@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ItemFilter, ItemKind, View } from "./api";
+import type { GroupMode } from "./grouping";
 import { startOfToday } from "./time";
 
 /** 列表当前显示的范围：一个内置视图、一个订阅源，或一个文件夹。 */
@@ -34,6 +35,10 @@ interface UiState {
   refreshing: number;
   /** 内置视图里只看邮件或只看文章。 */
   kindFilter: ItemKind | null;
+  /** 折叠相同邮件的方式。 */
+  groupMode: GroupMode;
+  /** 当前列表里展开着的组。换列表时清空。 */
+  expandedGroups: string[];
 
   // 以下是这台设备上的界面偏好，存在浏览器本地
   theme: ThemePref;
@@ -49,6 +54,8 @@ interface UiState {
   setDialog: (dialog: Dialog) => void;
   setRefreshing: (n: number) => void;
   setKindFilter: (kind: ItemKind | null) => void;
+  setGroupMode: (mode: GroupMode) => void;
+  setGroupExpanded: (key: string, expanded: boolean) => void;
   setTheme: (theme: ThemePref) => void;
   setDensity: (density: Density) => void;
   setLang: (lang: LangPref) => void;
@@ -73,6 +80,8 @@ export const useUi = create<UiState>()(
       dialog: null,
       refreshing: 0,
       kindFilter: null,
+      groupMode: "none",
+      expandedGroups: [],
 
       theme: "system",
       density: "compact",
@@ -81,12 +90,19 @@ export const useUi = create<UiState>()(
       listWidth: 380,
       collapsedFolders: [],
 
-      setScope: (scope) => set({ scope, openId: null, selection: [] }),
+      setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
       setSelection: (ids) => set({ selection: ids }),
       setDialog: (dialog) => set({ dialog }),
       setRefreshing: (refreshing) => set({ refreshing }),
-      setKindFilter: (kindFilter) => set({ kindFilter, openId: null, selection: [] }),
+      setKindFilter: (kindFilter) => set({ kindFilter, openId: null, selection: [], expandedGroups: [] }),
+      setGroupMode: (groupMode) => set({ groupMode, selection: [], expandedGroups: [] }),
+      setGroupExpanded: (key, expanded) =>
+        set((s) => ({
+          expandedGroups: expanded
+            ? [...new Set([...s.expandedGroups, key])]
+            : s.expandedGroups.filter((k) => k !== key),
+        })),
       setTheme: (theme) => set({ theme }),
       setDensity: (density) => set({ density }),
       setLang: (lang) => set({ lang }),
@@ -109,6 +125,7 @@ export const useUi = create<UiState>()(
         listWidth: s.listWidth,
         collapsedFolders: s.collapsedFolders,
         kindFilter: s.kindFilter,
+        groupMode: s.groupMode,
       }),
     },
   ),

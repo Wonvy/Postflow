@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Info, TriangleAlert } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Info, Mail, TriangleAlert } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Account,
   type AccountChanges,
@@ -10,9 +10,10 @@ import {
   type Security,
 } from "../lib/api";
 import { errorDetail, errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
-import { keys, useNav } from "../lib/queries";
+import { keys, useNav, usePresets } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
+import { ProviderIcon, providerName, providerOf } from "./ProviderIcon";
 import { Button, cx, Field, Modal, Select, Spinner, TextInput } from "./ui";
 
 /** 各服务商获取密码的说明。 */
@@ -178,8 +179,85 @@ function Disclosure({ open, onToggle, label }: { open: boolean; onToggle: () => 
   );
 }
 
-function usePresets() {
-  return useQuery({ queryKey: ["presets"], queryFn: () => api.presets().then((r) => r.presets) });
+/** 第一步里的服务商，按常用程度排。只用来自动识别的预设（比如 iCloud 自定域名）不出现在这里。 */
+const PERSONAL = [
+  "gmail", "outlook", "icloud", "yahoo", "qq", "163", "126", "yeah", "188", "sina",
+  "sohu", "139", "aliyun", "fastmail", "zoho", "yandex", "gmx", "mailru", "aol",
+];
+const BUSINESS = ["exmail", "qiye_aliyun", "qiye163", "feishu", "lark", "workspace", "m365", "263"];
+
+function ProviderTile({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-[68px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg border border-line px-1 transition-colors hover:border-line-strong hover:bg-hover"
+    >
+      {children}
+      <span className="w-full truncate text-center text-[12px] text-fg-2">{label}</span>
+    </button>
+  );
+}
+
+/** 第一步：选服务商。下面列出已经添加的邮箱。 */
+function ProviderGrid({ presets, onPick }: { presets: Preset[]; onPick: (preset: Preset | null) => void }) {
+  const t = useT();
+  const lang = useLang();
+  const nav = useNav();
+  const setDialog = useUi((s) => s.setDialog);
+  const byId = new Map(presets.map((p) => [p.id, p]));
+  const section = (title: string, ids: string[]) => (
+    <section>
+      <h3 className="mb-2 text-[12px] font-medium text-fg-3">{title}</h3>
+      <div className="grid grid-cols-4 gap-2">
+        {ids
+          .map((id) => byId.get(id))
+          .filter((p): p is Preset => p !== undefined)
+          .map((p) => (
+            <ProviderTile key={p.id} label={providerName(p, lang)} onClick={() => onPick(p)}>
+              <ProviderIcon id={p.id} size={28} />
+            </ProviderTile>
+          ))}
+        {title === t("account.business") && (
+          <ProviderTile label={t("account.other")} onClick={() => onPick(null)}>
+            <span className="inline-flex size-7 items-center justify-center rounded-[7px] bg-active text-fg-2">
+              <Mail size={17} strokeWidth={1.75} />
+            </span>
+          </ProviderTile>
+        )}
+      </div>
+    </section>
+  );
+  const accounts = nav.data?.accounts ?? [];
+
+  return (
+    <div className="flex flex-col gap-5 p-4">
+      {section(t("account.personal"), PERSONAL)}
+      {section(t("account.business"), BUSINESS)}
+      {accounts.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-[12px] font-medium text-fg-3">
+            {t("account.added")} · {accounts.length}
+          </h3>
+          <ul className="flex flex-col gap-px rounded-lg border border-line p-1">
+            {accounts.map((a) => (
+              <li key={a.id}>
+                <button
+                  type="button"
+                  onClick={() => setDialog({ type: "edit-account", accountId: a.id })}
+                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left hover:bg-hover"
+                >
+                  <ProviderIcon id={providerOf(a, presets)} size={16} />
+                  <span className="min-w-0 truncate text-fg">{a.name || a.email}</span>
+                  {a.name && <span className="min-w-0 truncate text-[12px] text-fg-3">{a.email}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
 }
 
 const EMPTY_SERVER: Server = { host: "", port: "993", security: "tls", username: "" };
@@ -201,6 +279,8 @@ export function AddAccountDialog() {
   const [showServer, setShowServer] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Failure | null>(null);
+  const [step, setStep] = useState<"choose" | "form">("choose");
+  const lang = useLang();
   // 用户自己改过服务器设置之后，就不再用推断的结果覆盖
   const touched = useRef(false);
 
@@ -215,6 +295,7 @@ export function AddAccountDialog() {
     setShowServer(false);
     setBusy(false);
     setError(null);
+    setStep("choose");
     touched.current = false;
   }, [open]);
 
@@ -232,14 +313,18 @@ export function AddAccountDialog() {
         .then((g) => {
           if (cancelled) return;
           setGuess(g);
-          if (!touched.current) {
+          // 地址认得出服务商时以它为准（选了 Gmail 却填了 QQ 地址，就换成 QQ）；
+          // 认不出时保留在第一步选的服务商，比如用自己域名的企业邮箱
+          setPresetId((chosen) => {
+            if (touched.current || (!g.preset && chosen)) return chosen;
             setServer({
               host: g.imap_host,
               port: String(g.imap_port),
               security: g.imap_security,
               username: g.username,
             });
-          }
+            return g.preset?.id ?? "";
+          });
         })
         .catch(() => {
           if (!cancelled) setGuess(null);
@@ -256,6 +341,19 @@ export function AddAccountDialog() {
     return guess?.preset ?? null;
   }, [guess, presetId, presets.data]);
   const hint = guess || presetId ? hintFor(preset, Boolean(presetId)) : null;
+
+  /** 第一步选了服务商：带入它的服务器设置，进入填写地址和密码。 */
+  const choose = (p: Preset | null) => {
+    touched.current = false;
+    setPresetId(p?.id ?? "");
+    setServer(
+      p
+        ? { host: p.imap_host, port: String(p.imap_port), security: p.imap_security, username: "" }
+        : EMPTY_SERVER,
+    );
+    setError(null);
+    setStep("form");
+  };
 
   const pickPreset = (id: string) => {
     setPresetId(id);
@@ -309,9 +407,32 @@ export function AddAccountDialog() {
     }
   };
 
+  const placeholder = preset?.domains[0] ? `name@${preset.domains[0]}` : "name@example.com";
+
   return (
-    <Modal open={open} onClose={() => setDialog(null)} title={t("account.addTitle")} width={460}>
+    <Modal
+      open={open}
+      onClose={() => setDialog(null)}
+      title={step === "choose" ? t("account.choose") : t("account.addTitle")}
+      width={step === "choose" ? 540 : 460}
+    >
+      {step === "choose" ? (
+        <ProviderGrid presets={presets.data ?? []} onPick={choose} />
+      ) : (
       <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4 p-4">
+        <div className="-mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStep("choose")}
+            disabled={busy}
+            aria-label={t("account.back")}
+            className="-ml-1 inline-flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg"
+          >
+            <ChevronLeft size={16} strokeWidth={2} />
+          </button>
+          <ProviderIcon id={preset?.id} size={22} />
+          <span className="font-medium">{preset ? providerName(preset, lang) : t("account.other")}</span>
+        </div>
         <Field label={t("account.email")}>
           <TextInput
             autoFocus
@@ -319,13 +440,13 @@ export function AddAccountDialog() {
             inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@example.com"
+            placeholder={placeholder}
             disabled={busy}
           />
         </Field>
         {preset && (
           <p className="-mt-2 text-[12px] text-fg-3">
-            {t("account.detected", { name: preset.name })} · {preset.imap_host}
+            {t("account.detected", { name: providerName(preset, lang) })} · {preset.imap_host}
           </p>
         )}
         <Field label={passwordLabel(t, preset)}>
@@ -381,6 +502,7 @@ export function AddAccountDialog() {
           </Button>
         </div>
       </form>
+      )}
     </Modal>
   );
 }

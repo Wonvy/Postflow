@@ -111,6 +111,7 @@ async function shot(browser, lang, name, prefs, act) {
     listWidth: 400,
     collapsedFolders: [],
     kindFilter: null,
+    groupMode: prefs.groupMode ?? "none",
   };
   await context.addInitScript((s) => {
     localStorage.setItem("postflow.ui", JSON.stringify({ state: s, version: 0 }));
@@ -176,7 +177,8 @@ async function main() {
         mkdirSync(join(OUT, lang), { recursive: true });
         const L = LABELS[lang];
 
-        await shot(browser, lang, "inbox", { theme: "dark" }, async (page) => {
+        // 按发件人折叠：同一发件人的通知、同一订阅源的文章各合成一行
+        await shot(browser, lang, "inbox", { theme: "dark", groupMode: "sender" }, async (page) => {
           await open(page, "Weekly digest");
           await page.locator("main iframe").waitFor();
         });
@@ -193,12 +195,10 @@ async function main() {
           await page.locator("main .article pre").waitFor();
         });
 
+        // 第一步：所有服务商的图标，下面是已经添加的邮箱
         await shot(browser, lang, "add-account", { theme: "dark" }, async (page) => {
           await page.getByRole("button", { name: L.addAccount }).first().click();
-          const dialog = page.getByRole("dialog");
-          await dialog.locator('input[type="email"]').fill("you@gmail.com");
-          await dialog.locator('input[type="password"]').fill("abcd efgh ijkl mnop");
-          await dialog.getByText("Gmail", { exact: false }).first().waitFor();
+          await page.getByRole("dialog").locator("section").first().waitFor();
         });
 
         await shot(browser, lang, "selection", { theme: "light", density: "comfortable" }, async (page) => {

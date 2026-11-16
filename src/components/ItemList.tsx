@@ -2,9 +2,13 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Archive,
   ArchiveRestore,
+  Check,
   CheckCheck,
+  ChevronDown,
+  ChevronRight,
   Inbox,
   Layers,
+  ListCollapse,
   type LucideIcon,
   Mail,
   MailOpen,
@@ -17,11 +21,13 @@ import {
 import { type MouseEvent, useEffect, useRef } from "react";
 import { useActions } from "../lib/actions";
 import type { Item, ItemKind } from "../lib/api";
+import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type Translate, useLang, useT } from "../lib/i18n";
-import { useItems, useNav } from "../lib/queries";
+import { useListModel } from "../lib/listModel";
+import { useNav } from "../lib/queries";
 import { type ListScope, useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
-import { Avatar, Button, cx, Favicon, ICON, IconButton, Spinner, Tip } from "./ui";
+import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
 
 const ROW_HEIGHT = { compact: 34, comfortable: 58 } as const;
 /** 滚动到离末尾还剩这么多行时开始加载下一页。 */
@@ -74,6 +80,49 @@ function KindFilter() {
   );
 }
 
+const GROUP_OPTIONS: { value: GroupMode; label: "group.none" | "group.thread" | "group.sender" }[] = [
+  { value: "none", label: "group.none" },
+  { value: "thread", label: "group.thread" },
+  { value: "sender", label: "group.sender" },
+];
+
+/** 工具栏里的「折叠相同邮件」：不折叠、按会话、按发件人。 */
+function GroupControl() {
+  const t = useT();
+  const mode = useUi((s) => s.groupMode);
+  const setMode = useUi((s) => s.setGroupMode);
+  return (
+    <Menu
+      align="end"
+      trigger={
+        <button
+          type="button"
+          aria-label={t("group.label")}
+          title={t("group.label")}
+          className={cx(
+            "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover",
+            mode === "none" ? "text-fg-2" : "bg-accent-soft text-accent",
+          )}
+        >
+          <ListCollapse {...ICON} />
+        </button>
+      }
+    >
+      <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{t("group.label")}</div>
+      {GROUP_OPTIONS.map(({ value, label }) => (
+        <MenuItem key={value} icon={mode === value ? <Check size={14} /> : null} onSelect={() => setMode(value)}>
+          {t(label)}
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+}
+
+/** 一行代表的位置 ID：单条是它自己，组是组里最新的那一条。 */
+function rowId(row: Row): string {
+  return row.kind === "item" ? row.item.id : row.group.lead.id;
+}
+
 export function ItemList({ width }: { width: number }) {
   const t = useT();
   const lang = useLang();
@@ -84,14 +133,16 @@ export function ItemList({ width }: { width: number }) {
   const refreshing = useUi((s) => s.refreshing);
   const setDialog = useUi((s) => s.setDialog);
   const nav = useNav();
-  const { filter, markAllRead, refresh } = useActions();
-  const { items, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useItems(filter);
+  const setGroupExpanded = useUi((s) => s.setGroupExpanded);
+  const { markAllRead, refresh, membersOf } = useActions();
+  const { query, items, rows: listRows, stops, groupMode } = useListModel();
+  const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
 
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
   const rowHeight = ROW_HEIGHT[density];
   const virtualizer = useVirtualizer({
-    count: items.length,
+    count: listRows.length,
     getScrollElement: () => scroller.current,
     estimateSize: () => rowHeight,
     overscan: 12,
@@ -108,42 +159,45 @@ export function ItemList({ width }: { width: number }) {
   // 用键盘移动时让打开的那一行保持在视野里
   useEffect(() => {
     if (!openId) return;
-    const index = items.findIndex((i) => i.id === openId);
+    const index = listRows.findIndex((r) => (r.kind === "item" || !r.expanded) && rowId(r) === openId);
     if (index >= 0) virtualizer.scrollToIndex(index, { align: "auto" });
     // 只在打开的条目变化时滚动，列表内容更新时不动
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId]);
 
-  const rows = virtualizer.getVirtualItems();
-  const lastVisible = rows[rows.length - 1]?.index ?? 0;
+  const virtualRows = virtualizer.getVirtualItems();
+  const lastVisible = virtualRows[virtualRows.length - 1]?.index ?? 0;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && lastVisible >= items.length - LOAD_AHEAD) {
+    if (hasNextPage && !isFetchingNextPage && lastVisible >= listRows.length - LOAD_AHEAD) {
       void fetchNextPage();
     }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, items.length, lastVisible]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, listRows.length, lastVisible]);
 
-  const onRowClick = (e: MouseEvent, item: Item, index: number) => {
+  const onRowClick = (e: MouseEvent, id: string) => {
     const ui = useUi.getState();
+    const members = membersOf(id);
     if (e.metaKey || e.ctrlKey) {
-      // 按住 ⌘ 或 Ctrl 逐个勾选。第一次勾选时把正在读的那条也带上，符合直觉。
+      // 按住 ⌘ 或 Ctrl 逐个勾选。第一次勾选时把正在读的那一行也带上，符合直觉。
       const base =
-        ui.selection.length > 0 ? ui.selection : ui.openId && ui.openId !== item.id ? [ui.openId] : [];
-      ui.setSelection(base.includes(item.id) ? base.filter((id) => id !== item.id) : [...base, item.id]);
-      anchor.current = item.id;
+        ui.selection.length > 0 ? ui.selection : ui.openId && ui.openId !== id ? membersOf(ui.openId) : [];
+      const all = members.every((m) => base.includes(m));
+      ui.setSelection(all ? base.filter((m) => !members.includes(m)) : [...new Set([...base, ...members])]);
+      anchor.current = id;
       return;
     }
     if (e.shiftKey) {
       // 按住 Shift 勾选一段
-      const from = items.findIndex((i) => i.id === (anchor.current ?? ui.openId));
-      if (from >= 0) {
-        const [start, end] = from < index ? [from, index] : [index, from];
-        ui.setSelection(items.slice(start, end + 1).map((i) => i.id));
+      const from = stops.findIndex((s) => s.id === (anchor.current ?? ui.openId));
+      const to = stops.findIndex((s) => s.id === id);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        ui.setSelection(stops.slice(start, end + 1).flatMap((s) => s.members));
         return;
       }
     }
-    anchor.current = item.id;
+    anchor.current = id;
     ui.setSelection([]);
-    ui.open(item.id);
+    ui.open(id);
   };
 
   const feeds = nav.data?.feeds;
@@ -164,6 +218,7 @@ export function ItemList({ width }: { width: number }) {
           {title}
         </h1>
         {scope.kind === "view" && <KindFilter />}
+        <GroupControl />
         <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={markAllRead}>
           <CheckCheck {...ICON} />
         </IconButton>
@@ -186,30 +241,63 @@ export function ItemList({ width }: { width: number }) {
           />
         ) : (
           <div className="relative mx-1.5 my-1.5" style={{ height: virtualizer.getTotalSize() }}>
-            {rows.map((row) => {
-              const item = items[row.index];
-              if (!item) return null;
-              const opened = item.id === openId;
-              const selected = selection.includes(item.id);
+            {virtualRows.map((virtual) => {
+              const row = listRows[virtual.index];
+              if (!row) return null;
+              const position = { height: virtual.size - 1, transform: `translateY(${virtual.start}px)` };
+
+              // 展开的组：一行标题，点一下收起
+              if (row.kind === "group" && row.expanded) {
+                return (
+                  <div
+                    key={`h:${row.group.key}`}
+                    role="button"
+                    tabIndex={-1}
+                    onClick={() => setGroupExpanded(row.group.key, false)}
+                    className="absolute inset-x-0 top-0 flex items-center gap-2 rounded-md px-2.5 text-[12px] text-fg-3 hover:bg-hover hover:text-fg-2"
+                    style={position}
+                  >
+                    <ChevronDown size={14} strokeWidth={2} className="shrink-0" />
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {groupMode === "thread" ? row.group.lead.title || t("reader.untitled") : row.group.people[0]}
+                    </span>
+                    <span className="tabular shrink-0">{t("group.count", { n: row.group.items.length })}</span>
+                  </div>
+                );
+              }
+
+              const id = rowId(row);
+              const item = row.kind === "item" ? row.item : row.group.lead;
+              const group = row.kind === "group" ? row.group : undefined;
+              const members = group ? group.items.map((i) => i.id) : [item.id];
+              const opened = id === openId;
+              const selected = members.every((m) => selection.includes(m));
+              const child = row.kind === "item" && row.child;
+              const props: RowProps = {
+                item,
+                group,
+                groupMode,
+                time: shortTime(item.published_at, lang),
+                untitled: t("reader.untitled"),
+                onExpand: group ? () => setGroupExpanded(group.key, true) : undefined,
+                expandLabel: t("group.expand"),
+              };
               return (
                 <div
-                  key={item.id}
+                  key={group ? `g:${group.key}` : item.id}
                   role="option"
                   aria-selected={opened || selected}
-                  onClick={(e) => onRowClick(e, item, row.index)}
+                  onClick={(e) => onRowClick(e, id)}
                   className={cx(
                     "absolute inset-x-0 top-0 flex rounded-md px-2.5 transition-colors",
                     density === "compact" ? "items-center gap-2.5" : "flex-col justify-center gap-1",
+                    child && "ml-5",
                     selected ? "bg-accent-soft" : opened ? "bg-active" : "hover:bg-hover",
                     selected && opened && "ring-1 ring-inset ring-accent/50",
                   )}
-                  style={{ height: row.size - 1, transform: `translateY(${row.start}px)` }}
+                  style={position}
                 >
-                  {density === "compact" ? (
-                    <CompactRow item={item} time={shortTime(item.published_at, lang)} untitled={t("reader.untitled")} />
-                  ) : (
-                    <ComfortableRow item={item} time={shortTime(item.published_at, lang)} untitled={t("reader.untitled")} />
-                  )}
+                  {density === "compact" ? <CompactRow {...props} /> : <ComfortableRow {...props} />}
                 </div>
               );
             })}
@@ -289,8 +377,13 @@ function UnreadDot({ unread }: { unread: boolean }) {
 
 interface RowProps {
   item: Item;
+  /** 折叠着的一组时有值，这一行代表整组。 */
+  group?: Group;
+  groupMode: GroupMode;
   time: string;
   untitled: string;
+  onExpand?: () => void;
+  expandLabel: string;
 }
 
 function Sender({ item, size = 16 }: { item: Item; size?: number }) {
@@ -300,47 +393,77 @@ function Sender({ item, size = 16 }: { item: Item; size?: number }) {
   return <Favicon src={item.source_icon} size={size} />;
 }
 
-function Trailing({ item, time }: { item: Item; time: string }) {
+/** 折叠的组右侧的数字，点一下展开。 */
+function CountPill({ count, onExpand, label }: { count: number; onExpand: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onExpand();
+      }}
+      className="tabular flex h-[18px] shrink-0 items-center gap-0.5 rounded-full border border-line-strong pl-1.5 pr-1 text-[11px] font-medium leading-none text-fg-2 hover:border-accent hover:text-accent"
+    >
+      {count}
+      <ChevronRight size={11} strokeWidth={2.25} />
+    </button>
+  );
+}
+
+function Trailing({ item, group, time, onExpand, expandLabel }: RowProps) {
+  const attachments = group ? group.hasAttachments : item.has_attachments;
+  const starred = group ? group.starred : item.starred;
   return (
     <>
-      {item.has_attachments && <Paperclip size={12} className="shrink-0 text-fg-3" />}
-      {item.starred && <Star size={12} className="shrink-0 fill-warning text-warning" />}
+      {group && onExpand && <CountPill count={group.items.length} onExpand={onExpand} label={expandLabel} />}
+      {attachments && <Paperclip size={12} className="shrink-0 text-fg-3" />}
+      {starred && <Star size={12} className="shrink-0 fill-warning text-warning" />}
       <span className="tabular shrink-0 text-[12px] text-fg-3">{time}</span>
     </>
   );
 }
 
-function CompactRow({ item, time, untitled }: RowProps) {
-  const unreadText = item.read ? "text-fg-3" : "font-medium text-fg";
+/** 邮件这一行左边显示谁：单封是发件人，一个会话是参与的人。 */
+function senderLabel(item: Item, group: Group | undefined, groupMode: GroupMode): string {
+  if (group && groupMode === "thread") return group.people.join(", ");
+  return item.author || item.sender_address || "";
+}
+
+function CompactRow(props: RowProps) {
+  const { item, group, groupMode, untitled } = props;
+  const unread = group ? group.unread > 0 : !item.read;
+  const unreadText = unread ? "font-medium text-fg" : "text-fg-3";
   return (
     <>
-      <UnreadDot unread={!item.read} />
+      <UnreadDot unread={unread} />
       <Sender item={item} />
       {item.kind === "mail" ? (
         <>
-          <span className={cx("w-[110px] shrink-0 truncate", unreadText)}>{item.author || item.sender_address}</span>
-          <span className={cx("min-w-0 flex-1 truncate", item.read ? "text-fg-3" : "text-fg")}>
-            {item.title || untitled}
-          </span>
+          <span className={cx("w-[110px] shrink-0 truncate", unreadText)}>{senderLabel(item, group, groupMode)}</span>
+          <span className={cx("min-w-0 flex-1 truncate", unread ? "text-fg" : "text-fg-3")}>{item.title || untitled}</span>
         </>
       ) : (
         <span className={cx("min-w-0 flex-1 truncate", unreadText)}>{item.title || untitled}</span>
       )}
-      <Trailing item={item} time={time} />
+      <Trailing {...props} />
     </>
   );
 }
 
-function ComfortableRow({ item, time, untitled }: RowProps) {
-  const source = item.kind === "mail" ? item.author || item.sender_address : item.source_title;
+function ComfortableRow(props: RowProps) {
+  const { item, group, groupMode, untitled } = props;
+  const unread = group ? group.unread > 0 : !item.read;
+  const source = item.kind === "mail" ? senderLabel(item, group, groupMode) : item.source_title;
   return (
     <>
       <div className="flex items-center gap-2.5">
-        <UnreadDot unread={!item.read} />
-        <span className={cx("min-w-0 flex-1 truncate", item.read ? "text-fg-3" : "font-medium text-fg")}>
+        <UnreadDot unread={unread} />
+        <span className={cx("min-w-0 flex-1 truncate", unread ? "font-medium text-fg" : "text-fg-3")}>
           {item.title || untitled}
         </span>
-        <Trailing item={item} time={time} />
+        <Trailing {...props} />
       </div>
       <div className="flex items-center gap-2 pl-4 text-[12px] text-fg-3">
         <Sender item={item} size={14} />

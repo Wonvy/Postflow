@@ -60,6 +60,10 @@ export function useItem(id: string | null, allowRemote = false) {
   });
 }
 
+export function usePresets() {
+  return useQuery({ queryKey: ["presets"], queryFn: () => api.presets().then((r) => r.presets) });
+}
+
 export function useSettings() {
   return useQuery({ queryKey: keys.settings, queryFn: api.settings });
 }

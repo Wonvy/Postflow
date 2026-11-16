@@ -21,10 +21,11 @@ import {
 } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { type Account, api, type Feed, type View } from "../lib/api";
+import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
 import { UpdatePill } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar } from "../lib/platform";
-import { keys, useNav } from "../lib/queries";
+import { keys, useNav, usePresets } from "../lib/queries";
 import { type ListScope, sameScope, useUi } from "../lib/store";
 import {
   Avatar,
@@ -166,14 +167,22 @@ function AccountRow({ account, active }: { account: Account; active: boolean }) 
   const t = useT();
   const setScope = useUi((s) => s.setScope);
   const setDialog = useUi((s) => s.setDialog);
+  const presets = usePresets();
   const label = account.name || account.email;
   const needsPassword = account.error_code === "mail_no_password";
+  const provider = providerOf(account, presets.data);
 
   return (
     <Row
       active={active}
       onClick={() => setScope({ kind: "account", accountId: account.id })}
-      leading={<Avatar name={label} seed={account.email} />}
+      leading={
+        hasProviderIcon(provider) ? (
+          <ProviderIcon id={provider} size={16} />
+        ) : (
+          <Avatar name={label} seed={account.email} />
+        )
+      }
       label={label}
       trailing={
         <>

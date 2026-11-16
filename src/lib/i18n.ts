@@ -24,6 +24,13 @@ const zh = {
   "action.download": "下载",
   "action.retry": "重试",
 
+  "group.label": "折叠相同邮件",
+  "group.none": "不折叠",
+  "group.thread": "同一会话",
+  "group.sender": "同一发件人或来源",
+  "group.count": "{n} 封",
+  "group.expand": "展开",
+
   "filter.all": "全部",
   "filter.mail": "只看邮件",
   "filter.article": "只看订阅",
@@ -37,6 +44,12 @@ const zh = {
   "mail.saved": "已保存 {name}",
 
   "account.addTitle": "添加邮箱",
+  "account.choose": "选择邮箱服务商",
+  "account.personal": "个人邮箱",
+  "account.business": "企业邮箱",
+  "account.other": "其他 IMAP 邮箱",
+  "account.added": "已添加的邮箱",
+  "account.back": "返回",
   "account.editTitle": "邮箱设置",
   "account.removeTitle": "移除邮箱",
   "account.removeBody": "移除 {email} 后，本机同步下来的邮件会被删除，所有设备上都不再显示这个邮箱。服务器上的邮件不受影响。",
@@ -120,6 +133,7 @@ const zh = {
   "reader.hintRead": "已读 / 未读",
   "reader.hintOpen": "在浏览器中打开",
   "reader.hintSelect": "多选",
+  "reader.hintGroup": "展开 / 收起折叠的邮件",
   "reader.loadingFullText": "正在抓取全文…",
   "reader.untitled": "无标题",
 
@@ -250,6 +264,13 @@ const en: Record<MessageKey, string> = {
   "action.download": "Download",
   "action.retry": "Retry",
 
+  "group.label": "Group similar items",
+  "group.none": "Don't group",
+  "group.thread": "By conversation",
+  "group.sender": "By sender or source",
+  "group.count": "{n} items",
+  "group.expand": "Expand",
+
   "filter.all": "All",
   "filter.mail": "Mail only",
   "filter.article": "Feeds only",
@@ -263,6 +284,12 @@ const en: Record<MessageKey, string> = {
   "mail.saved": "Saved {name}",
 
   "account.addTitle": "Add mail account",
+  "account.choose": "Choose your mail provider",
+  "account.personal": "Personal",
+  "account.business": "Work and business",
+  "account.other": "Other IMAP",
+  "account.added": "Already added",
+  "account.back": "Back",
   "account.editTitle": "Account settings",
   "account.removeTitle": "Remove account",
   "account.removeBody": "Removing {email} deletes the mail synced to this device and hides the account on all your devices. Mail on the server is not affected.",
@@ -346,6 +373,7 @@ const en: Record<MessageKey, string> = {
   "reader.hintRead": "Read / unread",
   "reader.hintOpen": "Open in browser",
   "reader.hintSelect": "Select multiple",
+  "reader.hintGroup": "Expand / collapse a group",
   "reader.loadingFullText": "Loading full text…",
   "reader.untitled": "Untitled",
 

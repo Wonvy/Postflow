@@ -58,7 +58,7 @@ function Article({ id }: { id: string }) {
   const qc = useQueryClient();
   const [allowRemote, setAllowRemote] = useState(false);
   const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote);
-  const { items, apply, toggle, openOriginal } = useActions();
+  const { items, apply, toggle, openOriginal, openTargets } = useActions();
   const autoRead = useRef<string | null>(null);
   const [mode, setMode] = useState<"feed" | "full">("feed");
   const [loadingFull, setLoadingFull] = useState(false);
@@ -76,6 +76,10 @@ function Article({ id }: { id: string }) {
 
   const summary = item ?? items.find((i) => i.id === id);
   const isMail = summary?.kind === "mail";
+  // 打开的是折叠着的一组时，按钮反映整组的状态，点下去也作用到整组
+  const group = openTargets();
+  const all = (flag: "read" | "starred" | "archived") =>
+    group.length > 0 ? group.every((i) => i[flag]) : Boolean(summary?.[flag]);
 
   const toggleFullText = async () => {
     if (!item) return;
@@ -122,26 +126,26 @@ function Article({ id }: { id: string }) {
               </IconButton>
             )}
             <IconButton
-              label={summary.read ? t("action.markUnread") : t("action.markRead")}
+              label={all("read") ? t("action.markUnread") : t("action.markRead")}
               shortcut="U"
-              onClick={() => toggle("read", [summary])}
+              onClick={() => toggle("read", group.length > 0 ? group : [summary])}
             >
-              {summary.read ? <Mail {...ICON} /> : <MailOpen {...ICON} />}
+              {all("read") ? <Mail {...ICON} /> : <MailOpen {...ICON} />}
             </IconButton>
             <IconButton
-              label={summary.starred ? t("action.unstar") : t("action.star")}
+              label={all("starred") ? t("action.unstar") : t("action.star")}
               shortcut="S"
-              active={summary.starred}
-              onClick={() => toggle("starred", [summary])}
+              active={all("starred")}
+              onClick={() => toggle("starred", group.length > 0 ? group : [summary])}
             >
-              <Star {...ICON} className={cx(summary.starred && "fill-warning text-warning")} />
+              <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
             </IconButton>
             <IconButton
-              label={summary.archived ? t("action.unarchive") : t("action.archive")}
+              label={all("archived") ? t("action.unarchive") : t("action.archive")}
               shortcut="E"
-              onClick={() => toggle("archived", [summary])}
+              onClick={() => toggle("archived", group.length > 0 ? group : [summary])}
             >
-              {summary.archived ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
+              {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
             </IconButton>
             {!isMail && summary.url && (
               <IconButton label={t("action.openOriginal")} shortcut="V" onClick={openOriginal}>
@@ -437,6 +441,7 @@ function Empty() {
     [["U"], t("reader.hintRead")],
     [["V"], t("reader.hintOpen")],
     [["X"], t("reader.hintSelect")],
+    [["→", "←"], t("reader.hintGroup")],
   ];
   return (
     <>

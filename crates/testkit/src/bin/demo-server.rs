@@ -157,6 +157,55 @@ fn seed_mail(work: &FakeImap, personal: &FakeImap) {
             "Hi all,\r\n\r\nWe leave at 3pm on Friday. Bring a jacket, it gets cold by the lake.\r\n\r\nLeo"),
         &["\\Seen"],
     );
+    // 同一个会话的三封，以及同一个发件人的几条通知，用来演示「折叠相同邮件」
+    work.deliver(
+        "INBOX",
+        &text_mail(
+            "review-5@northwind.example",
+            "Mei Han <mei@northwind.example>",
+            w,
+            "Design review notes",
+            2 * DAY + 9 * HOUR,
+            "Notes from today's review are below. Two options on the table: A (full redesign) and B (incremental).",
+        ),
+        &["\\Seen"],
+    );
+    work.deliver(
+        "INBOX",
+        &text_mail(
+            "review-6@northwind.example",
+            "Leo Park <leo@northwind.example>",
+            w,
+            "Re: Design review notes",
+            2 * DAY + 7 * HOUR,
+            "I lean towards B. We can ship it in two weeks.\r\n\r\n> Two options on the table",
+        ),
+        &["\\Seen"],
+    );
+    work.deliver(
+        "INBOX",
+        &text_mail(
+            "ci-1199@builds.example",
+            "Build Bot <ci@builds.example>",
+            w,
+            "Build #1199 failed on main",
+            DAY + 2 * HOUR,
+            "1 test failed: sync::conflict_copies_are_handled",
+        ),
+        &["\\Seen"],
+    );
+    work.deliver(
+        "INBOX",
+        &text_mail(
+            "ci-1200@builds.example",
+            "Build Bot <ci@builds.example>",
+            w,
+            "Build #1200 passed on main",
+            20 * HOUR,
+            "All checks passed in 6m 40s.",
+        ),
+        &["\\Seen"],
+    );
     work.deliver(
         "INBOX",
         &text_mail("review-7@northwind.example", "Design Review <review@northwind.example>", w,

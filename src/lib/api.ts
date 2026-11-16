@@ -118,6 +118,8 @@ export interface Preset {
   imap_security: Security;
   /** password、app_password、auth_code 或 oauth。 */
   password_kind: "password" | "app_password" | "auth_code" | "oauth";
+  /** 这个服务商的邮箱域名；企业邮箱为空。 */
+  domains: string[];
 }
 
 export interface AccountGuess {

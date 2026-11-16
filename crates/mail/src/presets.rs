@@ -19,6 +19,8 @@ pub struct Preset {
     pub password_kind: &'static str,
     /// 用户名是否只取 @ 前面的部分。
     pub username_local_part: bool,
+    /// 这个服务商的邮箱域名，界面用来给出示例地址。企业邮箱用自己的域名，这里为空。
+    pub domains: &'static [&'static str],
 }
 
 const fn p(
@@ -35,6 +37,7 @@ const fn p(
         imap_security: Security::Tls,
         password_kind,
         username_local_part: false,
+        domains: &[],
     }
 }
 
@@ -190,7 +193,10 @@ const MX_TIMEOUT: Duration = Duration::from_secs(4);
 pub fn presets() -> Vec<Preset> {
     PRESETS
         .iter()
-        .map(|(_, p)| p.clone())
+        .map(|(domains, p)| Preset {
+            domains,
+            ..p.clone()
+        })
         .chain(BUSINESS.iter().cloned())
         .collect()
 }
@@ -290,6 +296,11 @@ mod tests {
 
     #[test]
     fn known_and_unknown_domains() {
+        assert!(
+            presets()
+                .iter()
+                .any(|p| p.id == "qq" && p.domains.contains(&"qq.com"))
+        );
         let (cfg, preset) = guess("someone@QQ.com").unwrap();
         assert_eq!(cfg.host, "imap.qq.com");
         assert_eq!(cfg.port, 993);

@@ -44,6 +44,9 @@ jobs:
       - name: 类型检查并构建界面
         run: npm run build
 
+      - name: 界面逻辑测试
+        run: npm run test:ui
+
       - name: 检查格式
         if: runner.os == 'Linux'
         run: cargo fmt --all -- --check

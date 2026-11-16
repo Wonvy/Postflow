@@ -62,15 +62,17 @@ export function useShortcuts() {
         case "r":
           a.refreshAll();
           break;
-        case "x": {
-          // 勾选或取消勾选当前打开的条目，配合 J / K 可以只用键盘多选
+        case "x":
+          // 勾选或取消勾选当前打开的那一行，配合 J / K 可以只用键盘多选
           if (!ui.openId) return;
-          const next = ui.selection.includes(ui.openId)
-            ? ui.selection.filter((id) => id !== ui.openId)
-            : [...ui.selection, ui.openId];
-          ui.setSelection(next);
+          a.toggleSelected(ui.openId);
           break;
-        }
+        case "ArrowRight":
+          a.expandOpen();
+          break;
+        case "ArrowLeft":
+          a.collapseOpen();
+          break;
         case "Escape":
           if (ui.selection.length > 0) ui.setSelection([]);
           else if (ui.openId) ui.open(null);

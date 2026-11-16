@@ -8,7 +8,7 @@ An open-source, cross-platform client that brings your email and RSS feeds into 
 - **Sync on your terms.** Your data is a folder of append-only logs. Keep it in sync between devices with Syncthing, iCloud Drive, Dropbox or any file-sync tool.
 - **Keyboard first.** A calm three-pane layout where every frequent action has a single key.
 
-![Unified inbox with mail and feeds side by side](docs/screenshots/en/inbox.png)
+![Unified inbox with mail and feeds side by side, grouped by sender](docs/screenshots/en/inbox.png)
 
 ## Screenshots
 
@@ -16,8 +16,8 @@ An open-source, cross-platform client that brings your email and RSS feeds into 
 |---|---|
 | ![Reading a plain-text message with an attachment](docs/screenshots/en/mail.png) | ![Reading a feed article](docs/screenshots/en/article.png) |
 | Mail with attachments, in the light theme | Articles from your feeds |
-| ![Adding a mail account; the provider is detected from the address](docs/screenshots/en/add-account.png) | ![Selecting several items for a bulk action](docs/screenshots/en/selection.png) |
-| Add any IMAP account; common providers are detected | Select several items and act on them at once |
+| ![Choosing a mail provider from a grid of icons](docs/screenshots/en/add-account.png) | ![Selecting several items for a bulk action](docs/screenshots/en/selection.png) |
+| Pick your provider, or add any IMAP account | Select several items and act on them at once |
 
 ## Download
 
@@ -37,8 +37,8 @@ click **More info → Run anyway**.
 
 **Mail**
 
-- Add as many IMAP accounts as you like. For common providers (Gmail, iCloud, Yahoo, Fastmail, QQ, NetEase, and more)
-  you only enter your address and password.
+- Add as many IMAP accounts as you like. Pick your provider from a grid of icons (Gmail, Outlook, iCloud, Yahoo, QQ,
+  NetEase, Fastmail, and more), then enter your address and password; the server settings are filled in for you.
 - Business addresses on your own domain are detected from their mail records: Google Workspace, Microsoft 365,
   Tencent Exmail, Alibaba Mail, NetEase Enterprise, Feishu and others.
 - New mail arrives instantly on servers that support IMAP IDLE.
@@ -56,6 +56,8 @@ click **More info → Run anyway**.
 
 - Mail and articles are sorted together by time. Switch between everything, mail only and feeds only,
   or look at a single account or feed.
+- Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
+  source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
 - Inbox, Today, Unread, Starred and Archive views.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - The same interface also runs in your browser, served by the app on your own machine.
@@ -77,6 +79,7 @@ download page instead.
 | `U` | Read / unread |
 | `V` | Open the original page in your browser |
 | `X` | Select the current item for a bulk action |
+| `→` / `←` | Expand / collapse a group |
 | `Shift` + `A` | Mark everything in the list as read |
 | `R` | Refresh all feeds and mail |
 | `Esc` | Clear the selection, or close the reader |
