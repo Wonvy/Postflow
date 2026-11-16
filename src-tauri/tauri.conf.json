@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Postflow",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "app.postflow.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -31,6 +31,12 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Wonvy",
+    "copyright": "© 2026 Wonvy",
+    "homepage": "https://github.com/Wonvy/Postflow",
+    "category": "Productivity",
+    "shortDescription": "Mail and RSS in one inbox",
+    "longDescription": "Postflow brings your email and RSS feeds into one inbox. Your data stays on your own devices; no server or account needed.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -38,6 +44,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

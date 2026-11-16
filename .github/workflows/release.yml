@@ -1,0 +1,133 @@
+name: Release
+
+# 推送 v 开头的标签（例如 v0.2.0）时，在三个平台上打包，全部成功后发布 Release。
+# 发版用 `npm run release -- 0.2.0`，它会改好版本号、提交并打标签。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要重新打包的标签，例如 v0.2.0（必须已经推送到仓库）
+        required: true
+
+permissions:
+  contents: write
+
+# 同一个标签不要同时跑两次，免得往同一个 Release 里重复上传
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  prepare:
+    name: 创建草稿 Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: 核对标签和版本号
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::标签 $TAG 和 package.json 里的版本 $version 对不上。请用 npm run release -- <版本号> 发版。"
+            exit 1
+          fi
+
+      - name: 创建或沿用草稿
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 同一个标签重新跑时，沿用已有的草稿，不重复创建
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+                 --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
+          if [ -z "$id" ]; then
+            version="${TAG#v}"
+            sed "s/__VERSION__/$version/g" .github/release-notes.md > notes.md
+            # 附上自上个版本以来的提交与合并请求列表
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+              -f tag_name="$TAG" --jq .body >> notes.md || true
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+                   -f tag_name="$TAG" -f name="Postflow $TAG" \
+                   -F body=@notes.md -F draft=true \
+                   -F prerelease=$([[ "$TAG" == *-* ]] && echo true || echo false) \
+                   --jq .id)
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: 打包 (${{ matrix.name }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 一个安装包同时支持 Apple 芯片和 Intel
+          - name: macOS
+            os: macos-latest
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin
+          - name: Windows
+            os: windows-latest
+            rust_targets: ""
+            args: ""
+          # 用较老的 Ubuntu 打包，生成的程序在更多发行版上能运行
+          - name: Linux
+            os: ubuntu-22.04
+            rust_targets: ""
+            args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.name }}
+
+      - name: 安装 Linux 依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+
+      - run: npm ci
+
+      - name: 打包并上传到 Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          args: ${{ matrix.args }}
+          retryAttempts: 1
+
+  publish:
+    name: 发布 Release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 去掉草稿状态
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/${{ needs.prepare.outputs.release_id }}" \
+            -F draft=false --jq .html_url

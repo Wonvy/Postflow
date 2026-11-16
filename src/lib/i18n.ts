@@ -240,7 +240,7 @@ const en: Record<MessageKey, string> = {
   "mail.noSubject": "(No subject)",
   "mail.loading": "Fetching the message from the server…",
   "mail.remoteBlocked": "Remote images were blocked to protect your privacy.",
-  "mail.attachments": "{n} attachments",
+  "mail.attachments": "Attachments ({n})",
   "mail.saved": "Saved {name}",
 
   "account.addTitle": "Add mail account",

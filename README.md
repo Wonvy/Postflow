@@ -1,49 +1,132 @@
 # Postflow
 
-开源、跨平台的个人信息聚合客户端，把邮件和 RSS 订阅放进同一个信息流。
+**English** | [简体中文](README.zh-CN.md)
 
-- **完全本地**：直接从你的设备连邮箱、抓订阅，不需要服务器，也没有账号。
-- **同步交给你自己**：数据写成只追加的文本日志，放进任意一个目录，用 Syncthing、iCloud、坚果云之类的工具同步即可。
-- **键盘优先**：Linear 风格的三栏界面，常用操作都有单键快捷键。
+An open-source, cross-platform client that brings your email and RSS feeds into one inbox.
 
-## 现状
+- **Local first.** Postflow talks to your mail servers and feeds directly from your device. No server, no account.
+- **Sync on your terms.** Your data is a folder of append-only logs. Keep it in sync between devices with Syncthing, iCloud Drive, Dropbox or any file-sync tool.
+- **Keyboard first.** A calm three-pane layout where every frequent action has a single key.
 
-已经有的：
+![Unified inbox with mail and feeds side by side](docs/screenshots/en/inbox.png)
 
-- 邮箱：可以添加任意多个 IMAP 邮箱，常见服务商（Gmail、iCloud、QQ、网易、新浪、阿里、Fastmail 等）只需填地址和密码，
-  其余设置自动推断；企业邮箱可在服务器设置里选服务商或手动填写
-- 收信：后台保持连接，服务器支持 IDLE 时新邮件实时到达；首次同步收件箱最新 200 封，较大的邮件打开时再取正文
-- 读信：HTML 邮件经白名单净化后放进沙箱显示，脚本一律去掉，远程图片默认不加载（防追踪），可单封或按发件人放行；
-  纯文本邮件自动识别链接；附件可下载
-- 回写：已读、星标、归档写回邮件服务器，其他设备和其他客户端上的改动也会同步过来
-- 订阅：粘贴网站或订阅地址自动发现源，文件夹分组，重命名、退订，OPML 导入导出
-- 抓取：后台定时刷新，条件请求，失败退避，单独设置每个源的刷新间隔
-- 阅读：收件箱、今天、未读、星标、已归档五个视图；正文净化后展示；抓取原网页全文
-- 统一信息流：邮件和文章按时间混排，可切换「全部 / 只看邮件 / 只看订阅」，也可以只看某个邮箱或订阅源
-- 操作：已读、星标、归档、全部标为已读、多选批量操作
-- 界面：深色与浅色主题，紧凑与宽松两种列表密度，可拖拽调整栏宽，中英文
-- 数据：多设备按字段合并，索引可随时重建
-- 网页访问：同一套界面可以在本机浏览器里打开
+## Screenshots
 
-还没有的：写信与回复、Outlook / Microsoft 365 的 OAuth 登录、收件箱以外的文件夹、搜索、命令面板、
-稍后提醒、标签与规则、托盘常驻、移动端、安装包签名与自动更新。
+| | |
+|---|---|
+| ![Reading a plain-text message with an attachment](docs/screenshots/en/mail.png) | ![Reading a feed article](docs/screenshots/en/article.png) |
+| Mail with attachments, in the light theme | Articles from your feeds |
+| ![Adding a mail account; the provider is detected from the address](docs/screenshots/en/add-account.png) | ![Selecting several items for a bulk action](docs/screenshots/en/selection.png) |
+| Add any IMAP account; common providers are detected | Select several items and act on them at once |
 
-## 开发
+## Download
 
-需要 Rust（1.90 以上）和 Node.js（22 以上）。Linux 上还需要 Tauri 依赖的 WebKitGTK，见
-[Tauri 的环境准备文档](https://tauri.app/start/prerequisites/)。
+Get the installer for your system from [Releases](https://github.com/Wonvy/Postflow/releases):
+
+| System | File |
+|---|---|
+| macOS (Apple silicon and Intel) | `.dmg` |
+| Windows 10 / 11 | `-setup.exe` or `.msi` |
+| Linux | `.deb`, `.rpm` or `.AppImage` |
+
+The installers are not yet signed by Apple or Microsoft. On macOS, the first time you open the app go to
+**System Settings → Privacy & Security** and click **Open Anyway**. On Windows, when SmartScreen appears,
+click **More info → Run anyway**.
+
+## Features
+
+**Mail**
+
+- Add as many IMAP accounts as you like. For common providers (Gmail, iCloud, Yahoo, Fastmail, QQ, NetEase, and more)
+  you only enter your address and password.
+- Business addresses on your own domain are detected from their mail records: Google Workspace, Microsoft 365,
+  Tencent Exmail, Alibaba Mail, NetEase Enterprise, Feishu and others.
+- New mail arrives instantly on servers that support IMAP IDLE.
+- HTML mail is sanitized and shown in a sandbox with scripts removed. Remote images, often used to track when you
+  open a message, stay blocked until you allow them for one message or for a sender.
+- Read, starred and archived states are written back to the server, so your phone and webmail stay in step.
+
+**Feeds**
+
+- Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported.
+- Folders, per-feed refresh intervals, OPML import and export.
+- Load the full article from the original page for feeds that only publish a summary.
+
+**One inbox**
+
+- Mail and articles are sorted together by time. Switch between everything, mail only and feeds only,
+  or look at a single account or feed.
+- Inbox, Today, Unread, Starred and Archive views.
+- Dark and light themes, compact and comfortable list density, English and Chinese.
+- The same interface also runs in your browser, served by the app on your own machine.
+
+**Not yet available:** writing and replying, OAuth sign-in for Outlook and Microsoft 365, folders other than the
+inbox, search, a command palette, snoozing, labels and rules, a tray icon, mobile apps, signed installers and
+automatic updates.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `J` / `K` | Next / previous item |
+| `E` | Archive (in Archive, move back to the inbox) |
+| `S` | Star |
+| `U` | Read / unread |
+| `V` | Open the original page in your browser |
+| `X` | Select the current item for a bulk action |
+| `Shift` + `A` | Mark everything in the list as read |
+| `R` | Refresh all feeds and mail |
+| `Esc` | Clear the selection, or close the reader |
+
+## Your data
+
+On first launch you choose a data folder. It is the only thing you need to sync or back up:
+
+```
+<data folder>/
+├─ meta.json                          format version
+├─ oplog/<device id>/2026-11.jsonl    changes: feeds, accounts, read, starred, archived, settings
+└─ articles/<device id>/2026-11.jsonl archived feed articles
+```
+
+- **Each device only appends to its own files** and never edits anyone else's, so file-sync tools never see
+  conflicting edits.
+- **Every change records only the fields it touched, plus a timestamp.** When two devices edit the same field, the
+  later one wins. Replaying a change is harmless, so conflict copies left behind by sync tools are read safely.
+- **IDs are derived from content.** Two devices that fetch the same article give it the same ID.
+- **Passwords never go into the data folder.** Account settings (address, server) sync to your other devices, but
+  each device keeps the password in its own system keychain and asks for it once.
+- **Mail stays out of the data folder.** Each device syncs mail from the server itself. Read, starred and archived
+  states live on the server, so they are already consistent everywhere.
+
+A line in the change log looks like this:
+
+```json
+{"ts":"1794859065899-000000-a0fc06b58629","k":"item","ids":["4be0…","91c2…"],"set":{"read":true}}
+```
+
+The SQLite index, fetch state and full-text cache live in the app's local data folder and are never synced. The
+index is built entirely from the logs: delete it and it is rebuilt, or rebuild it from Settings.
+
+If the data folder lives in a cloud drive, set it to always keep files on this device. Placeholder files whose
+contents are still in the cloud cannot be read.
+
+## Development
+
+You need Rust 1.90 or later and Node.js 22 or later. On Linux, also install the WebKitGTK packages Tauri needs; see
+[Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 npm install
 ```
 
-运行桌面应用：
+Run the desktop app:
 
 ```bash
 npm run app
 ```
 
-在普通浏览器里开发界面（两个终端）：
+Work on the interface in a normal browser (two terminals):
 
 ```bash
 npm run server
@@ -53,19 +136,24 @@ npm run server
 npm run dev
 ```
 
-然后打开 <http://localhost:1420>。这种方式下数据放在仓库里的 `.postflow-dev/`，不会碰你真实的数据。
+Then open <http://localhost:1420>. In this mode the data lives in `.postflow-dev/` inside the repository, away from
+your real data.
 
-试邮箱功能不需要真实邮箱。下面这条命令会在本机起两个假的 IMAP 服务器，带一些样例邮件，每分钟还会投递一封新的：
+### Demo data
+
+You don't need a real mailbox to try things out. This starts two fake IMAP servers and three feeds on your machine,
+all with fictional content, and delivers a new message every minute:
 
 ```bash
-npm run demo-mail
+npm run demo
 ```
 
-在 Postflow 里添加邮箱，地址填 `work@example.com` 或 `me@example.org`，密码 `demo`，
-服务器设置里填 `127.0.0.1`、端口 `1143` 或 `1144`、加密选「不加密」。
-如果不想让测试密码进系统钥匙串，把 `npm run server` 换成 `npm run server:demo`，密码只存在内存里。
+Add a mail account with the address `work@example.com` or `me@example.org` and the password `demo`. In the server
+settings, use `127.0.0.1`, port `1143` or `1144`, and encryption **None**. The command prints the feed addresses.
+To keep the demo password out of your keychain, use `npm run server:demo` instead of `npm run server`; it keeps
+passwords in memory only.
 
-测试与检查：
+### Tests and checks
 
 ```bash
 cargo test --workspace
@@ -79,70 +167,55 @@ cargo clippy --workspace --all-targets
 npm run typecheck
 ```
 
-## 结构
+### Screenshots
 
-```
-crates/store/   数据层：数据目录里的日志、多设备合并、本机 SQLite 索引
-crates/feed/    订阅源：抓取、解析、发现、OPML、正文净化、全文提取
-crates/mail/    邮件：服务商预设、IMAP 连接与操作、邮件解析与安全渲染
-crates/testkit/ 只供测试用的假 IMAP 服务器
-crates/core/    核心：会话、调度、目录监听，对外只有一个 rpc 入口和一个事件流
-crates/web/     通过 HTTP 暴露核心，供浏览器里的界面使用
-src-tauri/      桌面与移动端外壳，只做转发
-src/            React 界面，桌面应用和浏览器共用
+The images in this README are generated from the demo data. After changing the interface, regenerate them with:
+
+```bash
+npm run screenshots
 ```
 
-界面不直接依赖运行环境：`src/lib/transport.ts` 在桌面应用里走进程内调用，在浏览器里走 HTTP，
-两边调用的是 `crates/core/src/rpc.rs` 里的同一组方法。
+It needs Google Chrome or Microsoft Edge installed and writes to `docs/screenshots/`.
 
-## 数据目录
+## Releasing
 
-首次启动时选择一个数据目录。它是唯一需要同步和备份的东西：
-
-```
-<数据目录>/
-├─ meta.json                          格式版本
-├─ oplog/<设备ID>/2026-11.jsonl       状态变更：订阅、已读、星标、归档、设置
-└─ articles/<设备ID>/2026-11.jsonl    文章存档
+```bash
+npm run release -- 0.2.0
 ```
 
-几条保证：
-
-- **每台设备只往自己的子目录里追加**，从不修改别的设备的文件，所以同步工具不会遇到两边改同一个文件的冲突。
-- **每条操作只记录改动的字段和一个时间戳**。合并时每个字段取时间戳最大的那次写入，
-  重复读入同一条操作没有副作用，同步工具留下的冲突副本可以放心地一并读入。
-- **条目 ID 由内容算出**。两台设备各自抓到同一篇文章时得到相同的 ID，状态才能对上。
-- **密码和令牌永远不写进数据目录**。邮箱账户的设置（地址、服务器）会同步到其他设备，
-  密码只存在每台设备自己的系统钥匙串里，新设备上第一次使用时输入一次。
-- **邮件不进数据目录**。每台设备各自从邮件服务器同步，已读、星标、归档以服务器为准，本来就跨设备一致。
-
-操作日志的一行长这样：
-
-```json
-{"ts":"1794859065899-000000-a0fc06b58629","k":"item","ids":["4be0…","91c2…"],"set":{"read":true}}
+```bash
+git push --follow-tags
 ```
 
-SQLite 索引、抓取状态和全文缓存只存在本机的应用数据目录里，不参与同步。
-索引完全由日志推导而来，删掉后会自动重建，也可以在设置里手动重建。
+The first command sets version 0.2.0 in `package.json`, `Cargo.toml` and both lock files, commits, and tags
+`v0.2.0`. Pushing the tag starts GitHub Actions, which builds the installers on macOS, Windows and Linux and
+publishes the release once all three succeed. A version with a hyphen, such as `0.2.0-beta.1`, is published as a
+pre-release.
 
-把数据目录放在云盘里时，请把它设为始终保留在本机。只留占位符、内容还在云端的文件读不到。
+If one platform fails, the release stays as a draft and is not public. After fixing the problem, run the Release
+workflow by hand from the Actions page with the same tag.
 
-## 快捷键
+To ship signed installers later, add your Apple and Microsoft certificates to the repository secrets and pass them to
+the build step, following [Tauri's signing guide](https://v2.tauri.app/distribute/sign/macos/).
 
-| 按键 | 作用 |
-|---|---|
-| `J` / `K` | 下一条 / 上一条 |
-| `E` | 归档，在已归档视图里是移回收件箱 |
-| `S` | 星标 |
-| `U` | 已读 / 未读 |
-| `V` | 在浏览器中打开原文 |
-| `X` | 勾选当前条目，用于批量操作 |
-| `Shift` + `A` | 当前列表全部标为已读 |
-| `R` | 刷新全部订阅 |
-| `Esc` | 取消勾选，或关闭阅读面板 |
+## Project layout
 
-## 许可
+```
+crates/store/    data layer: logs in the data folder, merging across devices, local SQLite index
+crates/feed/     feeds: fetching, parsing, discovery, OPML, sanitizing, full-text extraction
+crates/mail/     mail: provider detection, IMAP, parsing and safe rendering
+crates/core/     sessions, scheduling, folder watching; one rpc entry point and one event stream
+crates/web/      serves the core over HTTP for the browser interface
+crates/testkit/  fake IMAP server for tests, and the demo data server
+src-tauri/       desktop and mobile shell; it only forwards calls
+src/             React interface, shared by the desktop app and the browser
+```
 
-图标来自 [Lucide](https://lucide.dev)（ISC），字体是 [Inter](https://rsms.me/inter/)（OFL）。
+The interface doesn't care where it runs: `src/lib/transport.ts` uses in-process calls in the desktop app and HTTP
+in the browser, and both reach the same methods in `crates/core/src/rpc.rs`.
 
-项目自身的开源许可证尚未确定。
+## License
+
+Icons are from [Lucide](https://lucide.dev) (ISC). The font is [Inter](https://rsms.me/inter/) (OFL).
+
+The project's own license has not been chosen yet.

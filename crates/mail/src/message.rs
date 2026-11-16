@@ -120,8 +120,19 @@ pub fn summarize(raw: &[u8]) -> Summary {
     let Some(msg) = parse(raw) else {
         return Summary::default();
     };
-    let snippet = msg
-        .body_preview(SNIPPET_CHARS * 2)
+    // 只有 HTML 正文时自己取文字：库自带的预览会把相邻段落的字粘在一起
+    let has_plain = msg
+        .text_bodies()
+        .any(|part| matches!(part.body, PartType::Text(_)));
+    let preview = if !has_plain {
+        msg.html_bodies().find_map(|part| match &part.body {
+            PartType::Html(html) => Some(html_text(html)),
+            _ => None,
+        })
+    } else {
+        msg.body_preview(SNIPPET_CHARS * 2).map(|p| p.into_owned())
+    };
+    let snippet = preview
         .map(|p| truncate(&clean_text(&p), SNIPPET_CHARS))
         .unwrap_or_default();
     let list_unsubscribe = match msg.list_unsubscribe() {
@@ -390,6 +401,72 @@ a{{color:#4a55bd}}\
     )
 }
 
+/// 从 HTML 里取出给人看的文字，块级元素之间留一个空格。只用来生成列表摘要。
+fn html_text(html: &str) -> String {
+    const BLOCKS: &[&str] = &[
+        "p",
+        "br",
+        "div",
+        "li",
+        "tr",
+        "td",
+        "th",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "blockquote",
+        "pre",
+        "section",
+        "article",
+        "table",
+        "hr",
+        "header",
+        "footer",
+    ];
+    let mut out = String::with_capacity(html.len() / 2);
+    let mut rest = html;
+    while let Some(start) = rest.find('<') {
+        out.push_str(&rest[..start]);
+        let Some(end) = rest[start..].find('>') else {
+            rest = "";
+            break;
+        };
+        let tag = &rest[start + 1..start + end];
+        let name: String = tag
+            .trim_start_matches('/')
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+            .to_ascii_lowercase();
+        rest = &rest[start + end + 1..];
+        // 样式、脚本、头部的内容不是正文，整段跳过
+        if !tag.starts_with('/') && matches!(name.as_str(), "style" | "script" | "head" | "title") {
+            let close = format!("</{name}");
+            match rest.to_ascii_lowercase().find(&close) {
+                Some(at) => {
+                    rest = &rest[at..];
+                    rest = rest.find('>').map_or("", |gt| &rest[gt + 1..]);
+                }
+                None => rest = "",
+            }
+            continue;
+        }
+        if BLOCKS.contains(&name.as_str()) {
+            out.push(' ');
+        }
+    }
+    out.push_str(rest);
+    out.replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+}
+
 /// 纯文本正文：转义后把网址变成链接，保留换行。
 fn text_to_html(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 64);
@@ -610,6 +687,18 @@ See https://example.com/a?b=1&c=2. Thanks!\r\n\
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn html_only_snippets_keep_paragraphs_apart() {
+        let raw = "From: a@x\r\nSubject: s\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
+<html><head><title>T</title><style>p{color:red}</style></head><body>\
+<div>Issue 48</div><h1>Making the inbox <b>a tool</b> again</h1><p>Fish &amp; chips</p>\
+<script>alert(1)</script></body></html>\r\n";
+        assert_eq!(
+            summarize(raw.as_bytes()).snippet,
+            "Issue 48 Making the inbox a tool again Fish & chips"
+        );
     }
 
     #[test]
