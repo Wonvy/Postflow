@@ -140,10 +140,45 @@ jobs:
     name: 发布 Release
     needs: [prepare, build]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
     steps:
-      - name: 去掉草稿状态
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # 草稿阶段上传的文件还没有公开地址，latest.json 里写的是 api.github.com 的地址。
+      # 那个地址对每个 IP 每小时只给 60 次匿名请求，用户多的网络里在线更新会下载失败，
+      # 所以发布前把它们换成 github.com 的公开下载地址。
+      - name: 把 latest.json 里的下载地址换成公开地址
         run: |
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/${{ needs.prepare.outputs.release_id }}" \
-            -F draft=false --jq .html_url
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --paginate \
+            --jq '.[] | [.id, .name] | @tsv' > assets.tsv
+          latest_id=$(awk -F'\t' '$2 == "latest.json" {print $1}' assets.tsv)
+          if [ -z "$latest_id" ]; then
+            echo "::error::Release 里没有 latest.json，在线更新会找不到这个版本。"
+            exit 1
+          fi
+          gh api -H "Accept: application/octet-stream" \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$latest_id" > latest.json
+          python3 - <<'EOF'
+          import csv, json, os
+          repo, tag = os.environ["GITHUB_REPOSITORY"], os.environ["TAG"]
+          names = {row[0]: row[1] for row in csv.reader(open("assets.tsv"), delimiter="\t")}
+          prefix = f"https://api.github.com/repos/{repo}/releases/assets/"
+          data = json.load(open("latest.json"))
+          for platform in data["platforms"].values():
+              url = platform["url"]
+              if url.startswith(prefix):
+                  name = names[url[len(prefix):]]
+                  platform["url"] = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          json.dump(data, open("latest.json", "w"), indent=2)
+          print(json.dumps({k: v["url"] for k, v in data["platforms"].items()}, indent=2))
+          EOF
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$latest_id"
+          curl -sSf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+            --data-binary @latest.json \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" \
+            > /dev/null
+
+      - name: 去掉草稿状态
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false --jq .html_url
