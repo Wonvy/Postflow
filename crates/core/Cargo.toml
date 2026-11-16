@@ -1,0 +1,24 @@
+[package]
+name = "postflow-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+futures = "0.3.34"
+gethostname = "1.1.0"
+keyring = "4.2.0"
+notify = "8"
+postflow-feed = { version = "0.1.0", path = "../feed" }
+postflow-mail = { version = "0.1.0", path = "../mail" }
+postflow-store = { version = "0.1.0", path = "../store" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["full"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+axum = "0.8.9"
+postflow-testkit = { path = "../testkit" }
+tempfile = "3.27.0"

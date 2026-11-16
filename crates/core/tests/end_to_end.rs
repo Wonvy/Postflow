@@ -1,0 +1,331 @@
+//! 起一个本地的假订阅服务器，从设置、订阅、阅读一路走到刷新，不依赖外网。
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+
+use axum::Router;
+use axum::extract::State;
+use axum::http::{HeaderMap, StatusCode, header};
+use axum::response::IntoResponse;
+use axum::routing::get;
+use postflow_core::{Core, Event};
+use serde_json::{Value, json};
+
+#[derive(Clone, Default)]
+struct Site {
+    /// 源里现在有几篇文章，测试里通过改它来模拟「发了新文章」。
+    posts: Arc<AtomicUsize>,
+    feed_hits: Arc<AtomicUsize>,
+    not_modified: Arc<AtomicUsize>,
+}
+
+async fn feed(State(site): State<Site>, headers: HeaderMap) -> impl IntoResponse {
+    site.feed_hits.fetch_add(1, Ordering::SeqCst);
+    let posts = site.posts.load(Ordering::SeqCst);
+    let etag = format!("\"v{posts}\"");
+    if headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        == Some(etag.as_str())
+    {
+        site.not_modified.fetch_add(1, Ordering::SeqCst);
+        return (StatusCode::NOT_MODIFIED, HeaderMap::new(), String::new());
+    }
+    let items: String = (1..=posts)
+        .map(|n| {
+            format!(
+                "<item><title>Post {n}</title><link>/posts/{n}</link><guid>post-{n}</guid>\
+                 <pubDate>Mon, 0{n} Nov 2026 08:00:00 GMT</pubDate>\
+                 <description>&lt;p&gt;Body of post {n} &lt;script&gt;alert(1)&lt;/script&gt;\
+                 &lt;a href=\"/more\"&gt;more&lt;/a&gt;&lt;/p&gt;</description></item>"
+            )
+        })
+        .collect();
+    let body = format!(
+        "<?xml version=\"1.0\"?><rss version=\"2.0\"><channel>\
+         <title>Local Blog</title><link>/</link>{items}</channel></rss>"
+    );
+    let mut out = HeaderMap::new();
+    out.insert(header::ETAG, etag.parse().unwrap());
+    out.insert(header::CONTENT_TYPE, "application/rss+xml".parse().unwrap());
+    (StatusCode::OK, out, body)
+}
+
+async fn home() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        "<html><head><title>Local Blog</title>\
+         <link rel=\"alternate\" type=\"application/rss+xml\" title=\"Local feed\" href=\"/feed.xml\">\
+         </head><body>hello</body></html>",
+    )
+}
+
+async fn start_site() -> (Site, SocketAddr) {
+    let site = Site::default();
+    site.posts.store(2, Ordering::SeqCst);
+    let app = Router::new()
+        .route("/", get(home))
+        .route("/feed.xml", get(feed))
+        .with_state(site.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (site, addr)
+}
+
+async fn call(core: &Arc<Core>, method: &str, params: Value) -> Value {
+    core.rpc(method, params, Some("test".into()))
+        .await
+        .unwrap_or_else(|e| panic!("{method} failed: {e}"))
+}
+
+async fn list(core: &Arc<Core>, view: &str) -> Vec<Value> {
+    call(core, "items.list", json!({ "filter": { "view": view } })).await["items"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+/// 等到刷新结束的事件，超时就失败。
+async fn wait_for_refresh(rx: &mut tokio::sync::broadcast::Receiver<Event>) {
+    let wait = async {
+        loop {
+            if let Ok(Event::Refresh { active: 0 }) = rx.recv().await {
+                break;
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), wait)
+        .await
+        .expect("refresh did not finish");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn setup_subscribe_read_refresh() {
+    let (site, addr) = start_site().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let data_dir = tmp.path().join("data");
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+
+    // 还没设置时，除了状态和设置以外的方法都应该被拒绝
+    let status = call(&core, "app.status", json!({})).await;
+    assert_eq!(status["configured"], false);
+    assert!(!status["suggested_data_dir"].as_str().unwrap().is_empty());
+    let err = core.rpc("nav.get", json!({}), None).await.unwrap_err();
+    assert_eq!(err.code, "not_configured");
+
+    let status = call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": data_dir.to_str().unwrap(), "device_name": "Test Mac" }),
+    )
+    .await;
+    assert_eq!(status["configured"], true);
+    assert_eq!(status["device_name"], "Test Mac");
+    assert!(data_dir.join("meta.json").exists());
+
+    // 贴网站首页，应当发现它声明的订阅源
+    let home = format!("http://{addr}/");
+    let candidates = call(&core, "feeds.discover", json!({ "url": home })).await;
+    assert_eq!(candidates[0]["url"], format!("http://{addr}/feed.xml"));
+    assert_eq!(candidates[0]["title"], "Local feed");
+
+    // 直接拿首页地址去订阅也行，会自动采用唯一的候选
+    let feed = call(
+        &core,
+        "feeds.add",
+        json!({ "url": home, "folder": "Blogs" }),
+    )
+    .await;
+    assert_eq!(feed["title"], "Local Blog");
+    assert_eq!(feed["folder"], "Blogs");
+    assert_eq!(feed["unread"], 2);
+    assert_eq!(feed["icon_url"], format!("http://{addr}/favicon.ico"));
+    let feed_id = feed["id"].as_str().unwrap().to_string();
+
+    let nav = call(&core, "nav.get", json!({ "today_since": 0 })).await;
+    assert_eq!(nav["counts"]["unread"], 2);
+    assert_eq!(nav["feeds"].as_array().unwrap().len(), 1);
+
+    // 新的在前；相对链接补全成绝对地址
+    let items = list(&core, "inbox").await;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["title"], "Post 2");
+    assert_eq!(items[0]["url"], format!("http://{addr}/posts/2"));
+    assert_eq!(items[0]["source_title"], "Local Blog");
+    assert_eq!(items[0]["read"], false);
+
+    // 正文经过净化：脚本没了，相对链接补全并在新窗口打开
+    let id = items[0]["id"].as_str().unwrap().to_string();
+    let detail = call(&core, "items.get", json!({ "id": id })).await;
+    let content = detail["content"].as_str().unwrap();
+    assert!(content.contains("Body of post 2"), "{content}");
+    assert!(!content.contains("script"), "{content}");
+    assert!(
+        content.contains(&format!("href=\"http://{addr}/more\"")),
+        "{content}"
+    );
+    assert!(content.contains("target=\"_blank\""), "{content}");
+
+    // 已读、星标、归档
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [id], "read": true, "starred": true }),
+    )
+    .await;
+    assert_eq!(list(&core, "unread").await.len(), 1);
+    assert_eq!(list(&core, "starred").await.len(), 1);
+    call(&core, "items.set", json!({ "ids": [id], "archived": true })).await;
+    assert_eq!(list(&core, "inbox").await.len(), 1);
+    assert_eq!(list(&core, "archived").await.len(), 1);
+
+    // 刷新：内容没变时服务器回 304，不产生新文章
+    let mut events = core.subscribe();
+    call(&core, "feeds.refresh", json!({})).await;
+    wait_for_refresh(&mut events).await;
+    assert_eq!(site.not_modified.load(Ordering::SeqCst), 1);
+    assert_eq!(list(&core, "inbox").await.len(), 1);
+
+    // 发了一篇新文章，刷新后出现，旧文章的状态不受影响
+    site.posts.store(3, Ordering::SeqCst);
+    call(&core, "feeds.refresh", json!({ "id": feed_id })).await;
+    wait_for_refresh(&mut events).await;
+    let items = list(&core, "inbox").await;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["title"], "Post 3");
+    assert_eq!(list(&core, "archived").await.len(), 1);
+
+    // 全部标为已读
+    let marked = call(
+        &core,
+        "items.mark_all_read",
+        json!({ "filter": { "view": "inbox" } }),
+    )
+    .await;
+    assert_eq!(marked["count"], 2);
+    assert_eq!(
+        call(&core, "nav.get", json!({})).await["counts"]["unread"],
+        0
+    );
+
+    // 改名、移动文件夹、退订
+    call(
+        &core,
+        "feeds.update",
+        json!({ "id": feed_id, "title": "Renamed", "folder": "" }),
+    )
+    .await;
+    let nav = call(&core, "nav.get", json!({})).await;
+    assert_eq!(nav["feeds"][0]["title"], "Renamed");
+    assert_eq!(nav["feeds"][0]["folder"], "");
+    call(&core, "feeds.remove", json!({ "id": feed_id })).await;
+    let nav = call(&core, "nav.get", json!({})).await;
+    assert!(nav["feeds"].as_array().unwrap().is_empty());
+    // 星标的那篇在退订后仍然保留
+    assert_eq!(list(&core, "starred").await.len(), 1);
+
+    core.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn opml_roundtrip_and_restart() {
+    let (_site, addr) = start_site().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let local = tmp.path().join("local");
+    let data_dir = tmp.path().join("data");
+    let core = Core::open(&local).await.unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": data_dir.to_str().unwrap() }),
+    )
+    .await;
+
+    let opml = format!(
+        "<?xml version=\"1.0\"?><opml version=\"2.0\"><head><title>x</title></head><body>\
+         <outline text=\"News\"><outline type=\"rss\" text=\"Local\" xmlUrl=\"http://{addr}/feed.xml\"/></outline>\
+         <outline type=\"rss\" text=\"Dead\" xmlUrl=\"http://127.0.0.1:9/nothing.xml\"/>\
+         </body></opml>"
+    );
+    let mut events = core.subscribe();
+    let result = call(&core, "feeds.import_opml", json!({ "content": opml })).await;
+    assert_eq!(result["added"], 2);
+    wait_for_refresh(&mut events).await;
+
+    let nav = call(&core, "nav.get", json!({})).await;
+    let feeds = nav["feeds"].as_array().unwrap();
+    let local_feed = feeds.iter().find(|f| f["title"] == "Local").unwrap();
+    let dead_feed = feeds.iter().find(|f| f["title"] == "Dead").unwrap();
+    assert_eq!(local_feed["folder"], "News");
+    assert_eq!(local_feed["unread"], 2);
+    assert!(local_feed["error"].is_null());
+    // 抓不到的源要把原因记下来，界面据此标出失效源
+    assert!(
+        dead_feed["error"].as_str().is_some_and(|e| !e.is_empty()),
+        "{dead_feed}"
+    );
+
+    // 导出再解析，订阅和文件夹都还在
+    let exported = call(&core, "feeds.export_opml", json!({})).await;
+    let content = exported["content"].as_str().unwrap();
+    assert!(content.contains(&format!("http://{addr}/feed.xml")));
+    assert!(content.contains("News"));
+
+    // 重启：配置、订阅、文章都从磁盘恢复，不需要重新设置
+    core.shutdown();
+    drop(core);
+    let core = Core::open(&local).await.unwrap();
+    let status = call(&core, "app.status", json!({})).await;
+    assert_eq!(status["configured"], true);
+    assert_eq!(list(&core, "inbox").await.len(), 2);
+
+    // 把索引删了也能从数据目录重建出来
+    let stats = call(&core, "index.rebuild", json!({})).await;
+    assert_eq!(stats["articles"], 2);
+    assert_eq!(list(&core, "inbox").await.len(), 2);
+    core.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changes_written_by_another_device_are_picked_up() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data_dir = tmp.path().join("data");
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": data_dir.to_str().unwrap() }),
+    )
+    .await;
+    let mut events = core.subscribe();
+
+    // 另一台设备（另一个索引、另一个设备 ID）往同一个数据目录里写了一条订阅，
+    // 相当于同步工具把它的日志文件放了进来
+    let other_index = tmp.path().join("other/index.db");
+    let other = postflow_store::Store::open(&data_dir, &other_index, "ffffffffffff").unwrap();
+    other
+        .put_feed(postflow_store::NewFeed {
+            url: "https://elsewhere.example/feed.xml".into(),
+            title: "From the other device".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+    let wait = async {
+        loop {
+            if let Ok(Event::Changed { source: None, .. }) = events.recv().await {
+                break;
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(15), wait)
+        .await
+        .expect("the directory watcher did not notice the new log file");
+
+    let nav = call(&core, "nav.get", json!({})).await;
+    assert_eq!(nav["feeds"][0]["title"], "From the other device");
+    core.shutdown();
+}

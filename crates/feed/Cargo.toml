@@ -1,0 +1,22 @@
+[package]
+name = "postflow-feed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ammonia = "4.2.5"
+bytes = "1.12.1"
+dom_smoothie = "0.19.0"
+encoding_rs = "0.8.35"
+feed-rs = "3.0.0"
+futures = "0.3.34"
+opml = "1.1.6"
+reqwest = { version = "0.13.5", features = ["gzip", "brotli"] }
+scraper = "0.29.0"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"
+url = "2.5.8"
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }

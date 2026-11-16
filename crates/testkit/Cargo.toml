@@ -1,0 +1,10 @@
+[package]
+publish = false
+description = "只供测试使用的假服务器"
+name = "postflow-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio = { version = "1.54.1", features = ["full"] }

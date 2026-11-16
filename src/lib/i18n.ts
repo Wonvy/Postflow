@@ -1,0 +1,469 @@
+import { useCallback } from "react";
+import { useUi } from "./store";
+import type { Lang } from "./time";
+import { RpcError } from "./transport";
+
+const zh = {
+  "nav.inbox": "收件箱",
+  "nav.today": "今天",
+  "nav.unread": "未读",
+  "nav.starred": "星标",
+  "nav.archived": "已归档",
+  "nav.feeds": "订阅",
+  "nav.mail": "邮箱",
+  "nav.account": "邮箱",
+
+  "action.addAccount": "添加邮箱",
+  "action.addMenu": "添加",
+  "action.syncNow": "立即收信",
+  "action.remove": "移除",
+  "action.removeAccount": "移除邮箱",
+  "action.accountSettings": "邮箱设置…",
+  "action.showImages": "显示图片",
+  "action.alwaysShowImages": "总是显示此发件人的图片",
+  "action.download": "下载",
+  "action.retry": "重试",
+
+  "filter.all": "全部",
+  "filter.mail": "只看邮件",
+  "filter.article": "只看订阅",
+
+  "mail.to": "发给",
+  "mail.cc": "抄送",
+  "mail.noSubject": "（无主题）",
+  "mail.loading": "正在从服务器获取邮件…",
+  "mail.remoteBlocked": "为保护隐私，已阻止加载远程图片。",
+  "mail.attachments": "{n} 个附件",
+  "mail.saved": "已保存 {name}",
+
+  "account.addTitle": "添加邮箱",
+  "account.editTitle": "邮箱设置",
+  "account.removeTitle": "移除邮箱",
+  "account.removeBody": "移除 {email} 后，本机同步下来的邮件会被删除，所有设备上都不再显示这个邮箱。服务器上的邮件不受影响。",
+  "account.email": "邮箱地址",
+  "account.password": "密码",
+  "account.app_password": "应用专用密码",
+  "account.auth_code": "授权码",
+  "account.oauth": "密码",
+  "account.name": "显示名称",
+  "account.namePlaceholder": "可选，例如：工作",
+  "account.passwordKeep": "不修改请留空",
+  "account.server": "服务器设置",
+  "account.provider": "服务商",
+  "account.providerAuto": "根据邮箱地址识别",
+  "account.host": "IMAP 服务器",
+  "account.port": "端口",
+  "account.security": "加密方式",
+  "account.securityTls": "SSL/TLS",
+  "account.securityStarttls": "STARTTLS",
+  "account.securityNone": "不加密（仅限本机）",
+  "account.username": "用户名",
+  "account.connecting": "正在连接邮件服务器…",
+  "account.detected": "识别为 {name}",
+  "account.serverSaid": "服务器返回：{text}",
+  "account.passwordStored": "密码只保存在这台设备的系统钥匙串里，不会写进数据目录，也不会同步到其他设备。",
+  "account.needsPassword": "这台设备上还没有这个邮箱的密码，输入后开始收信。",
+  "account.lastSync": "上次收信：{time}",
+  "account.never": "还没有收过信",
+
+  "hint.exmail": "腾讯企业邮箱：先确认在网页版 设置 → 客户端设置 里开启了 IMAP。开启了微信动态密码或安全登录的，要用「客户端专用密码」，不是登录密码。",
+  "hint.qiye163": "网易企业邮箱：在网页版 设置 → 客户端设置 里开启 IMAP。开启了客户端授权码的，要用授权码登录。",
+  "hint.qiye_aliyun": "阿里企业邮箱：先确认管理员开启了 IMAP。开启了二次验证的，要在 设置 → 账户与安全 里生成三方客户端安全密码。",
+  "hint.feishu": "飞书邮箱：在飞书邮箱的 设置 → 第三方客户端 里开启 IMAP，并使用生成的专用密码。",
+  "hint.qq": "QQ 邮箱要用授权码登录：网页版 QQ 邮箱 → 设置 → 账号 → 开启 IMAP/SMTP 服务后生成。",
+  "hint.netease": "网易邮箱要用授权码登录：网页版邮箱 → 设置 → POP3/SMTP/IMAP → 开启 IMAP 服务后生成。",
+  "hint.gmail": "Gmail 要用应用专用密码：Google 账号 → 安全性 → 开启两步验证 → 应用专用密码。",
+  "hint.icloud": "iCloud 要用 App 专用密码：在 account.apple.com 的「登录与安全」里生成。",
+  "hint.oauth": "Outlook 与 Microsoft 365 已不再接受第三方客户端用密码登录，需要 OAuth 授权，这个功能还在开发中。",
+  "hint.auth_code": "这个邮箱要用授权码而不是登录密码，在邮箱网页版的设置里开启 IMAP 后生成。",
+  "hint.app_password": "这个邮箱要用应用专用密码，在账号的安全设置里生成。",
+  "hint.custom": "没有识别出服务商，已按常见规则猜测服务器地址。连接不上时请展开服务器设置修改。",
+
+  "action.addFeed": "添加订阅",
+  "action.refresh": "刷新",
+  "action.refreshAll": "刷新全部订阅",
+  "action.markAllRead": "全部标为已读",
+  "action.settings": "设置",
+  "action.star": "加星标",
+  "action.unstar": "取消星标",
+  "action.archive": "归档",
+  "action.unarchive": "移回收件箱",
+  "action.markRead": "标为已读",
+  "action.markUnread": "标为未读",
+  "action.openOriginal": "在浏览器中打开",
+  "action.fullText": "抓取全文",
+  "action.feedContent": "显示订阅内容",
+  "action.cancel": "取消",
+  "action.save": "保存",
+  "action.add": "添加",
+  "action.edit": "编辑…",
+  "action.unsubscribe": "退订",
+  "action.copyUrl": "复制订阅地址",
+  "action.choose": "选择…",
+  "action.more": "更多",
+  "action.close": "关闭",
+  "action.clearSelection": "取消选择",
+
+  "list.empty": "这里没有内容",
+  "list.caughtUp": "都处理完了",
+  "list.noFeedsTitle": "还没有订阅",
+  "list.noFeedsBody": "添加一个订阅源，或者在设置里从其他阅读器导入 OPML。",
+  "list.loading": "加载中…",
+  "list.noSourcesTitle": "还没有任何来源",
+  "list.noSourcesBody": "添加邮箱或订阅源，邮件和文章会出现在同一个收件箱里。",
+
+  "reader.empty": "选择一篇文章开始阅读",
+  "reader.selected": "已选择 {n} 项",
+  "reader.hintMove": "上下移动",
+  "reader.hintArchive": "归档",
+  "reader.hintStar": "星标",
+  "reader.hintRead": "已读 / 未读",
+  "reader.hintOpen": "在浏览器中打开",
+  "reader.hintSelect": "多选",
+  "reader.loadingFullText": "正在抓取全文…",
+  "reader.untitled": "无标题",
+
+  "add.title": "添加订阅",
+  "add.url": "网址",
+  "add.urlPlaceholder": "粘贴网站或订阅地址",
+  "add.folder": "文件夹",
+  "add.folderPlaceholder": "不放入文件夹",
+  "add.searching": "正在查找订阅源…",
+  "add.adding": "正在添加…",
+  "add.choose": "找到多个订阅源，选择一个",
+
+  "edit.title": "编辑订阅",
+  "edit.name": "名称",
+  "edit.folder": "文件夹",
+  "edit.interval": "刷新间隔",
+  "edit.intervalDefault": "默认",
+  "edit.lastError": "上次刷新失败",
+
+  "interval.minutes": "{n} 分钟",
+  "interval.hours": "{n} 小时",
+
+  "status.refreshing": "正在刷新 {n} 个订阅",
+
+  "onboarding.title": "欢迎使用 Postflow",
+  "onboarding.subtitle": "所有数据都保存在你自己的设备上，不经过任何服务器。",
+  "onboarding.dataDir": "数据目录",
+  "onboarding.dataDirHint":
+    "订阅、文章和阅读状态都存在这里。把这个目录交给 Syncthing、iCloud 等同步工具，就能在多台设备之间保持一致；目录里已有其他设备的数据时会自动导入。",
+  "onboarding.deviceName": "设备名称",
+  "onboarding.deviceNameHint": "用来在多台设备之间区分这一台。",
+  "onboarding.start": "开始使用",
+  "onboarding.previousError": "上次打开数据目录失败",
+
+  "settings.title": "设置",
+  "settings.appearance": "外观",
+  "settings.theme": "主题",
+  "settings.themeSystem": "跟随系统",
+  "settings.themeDark": "深色",
+  "settings.themeLight": "浅色",
+  "settings.density": "列表密度",
+  "settings.compact": "紧凑",
+  "settings.comfortable": "宽松",
+  "settings.language": "语言",
+  "settings.langSystem": "跟随系统",
+  "settings.feeds": "订阅",
+  "settings.refreshInterval": "默认刷新间隔",
+  "settings.opml": "迁移订阅",
+  "settings.opmlHint": "用 OPML 文件和其他阅读器互相导入导出订阅列表。",
+  "settings.import": "导入 OPML",
+  "settings.export": "导出 OPML",
+  "settings.imported": "新增 {added} 个订阅，文件里共 {total} 个",
+  "settings.exported": "已导出 {n} 个订阅",
+  "settings.data": "数据",
+  "settings.dataDir": "数据目录",
+  "settings.thisDevice": "这台设备",
+  "settings.devices": "使用这个数据目录的设备",
+  "settings.rebuild": "重建索引",
+  "settings.rebuildHint": "索引只是数据目录的本机缓存。显示不对时可以重建，不会丢数据。",
+  "settings.rebuilt": "已重建，共 {n} 篇文章",
+  "settings.about": "关于",
+  "settings.version": "版本",
+
+  "error.invalid_url": "地址格式不正确",
+  "error.network": "连接不上，请检查网络和地址",
+  "error.http_status": "对方服务器返回了错误",
+  "error.too_large": "内容太大，无法处理",
+  "error.not_a_feed": "这个地址不是订阅源",
+  "error.no_feed_found": "在这个地址没有找到订阅源",
+  "error.invalid_opml": "这不是有效的 OPML 文件",
+  "error.extract_failed": "没能从原网页提取出正文",
+  "error.format_too_new": "数据目录由更新版本的 Postflow 创建，请先升级应用",
+  "error.io": "读写文件失败",
+  "error.bad_params": "输入不正确",
+  "error.mail_auth": "登录失败：邮箱地址或密码不对。很多邮箱需要使用授权码或应用专用密码，而不是登录密码。",
+  "error.mail_connect": "连不上邮件服务器，请检查网络和服务器设置",
+  "error.mail_tls": "安全连接失败，服务器的证书可能有问题",
+  "error.mail_timeout": "邮件服务器响应超时",
+  "error.mail_server": "邮件服务器拒绝了请求",
+  "error.mail_no_password": "这台设备上还没有这个邮箱的密码",
+  "error.mail_unavailable": "这个邮箱现在没有连上",
+  "error.mail_parse": "无法解析这封邮件",
+  "error.invalid_email": "邮箱地址格式不正确",
+  "error.keychain": "无法把密码保存到系统钥匙串",
+  "error.not_found": "找不到了，可能已被删除",
+  "error.unknown": "出错了",
+} as const;
+
+export type MessageKey = keyof typeof zh;
+
+const en: Record<MessageKey, string> = {
+  "nav.inbox": "Inbox",
+  "nav.today": "Today",
+  "nav.unread": "Unread",
+  "nav.starred": "Starred",
+  "nav.archived": "Archive",
+  "nav.feeds": "Feeds",
+  "nav.mail": "Mail",
+  "nav.account": "Mail",
+
+  "action.addAccount": "Add mail account",
+  "action.addMenu": "Add",
+  "action.syncNow": "Check mail now",
+  "action.remove": "Remove",
+  "action.removeAccount": "Remove account",
+  "action.accountSettings": "Account settings…",
+  "action.showImages": "Show images",
+  "action.alwaysShowImages": "Always show images from this sender",
+  "action.download": "Download",
+  "action.retry": "Retry",
+
+  "filter.all": "All",
+  "filter.mail": "Mail only",
+  "filter.article": "Feeds only",
+
+  "mail.to": "To",
+  "mail.cc": "Cc",
+  "mail.noSubject": "(No subject)",
+  "mail.loading": "Fetching the message from the server…",
+  "mail.remoteBlocked": "Remote images were blocked to protect your privacy.",
+  "mail.attachments": "{n} attachments",
+  "mail.saved": "Saved {name}",
+
+  "account.addTitle": "Add mail account",
+  "account.editTitle": "Account settings",
+  "account.removeTitle": "Remove account",
+  "account.removeBody": "Removing {email} deletes the mail synced to this device and hides the account on all your devices. Mail on the server is not affected.",
+  "account.email": "Email address",
+  "account.password": "Password",
+  "account.app_password": "App password",
+  "account.auth_code": "Authorization code",
+  "account.oauth": "Password",
+  "account.name": "Display name",
+  "account.namePlaceholder": "Optional, e.g. Work",
+  "account.passwordKeep": "Leave empty to keep the current one",
+  "account.server": "Server settings",
+  "account.provider": "Provider",
+  "account.providerAuto": "Detect from the address",
+  "account.host": "IMAP server",
+  "account.port": "Port",
+  "account.security": "Encryption",
+  "account.securityTls": "SSL/TLS",
+  "account.securityStarttls": "STARTTLS",
+  "account.securityNone": "None (this machine only)",
+  "account.username": "Username",
+  "account.connecting": "Connecting to the mail server…",
+  "account.detected": "Detected: {name}",
+  "account.serverSaid": "Server said: {text}",
+  "account.passwordStored": "The password is kept only in this device's system keychain. It is never written to the data folder or synced to other devices.",
+  "account.needsPassword": "This device doesn't have the password for this account yet. Enter it to start receiving mail.",
+  "account.lastSync": "Last checked {time}",
+  "account.never": "Not checked yet",
+
+  "hint.exmail": "Tencent Exmail: make sure IMAP is enabled under Settings → Client settings on the web. If WeChat dynamic passwords or secure login are on, use a client-specific password, not your login password.",
+  "hint.qiye163": "NetEase enterprise mail: enable IMAP under Settings → Client settings on the web. If client authorization codes are on, sign in with one.",
+  "hint.qiye_aliyun": "Alibaba enterprise mail: make sure your administrator enabled IMAP. With two-step verification on, generate a third-party client password under Settings → Account security.",
+  "hint.feishu": "Feishu Mail: enable IMAP under Settings → Third-party clients in Feishu Mail and use the generated password.",
+  "hint.qq": "QQ Mail needs an authorization code: QQ Mail on the web → Settings → Account → enable IMAP/SMTP, then generate one.",
+  "hint.netease": "NetEase mail needs an authorization code: webmail → Settings → POP3/SMTP/IMAP → enable IMAP, then generate one.",
+  "hint.gmail": "Gmail needs an app password: Google Account → Security → turn on 2-Step Verification → App passwords.",
+  "hint.icloud": "iCloud needs an app-specific password: generate one under Sign-In and Security at account.apple.com.",
+  "hint.oauth": "Outlook and Microsoft 365 no longer accept passwords from third-party mail apps. They need OAuth sign-in, which is still being built.",
+  "hint.auth_code": "This provider needs an authorization code instead of your login password. Enable IMAP in the webmail settings to generate one.",
+  "hint.app_password": "This provider needs an app password. Generate one in your account's security settings.",
+  "hint.custom": "The provider wasn't recognized, so the server address is a guess. If it can't connect, open the server settings and adjust them.",
+
+  "action.addFeed": "Add feed",
+  "action.refresh": "Refresh",
+  "action.refreshAll": "Refresh all feeds",
+  "action.markAllRead": "Mark all as read",
+  "action.settings": "Settings",
+  "action.star": "Star",
+  "action.unstar": "Remove star",
+  "action.archive": "Archive",
+  "action.unarchive": "Move to inbox",
+  "action.markRead": "Mark as read",
+  "action.markUnread": "Mark as unread",
+  "action.openOriginal": "Open in browser",
+  "action.fullText": "Load full text",
+  "action.feedContent": "Show feed content",
+  "action.cancel": "Cancel",
+  "action.save": "Save",
+  "action.add": "Add",
+  "action.edit": "Edit…",
+  "action.unsubscribe": "Unsubscribe",
+  "action.copyUrl": "Copy feed URL",
+  "action.choose": "Choose…",
+  "action.more": "More",
+  "action.close": "Close",
+  "action.clearSelection": "Clear selection",
+
+  "list.empty": "Nothing here",
+  "list.caughtUp": "You're all caught up",
+  "list.noFeedsTitle": "No feeds yet",
+  "list.noFeedsBody": "Add a feed, or import an OPML file from another reader in Settings.",
+  "list.loading": "Loading…",
+  "list.noSourcesTitle": "Nothing connected yet",
+  "list.noSourcesBody": "Add a mail account or a feed. Mail and articles show up in the same inbox.",
+
+  "reader.empty": "Select an article to read",
+  "reader.selected": "{n} selected",
+  "reader.hintMove": "Move up and down",
+  "reader.hintArchive": "Archive",
+  "reader.hintStar": "Star",
+  "reader.hintRead": "Read / unread",
+  "reader.hintOpen": "Open in browser",
+  "reader.hintSelect": "Select multiple",
+  "reader.loadingFullText": "Loading full text…",
+  "reader.untitled": "Untitled",
+
+  "add.title": "Add feed",
+  "add.url": "URL",
+  "add.urlPlaceholder": "Paste a website or feed address",
+  "add.folder": "Folder",
+  "add.folderPlaceholder": "No folder",
+  "add.searching": "Looking for feeds…",
+  "add.adding": "Adding…",
+  "add.choose": "Several feeds found, pick one",
+
+  "edit.title": "Edit feed",
+  "edit.name": "Name",
+  "edit.folder": "Folder",
+  "edit.interval": "Refresh interval",
+  "edit.intervalDefault": "Default",
+  "edit.lastError": "Last refresh failed",
+
+  "interval.minutes": "{n} min",
+  "interval.hours": "{n} h",
+
+  "status.refreshing": "Refreshing {n} feeds",
+
+  "onboarding.title": "Welcome to Postflow",
+  "onboarding.subtitle": "Everything stays on your own devices. No server involved.",
+  "onboarding.dataDir": "Data folder",
+  "onboarding.dataDirHint":
+    "Feeds, articles and read state live here. Hand this folder to Syncthing, iCloud or a similar tool to keep several devices in step; data already in it from another device is imported automatically.",
+  "onboarding.deviceName": "Device name",
+  "onboarding.deviceNameHint": "Tells this device apart from your others.",
+  "onboarding.start": "Get started",
+  "onboarding.previousError": "The data folder could not be opened last time",
+
+  "settings.title": "Settings",
+  "settings.appearance": "Appearance",
+  "settings.theme": "Theme",
+  "settings.themeSystem": "System",
+  "settings.themeDark": "Dark",
+  "settings.themeLight": "Light",
+  "settings.density": "List density",
+  "settings.compact": "Compact",
+  "settings.comfortable": "Comfortable",
+  "settings.language": "Language",
+  "settings.langSystem": "System",
+  "settings.feeds": "Feeds",
+  "settings.refreshInterval": "Default refresh interval",
+  "settings.opml": "Move subscriptions",
+  "settings.opmlHint": "Use an OPML file to move your feed list to or from another reader.",
+  "settings.import": "Import OPML",
+  "settings.export": "Export OPML",
+  "settings.imported": "{added} new feeds added, {total} in the file",
+  "settings.exported": "{n} feeds exported",
+  "settings.data": "Data",
+  "settings.dataDir": "Data folder",
+  "settings.thisDevice": "This device",
+  "settings.devices": "Devices using this data folder",
+  "settings.rebuild": "Rebuild index",
+  "settings.rebuildHint":
+    "The index is only a local cache of the data folder. Rebuild it if something looks wrong; no data is lost.",
+  "settings.rebuilt": "Rebuilt, {n} articles",
+  "settings.about": "About",
+  "settings.version": "Version",
+
+  "error.invalid_url": "That address is not valid",
+  "error.network": "Could not connect. Check your network and the address",
+  "error.http_status": "The server returned an error",
+  "error.too_large": "The content is too large to handle",
+  "error.not_a_feed": "That address is not a feed",
+  "error.no_feed_found": "No feed was found at that address",
+  "error.invalid_opml": "That is not a valid OPML file",
+  "error.extract_failed": "Could not extract the article from the page",
+  "error.format_too_new": "This data folder was created by a newer Postflow. Update the app first",
+  "error.io": "Could not read or write the file",
+  "error.bad_params": "That input is not valid",
+  "error.mail_auth": "Sign-in failed: the address or password is wrong. Many providers need an app password or authorization code instead of your login password.",
+  "error.mail_connect": "Could not reach the mail server. Check your network and the server settings",
+  "error.mail_tls": "The secure connection failed. The server's certificate may be invalid",
+  "error.mail_timeout": "The mail server took too long to respond",
+  "error.mail_server": "The mail server refused the request",
+  "error.mail_no_password": "This device doesn't have the password for this account",
+  "error.mail_unavailable": "This account is not connected right now",
+  "error.mail_parse": "This message could not be read",
+  "error.invalid_email": "That email address is not valid",
+  "error.keychain": "Could not save the password to the system keychain",
+  "error.not_found": "It's no longer there",
+  "error.unknown": "Something went wrong",
+};
+
+const messages: Record<Lang, Record<MessageKey, string>> = { zh, en };
+
+export function resolveLang(pref: "system" | Lang): Lang {
+  if (pref !== "system") return pref;
+  return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+export function translate(
+  lang: Lang,
+  key: MessageKey,
+  vars?: Record<string, string | number>,
+): string {
+  let text: string = messages[lang][key];
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+export type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+export function useLang(): Lang {
+  return resolveLang(useUi((s) => s.lang));
+}
+
+export function useT(): Translate {
+  const lang = useLang();
+  return useCallback((key, vars) => translate(lang, key, vars), [lang]);
+}
+
+/** 邮件服务器自己给出的原因。通用提示之外再给用户看，常常直接说明了问题在哪。 */
+export function errorDetail(err: unknown): string | null {
+  if (!err || typeof err !== "object" || !("code" in err) || !("message" in err)) return null;
+  const code = String(err.code);
+  const message = String(err.message ?? "").trim();
+  return code.startsWith("mail_") && message ? message : null;
+}
+
+/** 把核心返回的错误码换成给人看的话。 */
+export function errorText(t: Translate, err: unknown): string {
+  const code =
+    err instanceof RpcError
+      ? err.code
+      : err && typeof err === "object" && "code" in err
+        ? String(err.code)
+        : "unknown";
+  const key = `error.${code}` as MessageKey;
+  return key in zh ? t(key) : t("error.unknown");
+}

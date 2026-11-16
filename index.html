@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Postflow</title>
+    <script>
+      // 在样式加载前就定好主题，避免启动时闪一下
+      try {
+        var saved = JSON.parse(localStorage.getItem("postflow.ui") || "{}").state || {};
+        var theme = saved.theme || "system";
+        if (theme === "system") {
+          theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        }
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

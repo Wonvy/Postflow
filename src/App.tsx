@@ -1,0 +1,125 @@
+import { Unplug } from "lucide-react";
+import { type PointerEvent, useEffect, useRef } from "react";
+import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
+import { AddFeedDialog, EditFeedDialog } from "./components/FeedDialogs";
+import { ItemList } from "./components/ItemList";
+import { Onboarding } from "./components/Onboarding";
+import { Reader } from "./components/Reader";
+import { SettingsDialog } from "./components/SettingsDialog";
+import { Sidebar } from "./components/Sidebar";
+import { Button, Spinner } from "./components/ui";
+import { resolveLang } from "./lib/i18n";
+import { useCoreEvents, useStatus } from "./lib/queries";
+import { useShortcuts } from "./lib/shortcuts";
+import { useUi } from "./lib/store";
+import { isTauri } from "./lib/transport";
+
+/** 把主题和语言写到 <html> 上，跟随系统时监听系统设置的变化。 */
+function useAppearance() {
+  const theme = useUi((s) => s.theme);
+  const lang = useUi((s) => s.lang);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      const resolved = theme === "system" ? (media.matches ? "light" : "dark") : theme;
+      document.documentElement.dataset.theme = resolved;
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.lang = resolveLang(lang) === "zh" ? "zh-CN" : "en";
+  }, [lang]);
+}
+
+/** 两栏之间的拖拽条。视觉上是一条线，可拖的范围比线宽。 */
+function Resizer({ width, onResize }: { width: number; onResize: (width: number) => void }) {
+  const start = useRef<{ x: number; width: number } | null>(null);
+
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    start.current = { x: e.clientX, width };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (start.current) onResize(start.current.width + e.clientX - start.current.x);
+  };
+  const onPointerUp = () => {
+    start.current = null;
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      className="group relative z-10 -mx-[4px] w-[9px] shrink-0 cursor-col-resize"
+    >
+      <div className="absolute inset-y-0 left-[4px] w-px bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
+    </div>
+  );
+}
+
+function Shell() {
+  useShortcuts();
+  const sidebarWidth = useUi((s) => s.sidebarWidth);
+  const listWidth = useUi((s) => s.listWidth);
+  const setSidebarWidth = useUi((s) => s.setSidebarWidth);
+  const setListWidth = useUi((s) => s.setListWidth);
+
+  return (
+    <div className="flex h-full">
+      <Sidebar width={sidebarWidth} />
+      <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
+      <ItemList width={listWidth} />
+      <Resizer width={listWidth} onResize={setListWidth} />
+      <Reader />
+      <AddFeedDialog />
+      <EditFeedDialog />
+      <AddAccountDialog />
+      <EditAccountDialog />
+      <RemoveAccountDialog />
+      <SettingsDialog />
+    </div>
+  );
+}
+
+export default function App() {
+  useAppearance();
+  useCoreEvents();
+  const status = useStatus();
+
+  if (status.isPending) {
+    return (
+      <div data-tauri-drag-region className="flex h-full items-center justify-center text-fg-3">
+        <Spinner size={16} />
+      </div>
+    );
+  }
+
+  if (status.isError || !status.data) {
+    return (
+      <div data-tauri-drag-region className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+        <Unplug size={28} strokeWidth={1.25} className="text-fg-4" />
+        <div>
+          <p className="font-medium text-fg-2">Cannot reach the Postflow core</p>
+          {!isTauri && (
+            <p className="mt-1 max-w-[360px] text-[12px] leading-relaxed text-fg-3">
+              Start it with <code className="select-text font-mono text-fg-2">npm run server</code> and try again.
+            </p>
+          )}
+        </div>
+        <Button onClick={() => void status.refetch()} busy={status.isFetching}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  return status.data.configured ? <Shell /> : <Onboarding status={status.data} />;
+}
