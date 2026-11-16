@@ -219,6 +219,7 @@ fn mail_state_stays_local_and_survives_index_rebuild() {
             fetched: 5_000,
             summary: String::new(),
             content: String::new(),
+            image: None,
         }])
         .unwrap();
 

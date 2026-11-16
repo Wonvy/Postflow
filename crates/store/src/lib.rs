@@ -8,6 +8,7 @@
 mod error;
 pub mod hlc;
 pub mod ids;
+pub mod image;
 pub mod logs;
 mod mail;
 mod model;

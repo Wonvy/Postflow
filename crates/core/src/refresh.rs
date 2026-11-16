@@ -177,6 +177,7 @@ pub(crate) fn to_articles(feed_id: &str, entries: Vec<ParsedEntry>, now: i64) ->
             fetched: now,
             summary: e.summary,
             content: e.content,
+            image: e.image,
         })
         .collect()
 }

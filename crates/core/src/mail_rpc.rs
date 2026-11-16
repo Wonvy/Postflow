@@ -73,6 +73,12 @@ fn non_empty(s: Option<String>) -> Option<String> {
     s.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
+/// 侧栏里拖动后的新顺序。
+#[derive(Deserialize)]
+struct Reorder {
+    ids: Vec<String>,
+}
+
 impl Core {
     pub(crate) async fn mail_rpc(
         self: &Arc<Self>,
@@ -86,6 +92,16 @@ impl Core {
             "accounts.add" => self.add_account(params, session).await,
             "accounts.update" => self.update_account(params, session).await,
             "accounts.remove" => self.remove_account(params, session).await,
+            "accounts.reorder" => match parse::<Reorder>(params) {
+                Ok(p) => match session.db(move |s| s.reorder_accounts(&p.ids)).await {
+                    Ok(()) => {
+                        self.emit_changed(&[Scope::Feeds], None);
+                        reply(json!({}))
+                    }
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
+            },
             "accounts.sync" => match parse::<OptionalId>(params) {
                 Ok(OptionalId { id: Some(id) }) => {
                     self.send_mail(session, &id, Command::Sync);

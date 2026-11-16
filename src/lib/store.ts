@@ -12,6 +12,11 @@ export type ListScope =
   | { kind: "folder"; folder: string };
 
 export type ThemePref = "system" | "dark" | "light";
+/** 列表的显示方式：一行一条、带摘要和缩略图、卡片。 */
+export type ListView = "list" | "summary" | "cards";
+
+export const CARD_MIN = 160;
+export const CARD_MAX = 480;
 export type Density = "compact" | "comfortable";
 export type LangPref = "system" | "zh" | "en";
 
@@ -22,6 +27,8 @@ export type Dialog =
   | { type: "add-account" }
   | { type: "edit-account"; accountId: string }
   | { type: "remove-account"; accountId: string }
+  /** 新建文件夹，或者给 `folder` 改名。 */
+  | { type: "folder"; folder?: string }
   | null;
 
 interface UiState {
@@ -51,6 +58,12 @@ interface UiState {
   collapsedFolders: string[];
   /** 翻译成哪种语言，模型目录里的语言代码。为空时跟界面语言一致。 */
   translateTo: string | null;
+  /** 每个列表各自记住的显示方式，键见 `scopeKey`。没选过的用 `defaultListView`。 */
+  listViews: Record<string, ListView>;
+  /** 最近一次选的显示方式，新打开的列表沿用它。 */
+  defaultListView: ListView;
+  /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
+  cardSize: number;
 
   setScope: (scope: ListScope) => void;
   open: (id: string | null) => void;
@@ -67,13 +80,17 @@ interface UiState {
   setListWidth: (w: number) => void;
   toggleFolder: (folder: string) => void;
   setTranslateTo: (code: string | null) => void;
+  setListView: (scope: ListScope, view: ListView) => void;
+  setCardSize: (size: number) => void;
   requestTranslate: () => void;
 }
 
 export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 360;
 export const LIST_MIN = 280;
-export const LIST_MAX = 640;
+export const LIST_MAX = 1400;
+/** 阅读面板至少留这么宽，列表再宽也不挤掉它。 */
+export const READER_MIN = 380;
 
 const clamp = (n: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, n)));
 
@@ -97,6 +114,9 @@ export const useUi = create<UiState>()(
       listWidth: 380,
       collapsedFolders: [],
       translateTo: null,
+      listViews: {},
+      defaultListView: "list",
+      cardSize: 260,
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -123,6 +143,9 @@ export const useUi = create<UiState>()(
             : [...s.collapsedFolders, folder],
         })),
       setTranslateTo: (translateTo) => set({ translateTo }),
+      setListView: (scope, view) =>
+        set((s) => ({ listViews: { ...s.listViews, [scopeKey(scope)]: view }, defaultListView: view })),
+      setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
     }),
     {
@@ -137,10 +160,32 @@ export const useUi = create<UiState>()(
         kindFilter: s.kindFilter,
         groupMode: s.groupMode,
         translateTo: s.translateTo,
+        listViews: s.listViews,
+        defaultListView: s.defaultListView,
+        cardSize: s.cardSize,
       }),
     },
   ),
 );
+
+/** 列表范围的标识，用来分别记住每个列表的显示方式。 */
+export function scopeKey(scope: ListScope): string {
+  switch (scope.kind) {
+    case "view":
+      return `view:${scope.view}`;
+    case "feed":
+      return `feed:${scope.feedId}`;
+    case "account":
+      return `account:${scope.accountId}`;
+    case "folder":
+      return `folder:${scope.folder}`;
+  }
+}
+
+/** 当前列表的显示方式。 */
+export function useListView(): ListView {
+  return useUi((s) => s.listViews[scopeKey(s.scope)] ?? s.defaultListView);
+}
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */
 export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFilter {

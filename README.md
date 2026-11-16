@@ -49,7 +49,9 @@ click **More info → Run anyway**.
 **Feeds**
 
 - Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported.
-- Folders, per-feed refresh intervals, OPML import and export.
+- Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them, drop them on a folder to
+  move them in, or on the Feeds heading to move them out. Mailboxes and folders can be dragged into order too, and
+  the order syncs to your other devices.
 - Load the full article from the original page for feeds that only publish a summary.
 
 **One inbox**
@@ -58,7 +60,11 @@ click **More info → Run anyway**.
   or look at a single account or feed.
 - Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
   source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
-- Inbox, Today, Unread, Starred and Archive views.
+- Inbox, Today, Unread, Starred and Archive views. Drag items from the list onto Starred or Archive to star or
+  archive them.
+- Three ways to show a list: compact rows, a summary with an excerpt and thumbnail, or a grid of cards with cover
+  images. Each list remembers its own choice. Hold Ctrl (⌘ on a Mac) and scroll, or pinch on a trackpad, to resize
+  the cards.
 - Offline translation for mail and articles. Press `T` and the message is translated on your device, keeping its
   layout and links; press it again for the original. The language is detected for you, and models for more than 50
   languages download once (about 40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read

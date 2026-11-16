@@ -75,6 +75,8 @@ export interface Item {
   archived: boolean;
   sender_address: string | null;
   has_attachments: boolean;
+  /** 卡片视图用的封面图，只有文章有。 */
+  image: string | null;
 }
 
 export interface Mailbox {
@@ -257,6 +259,8 @@ export const api = {
     patch: { title?: string; folder?: string; interval_min?: number | null },
   ) => rpc<void>("feeds.update", { id, ...patch }),
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
+  /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
+  reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
   refresh: (id?: string) => rpc<{ count: number }>("feeds.refresh", { id }),
   importOpml: (content: string) =>
     rpc<{ added: number; total: number }>("feeds.import_opml", { content }),
@@ -278,6 +282,7 @@ export const api = {
   updateAccount: (id: string, changes: AccountChanges) =>
     rpc<Account>("accounts.update", { id, ...changes }),
   removeAccount: (id: string) => rpc<void>("accounts.remove", { id }),
+  reorderAccounts: (ids: string[]) => rpc<void>("accounts.reorder", { ids }),
   syncAccount: (id?: string) => rpc<void>("accounts.sync", { id }),
   attachment: (id: string, index: number, path?: string) =>
     rpc<{ name: string; mime?: string; data?: string; path?: string }>("mail.attachment", {

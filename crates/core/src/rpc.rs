@@ -91,6 +91,14 @@ struct AddFeed {
     title: Option<String>,
 }
 
+/// 侧栏里拖动后，一个文件夹（空字符串是文件夹外）里订阅源的新顺序。
+#[derive(Deserialize)]
+struct ReorderFeeds {
+    #[serde(default)]
+    folder: String,
+    ids: Vec<String>,
+}
+
 #[derive(Deserialize)]
 struct UpdateFeed {
     id: String,
@@ -219,6 +227,16 @@ impl Core {
             "feeds.update" => {
                 let p: UpdateFeed = parse(params)?;
                 session.db(move |s| s.update_feed(&p.id, p.patch)).await?;
+                self.emit_changed(&[Scope::Feeds, Scope::Items], client);
+                reply(json!({}))
+            }
+            "feeds.reorder" => {
+                let p: ReorderFeeds = parse(params)?;
+                let folder = p.folder.trim().to_string();
+                session
+                    .db(move |s| s.reorder_feeds(&folder, &p.ids))
+                    .await?;
+                // 其他窗口要跟着变；发起方已经先在本地排好了
                 self.emit_changed(&[Scope::Feeds, Scope::Items], client);
                 reply(json!({}))
             }

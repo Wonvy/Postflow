@@ -7,31 +7,154 @@ import {
   ChevronDown,
   ChevronRight,
   Inbox,
+  LayoutGrid,
   Layers,
+  List,
   ListCollapse,
   type LucideIcon,
   Mail,
   MailOpen,
+  Minus,
   Paperclip,
+  Plus,
   RefreshCw,
+  Rows3,
   Rss,
   Star,
   X,
 } from "lucide-react";
-import { type MouseEvent, useEffect, useRef } from "react";
+import { type CSSProperties, type DragEvent, type MouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useActions } from "../lib/actions";
 import type { Item, ItemKind } from "../lib/api";
+import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type Translate, useLang, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
+import { isMac } from "../lib/platform";
 import { useNav } from "../lib/queries";
-import { type ListScope, useUi } from "../lib/store";
+import { CARD_MAX, CARD_MIN, type ListScope, type ListView, useListView, useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
 
 const ROW_HEIGHT = { compact: 34, comfortable: 58 } as const;
-/** 滚动到离末尾还剩这么多行时开始加载下一页。 */
+/** 摘要视图一行的高度：标题、两行摘要、来源。 */
+const SUMMARY_HEIGHT = 98;
+/** 展开的组的标题行。 */
+const HEADER_HEIGHT = 30;
+/** 卡片之间的间距，以及卡片下半部分文字区的高度。 */
+const CARD_GAP = 10;
+const CARD_TEXT = 128;
+/** 滚动到离末尾还剩这么多条时开始加载下一页。 */
 const LOAD_AHEAD = 30;
+
+/**
+ * 虚拟列表里的一行：展开的组的标题、一条（或折叠的一组），或者卡片视图里的一排卡片。
+ */
+type Line =
+  | { kind: "header"; group: Group }
+  | { kind: "row"; row: Row }
+  | { kind: "cards"; rows: Row[] };
+
+function linesOf(rows: Row[], view: ListView, columns: number): Line[] {
+  if (view !== "cards") {
+    return rows.map((row) =>
+      row.kind === "group" && row.expanded ? { kind: "header", group: row.group } : { kind: "row", row },
+    );
+  }
+  const lines: Line[] = [];
+  let current: Row[] = [];
+  const flush = () => {
+    if (current.length > 0) lines.push({ kind: "cards", rows: current });
+    current = [];
+  };
+  for (const row of rows) {
+    if (row.kind === "group" && row.expanded) {
+      flush();
+      lines.push({ kind: "header", group: row.group });
+      continue;
+    }
+    // 展开的组里的卡片自成几排，不和组外的混在一排
+    const child = row.kind === "item" && row.child;
+    const first = current[0];
+    if (first && (first.kind === "item" && first.child) !== child) flush();
+    current.push(row);
+    if (current.length >= columns) flush();
+  }
+  flush();
+  return lines;
+}
+
+/** 一行里能停留的位置。 */
+function lineIds(line: Line): string[] {
+  if (line.kind === "header") return [];
+  return (line.kind === "row" ? [line.row] : line.rows).map(rowId);
+}
+
+const VIEW_OPTIONS: { value: ListView; icon: LucideIcon; label: "view.list" | "view.summary" | "view.cards" }[] = [
+  { value: "list", icon: List, label: "view.list" },
+  { value: "summary", icon: Rows3, label: "view.summary" },
+  { value: "cards", icon: LayoutGrid, label: "view.cards" },
+];
+
+/** 工具栏里切换显示方式：列表、摘要、卡片。卡片视图下还能调大小。 */
+function ViewControl() {
+  const t = useT();
+  const scope = useUi((s) => s.scope);
+  const view = useListView();
+  const setView = useUi((s) => s.setListView);
+  const cardSize = useUi((s) => s.cardSize);
+  const setCardSize = useUi((s) => s.setCardSize);
+  const Icon = VIEW_OPTIONS.find((o) => o.value === view)?.icon ?? List;
+  return (
+    <Menu
+      align="end"
+      trigger={
+        <button
+          type="button"
+          aria-label={t("view.label")}
+          title={t("view.label")}
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+        >
+          <Icon {...ICON} />
+        </button>
+      }
+    >
+      <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{t("view.label")}</div>
+      {VIEW_OPTIONS.map(({ value, icon: OptionIcon, label }) => (
+        <MenuItem key={value} icon={<OptionIcon size={14} />} onSelect={() => setView(scope, value)}>
+          <span className="flex-1">{t(label)}</span>
+          {view === value && <Check size={14} className="ml-3 text-fg-2" />}
+        </MenuItem>
+      ))}
+      {view === "cards" && (
+        <div className="mt-1 border-t border-line px-2 pb-1.5 pt-2">
+          <div className="flex items-center gap-1">
+            <span className="flex-1 text-[12px] text-fg-2">{t("view.cardSize")}</span>
+            <button
+              type="button"
+              aria-label={t("view.smaller")}
+              disabled={cardSize <= CARD_MIN}
+              onClick={() => setCardSize(cardSize - 40)}
+              className="flex size-6 items-center justify-center rounded text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-40"
+            >
+              <Minus size={13} />
+            </button>
+            <button
+              type="button"
+              aria-label={t("view.larger")}
+              disabled={cardSize >= CARD_MAX}
+              onClick={() => setCardSize(cardSize + 40)}
+              className="flex size-6 items-center justify-center rounded text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-40"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+          <div className="mt-1 text-[11px] text-fg-3">{t("view.cardSizeHint", { key: isMac ? "⌘" : "Ctrl" })}</div>
+        </div>
+      )}
+    </Menu>
+  );
+}
 
 function scopeTitle(scope: ListScope, t: Translate, sourceTitle: (id: string) => string | undefined) {
   switch (scope.kind) {
@@ -137,18 +260,74 @@ export function ItemList({ width }: { width: number }) {
   const { markAllRead, refresh, membersOf } = useActions();
   const { query, items, rows: listRows, stops, groupMode } = useListModel();
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  const view = useListView();
+  const cardSize = useUi((s) => s.cardSize);
 
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
-  const rowHeight = ROW_HEIGHT[density];
+
+  // 卡片按列表的实际宽度排列
+  const [inner, setInner] = useState(width);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const update = () => setInner(el.clientWidth - 12);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const columns = Math.max(1, Math.floor((inner + CARD_GAP) / (cardSize + CARD_GAP)));
+  const cardWidth = Math.floor((inner - CARD_GAP * (columns - 1)) / columns);
+  const imageHeight = Math.round(cardWidth * 0.56);
+  const cardHeight = imageHeight + CARD_TEXT;
+
+  const lines = useMemo(() => linesOf(listRows, view, columns), [listRows, view, columns]);
+  const sizeOf = (line: Line | undefined) =>
+    !line
+      ? 0
+      : line.kind === "header"
+        ? HEADER_HEIGHT
+        : line.kind === "cards"
+          ? cardHeight + CARD_GAP
+          : view === "summary"
+            ? SUMMARY_HEIGHT
+            : ROW_HEIGHT[density];
   const virtualizer = useVirtualizer({
-    count: listRows.length,
+    count: lines.length,
     getScrollElement: () => scroller.current,
-    estimateSize: () => rowHeight,
-    overscan: 12,
+    estimateSize: (i) => sizeOf(lines[i]),
+    overscan: view === "cards" ? 3 : 12,
   });
 
-  useEffect(() => virtualizer.measure(), [rowHeight, virtualizer]);
+  useEffect(() => virtualizer.measure(), [density, view, cardHeight, columns, virtualizer]);
+
+  // 按住 Ctrl（Mac 上是 ⌘，或者触控板双指捏合）滚动滚轮调整卡片大小
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || viewRef.current !== "cards") return;
+      e.preventDefault();
+      const delta = Math.max(-60, Math.min(60, e.deltaY));
+      const { cardSize: size, setCardSize } = useUi.getState();
+      setCardSize(size * Math.exp(-delta * 0.004));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // 卡片换了列数时，让原来最上面的那张还在最上面
+  const topId = useRef<string | null>(null);
+  const shownColumns = useRef(columns);
+  useLayoutEffect(() => {
+    if (shownColumns.current === columns) return;
+    shownColumns.current = columns;
+    const index = lines.findIndex((l) => topId.current !== null && lineIds(l).includes(topId.current));
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: "start" });
+  }, [columns, lines, virtualizer]);
 
   // 换了列表就回到顶部
   useEffect(() => {
@@ -159,19 +338,34 @@ export function ItemList({ width }: { width: number }) {
   // 用键盘移动时让打开的那一行保持在视野里
   useEffect(() => {
     if (!openId) return;
-    const index = listRows.findIndex((r) => (r.kind === "item" || !r.expanded) && rowId(r) === openId);
+    const index = lines.findIndex((l) => lineIds(l).includes(openId));
     if (index >= 0) virtualizer.scrollToIndex(index, { align: "auto" });
     // 只在打开的条目变化时滚动，列表内容更新时不动
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId]);
 
   const virtualRows = virtualizer.getVirtualItems();
-  const lastVisible = virtualRows[virtualRows.length - 1]?.index ?? 0;
+  const offset = virtualizer.scrollOffset ?? 0;
+  const firstVisible = virtualRows.find((v) => v.end > offset);
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && lastVisible >= listRows.length - LOAD_AHEAD) {
+    const line = firstVisible ? lines[firstVisible.index] : undefined;
+    if (line && shownColumns.current === columns) topId.current = lineIds(line)[0] ?? topId.current;
+  });
+  const lastVisible = virtualRows[virtualRows.length - 1]?.index ?? 0;
+  const ahead = view === "cards" ? Math.ceil(LOAD_AHEAD / columns) : LOAD_AHEAD;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && lastVisible >= lines.length - ahead) {
       void fetchNextPage();
     }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, listRows.length, lastVisible]);
+  }, [ahead, fetchNextPage, hasNextPage, isFetchingNextPage, lines.length, lastVisible]);
+
+  // 拖到侧栏的视图上：勾选着的就拖勾选的那些，否则拖这一行代表的条目
+  const onDragStart = (e: DragEvent, id: string, label: string) => {
+    const ui = useUi.getState();
+    const members = membersOf(id);
+    const ids = members.every((m) => ui.selection.includes(m)) ? ui.selection : members;
+    startDrag(e, { kind: "items", ids }, label);
+  };
 
   const onRowClick = (e: MouseEvent, id: string) => {
     const ui = useUi.getState();
@@ -218,6 +412,7 @@ export function ItemList({ width }: { width: number }) {
           {title}
         </h1>
         {scope.kind === "view" && <KindFilter />}
+        <ViewControl />
         <GroupControl />
         <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={markAllRead}>
           <CheckCheck {...ICON} />
@@ -242,62 +437,127 @@ export function ItemList({ width }: { width: number }) {
         ) : (
           <div className="relative mx-1.5 my-1.5" style={{ height: virtualizer.getTotalSize() }}>
             {virtualRows.map((virtual) => {
-              const row = listRows[virtual.index];
-              if (!row) return null;
+              const line = lines[virtual.index];
+              if (!line) return null;
               const position = { height: virtual.size - 1, transform: `translateY(${virtual.start}px)` };
 
               // 展开的组：一行标题，点一下收起
-              if (row.kind === "group" && row.expanded) {
+              if (line.kind === "header") {
+                const group = line.group;
                 return (
                   <div
-                    key={`h:${row.group.key}`}
+                    key={`h:${group.key}`}
                     role="button"
                     tabIndex={-1}
-                    onClick={() => setGroupExpanded(row.group.key, false)}
+                    onClick={() => setGroupExpanded(group.key, false)}
                     className="absolute inset-x-0 top-0 flex items-center gap-2 rounded-md px-2.5 text-[12px] text-fg-3 hover:bg-hover hover:text-fg-2"
                     style={position}
                   >
                     <ChevronDown size={14} strokeWidth={2} className="shrink-0" />
                     <span className="min-w-0 flex-1 truncate font-medium">
-                      {groupMode === "thread" ? row.group.lead.title || t("reader.untitled") : row.group.people[0]}
+                      {groupMode === "thread" ? group.lead.title || t("reader.untitled") : group.people[0]}
                     </span>
-                    <span className="tabular shrink-0">{t("group.count", { n: row.group.items.length })}</span>
+                    <span className="tabular shrink-0">{t("group.count", { n: group.items.length })}</span>
                   </div>
                 );
               }
 
-              const id = rowId(row);
-              const item = row.kind === "item" ? row.item : row.group.lead;
-              const group = row.kind === "group" ? row.group : undefined;
-              const members = group ? group.items.map((i) => i.id) : [item.id];
-              const opened = id === openId;
-              const selected = members.every((m) => selection.includes(m));
-              const child = row.kind === "item" && row.child;
-              const props: RowProps = {
-                item,
-                group,
-                groupMode,
-                time: shortTime(item.published_at, lang),
-                untitled: t("reader.untitled"),
-                onExpand: group ? () => setGroupExpanded(group.key, true) : undefined,
-                expandLabel: t("group.expand"),
+              const describe = (row: Row) => {
+                const id = rowId(row);
+                const item = row.kind === "item" ? row.item : row.group.lead;
+                const group = row.kind === "group" ? row.group : undefined;
+                const members = group ? group.items.map((i) => i.id) : [item.id];
+                const props: RowProps = {
+                  item,
+                  group,
+                  groupMode,
+                  time: shortTime(item.published_at, lang),
+                  untitled: t("reader.untitled"),
+                  onExpand: group ? () => setGroupExpanded(group.key, true) : undefined,
+                  expandLabel: t("group.expand"),
+                };
+                return {
+                  id,
+                  key: group ? `g:${group.key}` : item.id,
+                  props,
+                  opened: id === openId,
+                  selected: members.every((m) => selection.includes(m)),
+                  child: row.kind === "item" && row.child,
+                  drag: {
+                    draggable: true,
+                    onDragStart: (e: DragEvent) => onDragStart(e, id, item.title),
+                    onDragEnd: endDrag,
+                  },
+                };
               };
+
+              if (line.kind === "cards") {
+                return (
+                  <div
+                    key={`c:${lineIds(line)[0]}`}
+                    className="absolute inset-x-0 top-0 grid"
+                    style={{
+                      ...position,
+                      height: cardHeight,
+                      gridTemplateColumns: `repeat(${columns}, ${cardWidth}px)`,
+                      columnGap: CARD_GAP,
+                    }}
+                  >
+                    {line.rows.map((row) => {
+                      const d = describe(row);
+                      return (
+                        <div
+                          key={d.key}
+                          role="option"
+                          aria-selected={d.opened || d.selected}
+                          onClick={(e) => onRowClick(e, d.id)}
+                          {...d.drag}
+                          className={cx(
+                            "overflow-hidden rounded-lg border transition-colors",
+                            d.selected
+                              ? "border-accent/60 bg-accent-soft"
+                              : d.opened
+                                ? "border-accent/60 bg-active"
+                                : "border-line bg-surface hover:border-line-strong hover:bg-hover",
+                          )}
+                          style={{ height: cardHeight }}
+                        >
+                          <Card {...d.props} imageHeight={imageHeight} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              const d = describe(line.row);
               return (
                 <div
-                  key={group ? `g:${group.key}` : item.id}
+                  key={d.key}
                   role="option"
-                  aria-selected={opened || selected}
-                  onClick={(e) => onRowClick(e, id)}
+                  aria-selected={d.opened || d.selected}
+                  onClick={(e) => onRowClick(e, d.id)}
+                  {...d.drag}
                   className={cx(
                     "absolute inset-x-0 top-0 flex rounded-md px-2.5 transition-colors",
-                    density === "compact" ? "items-center gap-2.5" : "flex-col justify-center gap-1",
-                    child && "ml-5",
-                    selected ? "bg-accent-soft" : opened ? "bg-active" : "hover:bg-hover",
-                    selected && opened && "ring-1 ring-inset ring-accent/50",
+                    view === "summary"
+                      ? "items-center gap-3"
+                      : density === "compact"
+                        ? "items-center gap-2.5"
+                        : "flex-col justify-center gap-1",
+                    d.child && "ml-5",
+                    d.selected ? "bg-accent-soft" : d.opened ? "bg-active" : "hover:bg-hover",
+                    d.selected && d.opened && "ring-1 ring-inset ring-accent/50",
                   )}
                   style={position}
                 >
-                  {density === "compact" ? <CompactRow {...props} /> : <ComfortableRow {...props} />}
+                  {view === "summary" ? (
+                    <SummaryRow {...d.props} />
+                  ) : density === "compact" ? (
+                    <CompactRow {...d.props} />
+                  ) : (
+                    <ComfortableRow {...d.props} />
+                  )}
                 </div>
               );
             })}
@@ -473,6 +733,111 @@ function ComfortableRow(props: RowProps) {
         </span>
       </div>
     </>
+  );
+}
+
+/** 来源：文章是订阅源的图标和名字，邮件是发件人。 */
+function SourceLine(props: RowProps & { size?: number }) {
+  const { item, group, groupMode, size = 14 } = props;
+  const source = item.kind === "mail" ? senderLabel(item, group, groupMode) : item.source_title;
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-3">
+      <Sender item={item} size={size} />
+      <span className="min-w-0 flex-1 truncate">{source}</span>
+      <Trailing {...props} />
+    </div>
+  );
+}
+
+/** 图片加载不出来就不显示，而不是留一个破图标。 */
+function Picture({ src, className, style }: { src: string; className?: string; style?: CSSProperties }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      draggable={false}
+      onError={() => setFailed(true)}
+      className={className}
+      style={style}
+    />
+  );
+}
+
+/** 摘要视图：标题、两行摘要、来源，有图时右边一张缩略图。 */
+function SummaryRow(props: RowProps) {
+  const { item, group, untitled } = props;
+  const unread = group ? group.unread > 0 : !item.read;
+  return (
+    <>
+      <UnreadDot unread={unread} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className={cx("truncate text-[14px]", unread ? "font-semibold text-fg" : "text-fg-2")}>
+          {item.title || untitled}
+        </span>
+        <p className="line-clamp-2 text-[12px] leading-[17px] text-fg-3">{item.summary}</p>
+        <SourceLine {...props} />
+      </div>
+      {item.image && (
+        <Picture src={item.image} className="size-[72px] shrink-0 rounded-md bg-active object-cover" />
+      )}
+    </>
+  );
+}
+
+/** 卡片视图里的一张。没有图的把位置留给摘要。 */
+function Card(props: RowProps & { imageHeight: number }) {
+  const { item, group, untitled, imageHeight } = props;
+  const unread = group ? group.unread > 0 : !item.read;
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [item.image]);
+  const picture = item.image && !broken;
+  return (
+    <div className="flex h-full flex-col">
+      {picture && (
+        <img
+          src={item.image ?? ""}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          draggable={false}
+          onError={() => setBroken(true)}
+          className="w-full shrink-0 bg-active object-cover"
+          style={{ height: imageHeight }}
+        />
+      )}
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-2.5 pt-2.5">
+        <div className="flex h-5 shrink-0 items-center gap-1.5">
+          <UnreadDot unread={unread} />
+          <div className="min-w-0 flex-1">
+            <SourceLine {...props} />
+          </div>
+        </div>
+        <span
+          className={cx(
+            "shrink-0 text-[14px] leading-[19px]",
+            picture ? "line-clamp-2" : "line-clamp-3",
+            unread ? "font-semibold text-fg" : "text-fg-2",
+          )}
+        >
+          {item.title || untitled}
+        </span>
+        <p
+          className={cx(
+            "min-h-0 overflow-hidden text-[12px] leading-[17px] text-fg-3",
+            picture ? "line-clamp-2" : "flex-1 [mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
+          )}
+        >
+          {item.summary}
+        </p>
+      </div>
+    </div>
   );
 }
 

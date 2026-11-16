@@ -3,6 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { api, type Candidate, type Feed } from "../lib/api";
 import { errorText, type Translate, useT } from "../lib/i18n";
+import { useFolders } from "../lib/folders";
 import { keys, useNav, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { Button, Field, Modal, Select, Spinner, TextInput } from "./ui";
@@ -43,11 +44,6 @@ function FolderInput({
       </datalist>
     </>
   );
-}
-
-function useFolders(): string[] {
-  const nav = useNav();
-  return [...new Set((nav.data?.feeds ?? []).map((f) => f.folder).filter(Boolean))].sort();
 }
 
 export function AddFeedDialog() {

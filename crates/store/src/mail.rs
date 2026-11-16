@@ -64,8 +64,8 @@ pub(crate) fn materialize_account(conn: &Connection, id: &str) -> Result<()> {
     };
     conn.execute(
         "INSERT OR REPLACE INTO accounts \
-         (id, email, name, imap_host, imap_port, imap_security, username, deleted, added_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         (id, email, name, imap_host, imap_port, imap_security, username, deleted, added_at, position) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             id,
             email,
@@ -82,6 +82,7 @@ pub(crate) fn materialize_account(conn: &Connection, id: &str) -> Result<()> {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
             fields.get("added_at").and_then(Value::as_i64).unwrap_or(0),
+            fields.get("position").and_then(Value::as_f64),
         ],
     )?;
     // 别的设备移除了这个邮箱：本机同步下来的邮件也清掉
@@ -181,10 +182,37 @@ impl Store {
     pub fn accounts(&self) -> Result<Vec<Account>> {
         let guard = self.lock();
         let mut stmt = guard.conn.prepare(&format!(
-            "{ACCOUNT_SQL} WHERE a.deleted = 0 ORDER BY a.added_at, a.email"
+            "{ACCOUNT_SQL} WHERE a.deleted = 0 \
+             ORDER BY a.position IS NULL, a.position, a.added_at, a.email"
         ))?;
         let rows = stmt.query_map([], account_from_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// 按给定的顺序排列邮箱。只写顺序变了的那些。
+    pub fn reorder_accounts(&self, ids: &[String]) -> Result<()> {
+        for (index, id) in ids.iter().enumerate() {
+            let current: Option<Option<f64>> = self
+                .lock()
+                .conn
+                .query_row(
+                    "SELECT position FROM accounts WHERE id = ?1 AND deleted = 0",
+                    [id],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            let Some(old) = current else {
+                continue;
+            };
+            let position = index as f64;
+            if old == Some(position) {
+                continue;
+            }
+            let mut set = Map::new();
+            set.insert("position".into(), json!(position));
+            self.set_fields("account", std::slice::from_ref(id), set)?;
+        }
+        Ok(())
     }
 
     pub fn account(&self, id: &str) -> Result<Option<Account>> {

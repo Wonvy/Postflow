@@ -1,5 +1,5 @@
 import { Unplug } from "lucide-react";
-import { type PointerEvent, useEffect, useRef } from "react";
+import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
 import { AddFeedDialog, EditFeedDialog } from "./components/FeedDialogs";
 import { ItemList } from "./components/ItemList";
@@ -12,7 +12,7 @@ import { Button, Spinner } from "./components/ui";
 import { resolveLang } from "./lib/i18n";
 import { useCoreEvents, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
-import { useUi } from "./lib/store";
+import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
 import { isTauri } from "./lib/transport";
 import { startUpdateChecks } from "./lib/updater";
 
@@ -75,12 +75,22 @@ function Shell() {
   const setSidebarWidth = useUi((s) => s.setSidebarWidth);
   const setListWidth = useUi((s) => s.setListWidth);
 
+  // 卡片视图里列表可以拉得很宽，但要给阅读面板留出位置
+  const [viewport, setViewport] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setViewport(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const listMax = Math.max(LIST_MIN, viewport - sidebarWidth - READER_MIN);
+  const listShown = Math.min(listWidth, listMax);
+
   return (
     <div className="flex h-full">
       <Sidebar width={sidebarWidth} />
       <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
-      <ItemList width={listWidth} />
-      <Resizer width={listWidth} onResize={setListWidth} />
+      <ItemList width={listShown} />
+      <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
       <Reader />
       <AddFeedDialog />
       <EditFeedDialog />

@@ -280,6 +280,8 @@ struct Post {
     author: &'static str,
     ago: i64,
     html: &'static str,
+    /// 封面图的两个颜色。卡片视图里显示，由这个服务现场画出来。
+    cover: Option<[&'static str; 2]>,
 }
 
 const FIELD_NOTES: &[Post] = &[
@@ -298,6 +300,7 @@ two devices editing the same file, so they never produce conflicts.</p>\
 <p>Each change carries a hybrid logical clock. When two devices edit the same field, the later timestamp \
 wins; edits to different fields both survive.</p>\
 <blockquote>The index is just a cache. Delete it and it rebuilds from the logs.</blockquote>",
+        cover: Some(["#3f7d6b", "#a8d5c2"]),
     },
     Post {
         slug: "idle",
@@ -306,6 +309,7 @@ wins; edits to different fields both survive.</p>\
         ago: DAY + 3 * HOUR,
         html: "<p>IDLE lets a server push new mail to a connected client. Servers drop idle connections after \
 about 30 minutes, so re-issue it every ten.</p>",
+        cover: None,
     },
     Post {
         slug: "sandboxed-mail",
@@ -314,6 +318,7 @@ about 30 minutes, so re-issue it every ten.</p>",
         ago: 4 * DAY,
         html: "<p>Sanitize first, then render inside a sandboxed frame with a strict content security policy. \
 Remote images stay off until you ask for them.</p>",
+        cover: Some(["#2f4b7c", "#9bb7e0"]),
     },
 ];
 
@@ -324,6 +329,7 @@ const WEEKLY: &[Post] = &[
         author: "Interface Weekly",
         ago: 9 * HOUR,
         html: "<p>Fewer borders, more alignment. A quiet interface lets content carry the hierarchy.</p>",
+        cover: Some(["#b4553c", "#f2c6a0"]),
     },
     Post {
         slug: "keyboard-first",
@@ -331,6 +337,7 @@ const WEEKLY: &[Post] = &[
         author: "Interface Weekly",
         ago: 2 * DAY + 8 * HOUR,
         html: "<p>Every frequent action deserves a single key. Show the key next to the action, and people learn it.</p>",
+        cover: Some(["#5b4b8a", "#c9b8f0"]),
     },
 ];
 
@@ -341,6 +348,7 @@ const CN_WEEKLY: &[Post] = &[
         author: "开源周刊",
         ago: 6 * HOUR,
         html: "<p>本期介绍几款数据保存在用户自己设备上的软件，以及它们怎样在多台设备之间同步。</p>",
+        cover: Some(["#4b5fb8", "#b8c4f2"]),
     },
     Post {
         slug: "issue-47",
@@ -348,6 +356,7 @@ const CN_WEEKLY: &[Post] = &[
         author: "开源周刊",
         ago: 7 * DAY + HOUR,
         html: "<p>用快捷键处理信息流：上下移动、归档、加星标，手不离开键盘。</p>",
+        cover: None,
     },
 ];
 
@@ -364,8 +373,16 @@ fn atom(name: &str, slug: &str, icon: &str, posts: &[Post]) -> String {
         .map(|p| {
             format!(
                 "<entry><id>{base}/{s}</id><title>{t}</title><link href=\"{base}/{s}\"/>\
-                 <updated>{d}</updated><author><name>{a}</name></author>\
+                 <updated>{d}</updated><author><name>{a}</name></author>{m}\
                  <content type=\"html\">{c}</content></entry>",
+                m = if p.cover.is_some() {
+                    format!(
+                        "<media:thumbnail url=\"http://127.0.0.1:{FEED_PORT}/covers/{}.svg\"/>",
+                        p.slug
+                    )
+                } else {
+                    String::new()
+                },
                 s = p.slug,
                 t = escape(p.title),
                 d = feed_date(p.ago),
@@ -375,7 +392,8 @@ fn atom(name: &str, slug: &str, icon: &str, posts: &[Post]) -> String {
         })
         .collect();
     format!(
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?><feed xmlns=\"http://www.w3.org/2005/Atom\">\
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\
+         <feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:media=\"http://search.yahoo.com/mrss/\">\
          <title>{}</title><link href=\"{base}/\"/><id>{base}/</id>\
          <icon>http://127.0.0.1:{FEED_PORT}/icons/{icon}.svg</icon><updated>{}</updated>{entries}</feed>",
         escape(name),
@@ -391,7 +409,38 @@ fn icon(letter: &str, color: &str) -> String {
     )
 }
 
+/// 一张抽象的封面：斜向渐变加几个圆。
+fn cover(colors: [&str; 2], seed: usize) -> String {
+    let [a, b] = colors;
+    let circles: String = (0..3)
+        .map(|i| {
+            let n = seed * 7 + i * 13;
+            format!(
+                "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"#fff\" fill-opacity=\"0.{}\"/>",
+                80 + (n * 37) % 480,
+                40 + (n * 53) % 260,
+                40 + (n * 11) % 90,
+                12 + i * 6
+            )
+        })
+        .collect();
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 640 360\">\
+         <defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\
+         <stop offset=\"0\" stop-color=\"{a}\"/><stop offset=\"1\" stop-color=\"{b}\"/></linearGradient></defs>\
+         <rect width=\"640\" height=\"360\" fill=\"url(#g)\"/>{circles}</svg>"
+    )
+}
+
 fn route(path: &str) -> Option<(&'static str, String)> {
+    if let Some(slug) = path
+        .strip_prefix("/covers/")
+        .and_then(|p| p.strip_suffix(".svg"))
+    {
+        let all = FIELD_NOTES.iter().chain(WEEKLY).chain(CN_WEEKLY);
+        let (seed, post) = all.enumerate().find(|(_, p)| p.slug == slug)?;
+        return Some(("image/svg+xml", cover(post.cover?, seed)));
+    }
     let xml = "application/atom+xml; charset=utf-8";
     let svg = "image/svg+xml";
     Some(match path {

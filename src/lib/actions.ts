@@ -79,6 +79,9 @@ export function useActions() {
     [filter.view, stops, setItems],
   );
 
+  /** 按 ID 修改条目，拖到侧栏的视图上时用。 */
+  const applyTo = useCallback((ids: string[], patch: ItemPatch) => apply(resolve(ids), patch), [apply, resolve]);
+
   /** 全都已经是这个状态就取消，否则全部设上。 */
   const toggle = useCallback(
     (flag: Flag, list = targets()) => {
@@ -158,6 +161,7 @@ export function useActions() {
     targets,
     openTargets,
     apply,
+    applyTo,
     toggle,
     move,
     toggleSelected,

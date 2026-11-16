@@ -47,6 +47,9 @@ pub struct Article {
     /// 原始 HTML 正文，未经净化，展示前再净化。
     #[serde(default)]
     pub content: String,
+    /// 源里明确给出的封面图（媒体缩略图、图片附件）。没有时从正文里找。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -163,6 +166,8 @@ pub struct ItemSummary {
     /// 邮件发件人的地址，界面用来生成头像颜色。
     pub sender_address: Option<String>,
     pub has_attachments: bool,
+    /// 卡片视图用的封面图。只有文章有。
+    pub image: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

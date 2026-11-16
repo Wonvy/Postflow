@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS feeds (
     folder       TEXT NOT NULL DEFAULT '',
     interval_min INTEGER,
     deleted      INTEGER NOT NULL DEFAULT 0,
-    added_at     INTEGER NOT NULL DEFAULT 0
+    added_at     INTEGER NOT NULL DEFAULT 0,
+    -- 在侧栏里的顺序。没拖动过的为空，排在后面按名称排
+    position     REAL
 ) WITHOUT ROWID;
 
 -- 邮箱账户的配置。密码不在这里，在系统钥匙串里。
@@ -70,7 +72,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     imap_security TEXT NOT NULL DEFAULT 'tls',
     username      TEXT NOT NULL DEFAULT '',
     deleted       INTEGER NOT NULL DEFAULT 0,
-    added_at      INTEGER NOT NULL DEFAULT 0
+    added_at      INTEGER NOT NULL DEFAULT 0,
+    position      REAL
 ) WITHOUT ROWID;
 
 -- 信息流里的每一条：订阅文章（kind = article）或邮件（kind = mail）。
@@ -88,7 +91,8 @@ CREATE TABLE IF NOT EXISTS items (
     fetched_at   INTEGER NOT NULL,
     read         INTEGER NOT NULL DEFAULT 0,
     starred      INTEGER NOT NULL DEFAULT 0,
-    archived     INTEGER NOT NULL DEFAULT 0
+    archived     INTEGER NOT NULL DEFAULT 0,
+    image        TEXT
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS items_by_time ON items (published_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS items_by_source ON items (source_id, published_at DESC, id DESC);
@@ -156,7 +160,7 @@ pub(crate) const ITEM_FROM: &str = "items i \
 const ITEM_COLUMNS: &str = "i.id, i.kind, i.source_id, \
      CASE WHEN i.kind = 'mail' THEN COALESCE(NULLIF(a.name, ''), a.email, '') ELSE COALESCE(f.title, '') END, \
      f.icon_url, i.url, i.title, i.author, i.summary, i.published_at, i.read, i.starred, i.archived, \
-     m.from_address, COALESCE(m.has_attachments, 0)";
+     m.from_address, COALESCE(m.has_attachments, 0), i.image";
 
 /// 来源还在：订阅没退订，邮箱没移除。
 pub(crate) const ALIVE: &str = "COALESCE(f.deleted, a.deleted, 1) = 0";
@@ -338,6 +342,35 @@ impl Store {
         self.set_fields("feed", &[id.to_string()], set)
     }
 
+    /// 把一组订阅源按给定的顺序放进一个文件夹（空字符串是不在任何文件夹里）。
+    /// 只写真正变了的字段，拖动一次通常只改一两个源。
+    pub fn reorder_feeds(&self, folder: &str, ids: &[String]) -> Result<()> {
+        for (index, id) in ids.iter().enumerate() {
+            let current: Option<(String, Option<f64>)> = self
+                .lock()
+                .conn
+                .query_row(
+                    "SELECT folder, position FROM feeds WHERE id = ?1 AND deleted = 0",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            let Some((old_folder, old_position)) = current else {
+                continue;
+            };
+            let position = index as f64;
+            let mut set = Map::new();
+            if old_folder != folder {
+                set.insert("folder".into(), json!(folder));
+            }
+            if old_position != Some(position) {
+                set.insert("position".into(), json!(position));
+            }
+            self.set_fields("feed", std::slice::from_ref(id), set)?;
+        }
+        Ok(())
+    }
+
     /// 退订。文章存档保留，重新订阅后还在。
     pub fn remove_feed(&self, id: &str) -> Result<()> {
         let mut set = Map::new();
@@ -500,8 +533,8 @@ impl Store {
             .query_row([id], |r| {
                 Ok(ItemDetail {
                     item: item_from_row(r)?,
-                    content: r.get(15)?,
-                    full_text: r.get(16)?,
+                    content: r.get(16)?,
+                    full_text: r.get(17)?,
                 })
             })
             .optional()?;
@@ -681,10 +714,67 @@ fn init_schema(conn: &Connection, data_dir: &Path) -> Result<()> {
         }
     }
     conn.execute_batch(SCHEMA)?;
+    migrate(conn)?;
     conn.execute(
         "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?1), ('data_dir', ?2)",
         params![version, dir],
     )?;
+    Ok(())
+}
+
+/// 给旧索引补上后来加的列。改版本号会连本机同步下来的邮件一起丢掉，加列不会。
+fn migrate(conn: &Connection) -> Result<()> {
+    add_column(conn, "feeds", "position", "REAL")?;
+    add_column(conn, "accounts", "position", "REAL")?;
+    if add_column(conn, "items", "image", "TEXT")? {
+        backfill_images(conn)?;
+    }
+    Ok(())
+}
+
+/// 表里没有这一列就加上。返回是否新加了。
+fn add_column(conn: &Connection, table: &str, column: &str, decl: &str) -> Result<bool> {
+    let exists: bool = conn.query_row(
+        &format!("SELECT COUNT(*) > 0 FROM pragma_table_info('{table}') WHERE name = ?1"),
+        [column],
+        |r| r.get(0),
+    )?;
+    if !exists {
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"),
+            [],
+        )?;
+    }
+    Ok(!exists)
+}
+
+/// 刚加上封面列时，从已经入库的文章正文里找一遍。
+fn backfill_images(conn: &Connection) -> Result<()> {
+    let found: Vec<(String, String)> = {
+        let mut stmt = conn.prepare(
+            "SELECT i.id, i.url, c.html FROM items i JOIN item_content c ON c.id = i.id \
+             WHERE i.kind = 'article'",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut found = Vec::new();
+        for row in rows {
+            let (id, url, html) = row?;
+            if let Some(image) = crate::image::first_image(&html, url.as_deref()) {
+                found.push((id, image));
+            }
+        }
+        found
+    };
+    let mut update = conn.prepare("UPDATE items SET image = ?2 WHERE id = ?1")?;
+    for (id, image) in found {
+        update.execute(params![id, image])?;
+    }
     Ok(())
 }
 
@@ -799,8 +889,8 @@ fn materialize_feed(conn: &Connection, id: &str) -> Result<()> {
     };
     conn.execute(
         "INSERT OR REPLACE INTO feeds \
-         (id, url, title, site_url, icon_url, folder, interval_min, deleted, added_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         (id, url, title, site_url, icon_url, folder, interval_min, deleted, added_at, position) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             id,
             url,
@@ -814,6 +904,7 @@ fn materialize_feed(conn: &Connection, id: &str) -> Result<()> {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
             fields.get("added_at").and_then(Value::as_i64).unwrap_or(0),
+            fields.get("position").and_then(Value::as_f64),
         ],
     )?;
     Ok(())
@@ -837,8 +928,8 @@ fn insert_article(conn: &Connection, a: &Article) -> Result<bool> {
     let inserted = conn
         .prepare_cached(
             "INSERT OR IGNORE INTO items \
-             (id, kind, source_id, guid, url, title, author, summary, published_at, fetched_at) \
-             VALUES (?1, 'article', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             (id, kind, source_id, guid, url, title, author, summary, published_at, fetched_at, image) \
+             VALUES (?1, 'article', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )?
         .execute(params![
             a.id,
@@ -849,7 +940,8 @@ fn insert_article(conn: &Connection, a: &Article) -> Result<bool> {
             a.author,
             a.summary,
             a.published,
-            a.fetched
+            a.fetched,
+            article_image(a),
         ])?;
     if inserted == 0 {
         return Ok(false);
@@ -858,6 +950,14 @@ fn insert_article(conn: &Connection, a: &Article) -> Result<bool> {
         .execute(params![a.id, a.content])?;
     materialize_item(conn, &a.id)?;
     Ok(true)
+}
+
+/// 文章的封面：源里给了就用，否则从正文里找。
+fn article_image(a: &Article) -> Option<String> {
+    a.image
+        .clone()
+        .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+        .or_else(|| crate::image::first_image(&a.content, a.url.as_deref()))
 }
 
 fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
@@ -897,7 +997,8 @@ fn feed_sql(cond: &str) -> String {
                   WHERE i.source_id = f.id AND i.read = 0 AND i.archived = 0), \
                 ff.last_fetch_at, ff.error \
          FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
-         WHERE {cond} ORDER BY f.folder COLLATE NOCASE, f.title COLLATE NOCASE"
+         WHERE {cond} \
+         ORDER BY f.folder COLLATE NOCASE, f.position IS NULL, f.position, f.title COLLATE NOCASE"
     )
 }
 
@@ -934,5 +1035,6 @@ fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         archived: r.get(12)?,
         sender_address: r.get(13)?,
         has_attachments: r.get(14)?,
+        image: r.get(15)?,
     })
 }

@@ -26,6 +26,8 @@ pub struct ParsedEntry {
     pub summary: String,
     /// 原始 HTML 正文，未净化。
     pub content: String,
+    /// 源里明确给出的封面图：媒体缩略图或图片附件。
+    pub image: Option<String>,
 }
 
 /// 解析 RSS、Atom 或 JSON Feed。`base_url` 用来把相对链接补全。
@@ -44,6 +46,17 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
         .map_err(|e| Error::NotAFeed(e.to_string()))?;
 
     let site_url = pick_link(&feed.links).filter(|u| u != base_url);
+    let mut entries: Vec<ParsedEntry> = feed.entries.into_iter().map(convert_entry).collect();
+    // feed-rs 只在有 media:content 时才保留缩略图。直接挂在条目下的 media:thumbnail
+    // （新闻网站常这样写）从原文里补上；条目数对得上才用，免得张冠李戴
+    let thumbs = standalone_thumbnails(&String::from_utf8_lossy(bytes));
+    if thumbs.len() == entries.len() {
+        for (entry, thumb) in entries.iter_mut().zip(thumbs) {
+            if entry.image.is_none() {
+                entry.image = thumb;
+            }
+        }
+    }
     Ok(ParsedFeed {
         title: feed.title.as_ref().map(plain).unwrap_or_default(),
         site_url,
@@ -52,7 +65,7 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
             .or(feed.logo)
             .map(|i| i.uri)
             .filter(|u| !u.is_empty()),
-        entries: feed.entries.into_iter().map(convert_entry).collect(),
+        entries,
     })
 }
 
@@ -109,6 +122,7 @@ fn convert_entry(entry: Entry) -> ParsedEntry {
         guid = format!("{title}\u{0}{}\u{0}{}", published_ms.unwrap_or(0), summary);
     }
 
+    let image = media_image(&entry);
     ParsedEntry {
         guid,
         url,
@@ -117,7 +131,68 @@ fn convert_entry(entry: Entry) -> ParsedEntry {
         published_ms,
         summary,
         content,
+        image,
     }
+}
+
+/// 按顺序列出每个条目（`<item>` 或 `<entry>`）里第一个 `media:thumbnail` 的地址。
+fn standalone_thumbnails(xml: &str) -> Vec<Option<String>> {
+    let (open, close) = if xml.contains("<item") {
+        ("<item", "</item>")
+    } else {
+        ("<entry", "</entry>")
+    };
+    let mut out = Vec::new();
+    let mut rest = xml;
+    while let Some(start) = rest.find(open) {
+        let after = &rest[start + open.len()..];
+        // `<items>`、`<entryLink>` 之类不算
+        if !after.starts_with(['>', ' ', '\n', '\r', '\t']) {
+            rest = after;
+            continue;
+        }
+        let end = after.find(close).unwrap_or(after.len());
+        let block = &after[..end];
+        out.push(block.find("<media:thumbnail").and_then(|i| {
+            let tag = &block[i..];
+            let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+            let value = tag.split("url=").nth(1)?;
+            let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+            let url = value[1..].split(quote).next()?.replace("&amp;", "&");
+            (url.starts_with("https://") || url.starts_with("http://")).then_some(url)
+        }));
+        rest = &after[end..];
+    }
+    out
+}
+
+/// 媒体缩略图、图片类型的媒体内容，或者图片附件。
+fn media_image(entry: &Entry) -> Option<String> {
+    let web = |u: &str| u.starts_with("https://") || u.starts_with("http://");
+    for media in &entry.media {
+        if let Some(thumb) = media.thumbnails.iter().find(|t| web(&t.image.uri)) {
+            return Some(thumb.image.uri.clone());
+        }
+        let picture = media.content.iter().find(|c| {
+            c.content_type
+                .as_ref()
+                .is_some_and(|t| t.to_string().starts_with("image/"))
+        });
+        if let Some(url) = picture.and_then(|c| c.url.as_ref()) {
+            return Some(url.to_string());
+        }
+    }
+    entry
+        .links
+        .iter()
+        .find(|l| {
+            l.rel.as_deref() == Some("enclosure")
+                && l.media_type
+                    .as_deref()
+                    .is_some_and(|t| t.starts_with("image/"))
+                && web(&l.href)
+        })
+        .map(|l| l.href.clone())
 }
 
 /// 优先取指向网页的链接，跳过指向源自身和附件的。
@@ -304,6 +379,30 @@ mod tests {
         let entry = &feed.entries[0];
         assert_eq!(entry.guid, "1");
         assert_eq!(entry.content, "<p>Line one</p><p>Line two</p>");
+    }
+
+    #[test]
+    fn cover_images_from_media_and_enclosures() {
+        let rss = r#"<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+<channel><title>Pics</title><link>https://pics.example/</link>
+<item><guid>1</guid><title>Thumb</title>
+  <media:thumbnail url="https://pics.example/thumb.jpg"/></item>
+<item><guid>2</guid><title>Enclosure</title>
+  <enclosure url="https://pics.example/photo.png" type="image/png" length="1"/></item>
+<item><guid>3</guid><title>Podcast</title>
+  <enclosure url="https://pics.example/episode.mp3" type="audio/mpeg" length="1"/></item>
+</channel></rss>"#;
+        let feed = parse_feed(rss.as_bytes(), "https://pics.example/feed").unwrap();
+        let images: Vec<Option<&str>> = feed.entries.iter().map(|e| e.image.as_deref()).collect();
+        assert_eq!(
+            images,
+            vec![
+                Some("https://pics.example/thumb.jpg"),
+                Some("https://pics.example/photo.png"),
+                None
+            ]
+        );
     }
 
     #[test]
