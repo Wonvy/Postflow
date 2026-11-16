@@ -62,6 +62,10 @@ export function useShortcuts() {
         case "r":
           a.refreshAll();
           break;
+        case "t":
+          if (!ui.openId) return;
+          ui.requestTranslate();
+          break;
         case "x":
           // 勾选或取消勾选当前打开的那一行，配合 J / K 可以只用键盘多选
           if (!ui.openId) return;

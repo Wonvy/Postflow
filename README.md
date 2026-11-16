@@ -59,6 +59,10 @@ click **More info → Run anyway**.
 - Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
   source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
 - Inbox, Today, Unread, Starred and Archive views.
+- Offline translation for mail and articles. Press `T` and the message is translated on your device, keeping its
+  layout and links; press it again for the original. The language is detected for you, and models for more than 50
+  languages download once (about 40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read
+  is sent anywhere.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - The same interface also runs in your browser, served by the app on your own machine.
 - Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
@@ -81,6 +85,7 @@ download page instead.
 | `X` | Select the current item for a bulk action |
 | `→` / `←` | Expand / collapse a group |
 | `Shift` + `A` | Mark everything in the list as read |
+| `T` | Translate / show the original |
 | `R` | Refresh all feeds and mail |
 | `Esc` | Clear the selection, or close the reader |
 
@@ -111,7 +116,8 @@ A line in the change log looks like this:
 {"ts":"1794859065899-000000-a0fc06b58629","k":"item","ids":["4be0…","91c2…"],"set":{"read":true}}
 ```
 
-The SQLite index, fetch state and full-text cache live in the app's local data folder and are never synced. The
+The SQLite index, fetch state, full-text cache and translation models live in the app's local data folder and are
+never synced. The
 index is built entirely from the logs: delete it and it is rebuilt, or rebuild it from Settings.
 
 If the data folder lives in a cloud drive, set it to always keep files on this device. Placeholder files whose
@@ -219,14 +225,15 @@ the build step, following [Tauri's signing guide](https://v2.tauri.app/distribut
 ## Project layout
 
 ```
-crates/store/    data layer: logs in the data folder, merging across devices, local SQLite index
-crates/feed/     feeds: fetching, parsing, discovery, OPML, sanitizing, full-text extraction
-crates/mail/     mail: provider detection, IMAP, parsing and safe rendering
-crates/core/     sessions, scheduling, folder watching; one rpc entry point and one event stream
-crates/web/      serves the core over HTTP for the browser interface
-crates/testkit/  fake IMAP server for tests, and the demo data server
-src-tauri/       desktop and mobile shell; it only forwards calls
-src/             React interface, shared by the desktop app and the browser
+crates/store/     data layer: logs in the data folder, merging across devices, local SQLite index
+crates/feed/      feeds: fetching, parsing, discovery, OPML, sanitizing, full-text extraction
+crates/mail/      mail: provider detection, IMAP, parsing and safe rendering
+crates/translate/ offline translation: model download and checks, language detection, keeping links and formatting
+crates/core/      sessions, scheduling, folder watching; one rpc entry point and one event stream
+crates/web/       serves the core over HTTP for the browser interface
+crates/testkit/   fake IMAP server for tests, and the demo data server
+src-tauri/        desktop and mobile shell; it only forwards calls
+src/              React interface, shared by the desktop app and the browser
 ```
 
 The interface doesn't care where it runs: `src/lib/transport.ts` uses in-process calls in the desktop app and HTTP
@@ -235,5 +242,7 @@ in the browser, and both reach the same methods in `crates/core/src/rpc.rs`.
 ## License
 
 Icons are from [Lucide](https://lucide.dev) (ISC). The font is [Inter](https://rsms.me/inter/) (OFL).
+Translation uses the [Firefox Translations](https://github.com/mozilla/translations) models (MPL-2.0), run by
+[fxtranslate](https://crates.io/crates/fxtranslate) (MPL-2.0). Models are downloaded on demand and are not bundled.
 
 The project's own license has not been chosen yet.

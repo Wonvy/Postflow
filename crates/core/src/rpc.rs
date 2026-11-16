@@ -190,6 +190,7 @@ impl Core {
                 self.setup(&p.data_dir, &p.device_name).await?;
                 return reply(self.status().await);
             }
+            m if m.starts_with("translate.") => return self.translate_rpc(m, params).await,
             _ => {}
         }
 

@@ -329,3 +329,36 @@ async fn changes_written_by_another_device_are_picked_up() {
     assert_eq!(nav["feeds"][0]["title"], "From the other device");
     core.shutdown();
 }
+
+#[tokio::test]
+async fn translation_works_before_setup_without_network() {
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+
+    // 还没设置数据目录也能调用；原文已经是目标语言时不需要任何模型
+    let plan = call(
+        &core,
+        "translate.plan",
+        json!({ "text": "今天天气很好，我们去散步吧。", "to": "zh" }),
+    )
+    .await;
+    assert_eq!(plan["from"], "zh");
+    assert_eq!(plan["same"], true);
+    assert_eq!(plan["missing"], json!([]));
+
+    let out = call(
+        &core,
+        "translate.text",
+        json!({ "from": "zh_hant", "to": "zh", "segments": [{ "text": "你好", "marks": [[0, 2]] }] }),
+    )
+    .await;
+    assert_eq!(out["segments"][0]["text"], "你好");
+    assert_eq!(out["segments"][0]["marks"], json!([[0, 2, 0]]));
+
+    let err = core
+        .rpc("translate.remove", json!({ "pair": "../x-en" }), None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "bad_params");
+    assert!(tmp.path().join("local/translation").is_dir());
+}

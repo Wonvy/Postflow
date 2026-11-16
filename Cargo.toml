@@ -17,6 +17,10 @@ postflow-web = { path = "crates/web" }
 # 依赖用优化构建，开发时抓取与解析不至于太慢
 opt-level = 1
 
+[profile.dev.package.fxtranslate]
+# 翻译推理全是数值计算，不优化要慢几十倍
+opt-level = 3
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

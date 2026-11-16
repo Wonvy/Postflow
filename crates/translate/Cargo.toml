@@ -1,0 +1,23 @@
+[package]
+name = "postflow-translate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+flate2 = "1.1.11"
+# 只用纯 Rust 的标量内核。默认的 SIMD 内核在编译时按指令集写死、运行时不检查 CPU，
+# 在 M1 或没有 AVX2 的电脑上会直接崩溃。标量内核翻一段话也只要几十毫秒。
+fxtranslate = { version = "0.5.0", default-features = false, features = ["lean-embed", "mmap", "icu-segmenter"] }
+reqwest = "0.13.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.0"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+whatlang = "0.18.0"
+
+[dev-dependencies]
+axum = "0.8.9"
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["full"] }

@@ -57,6 +57,8 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 列表工具栏里可以折叠相同邮件：按会话（回复和原邮件合成一行），或按发件人和来源（一连串通知合成一行）。
   对折叠的一组归档、加星标、标已读，会作用到组里的每一条。
 - 收件箱、今天、未读、星标、已归档五个视图。
+- 邮件和文章都能离线翻译。按 `T` 在本机翻译，版式和链接保持不变，再按一次回到原文。原文语言自动识别，
+  支持 50 多种语言，模型来自 Mozilla 的 Firefox 翻译项目，每个方向约 40–70 MB，只需下载一次。你读的内容不会发到任何地方。
 - 深色与浅色主题，紧凑与宽松两种列表密度，中英文界面。
 - 同一套界面也能在浏览器里打开，由你自己电脑上的应用提供。
 - 在线更新：有新版本时，Postflow 会提示下载、安装并重启。更新包经过签名，签名对不上的包不会被安装。
@@ -77,6 +79,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 | `X` | 勾选当前条目，用于批量操作 |
 | `→` / `←` | 展开 / 收起折叠的一组 |
 | `Shift` + `A` | 当前列表全部标为已读 |
+| `T` | 翻译 / 显示原文 |
 | `R` | 刷新全部订阅和邮箱 |
 | `Esc` | 取消勾选，或关闭阅读面板 |
 
@@ -105,7 +108,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 {"ts":"1794859065899-000000-a0fc06b58629","k":"item","ids":["4be0…","91c2…"],"set":{"read":true}}
 ```
 
-SQLite 索引、抓取状态和全文缓存只存在本机的应用数据目录里，不参与同步。
+SQLite 索引、抓取状态、全文缓存和翻译模型只存在本机的应用数据目录里，不参与同步。
 索引完全由日志推导而来，删掉后会自动重建，也可以在设置里手动重建。
 
 把数据目录放在云盘里时，请把它设为始终保留在本机。只留占位符、内容还在云端的文件读不到。
@@ -207,14 +210,15 @@ npm run tauri -- build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 ## 代码结构
 
 ```
-crates/store/    数据层：数据目录里的日志、多设备合并、本机 SQLite 索引
-crates/feed/     订阅源：抓取、解析、发现、OPML、正文净化、全文提取
-crates/mail/     邮件：服务商识别、IMAP、邮件解析与安全渲染
-crates/core/     会话、调度、目录监听，对外只有一个 rpc 入口和一个事件流
-crates/web/      通过 HTTP 暴露核心，供浏览器里的界面使用
-crates/testkit/  测试用的假 IMAP 服务器，以及演示数据服务
-src-tauri/       桌面与移动端外壳，只做转发
-src/             React 界面，桌面应用和浏览器共用
+crates/store/     数据层：数据目录里的日志、多设备合并、本机 SQLite 索引
+crates/feed/      订阅源：抓取、解析、发现、OPML、正文净化、全文提取
+crates/mail/      邮件：服务商识别、IMAP、邮件解析与安全渲染
+crates/translate/ 离线翻译：模型下载与校验、语言识别、保留链接和格式
+crates/core/      会话、调度、目录监听，对外只有一个 rpc 入口和一个事件流
+crates/web/       通过 HTTP 暴露核心，供浏览器里的界面使用
+crates/testkit/   测试用的假 IMAP 服务器，以及演示数据服务
+src-tauri/        桌面与移动端外壳，只做转发
+src/              React 界面，桌面应用和浏览器共用
 ```
 
 界面不直接依赖运行环境：`src/lib/transport.ts` 在桌面应用里走进程内调用，在浏览器里走 HTTP，
@@ -223,5 +227,7 @@ src/             React 界面，桌面应用和浏览器共用
 ## 许可
 
 图标来自 [Lucide](https://lucide.dev)（ISC），字体是 [Inter](https://rsms.me/inter/)（OFL）。
+翻译使用 [Firefox Translations](https://github.com/mozilla/translations) 的模型（MPL-2.0），
+由 [fxtranslate](https://crates.io/crates/fxtranslate)（MPL-2.0）运行。模型按需下载，不随应用打包。
 
 项目自身的开源许可证尚未确定。

@@ -6,14 +6,16 @@ import {
   Download,
   ExternalLink,
   ImageOff,
+  Languages,
   Mail,
   MailOpen,
   Newspaper,
   Paperclip,
   Star,
   TriangleAlert,
+  X,
 } from "lucide-react";
-import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
@@ -21,6 +23,12 @@ import { formatSize, openExternal, saveAttachment } from "../lib/platform";
 import { keys, useItem } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { fullTime } from "../lib/time";
+import {
+  languageName,
+  type TranslateSource,
+  useModelDownloads,
+  useTranslation,
+} from "../lib/translate";
 import { isTauri } from "../lib/transport";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Kbd, Spinner } from "./ui";
 
@@ -63,6 +71,28 @@ function Article({ id }: { id: string }) {
   const [mode, setMode] = useState<"feed" | "full">("feed");
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
+
+  // 翻译的是此刻显示的正文：邮件正文，或者文章的订阅内容 / 全文
+  const source = useMemo<TranslateSource | null>(() => {
+    if (!item) return null;
+    if (item.mail) {
+      return { title: item.title, html: item.mail.body, document: item.mail.body_kind === "html" };
+    }
+    const html = mode === "full" && item.full_text ? item.full_text : (item.content ?? "");
+    return { title: item.title, html, document: false };
+  }, [item, mode]);
+  const translation = useTranslation(source);
+  const phase = translation.phase;
+  const shown = phase.kind === "on" ? { title: phase.title, html: phase.html } : null;
+
+  // T 键
+  const translateRequest = useUi((s) => s.translateRequest);
+  const seenRequest = useRef(translateRequest);
+  useEffect(() => {
+    if (translateRequest === seenRequest.current) return;
+    seenRequest.current = translateRequest;
+    translation.toggle();
+  }, [translateRequest, translation]);
 
   // 打开即视为已读。每条只自动标一次，之后手动改回未读不会被再次覆盖。
   // 用列表里已有的数据判断，不等正文加载完：用键盘快速翻过的条目也要算读过。
@@ -126,6 +156,19 @@ function Article({ id }: { id: string }) {
               </IconButton>
             )}
             <IconButton
+              label={phase.kind === "on" ? t("action.showOriginal") : t("action.translate")}
+              shortcut="T"
+              active={phase.kind === "on"}
+              disabled={!item}
+              onClick={translation.toggle}
+            >
+              {phase.kind === "checking" || phase.kind === "translating" || phase.kind === "downloading" ? (
+                <Spinner size={15} />
+              ) : (
+                <Languages {...ICON} />
+              )}
+            </IconButton>
+            <IconButton
               label={all("read") ? t("action.markUnread") : t("action.markRead")}
               shortcut="U"
               onClick={() => toggle("read", group.length > 0 ? group : [summary])}
@@ -162,13 +205,22 @@ function Article({ id }: { id: string }) {
             <MailView
               item={item}
               mail={item.mail}
+              shown={shown}
+              bar={<TranslateBar translation={translation} />}
               onShowImages={() => setAllowRemote(true)}
               onTrusted={() => {
                 void qc.invalidateQueries({ queryKey: ["item", item.id] });
               }}
             />
           ) : (
-            <ArticleView item={item} mode={mode} loadingFull={loadingFull} fullError={fullError} />
+            <ArticleView
+              item={item}
+              mode={mode}
+              loadingFull={loadingFull}
+              fullError={fullError}
+              shown={shown}
+              bar={<TranslateBar translation={translation} />}
+            />
           )
         ) : error ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
@@ -189,24 +241,32 @@ function Article({ id }: { id: string }) {
   );
 }
 
+/** 译文开着时显示的标题和正文。 */
+type Shown = { title: string; html: string } | null;
+
 function ArticleView({
   item,
   mode,
   loadingFull,
   fullError,
+  shown,
+  bar,
 }: {
   item: ItemDetail;
   mode: "feed" | "full";
   loadingFull: boolean;
   fullError: string | null;
+  shown: Shown;
+  bar: ReactNode;
 }) {
   const t = useT();
   const lang = useLang();
-  const html = mode === "full" && item.full_text ? item.full_text : (item.content ?? "");
+  const original = mode === "full" && item.full_text ? item.full_text : (item.content ?? "");
+  const html = shown?.html ?? original;
   return (
     <article className="mx-auto max-w-[720px] px-10 pb-24 pt-10">
       <h1 className="cursor-auto select-text text-[26px] font-semibold leading-[1.25] tracking-[-0.02em]">
-        {item.title || t("reader.untitled")}
+        {shown?.title || item.title || t("reader.untitled")}
       </h1>
       <div className="mb-8 mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-3">
         <Favicon src={item.source_icon} />
@@ -220,6 +280,7 @@ function ArticleView({
         <span aria-hidden>·</span>
         <time dateTime={new Date(item.published_at).toISOString()}>{fullTime(item.published_at, lang)}</time>
       </div>
+      {bar}
       {fullError && (
         <p className="mb-6 rounded-md border border-line bg-hover px-3 py-2 text-[13px] text-fg-2">{fullError}</p>
       )}
@@ -242,11 +303,15 @@ function formatPeople(list: Mailbox[]): string {
 function MailView({
   item,
   mail,
+  shown,
+  bar,
   onShowImages,
   onTrusted,
 }: {
   item: ItemDetail;
   mail: MailDetail;
+  shown: Shown;
+  bar: ReactNode;
   onShowImages: () => void;
   onTrusted: () => void;
 }) {
@@ -265,7 +330,7 @@ function MailView({
   return (
     <article className="mx-auto max-w-[760px] px-8 pb-24 pt-8">
       <h1 className="cursor-auto select-text text-[22px] font-semibold leading-[1.3] tracking-[-0.015em]">
-        {item.title || t("mail.noSubject")}
+        {shown?.title || item.title || t("mail.noSubject")}
       </h1>
 
       <div className="mb-6 mt-5 flex items-start gap-3">
@@ -316,11 +381,17 @@ function MailView({
         </div>
       )}
 
+      {bar}
+
       {mail.body_kind === "html" ? (
-        <MailFrame html={mail.body} />
+        <MailFrame html={shown?.html ?? mail.body} />
       ) : (
         // 纯文本邮件在核心里已转义成安全的 HTML，见 postflow-mail 的 text_to_html
-        <div className="article" onClick={interceptLinks} dangerouslySetInnerHTML={{ __html: mail.body }} />
+        <div
+          className="article"
+          onClick={interceptLinks}
+          dangerouslySetInnerHTML={{ __html: shown?.html ?? mail.body }}
+        />
       )}
 
       {mail.attachments.length > 0 && <Attachments itemId={item.id} mail={mail} />}
@@ -383,6 +454,99 @@ function MailFrame({ html }: { html: string }) {
   );
 }
 
+/** 正文上方的一条翻译状态：要不要下载模型、下载进度、译自哪种语言。 */
+function TranslateBar({ translation }: { translation: ReturnType<typeof useTranslation> }) {
+  const t = useT();
+  const lang = useLang();
+  const downloads = useModelDownloads((s) => s.byPair);
+  const { phase, to, download, off, retry } = translation;
+  const name = (code: string) => languageName(code, lang);
+
+  const bar = (icon: ReactNode, text: ReactNode, actions?: ReactNode) => (
+    <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
+      <span className="flex shrink-0 text-fg-3">{icon}</span>
+      <div className="min-w-0 flex-1">{text}</div>
+      {actions && <div className="flex gap-1">{actions}</div>}
+    </div>
+  );
+  const icon = <Languages size={14} strokeWidth={1.75} />;
+  const small = "h-6 px-2 text-[12px]";
+
+  switch (phase.kind) {
+    case "off":
+      return null;
+    case "checking":
+    case "translating":
+      return bar(<Spinner size={13} />, t(phase.kind === "checking" ? "translate.checking" : "translate.translating"));
+    case "need": {
+      const size = formatSize(phase.plan.missing.reduce((n, m) => n + m.size, 0));
+      const text =
+        phase.plan.missing.length > 1 && phase.plan.from
+          ? t("translate.needPivot", { from: name(phase.plan.from), to: name(to), size })
+          : t("translate.need", { to: name(to), size });
+      return bar(
+        icon,
+        text,
+        <>
+          <Button variant="primary" className={small} onClick={() => download(phase.plan)}>
+            {t("translate.download")}
+          </Button>
+          <Button variant="ghost" className={small} onClick={off}>
+            {t("translate.cancel")}
+          </Button>
+        </>,
+      );
+    }
+    case "downloading": {
+      const states = phase.plan.missing.map((m) => downloads[m.pair]);
+      const received = states.reduce((n, s) => n + (s?.received ?? 0), 0);
+      const total = states.reduce((n, s) => n + (s?.total ?? 0), 0);
+      const percent = total > 0 ? Math.min(100, Math.floor((received / total) * 100)) : 0;
+      return bar(
+        <Spinner size={13} />,
+        <div className="flex items-center gap-3">
+          <span className="shrink-0">{t("translate.downloading")}</span>
+          <div className="h-1 min-w-[80px] flex-1 overflow-hidden rounded-full bg-active">
+            <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${percent}%` }} />
+          </div>
+          <span className="tabular w-16 shrink-0 text-right text-fg-3">
+            {total > 0 ? `${percent}% · ${formatSize(total)}` : ""}
+          </span>
+        </div>,
+      );
+    }
+    case "on":
+      return bar(
+        icon,
+        t("translate.done", { from: name(phase.from), to: name(to) }),
+        <Button variant="ghost" className={small} onClick={off}>
+          {t("action.showOriginal")}
+        </Button>,
+      );
+    case "same":
+      return bar(
+        icon,
+        t("translate.same", { lang: name(phase.from) }),
+        <IconButton label={t("translate.cancel")} className="h-6 w-6" onClick={off}>
+          <X size={13} strokeWidth={1.75} />
+        </IconButton>,
+      );
+    case "error":
+      return bar(
+        <TriangleAlert size={14} strokeWidth={1.75} />,
+        errorText(t, phase.error),
+        <>
+          <Button className={small} onClick={() => void retry()}>
+            {t("action.retry")}
+          </Button>
+          <Button variant="ghost" className={small} onClick={off}>
+            {t("translate.cancel")}
+          </Button>
+        </>,
+      );
+  }
+}
+
 function Attachments({ itemId, mail }: { itemId: string; mail: MailDetail }) {
   const t = useT();
   const [busy, setBusy] = useState<number | null>(null);
@@ -441,6 +605,7 @@ function Empty() {
     [["U"], t("reader.hintRead")],
     [["V"], t("reader.hintOpen")],
     [["X"], t("reader.hintSelect")],
+    [["T"], t("reader.hintTranslate")],
     [["→", "←"], t("reader.hintGroup")],
   ];
   return (

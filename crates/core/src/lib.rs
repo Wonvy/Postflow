@@ -7,6 +7,7 @@ mod mail_rpc;
 mod refresh;
 mod rpc;
 mod secrets;
+mod translate_rpc;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -17,6 +18,7 @@ use std::time::Duration;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use postflow_feed::Client;
 use postflow_store::{Store, ids};
+use postflow_translate::Translator;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
@@ -37,6 +39,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("{0}")]
     Feed(#[from] postflow_feed::Error),
+    #[error("{0}")]
+    Translate(#[from] postflow_translate::Error),
 }
 
 /// 推给界面的事件。
@@ -54,6 +58,24 @@ pub enum Event {
     Refresh { active: usize },
     /// 配置状态变了，例如首次设置完成。
     Status,
+    /// 翻译模型的下载进度。
+    Model {
+        pair: String,
+        received: u64,
+        total: u64,
+        state: ModelState,
+        /// 失败时的错误码。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelState {
+    Downloading,
+    Installed,
+    Failed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -132,6 +154,8 @@ pub struct Core {
     events: broadcast::Sender<Event>,
     pub(crate) refreshing: AtomicUsize,
     pub(crate) secrets: Arc<dyn Secrets>,
+    /// 离线翻译，模型放在 `local_dir/translation` 下。
+    pub(crate) translator: Arc<Translator>,
 }
 
 impl Core {
@@ -148,7 +172,9 @@ impl Core {
         let local_dir = local_dir.into();
         std::fs::create_dir_all(&local_dir)?;
         let (events, _) = broadcast::channel(256);
+        let translator = Arc::new(Translator::new(local_dir.join("translation"))?);
         let core = Arc::new(Core {
+            translator,
             local_dir,
             client: Client::new()?,
             session: RwLock::new(None),

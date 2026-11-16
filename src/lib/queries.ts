@@ -19,6 +19,7 @@ import {
   type ItemPatch,
 } from "./api";
 import { useUi } from "./store";
+import { useModelDownloads } from "./translate";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
 
@@ -148,6 +149,15 @@ export function useCoreEvents() {
           break;
         case "status":
           void qc.invalidateQueries({ queryKey: keys.status });
+          break;
+        case "model":
+          useModelDownloads.getState().update(event.pair, {
+            received: event.received,
+            total: event.total,
+            state: event.state,
+            error: event.error,
+          });
+          if (event.state !== "downloading") void qc.invalidateQueries({ queryKey: ["translate"] });
           break;
         case "changed":
           // 自己发起的修改已经乐观更新过了

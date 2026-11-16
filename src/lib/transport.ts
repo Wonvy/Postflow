@@ -6,7 +6,15 @@ export type Scope = "feeds" | "items" | "settings" | "devices";
 export type CoreEvent =
   | { type: "changed"; scope: Scope[]; source?: string }
   | { type: "refresh"; active: number }
-  | { type: "status" };
+  | { type: "status" }
+  | {
+      type: "model";
+      pair: string;
+      received: number;
+      total: number;
+      state: "downloading" | "installed" | "failed";
+      error?: string;
+    };
 
 export class RpcError extends Error {
   code: string;

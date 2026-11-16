@@ -1,12 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { errorText, useT } from "../lib/i18n";
-import { exportOpml } from "../lib/platform";
+import { errorText, useLang, useT } from "../lib/i18n";
+import { exportOpml, formatSize } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type LangPref, type ThemePref, useUi } from "../lib/store";
+import { languageName, useModelDownloads, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { Button, Modal, Segmented, Select, TextInput } from "./ui";
 
@@ -133,6 +134,10 @@ export function SettingsDialog() {
         </SettingRow>
       </Section>
 
+      <Section title={t("settings.translation")}>
+        <TranslationSettings open={open} />
+      </Section>
+
       <Section title={t("settings.feeds")}>
         <SettingRow label={t("settings.refreshInterval")}>
           <Select
@@ -233,6 +238,96 @@ export function SettingsDialog() {
         </p>
       )}
     </Modal>
+  );
+}
+
+function TranslationSettings({ open }: { open: boolean }) {
+  const t = useT();
+  const lang = useLang();
+  const qc = useQueryClient();
+  const translateTo = useUi((s) => s.translateTo);
+  const setTranslateTo = useUi((s) => s.setTranslateTo);
+  const languages = useTranslateLanguages(open);
+  const downloads = useModelDownloads((s) => s.byPair);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const name = (code: string) => languageName(code, lang);
+  const targets = [...new Set([...(languages.data?.targets ?? []), ...(translateTo ? [translateTo] : [])])].sort(
+    (a, b) => name(a).localeCompare(name(b), lang === "zh" ? "zh-CN" : "en"),
+  );
+  const installed = languages.data?.installed ?? [];
+  const active = Object.entries(downloads).filter(
+    ([pair, d]) => d.state === "downloading" && !installed.some((m) => m.pair === pair),
+  );
+
+  const remove = async (pair: string) => {
+    setRemoving(pair);
+    setError(null);
+    try {
+      await api.removeModel(pair);
+      await qc.invalidateQueries({ queryKey: ["translate"] });
+    } catch (err) {
+      setError(errorText(t, err));
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  return (
+    <>
+      <SettingRow label={t("settings.translateTo")} hint={t("settings.translateToHint")}>
+        <Select className="w-44" value={translateTo ?? ""} onChange={(e) => setTranslateTo(e.target.value || null)}>
+          <option value="">{t("settings.translateFollow")}</option>
+          {targets.map((code) => (
+            <option key={code} value={code}>
+              {name(code)}
+            </option>
+          ))}
+        </Select>
+      </SettingRow>
+      <div>
+        <div className="text-fg">{t("settings.models")}</div>
+        <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("settings.modelsHint")}</div>
+        {languages.data && !languages.data.catalog && (
+          <div className="mt-1 text-[12px] text-fg-3">{t("settings.modelsOffline")}</div>
+        )}
+        <ul className="mt-2 flex flex-col">
+          {installed.length === 0 && active.length === 0 && (
+            <li className="text-[12px] text-fg-3">{t("settings.noModels")}</li>
+          )}
+          {installed.map((m) => (
+            <li key={m.pair} className="flex h-8 items-center gap-3">
+              <span className="min-w-0 flex-1 truncate text-fg-2">
+                {name(m.from)} → {name(m.to)}
+              </span>
+              <span className="tabular text-[12px] text-fg-3">{formatSize(m.size)}</span>
+              <Button
+                variant="ghost"
+                className="h-6 px-2 text-[12px]"
+                busy={removing === m.pair}
+                onClick={() => void remove(m.pair)}
+              >
+                {t("action.remove")}
+              </Button>
+            </li>
+          ))}
+          {active.map(([pair, d]) => {
+            const [from = "", to = ""] = pair.split("-");
+            const percent = d.total > 0 ? Math.floor((d.received / d.total) * 100) : 0;
+            return (
+              <li key={pair} className="flex h-8 items-center gap-3">
+                <span className="min-w-0 flex-1 truncate text-fg-2">
+                  {name(from)} → {name(to)}
+                </span>
+                <span className="tabular text-[12px] text-fg-3">{t("translate.downloading")} {percent}%</span>
+              </li>
+            );
+          })}
+        </ul>
+        {error && <div className="mt-1 text-[12px] text-danger">{error}</div>}
+      </div>
+    </>
   );
 }
 

@@ -39,6 +39,8 @@ interface UiState {
   groupMode: GroupMode;
   /** 当前列表里展开着的组。换列表时清空。 */
   expandedGroups: string[];
+  /** 按 T 键时加一，阅读面板据此切换译文。 */
+  translateRequest: number;
 
   // 以下是这台设备上的界面偏好，存在浏览器本地
   theme: ThemePref;
@@ -47,6 +49,8 @@ interface UiState {
   sidebarWidth: number;
   listWidth: number;
   collapsedFolders: string[];
+  /** 翻译成哪种语言，模型目录里的语言代码。为空时跟界面语言一致。 */
+  translateTo: string | null;
 
   setScope: (scope: ListScope) => void;
   open: (id: string | null) => void;
@@ -62,6 +66,8 @@ interface UiState {
   setSidebarWidth: (w: number) => void;
   setListWidth: (w: number) => void;
   toggleFolder: (folder: string) => void;
+  setTranslateTo: (code: string | null) => void;
+  requestTranslate: () => void;
 }
 
 export const SIDEBAR_MIN = 200;
@@ -82,6 +88,7 @@ export const useUi = create<UiState>()(
       kindFilter: null,
       groupMode: "none",
       expandedGroups: [],
+      translateRequest: 0,
 
       theme: "system",
       density: "compact",
@@ -89,6 +96,7 @@ export const useUi = create<UiState>()(
       sidebarWidth: 244,
       listWidth: 380,
       collapsedFolders: [],
+      translateTo: null,
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -114,6 +122,8 @@ export const useUi = create<UiState>()(
             ? s.collapsedFolders.filter((f) => f !== folder)
             : [...s.collapsedFolders, folder],
         })),
+      setTranslateTo: (translateTo) => set({ translateTo }),
+      requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
     }),
     {
       name: "postflow.ui",
@@ -126,6 +136,7 @@ export const useUi = create<UiState>()(
         collapsedFolders: s.collapsedFolders,
         kindFilter: s.kindFilter,
         groupMode: s.groupMode,
+        translateTo: s.translateTo,
       }),
     },
   ),

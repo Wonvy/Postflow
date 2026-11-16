@@ -194,6 +194,55 @@ export interface ImportStats {
 
 export type Settings = Record<string, unknown>;
 
+/** 已经下载到本机的翻译模型。语言代码用的是模型目录里的写法，比如 `zh`、`zh_hant`。 */
+export interface InstalledModel {
+  pair: string;
+  from: string;
+  to: string;
+  size: number;
+}
+
+export interface ModelProgress {
+  pair: string;
+  received: number;
+  total: number;
+}
+
+export interface TranslateLanguages {
+  /** 拿到了模型目录。离线又没存过目录时为 false，只能用已经下载的模型。 */
+  catalog: boolean;
+  sources: string[];
+  targets: string[];
+  installed: InstalledModel[];
+  downloads: ModelProgress[];
+}
+
+export interface MissingModel {
+  pair: string;
+  from: string;
+  to: string;
+  size: number;
+}
+
+export interface TranslatePlan {
+  from: string | null;
+  to: string;
+  same: boolean;
+  missing: MissingModel[];
+}
+
+/** 要翻译的一段：纯文字，加上里面每个行内元素覆盖的 `[start, end)`（UTF-16 下标）。 */
+export interface SourceSegment {
+  text: string;
+  marks: [number, number][];
+}
+
+/** 译文：每个标记是 `[start, end, 原文里第几个元素]`。 */
+export interface TranslatedSegment {
+  text: string;
+  marks: [number, number, number][];
+}
+
 export const api = {
   status: () => rpc<Status>("app.status"),
   setup: (data_dir: string, device_name: string) =>
@@ -245,4 +294,12 @@ export const api = {
   renameDevice: (name: string) => rpc<void>("devices.rename", { name }),
 
   rebuildIndex: () => rpc<ImportStats>("index.rebuild"),
+
+  translateLanguages: () => rpc<TranslateLanguages>("translate.languages"),
+  translatePlan: (text: string, to: string, from?: string) =>
+    rpc<TranslatePlan>("translate.plan", { text, to, from }),
+  downloadModels: (pairs: string[]) => rpc<void>("translate.download", { pairs }),
+  removeModel: (pair: string) => rpc<void>("translate.remove", { pair }),
+  translateText: (from: string, to: string, segments: SourceSegment[]) =>
+    rpc<{ segments: TranslatedSegment[] }>("translate.text", { from, to, segments }),
 };
