@@ -15,6 +15,13 @@ export type ThemePref = "system" | "dark" | "light";
 /** 列表的显示方式：一行一条、带摘要和缩略图、卡片。 */
 export type ListView = "list" | "summary" | "cards";
 
+/** 侧栏布局：邮箱和订阅上下排列（可折叠），或者分成选项卡。 */
+export type SidebarLayout = "groups" | "tabs";
+export type SidebarTab = "all" | "mail" | "feeds";
+export type SidebarSection = "mail" | "feeds";
+/** 每个选项卡只看哪一类条目。 */
+export const TAB_KIND: Record<SidebarTab, ItemKind | null> = { all: null, mail: "mail", feeds: "article" };
+
 export const CARD_MIN = 160;
 export const CARD_MAX = 480;
 export type Density = "compact" | "comfortable";
@@ -64,6 +71,12 @@ interface UiState {
   defaultListView: ListView;
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
+  sidebarLayout: SidebarLayout;
+  collapsedSections: SidebarSection[];
+  /** 选项卡模式下当前的选项卡。 */
+  tab: SidebarTab;
+  /** 每个选项卡上次停在的列表，切回来时回到那里。 */
+  tabScopes: Partial<Record<SidebarTab, ListScope>>;
 
   setScope: (scope: ListScope) => void;
   open: (id: string | null) => void;
@@ -82,6 +95,9 @@ interface UiState {
   setTranslateTo: (code: string | null) => void;
   setListView: (scope: ListScope, view: ListView) => void;
   setCardSize: (size: number) => void;
+  setSidebarLayout: (layout: SidebarLayout) => void;
+  toggleSection: (section: SidebarSection) => void;
+  setTab: (tab: SidebarTab) => void;
   requestTranslate: () => void;
 }
 
@@ -117,6 +133,10 @@ export const useUi = create<UiState>()(
       listViews: {},
       defaultListView: "list",
       cardSize: 260,
+      sidebarLayout: "groups",
+      collapsedSections: [],
+      tab: "all",
+      tabScopes: {},
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -144,7 +164,42 @@ export const useUi = create<UiState>()(
         })),
       setTranslateTo: (translateTo) => set({ translateTo }),
       setListView: (scope, view) =>
-        set((s) => ({ listViews: { ...s.listViews, [scopeKey(scope)]: view }, defaultListView: view })),
+        set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.kindFilter)]: view }, defaultListView: view })),
+      setSidebarLayout: (sidebarLayout) =>
+        set((s) => {
+          if (sidebarLayout === "groups") return { sidebarLayout };
+          // 进入选项卡模式：按当前选项卡筛选，停在不属于它的列表上就回到收件箱
+          const kind = TAB_KIND[s.tab];
+          const fits =
+            s.tab === "all" ||
+            s.scope.kind === "view" ||
+            (s.tab === "mail" ? s.scope.kind === "account" : s.scope.kind !== "account");
+          return {
+            sidebarLayout,
+            kindFilter: kind,
+            ...(fits ? {} : { scope: { kind: "view", view: "inbox" } as ListScope, openId: null, selection: [] }),
+          };
+        }),
+      toggleSection: (section) =>
+        set((s) => ({
+          collapsedSections: s.collapsedSections.includes(section)
+            ? s.collapsedSections.filter((x) => x !== section)
+            : [...s.collapsedSections, section],
+        })),
+      setTab: (tab) =>
+        set((s) => {
+          if (tab === s.tab) return {};
+          const tabScopes = { ...s.tabScopes, [s.tab]: s.scope };
+          return {
+            tab,
+            tabScopes,
+            scope: tabScopes[tab] ?? { kind: "view", view: "inbox" },
+            kindFilter: TAB_KIND[tab],
+            openId: null,
+            selection: [],
+            expandedGroups: [],
+          };
+        }),
       setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
     }),
@@ -163,6 +218,9 @@ export const useUi = create<UiState>()(
         listViews: s.listViews,
         defaultListView: s.defaultListView,
         cardSize: s.cardSize,
+        sidebarLayout: s.sidebarLayout,
+        collapsedSections: s.collapsedSections,
+        tab: s.tab,
       }),
     },
   ),
@@ -182,9 +240,15 @@ export function scopeKey(scope: ListScope): string {
   }
 }
 
+/** 记住显示方式用的键。内置视图在只看邮件或只看订阅时各记各的，选项卡因此也各记各的。 */
+export function listKey(scope: ListScope, kind: ItemKind | null): string {
+  const base = scopeKey(scope);
+  return scope.kind === "view" && kind ? `${base}:${kind}` : base;
+}
+
 /** 当前列表的显示方式。 */
 export function useListView(): ListView {
-  return useUi((s) => s.listViews[scopeKey(s.scope)] ?? s.defaultListView);
+  return useUi((s) => s.listViews[listKey(s.scope, s.kindFilter)] ?? s.defaultListView);
 }
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */

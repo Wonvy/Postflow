@@ -8,8 +8,10 @@ import {
   FolderPlus,
   Inbox,
   KeyRound,
+  ListTree,
   type LucideIcon,
   Mail,
+  PanelTop,
   Pencil,
   Plus,
   RefreshCw,
@@ -30,7 +32,7 @@ import { UpdatePill } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar } from "../lib/platform";
 import { keys, useNav, usePresets } from "../lib/queries";
-import { type ListScope, sameScope, useUi } from "../lib/store";
+import { type ListScope, type SidebarSection, type SidebarTab, sameScope, useUi } from "../lib/store";
 import {
   Avatar,
   Button,
@@ -320,6 +322,9 @@ function SectionHeader({
   drag,
   highlight = false,
   extra,
+  collapsed,
+  onToggle,
+  unread = 0,
 }: {
   label: string;
   addLabel: string;
@@ -327,17 +332,33 @@ function SectionHeader({
   drag?: DragHandlers;
   highlight?: boolean;
   extra?: ReactNode;
+  collapsed: boolean;
+  onToggle: () => void;
+  /** 收起时在标题右边显示这一组的未读数。 */
+  unread?: number;
 }) {
   return (
     <div
       {...drag}
       className={cx(
-        "group/section mb-1 mt-5 flex h-6 items-center justify-between rounded-md pl-2 pr-0.5 transition-colors",
+        "group/section mb-1 mt-5 flex h-6 items-center justify-between rounded-md pl-1 pr-0.5 transition-colors",
         highlight && "bg-accent-soft ring-1 ring-inset ring-accent/60",
       )}
     >
-      <span className="text-[12px] font-medium text-fg-3">{label}</span>
-      <span className="flex-1" />
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 items-center gap-1 rounded text-left text-[12px] font-medium text-fg-3 hover:text-fg-2"
+      >
+        <ChevronRight
+          size={12}
+          strokeWidth={2.25}
+          className={cx("shrink-0 transition-transform", !collapsed && "rotate-90")}
+        />
+        <span className="truncate">{label}</span>
+      </button>
+      {collapsed && <Count n={unread} />}
       {extra}
       <Tip label={addLabel} side="right">
         <button
@@ -362,6 +383,16 @@ export function Sidebar({ width }: { width: number }) {
   const refreshing = useUi((s) => s.refreshing);
   const collapsed = useUi((s) => s.collapsedFolders);
   const toggleFolder = useUi((s) => s.toggleFolder);
+  const layout = useUi((s) => s.sidebarLayout);
+  const setLayout = useUi((s) => s.setSidebarLayout);
+  const tab = useUi((s) => s.tab);
+  const setTab = useUi((s) => s.setTab);
+  const collapsedSections = useUi((s) => s.collapsedSections);
+  const toggleSection = useUi((s) => s.toggleSection);
+  const isCollapsed = (section: SidebarSection) => collapsedSections.includes(section);
+  // 选项卡模式下只显示当前选项卡的那一组
+  const shows = (section: SidebarSection) =>
+    layout === "groups" || tab === "all" || (tab === "mail") === (section === "mail");
   const qc = useQueryClient();
   const { applyTo } = useActions();
   const folderActions = useFolderActions();
@@ -513,8 +544,19 @@ export function Sidebar({ width }: { width: number }) {
   };
 
   const isActive = (target: ListScope) => sameScope(scope, target);
-  const countFor = (view: View) =>
-    view === "inbox" ? counts?.unread : view === "today" ? counts?.today : undefined;
+  // 选项卡模式下视图的数字也只算这一类
+  const kind = layout === "tabs" ? tab : "all";
+  const countFor = (view: View) => {
+    if (!counts) return undefined;
+    if (view === "inbox") return kind === "mail" ? counts.unread_mail : kind === "feeds" ? counts.unread_article : counts.unread;
+    if (view === "today") return kind === "mail" ? counts.today_mail : kind === "feeds" ? counts.today_article : counts.today;
+    return undefined;
+  };
+  const TABS: { value: SidebarTab; label: string; count: number }[] = [
+    { value: "all", label: t("tab.all"), count: counts?.unread ?? 0 },
+    { value: "mail", label: t("nav.mail"), count: counts?.unread_mail ?? 0 },
+    { value: "feeds", label: t("nav.feeds"), count: counts?.unread_article ?? 0 },
+  ];
 
   return (
     <aside className="flex h-full shrink-0 flex-col bg-sidebar" style={{ width }}>
@@ -529,6 +571,12 @@ export function Sidebar({ width }: { width: number }) {
           </div>
         )}
         <div className="flex-1" data-tauri-drag-region />
+        <IconButton
+          label={layout === "tabs" ? t("layout.toGroups") : t("layout.toTabs")}
+          onClick={() => setLayout(layout === "tabs" ? "groups" : "tabs")}
+        >
+          {layout === "tabs" ? <ListTree {...ICON} /> : <PanelTop {...ICON} />}
+        </IconButton>
         <IconButton label={t("action.refreshAll")} shortcut="R" onClick={() => void api.refresh()}>
           <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
         </IconButton>
@@ -556,6 +604,28 @@ export function Sidebar({ width }: { width: number }) {
         </Menu>
       </header>
 
+      {layout === "tabs" && (
+        <div role="tablist" aria-label={t("layout.tabs")} className="mx-2 mb-2 flex shrink-0 rounded-md bg-hover p-0.5">
+          {TABS.map((item, i) => (
+            <Tip key={item.value} label={item.label} shortcut={String(i + 1)}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === item.value}
+                onClick={() => setTab(item.value)}
+                className={cx(
+                  "flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded-[5px] px-1.5 text-[12px] transition-colors",
+                  tab === item.value ? "bg-surface font-medium text-fg shadow-sm" : "text-fg-3 hover:text-fg-2",
+                )}
+              >
+                <span className="truncate">{item.label}</span>
+                {item.count > 0 && <span className="tabular text-[11px] text-fg-3">{item.count > 999 ? "999+" : item.count}</span>}
+              </button>
+            </Tip>
+          ))}
+        </div>
+      )}
+
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <div className="flex flex-col gap-px">
           {VIEWS.map(({ view, icon: Icon, label }) => (
@@ -572,119 +642,137 @@ export function Sidebar({ width }: { width: number }) {
           ))}
         </div>
 
-        <SectionHeader
-          label={t("nav.mail")}
-          addLabel={t("action.addAccount")}
-          onAdd={() => setDialog({ type: "add-account" })}
-        />
-        <div className="flex flex-col gap-px">
-          {accounts?.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              active={isActive({ kind: "account", accountId: account.id })}
-              drag={{ ...source({ kind: "account", id: account.id }, account.name || account.email), ...accountTarget(account) }}
-              drop={dropAt(`account:${account.id}`)}
+        {shows("mail") && (
+          <>
+            <SectionHeader
+              label={t("nav.mail")}
+              addLabel={t("action.addAccount")}
+              onAdd={() => setDialog({ type: "add-account" })}
+              collapsed={isCollapsed("mail")}
+              onToggle={() => toggleSection("mail")}
+              unread={counts?.unread_mail}
             />
-          ))}
-          {accounts && accounts.length === 0 && (
-            <button
-              type="button"
-              onClick={() => setDialog({ type: "add-account" })}
-              className="flex h-7 items-center gap-2 rounded-md pl-2 text-fg-3 hover:bg-hover hover:text-fg"
-            >
-              <Plus {...ICON} />
-              {t("action.addAccount")}
-            </button>
-          )}
-        </div>
-
-        <SectionHeader
-          label={t("nav.feeds")}
-          addLabel={t("action.addFeed")}
-          onAdd={() => setDialog({ type: "add-feed" })}
-          drag={feedsSectionTarget}
-          highlight={dropAt("section:feeds") !== null}
-          extra={
-            <Tip label={t("folder.new")} side="right">
-              <button
-                type="button"
-                aria-label={t("folder.new")}
-                onClick={() => setDialog({ type: "folder" })}
-                className="flex size-5 items-center justify-center rounded text-fg-3 opacity-0 hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100"
-              >
-                <FolderPlus size={14} strokeWidth={2} />
-              </button>
-            </Tip>
-          }
-        />
-
-        <div className="flex flex-col gap-px">
-          {folders.map(([folder, list]) => {
-            const open = !collapsed.includes(folder);
-            return (
-              <div key={folder} className="flex flex-col gap-px">
-                <Row
-                  active={isActive({ kind: "folder", folder })}
-                  onClick={() => setScope({ kind: "folder", folder })}
-                  drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder) }}
-                  drop={dropAt(`folder:${folder}`)}
-                  leading={
-                    <button
-                      type="button"
-                      aria-expanded={open}
-                      aria-label={folder}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFolder(folder);
-                      }}
-                      className="flex size-5 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg"
-                    >
-                      <ChevronRight
-                        size={14}
-                        strokeWidth={2}
-                        className={cx("transition-transform", open && "rotate-90")}
-                      />
-                    </button>
-                  }
-                  label={folder}
-                  trailing={<FolderTrailing folder={folder} unread={list.reduce((sum, f) => sum + f.unread, 0)} />}
-                />
-                {open &&
-                  list.map((feed) => (
-                    <FeedRow
-                      key={feed.id}
-                      feed={feed}
-                      indent
-                      active={isActive({ kind: "feed", feedId: feed.id })}
-                      drag={{ ...source({ kind: "feed", id: feed.id, folder: feed.folder }, feed.title), ...feedTarget(feed) }}
-                      drop={dropAt(`feed:${feed.id}`)}
-                    />
-                  ))}
+            {!isCollapsed("mail") && (
+              <div className="flex flex-col gap-px">
+                {accounts?.map((account) => (
+                  <AccountRow
+                    key={account.id}
+                    account={account}
+                    active={isActive({ kind: "account", accountId: account.id })}
+                    drag={{ ...source({ kind: "account", id: account.id }, account.name || account.email), ...accountTarget(account) }}
+                    drop={dropAt(`account:${account.id}`)}
+                  />
+                ))}
+                {accounts && accounts.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ type: "add-account" })}
+                    className="flex h-7 items-center gap-2 rounded-md pl-2 text-fg-3 hover:bg-hover hover:text-fg"
+                  >
+                    <Plus {...ICON} />
+                    {t("action.addAccount")}
+                  </button>
+                )}
               </div>
-            );
-          })}
-          {loose.map((feed) => (
-            <FeedRow
-              key={feed.id}
-              feed={feed}
-              indent={false}
-              active={isActive({ kind: "feed", feedId: feed.id })}
-              drag={{ ...source({ kind: "feed", id: feed.id, folder: "" }, feed.title), ...feedTarget(feed) }}
-              drop={dropAt(`feed:${feed.id}`)}
+            )}
+          </>
+        )}
+
+        {shows("feeds") && (
+          <>
+            <SectionHeader
+              label={t("nav.feeds")}
+              addLabel={t("action.addFeed")}
+              onAdd={() => setDialog({ type: "add-feed" })}
+              collapsed={isCollapsed("feeds")}
+              onToggle={() => toggleSection("feeds")}
+              unread={counts?.unread_article}
+              drag={feedsSectionTarget}
+              highlight={dropAt("section:feeds") !== null}
+              extra={
+                <Tip label={t("folder.new")} side="right">
+                  <button
+                    type="button"
+                    aria-label={t("folder.new")}
+                    onClick={() => setDialog({ type: "folder" })}
+                    className="flex size-5 items-center justify-center rounded text-fg-3 opacity-0 hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100"
+                  >
+                    <FolderPlus size={14} strokeWidth={2} />
+                  </button>
+                </Tip>
+              }
             />
-          ))}
-          {feeds && feeds.length === 0 && (
-            <button
-              type="button"
-              onClick={() => setDialog({ type: "add-feed" })}
-              className="flex h-7 items-center gap-2 rounded-md pl-2 text-fg-3 hover:bg-hover hover:text-fg"
-            >
-              <Plus {...ICON} />
-              {t("action.addFeed")}
-            </button>
-          )}
-        </div>
+
+            {!isCollapsed("feeds") && (
+              <div className="flex flex-col gap-px">
+                {folders.map(([folder, list]) => {
+                  const open = !collapsed.includes(folder);
+                  return (
+                    <div key={folder} className="flex flex-col gap-px">
+                      <Row
+                        active={isActive({ kind: "folder", folder })}
+                        onClick={() => setScope({ kind: "folder", folder })}
+                        drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder) }}
+                        drop={dropAt(`folder:${folder}`)}
+                        leading={
+                          <button
+                            type="button"
+                            aria-expanded={open}
+                            aria-label={folder}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFolder(folder);
+                            }}
+                            className="flex size-5 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg"
+                          >
+                            <ChevronRight
+                              size={14}
+                              strokeWidth={2}
+                              className={cx("transition-transform", open && "rotate-90")}
+                            />
+                          </button>
+                        }
+                        label={folder}
+                        trailing={<FolderTrailing folder={folder} unread={list.reduce((sum, f) => sum + f.unread, 0)} />}
+                      />
+                      {open &&
+                        list.map((feed) => (
+                          <FeedRow
+                            key={feed.id}
+                            feed={feed}
+                            indent
+                            active={isActive({ kind: "feed", feedId: feed.id })}
+                            drag={{ ...source({ kind: "feed", id: feed.id, folder: feed.folder }, feed.title), ...feedTarget(feed) }}
+                            drop={dropAt(`feed:${feed.id}`)}
+                          />
+                        ))}
+                    </div>
+                  );
+                })}
+                {loose.map((feed) => (
+                  <FeedRow
+                    key={feed.id}
+                    feed={feed}
+                    indent={false}
+                    active={isActive({ kind: "feed", feedId: feed.id })}
+                    drag={{ ...source({ kind: "feed", id: feed.id, folder: "" }, feed.title), ...feedTarget(feed) }}
+                    drop={dropAt(`feed:${feed.id}`)}
+                  />
+                ))}
+                {feeds && feeds.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ type: "add-feed" })}
+                    className="flex h-7 items-center gap-2 rounded-md pl-2 text-fg-3 hover:bg-hover hover:text-fg"
+                  >
+                    <Plus {...ICON} />
+                    {t("action.addFeed")}
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </nav>
 
       <footer className="flex h-10 shrink-0 items-center gap-1 border-t border-line px-2">

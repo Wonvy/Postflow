@@ -6,7 +6,7 @@ import { exportOpml, formatSize } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
-import { type Density, type LangPref, type ThemePref, useUi } from "../lib/store";
+import { type Density, type LangPref, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { Button, Modal, Segmented, Select, TextInput } from "./ui";
@@ -43,6 +43,8 @@ export function SettingsDialog() {
   const setDensity = useUi((s) => s.setDensity);
   const lang = useUi((s) => s.lang);
   const setLang = useUi((s) => s.setLang);
+  const sidebarLayout = useUi((s) => s.sidebarLayout);
+  const setSidebarLayout = useUi((s) => s.setSidebarLayout);
 
   const status = useStatus();
   const settings = useSettings();
@@ -118,6 +120,16 @@ export function SettingsDialog() {
             options={[
               { value: "compact", label: t("settings.compact") },
               { value: "comfortable", label: t("settings.comfortable") },
+            ]}
+          />
+        </SettingRow>
+        <SettingRow label={t("settings.sidebar")}>
+          <Segmented<SidebarLayout>
+            value={sidebarLayout}
+            onChange={setSidebarLayout}
+            options={[
+              { value: "groups", label: t("settings.sidebarGroups") },
+              { value: "tabs", label: t("settings.sidebarTabs") },
             ]}
           />
         </SettingRow>

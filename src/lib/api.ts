@@ -31,6 +31,10 @@ export interface Counts {
   unread: number;
   today: number;
   starred: number;
+  unread_mail: number;
+  today_mail: number;
+  unread_article: number;
+  today_article: number;
 }
 
 export type Security = "tls" | "starttls" | "none";

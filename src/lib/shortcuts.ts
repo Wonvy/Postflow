@@ -66,6 +66,13 @@ export function useShortcuts() {
           if (!ui.openId) return;
           ui.requestTranslate();
           break;
+        case "1":
+        case "2":
+        case "3":
+          // 选项卡模式下切换选项卡
+          if (ui.sidebarLayout !== "tabs") return;
+          ui.setTab((["all", "mail", "feeds"] as const)[Number(key) - 1] ?? "all");
+          break;
         case "x":
           // 勾选或取消勾选当前打开的那一行，配合 J / K 可以只用键盘多选
           if (!ui.openId) return;

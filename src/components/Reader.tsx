@@ -598,7 +598,9 @@ function Attachments({ itemId, mail }: { itemId: string; mail: MailDetail }) {
 
 function Empty() {
   const t = useT();
+  const tabs = useUi((s) => s.sidebarLayout === "tabs");
   const hints: [string[], string][] = [
+    ...(tabs ? ([[["1", "2", "3"], t("reader.hintTabs")]] as [string[], string][]) : []),
     [["J", "K"], t("reader.hintMove")],
     [["E"], t("reader.hintArchive")],
     [["S"], t("reader.hintStar")],

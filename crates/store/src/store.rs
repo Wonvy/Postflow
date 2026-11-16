@@ -545,12 +545,15 @@ impl Store {
         let guard = self.lock();
         let sql = format!(
             "SELECT COALESCE(SUM(i.read = 0), 0), \
-                    COALESCE(SUM(i.read = 0 AND i.published_at >= ?1), 0) \
+                    COALESCE(SUM(i.read = 0 AND i.published_at >= ?1), 0), \
+                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail'), 0), \
+                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND i.published_at >= ?1), 0) \
              FROM {ITEM_FROM} WHERE i.archived = 0 AND {ALIVE}"
         );
-        let (unread, today) = guard
-            .conn
-            .query_row(&sql, [today_since], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        let (unread, today, unread_mail, today_mail): (i64, i64, i64, i64) =
+            guard.conn.query_row(&sql, [today_since], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })?;
         let starred =
             guard
                 .conn
@@ -561,6 +564,10 @@ impl Store {
             unread,
             today,
             starred,
+            unread_mail,
+            today_mail,
+            unread_article: unread - unread_mail,
+            today_article: today - today_mail,
         })
     }
 

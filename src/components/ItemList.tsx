@@ -32,7 +32,7 @@ import { type Translate, useLang, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
 import { isMac } from "../lib/platform";
 import { useNav } from "../lib/queries";
-import { CARD_MAX, CARD_MIN, type ListScope, type ListView, useListView, useUi } from "../lib/store";
+import { CARD_MAX, CARD_MIN, type ListScope, type ListView, listKey, useListView, useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
 
@@ -44,6 +44,9 @@ const HEADER_HEIGHT = 30;
 /** 卡片之间的间距，以及卡片下半部分文字区的高度。 */
 const CARD_GAP = 10;
 const CARD_TEXT = 128;
+/** 每个列表上次滚到的位置，只在这次打开应用期间记着。 */
+const scrollPositions = new Map<string, number>();
+
 /** 滚动到离末尾还剩这么多条时开始加载下一页。 */
 const LOAD_AHEAD = 30;
 
@@ -262,6 +265,9 @@ export function ItemList({ width }: { width: number }) {
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   const view = useListView();
   const cardSize = useUi((s) => s.cardSize);
+  const layout = useUi((s) => s.sidebarLayout);
+  const kindFilter = useUi((s) => s.kindFilter);
+  const here = listKey(scope, kindFilter);
 
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
@@ -329,11 +335,16 @@ export function ItemList({ width }: { width: number }) {
     if (index >= 0) virtualizer.scrollToIndex(index, { align: "start" });
   }, [columns, lines, virtualizer]);
 
-  // 换了列表就回到顶部
+  // 换了列表时回到它上次滚到的位置（第一次打开是顶部）
   useEffect(() => {
-    scroller.current?.scrollTo({ top: 0 });
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollTo({ top: scrollPositions.get(here) ?? 0 });
     anchor.current = null;
-  }, [scope]);
+    const save = () => scrollPositions.set(here, el.scrollTop);
+    el.addEventListener("scroll", save, { passive: true });
+    return () => el.removeEventListener("scroll", save);
+  }, [here]);
 
   // 用键盘移动时让打开的那一行保持在视野里
   useEffect(() => {
@@ -411,7 +422,7 @@ export function ItemList({ width }: { width: number }) {
         <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold">
           {title}
         </h1>
-        {scope.kind === "view" && <KindFilter />}
+        {scope.kind === "view" && layout !== "tabs" && <KindFilter />}
         <ViewControl />
         <GroupControl />
         <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={markAllRead}>
