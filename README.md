@@ -59,10 +59,13 @@ click **More info → Run anyway**.
 - Inbox, Today, Unread, Starred and Archive views.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - The same interface also runs in your browser, served by the app on your own machine.
+- Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
+  packages are signed, and the app refuses any package whose signature doesn't match.
 
 **Not yet available:** writing and replying, OAuth sign-in for Outlook and Microsoft 365, folders other than the
-inbox, search, a command palette, snoozing, labels and rules, a tray icon, mobile apps, signed installers and
-automatic updates.
+inbox, search, a command palette, snoozing, labels and rules, a tray icon, mobile apps, and installers signed by
+Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
+download page instead.
 
 ## Keyboard shortcuts
 
@@ -191,6 +194,18 @@ The first command sets version 0.2.0 in `package.json`, `Cargo.toml` and both lo
 `v0.2.0`. Pushing the tag starts GitHub Actions, which builds the installers on macOS, Windows and Linux and
 publishes the release once all three succeed. A version with a hyphen, such as `0.2.0-beta.1`, is published as a
 pre-release.
+
+Every release also contains signed update packages and a `latest.json`, which installed copies of Postflow check
+to update themselves. Signing needs the private key in the repository secret `TAURI_SIGNING_PRIVATE_KEY`
+(Settings → Secrets and variables → Actions); the matching public key is in `src-tauri/tauri.conf.json`. Keep a
+backup of the private key: without it, installed copies can't verify future updates.
+
+To build installers on your own machine, either set `TAURI_SIGNING_PRIVATE_KEY` to the key, or turn the update
+packages off for that build:
+
+```bash
+npm run tauri -- build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+```
 
 If one platform fails, the release stays as a draft and is not public. After fixing the problem, run the Release
 workflow by hand from the Actions page with the same tag.

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { type Account, api, type Feed, type View } from "../lib/api";
+import { UpdatePill } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar } from "../lib/platform";
 import { keys, useNav } from "../lib/queries";
@@ -444,6 +445,7 @@ export function Sidebar({ width }: { width: number }) {
             <span className="truncate">{t("status.refreshing", { n: refreshing })}</span>
           </span>
         )}
+        <UpdatePill />
       </footer>
     </aside>
   );

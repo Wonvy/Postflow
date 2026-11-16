@@ -3,6 +3,8 @@ import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "r
 import { api } from "../lib/api";
 import { errorText, useT } from "../lib/i18n";
 import { exportOpml } from "../lib/platform";
+import { isTauri } from "../lib/transport";
+import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type LangPref, type ThemePref, useUi } from "../lib/store";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
@@ -215,6 +217,7 @@ export function SettingsDialog() {
       <Section title={t("settings.about")}>
         <SettingRow label={t("settings.version")}>
           <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
+          {isTauri && <UpdateCheck />}
         </SettingRow>
       </Section>
 
@@ -230,5 +233,30 @@ export function SettingsDialog() {
         </p>
       )}
     </Modal>
+  );
+}
+
+function UpdateCheck() {
+  const t = useT();
+  const phase = useUpdater((s) => s.phase);
+  const version = useUpdater((s) => s.version);
+  const setDialogOpen = useUpdater((s) => s.setDialogOpen);
+
+  if (phase === "available" && version) {
+    return (
+      <Button variant="primary" onClick={() => setDialogOpen(true)}>
+        {t("settings.updateAvailable", { version })}
+      </Button>
+    );
+  }
+  const note =
+    phase === "latest" ? t("settings.upToDate") : phase === "error" ? t("settings.checkFailed") : null;
+  return (
+    <>
+      {note && <span className="text-[12px] text-fg-3">{note}</span>}
+      <Button busy={phase === "checking"} onClick={() => void checkForUpdate(true)}>
+        {t("settings.checkUpdates")}
+      </Button>
+    </>
   );
 }

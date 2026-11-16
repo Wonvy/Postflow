@@ -56,9 +56,11 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 收件箱、今天、未读、星标、已归档五个视图。
 - 深色与浅色主题，紧凑与宽松两种列表密度，中英文界面。
 - 同一套界面也能在浏览器里打开，由你自己电脑上的应用提供。
+- 在线更新：有新版本时，Postflow 会提示下载、安装并重启。更新包经过签名，签名对不上的包不会被安装。
 
 **还没有的**：写信与回复、Outlook 与 Microsoft 365 的 OAuth 登录、收件箱以外的文件夹、搜索、命令面板、
-稍后提醒、标签与规则、托盘常驻、移动端、安装包签名与自动更新。
+稍后提醒、标签与规则、托盘常驻、移动端、苹果和微软的安装包签名。Linux 上只有 AppImage 能在应用里直接更新，
+用 `.deb`、`.rpm` 安装的会引导你去下载页。
 
 ## 快捷键
 
@@ -181,6 +183,16 @@ git push --follow-tags
 第一条命令把 `package.json`、`Cargo.toml` 和两个锁文件里的版本号改成 0.2.0，提交并打上 `v0.2.0` 标签。
 推送标签后，GitHub Actions 会在 macOS、Windows、Linux 上分别打包，三个都成功后自动发布 Release。
 带横线的版本号（例如 `0.2.0-beta.1`）会发布成预发布版本。
+
+每个 Release 里还有签过名的更新包和一个 `latest.json`，已安装的 Postflow 靠它们在线更新。
+签名用的私钥要放在仓库的 Secret `TAURI_SIGNING_PRIVATE_KEY` 里（Settings → Secrets and variables → Actions），
+对应的公钥在 `src-tauri/tauri.conf.json`。请备份好私钥：丢了的话，已安装的版本就无法验证以后的更新。
+
+在自己电脑上打安装包时，要么把私钥设到环境变量 `TAURI_SIGNING_PRIVATE_KEY`，要么这次不生成更新包：
+
+```bash
+npm run tauri -- build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+```
 
 某个平台打包失败时，Release 停留在草稿状态，不会对外公开。修好后在 Actions 页面手动运行 Release 流程，
 填入同一个标签即可重新打包。

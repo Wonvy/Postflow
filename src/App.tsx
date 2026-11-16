@@ -6,6 +6,7 @@ import { ItemList } from "./components/ItemList";
 import { Onboarding } from "./components/Onboarding";
 import { Reader } from "./components/Reader";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { Button, Spinner } from "./components/ui";
 import { resolveLang } from "./lib/i18n";
@@ -13,6 +14,7 @@ import { useCoreEvents, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { useUi } from "./lib/store";
 import { isTauri } from "./lib/transport";
+import { startUpdateChecks } from "./lib/updater";
 
 /** 把主题和语言写到 <html> 上，跟随系统时监听系统设置的变化。 */
 function useAppearance() {
@@ -67,6 +69,7 @@ function Resizer({ width, onResize }: { width: number; onResize: (width: number)
 
 function Shell() {
   useShortcuts();
+  useEffect(() => startUpdateChecks(), []);
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);
   const setSidebarWidth = useUi((s) => s.setSidebarWidth);
@@ -84,6 +87,7 @@ function Shell() {
       <AddAccountDialog />
       <EditAccountDialog />
       <RemoveAccountDialog />
+      <UpdateDialog />
       <SettingsDialog />
     </div>
   );

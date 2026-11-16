@@ -278,10 +278,15 @@ impl Core {
         let (tx, rx) = mpsc::unbounded_channel::<()>();
         let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             if let Ok(event) = res {
-                let relevant = event
-                    .paths
-                    .iter()
-                    .any(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"));
+                // 新设备第一次同步过来时，先出现它的目录，再出现里面的文件。Linux 上新目录的监听
+                // 是收到目录事件后才补上的，紧接着写进去的文件可能没有事件，所以新目录也算变化。
+                let new_dir = matches!(event.kind, notify::EventKind::Create(_))
+                    && event.paths.iter().any(|p| p.is_dir());
+                let relevant = new_dir
+                    || event
+                        .paths
+                        .iter()
+                        .any(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"));
                 if relevant {
                     let _ = tx.send(());
                 }

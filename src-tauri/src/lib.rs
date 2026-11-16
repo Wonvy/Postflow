@@ -33,6 +33,17 @@ async fn rpc(
     result
 }
 
+/// 这个安装方式能不能在应用里直接更新。Linux 上只有 AppImage 可以原地替换自己；
+/// 用 deb、rpm 装的版本由系统的包管理器管，界面会改成引导去下载页。
+#[tauri::command]
+fn updater_supported() -> bool {
+    if cfg!(target_os = "linux") {
+        std::env::var_os("APPIMAGE").is_some()
+    } else {
+        cfg!(desktop)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if cfg!(debug_assertions) {
@@ -42,9 +53,16 @@ pub fn run() {
         let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
     }
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_opener::init());
+    // 在线更新只有桌面端有；手机上走应用商店
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
+    builder
         .setup(|app| {
             // 索引和本机配置放在系统给应用分配的私有目录里，不参与同步
             let local_dir = app.path().app_local_data_dir()?;
@@ -76,7 +94,7 @@ pub fn run() {
             app.manage(AppState { core });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc])
+        .invoke_handler(tauri::generate_handler![rpc, updater_supported])
         .build(tauri::generate_context!())
         .expect("error while building Postflow")
         .run(|app, event| {
