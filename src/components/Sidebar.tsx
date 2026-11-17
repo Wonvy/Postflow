@@ -752,7 +752,7 @@ export function Sidebar({ width }: { width: number }) {
             <SectionHeader
               label={t("nav.labels")}
               addLabel={t("label.edit")}
-              onAdd={() => setDialog({ type: "settings" })}
+              onAdd={() => setDialog({ type: "settings", page: "categories" })}
               collapsed={isCollapsed("labels")}
               onToggle={() => toggleSection("labels")}
               unread={labelCounts.reduce((n, l) => n + l.unread, 0)}
