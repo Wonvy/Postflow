@@ -44,7 +44,8 @@ export type SettingsPage =
   | "about";
 
 export type Dialog =
-  | { type: "add-feed" }
+  /** 添加订阅。从文件夹的菜单打开时带上 `folder`，默认放进那个文件夹。 */
+  | { type: "add-feed"; folder?: string }
   /** 设置。给了 `page` 就直接打开那一页，否则停在上次看的那一页。 */
   | { type: "settings"; page?: SettingsPage }
   | { type: "edit-feed"; feedId: string }
@@ -109,6 +110,8 @@ interface UiState {
   /** 原网页模拟的设备，以及是否横过来。 */
   webDevice: WebDevice;
   webLandscape: boolean;
+  /** 最近放进去过订阅的文件夹，新的在前。添加订阅时排在最前面。 */
+  recentFolders: string[];
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
   mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
@@ -146,6 +149,7 @@ interface UiState {
   setReaderWeb: (on: boolean) => void;
   setWebDevice: (device: WebDevice) => void;
   setWebLandscape: (landscape: boolean) => void;
+  rememberFolder: (folder: string) => void;
   requestTranslate: () => void;
 }
 
@@ -155,6 +159,9 @@ export const LIST_MIN = 280;
 export const LIST_MAX = 1400;
 /** 阅读面板至少留这么宽，列表再宽也不挤掉它。 */
 export const READER_MIN = 380;
+
+/** 记住几个最近用过的文件夹。 */
+const RECENT_FOLDERS = 6;
 
 const clamp = (n: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, n)));
 
@@ -195,6 +202,7 @@ export const useUi = create<UiState>()(
       readerWeb: false,
       webDevice: "desktop",
       webLandscape: false,
+      recentFolders: [],
 
       setScope: (scope) => set({ scope, mainView: "list", openId: null, selection: [], expandedGroups: [] }),
       setMainView: (mainView) => set({ mainView }),
@@ -254,6 +262,12 @@ export const useUi = create<UiState>()(
       setReaderWeb: (readerWeb) => set({ readerWeb }),
       setWebDevice: (webDevice) => set({ webDevice: devicePreset(webDevice).id }),
       setWebLandscape: (webLandscape) => set({ webLandscape }),
+      rememberFolder: (folder) =>
+        set((s) => {
+          const name = folder.trim();
+          if (!name) return {};
+          return { recentFolders: [name, ...s.recentFolders.filter((f) => f !== name)].slice(0, RECENT_FOLDERS) };
+        }),
       toggleAiPanel: () => set((s) => ({ aiPanel: !s.aiPanel, aiPanelFor: s.aiPanel ? null : s.openId })),
       toggleSection: (section) =>
         set((s) => ({
@@ -304,6 +318,7 @@ export const useUi = create<UiState>()(
         readerWeb: s.readerWeb,
         webDevice: s.webDevice,
         webLandscape: s.webLandscape,
+        recentFolders: s.recentFolders,
       }),
     },
   ),

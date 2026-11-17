@@ -960,6 +960,10 @@ function FolderMenuItems({ folder }: { folder: string }) {
   const { remove } = useFolderActions();
   return (
     <>
+      <MenuItem icon={<Plus size={14} />} onSelect={() => setDialog({ type: "add-feed", folder })}>
+        {t("folder.addFeed")}
+      </MenuItem>
+      <MenuSeparator />
       <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "folder", folder })}>
         {t("folder.rename")}
       </MenuItem>
@@ -971,7 +975,7 @@ function FolderMenuItems({ folder }: { folder: string }) {
   );
 }
 
-/** 文件夹行右边：未读数，悬停时换成菜单（改名、删除）。 */
+/** 文件夹行右边：未读数，悬停时换成菜单（在这里添加订阅、改名、删除）。 */
 function FolderTrailing({ folder, unread }: { folder: string; unread: number }) {
   const t = useT();
   return (

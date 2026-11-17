@@ -196,6 +196,25 @@ export interface Candidate {
   title: string;
 }
 
+/** 添加订阅前的预览。 */
+export interface FeedPreview {
+  url: string;
+  title: string;
+  site_url: string | null;
+  icon_url: string | null;
+  description: string | null;
+  entry_count: number;
+  newest_ms: number | null;
+  oldest_ms: number | null;
+  entries: { title: string; url: string | null; published_ms: number | null; summary: string; image: string | null }[];
+  kind: "youtube" | null;
+}
+
+export interface Preview {
+  feed: FeedPreview;
+  candidates: Candidate[];
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -370,7 +389,9 @@ export const api = {
   nav: (today_since: number) => rpc<Nav>("nav.get", { today_since }),
 
   discover: (url: string) => rpc<Candidate[]>("feeds.discover", { url }),
-  addFeed: (url: string, folder: string) => rpc<Feed>("feeds.add", { url, folder }),
+  preview: (url: string) => rpc<Preview>("feeds.preview", { url }),
+  addFeed: (url: string, folder: string, extra: { title?: string; icon_url?: string | null } = {}) =>
+    rpc<Feed>("feeds.add", { url, folder, ...extra }),
   updateFeed: (
     id: string,
     patch: { title?: string; folder?: string; interval_min?: number | null },

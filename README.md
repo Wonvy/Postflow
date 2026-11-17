@@ -49,7 +49,13 @@ click **More info → Run anyway**.
 
 **Feeds**
 
-- Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported.
+- Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported. A preview
+  appears as soon as you paste: the site's icon, name and description, how often it posts, and its latest items, so
+  you can see what you're subscribing to. Sites that offer several feeds let you pick one.
+- YouTube channels and playlists: paste an address like `https://www.youtube.com/@name` to subscribe to the channel's
+  new videos, with the channel's avatar as the feed icon.
+- The folder field lists your recently used folders first; type to filter or to create a new folder. A folder's menu
+  in the sidebar has "Add a feed here".
 - Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them: drop one on the middle of a
   folder to move it in, or above or below a folder to keep it outside; feeds outside folders and folders can be mixed
   in any order. Mailboxes can be dragged into order too, and the order syncs to your other devices. Right-click a
@@ -87,7 +93,8 @@ click **More info → Run anyway**.
   images. Each list remembers its own choice. Hold Ctrl (⌘ on a Mac) and scroll, or pinch on a trackpad, to resize
   the cards.
 - List style (the layout button in the list toolbar): title and summary text size, row spacing, padding, how many
-  summary lines to show, and whether to show summaries, source icons and images, kept on this device.
+  summary lines to show, and whether to show summaries, source icons and images, kept on this device. "Group by date"
+  splits the list into Today, Yesterday, This week, Last week, This month and then months, each with a count.
 - Every row shows where it came from: the feed's icon for articles, and for mail the sender, with a small badge for
   the mailbox when you have more than one. The reader's toolbar shows the source's icon and name; click it to see
   everything from that feed or mailbox.
