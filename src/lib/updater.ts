@@ -112,11 +112,34 @@ export async function checkForUpdate(manual = false): Promise<void> {
   }
 }
 
+/**
+ * Windows 上装在需要管理员权限的目录（比如 D:\Program Files）时，普通权限的更新写不进去。
+ * 这种情况交给桌面端：下载、校验后通过系统的管理员授权窗口运行安装程序（见 src-tauri/src/elevated_update.rs）。
+ */
+async function installElevatedIfNeeded(): Promise<boolean> {
+  if (!/Windows/i.test(navigator.userAgent)) return false;
+  const { invoke } = await import("@tauri-apps/api/core");
+  const writable = await invoke<boolean>("install_dir_writable").catch(() => true);
+  if (writable) return false;
+  const { listen } = await import("@tauri-apps/api/event");
+  const stop = await listen<{ downloaded: number; total: number | null }>("postflow:update-progress", (e) =>
+    useUpdater.setState({ downloaded: e.payload.downloaded, total: e.payload.total }),
+  );
+  try {
+    await invoke("install_update_elevated");
+    useUpdater.setState({ phase: "installing" });
+  } finally {
+    stop();
+  }
+  return true;
+}
+
 /** 下载并安装，完成后重启应用。Windows 上安装程序会自己关掉应用再装。 */
 export async function installUpdate(): Promise<void> {
   if (!pending) return;
   useUpdater.setState({ phase: "downloading", downloaded: 0, total: null, error: null });
   try {
+    if (await installElevatedIfNeeded()) return;
     await pending.downloadAndInstall((event) => {
       switch (event.event) {
         case "Started":

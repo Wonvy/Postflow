@@ -8,6 +8,8 @@ use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(desktop)]
+#[cfg(desktop)]
+mod elevated_update;
 mod web_page;
 
 /// 核心事件在界面一侧的事件名。
@@ -62,6 +64,8 @@ fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
         rpc,
         save_text_file,
         updater_supported,
+        elevated_update::install_dir_writable,
+        elevated_update::install_update_elevated,
         web_page::web_show,
         web_page::web_frame,
         web_page::web_hide,

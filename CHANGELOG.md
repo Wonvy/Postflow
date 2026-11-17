@@ -29,6 +29,9 @@ that heading into the version number and date.
   also available in Chinese (docs/plugins.zh-CN.md), and Settings → Plugins opens the one for your language.
 - A new look for the Windows installer: brand-purple welcome and finish pages, a header with the Postflow logo,
   its own setup icon, and Chinese as well as English (picked from your Windows language).
+- Windows: updating works when Postflow is installed in a folder that needs administrator rights (such as
+  D:\Program Files). Postflow notices, downloads and checks the update, and asks for permission through the
+  Windows prompt instead of failing.
 
 ### 中文
 
@@ -46,6 +49,8 @@ that heading into the version number and date.
   插件开发文档有了完整的中文版（docs/plugins.zh-CN.md），「设置 → 插件」里的开发文档按钮会按界面语言打开对应的版本。
 - Windows 安装程序换了新样子：品牌紫色的欢迎页和完成页、带 Postflow 图标的页眉、单独的安装程序图标，
   并且有了中文界面（按 Windows 的语言自动选择）。
+- Windows：Postflow 装在需要管理员权限的文件夹（比如 D:\Program Files）时也能在线更新了。Postflow 会发现这种情况，
+  下载并校验更新后，通过系统的授权窗口请求权限，而不是直接安装失败。
 
 ## 0.1.13 — 2026-11-17
 

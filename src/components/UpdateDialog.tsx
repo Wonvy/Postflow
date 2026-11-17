@@ -160,7 +160,9 @@ export function UpdateDialog() {
         {phase === "error" && error && (
           <p role="alert" className="flex items-start gap-2 text-[13px] leading-relaxed text-danger">
             <TriangleAlert size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
-            <span className="min-w-0 break-words">{t("update.failed", { error })}</span>
+            <span className="min-w-0 break-words">
+              {error === "elevation_declined" ? t("update.elevationDeclined") : t("update.failed", { error })}
+            </span>
           </p>
         )}
 
