@@ -13,6 +13,8 @@ that heading into the version number and date.
 - Move mail into a folder: "Move to folder" in the right-click menu, or drag it onto the folder in the sidebar.
 - Formatted mail: bold, italic, underline, strikethrough, links (`⌘K`), lists and quotes. The "T" button switches
   between formatted and plain text. Formatted mail includes a plain-text copy for other mail apps.
+- Gmail and Google Workspace can sign in with your Google account instead of an app password. Like Microsoft, this
+  needs an OAuth client you register with Google once; see the README.
 - Older mail: at the end of a mailbox, folder, Sent, Drafts, Spam or Trash list, load the next 100 older messages
   from the server.
 
@@ -22,6 +24,8 @@ that heading into the version number and date.
 - 把邮件移进文件夹：右键菜单里的「移到文件夹」，或者直接拖到侧栏的文件夹上。
 - 带格式的邮件：粗体、斜体、下划线、删除线、链接（`⌘K`）、列表和引用。「T」按钮在带格式和纯文本之间切换。
   带格式的信会附一份纯文本，给只看纯文本的邮件程序。
+- Gmail 和 Google Workspace 可以用 Google 账户登录，不用应用专用密码。和微软一样，需要先在 Google 注册一个
+  OAuth 客户端，步骤见说明文档。
 - 更早的邮件：邮箱、文件夹、已发送、草稿、垃圾邮件和已删除的列表拉到底，可以从服务器再取 100 封更早的。
 
 ## 0.1.11 — 2026-11-17

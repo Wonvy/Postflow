@@ -64,6 +64,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 每个邮箱可以设一个签名（在邮箱设置里），写信时加在正文后面，回复时在引文上面。
 - Outlook.com、Hotmail 和 Microsoft 365 用微软账户登录（OAuth 2.0），登录在浏览器里完成，Postflow 拿不到你的密码。
   登录状态存在这台设备的钥匙串里，会自动续期。详见 [Outlook.com 和 Microsoft 365](#outlookcom-和-microsoft-365)。
+  Gmail 也可以这样用 Google 账户登录，或者用应用专用密码，见 [用 Google 账户登录 Gmail](#用-google-账户登录-gmail)。
 
 **订阅**
 
@@ -135,8 +136,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 邮件默认不发给云端 AI，需要在设置里打开；本机运行的服务不受限制。生成的内容、对话和用量只存在这台设备上；
   你不点、也没打开自动功能时，什么都不会发出去。
 
-**还没有的**：Gmail 的 OAuth 登录（请用应用专用密码）、命令面板、稍后提醒、规则、托盘常驻、移动端、
-苹果和微软的安装包签名。Linux 上只有 AppImage 能在应用里直接更新，
+**还没有的**：命令面板、稍后提醒、规则、托盘常驻、移动端、苹果和微软的安装包签名。Linux 上只有 AppImage 能在应用里直接更新，
 用 `.deb`、`.rpm` 安装的会引导你去下载页。
 
 ## 快捷键
@@ -186,6 +186,23 @@ Postflow 用它换来令牌（OAuth 2.0 授权码 + PKCE）。刷新令牌和密
 `POSTFLOW_MICROSOFT_CLIENT_ID`。工作和学校邮箱要开启 IMAP，
 管理员可能需要先批准这个应用。要发信的话，Microsoft 365 还要允许这个邮箱用 SMTP 发信（经过身份验证的 SMTP）。
 在 Postflow 能发信之前登录的邮箱照常收信；要发信时在邮箱设置里重新登录一次即可。
+
+## 用 Google 账户登录 Gmail
+
+Gmail 和 Google Workspace 用应用专用密码就能登录，这是最快的办法。Postflow 也可以用 Google 账户登录
+（OAuth 2.0 + PKCE，在浏览器里完成，和微软的一样）。和微软一样，Google 也需要一个你自己注册的 OAuth 客户端，
+注册一次就好：
+
+1. 在 [Google Cloud 控制台](https://console.cloud.google.com) 新建一个项目，打开「API 和服务 → OAuth 同意屏幕」
+   并设置好（选「外部」；Workspace 域名可以选「内部」），把自己的邮箱加为测试用户。
+2. 在「凭据」里新建「OAuth 客户端 ID」，类型选「桌面应用」，复制客户端 ID 和客户端密钥。
+   Google 要求桌面应用也带上密钥，但它在桌面应用里并不保密。
+3. 在 Postflow 里添加 Gmail 邮箱，选「Google 账户登录」，粘贴 ID 和密钥，点「用 Google 账户登录」。
+   它们存在设置里，会同步到你的其他设备。
+
+同意屏幕处于「测试」状态时，Google 会在七天后让登录失效；改成「正式版」就不会。之后 Google 会提示应用未经验证
+（因为要的是完整的邮件权限），只有你自己用的话，在「高级」里选择继续即可。开发时也可以改用环境变量
+`POSTFLOW_GOOGLE_CLIENT_ID` 和 `POSTFLOW_GOOGLE_CLIENT_SECRET`。
 
 ## 数据
 

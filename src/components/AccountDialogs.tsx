@@ -1,11 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ExternalLink, Info, Mail, TriangleAlert } from "lucide-react";
+import { siGoogle } from "simple-icons";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Account,
   type AccountChanges,
   type AccountGuess,
   api,
+  type OAuthProvider,
   type Preset,
   type Security,
 } from "../lib/api";
@@ -15,7 +17,7 @@ import { keys, useNav, usePresets, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
 import { ProviderIcon, providerName, providerOf } from "./ProviderIcon";
-import { Button, cx, Field, Modal, Select, Spinner, Switch, TextInput } from "./ui";
+import { Button, cx, Field, Modal, Segmented, Select, Spinner, Switch, TextInput } from "./ui";
 
 /** 各服务商获取密码的说明。 */
 function hintFor(preset: Preset | null, recognized: boolean): MessageKey | null {
@@ -133,10 +135,31 @@ function ErrorLine({ error }: { error: Failure }) {
 }
 
 /** 注册 Azure 应用的说明，在说明文档里。 */
-const OAUTH_DOCS: Record<"zh" | "en", string> = {
-  en: "https://github.com/Wonvy/Postflow#outlookcom-and-microsoft-365",
-  zh: "https://github.com/Wonvy/Postflow/blob/main/README.zh-CN.md#outlookcom-和-microsoft-365",
+const OAUTH_DOCS: Record<OAuthProvider, Record<"zh" | "en", string>> = {
+  microsoft: {
+    en: "https://github.com/Wonvy/Postflow#outlookcom-and-microsoft-365",
+    zh: "https://github.com/Wonvy/Postflow/blob/main/README.zh-CN.md#outlookcom-和-microsoft-365",
+  },
+  google: {
+    en: "https://github.com/Wonvy/Postflow#gmail-with-a-google-account",
+    zh: "https://github.com/Wonvy/Postflow/blob/main/README.zh-CN.md#用-google-账户登录-gmail",
+  },
 };
+
+/** 设置里存应用 ID 和（Google 的）客户端密钥的地方。 */
+const CLIENT_SETTINGS: Record<OAuthProvider, { id: string; secret?: string }> = {
+  microsoft: { id: "mail.microsoft_client_id" },
+  google: { id: "mail.google_client_id", secret: "mail.google_client_secret" },
+};
+
+/** Gmail 和 Google Workspace 可以用应用专用密码，也可以用 Google 账户登录。 */
+const canUseGoogle = (preset: Preset | null | undefined) => preset?.id === "gmail" || preset?.id === "workspace";
+
+/** 登录按钮上的名字。中文里英文名字两边要空一格：「用 Google 账户登录」。 */
+function providerLabel(provider: OAuthProvider, lang: "zh" | "en"): string {
+  if (provider === "google") return lang === "zh" ? " Google " : "Google";
+  return lang === "zh" ? "微软" : "Microsoft";
+}
 
 /** Outlook、Microsoft 365 这类只能用微软账户登录的服务商。 */
 const usesOAuth = (preset: Preset | null | undefined) => preset?.password_kind === "oauth";
@@ -145,11 +168,13 @@ const usesOAuth = (preset: Preset | null | undefined) => preset?.password_kind =
  * 用微软账户登录：在系统浏览器里打开微软的登录页，等它把授权送回本机，再交给 `onSignedIn`
  * 去添加或更新账户。还没设置 Azure 应用 ID 时，先让用户填一个。
  */
-function MicrosoftSignIn({
+function OAuthSignIn({
+  provider = "microsoft",
   email,
   again,
   onSignedIn,
 }: {
+  provider?: OAuthProvider;
   email: string;
   again?: boolean;
   onSignedIn: (flowId: string) => Promise<void>;
@@ -162,8 +187,11 @@ function MicrosoftSignIn({
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<Failure | null>(null);
   const settings = useSettings();
-  const savedId = settings.data?.["mail.microsoft_client_id"];
+  const keys_: { id: string; secret?: string } = CLIENT_SETTINGS[provider];
+  const savedId = settings.data?.[keys_.id];
+  const name = providerLabel(provider, lang);
   const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
   /** 已经有应用 ID 时，用户点了「更换应用 ID」。填错了 ID 也能改回来。 */
   const [editingId, setEditingId] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -181,7 +209,7 @@ function MicrosoftSignIn({
   const start = async () => {
     setError(null);
     try {
-      const started = await api.oauthStart(email);
+      const started = await api.oauthStart(email, provider);
       flow.current = started.flow_id;
       setUrl(started.url);
       setPhase("waiting");
@@ -207,10 +235,11 @@ function MicrosoftSignIn({
   };
 
   const saveClientId = async () => {
-    if (!clientId.trim()) return;
+    if (!clientId.trim() || (keys_.secret && !clientSecret.trim())) return;
     setSaving(true);
     try {
-      await api.setSetting("mail.microsoft_client_id", clientId.trim());
+      await api.setSetting(keys_.id, clientId.trim());
+      if (keys_.secret) await api.setSetting(keys_.secret, clientSecret.trim());
       await qc.invalidateQueries({ queryKey: ["oauth-config"] });
       void qc.invalidateQueries({ queryKey: keys.settings });
       setEditingId(false);
@@ -222,30 +251,48 @@ function MicrosoftSignIn({
     }
   };
 
-  if ((config.data && !config.data.microsoft) || editingId) {
+  if ((config.data && !config.data[provider]) || editingId) {
+    const google = provider === "google";
     return (
       <div className="flex flex-col gap-3">
         <Hint
           tone={editingId ? "info" : "warning"}
-          text={t(editingId ? "oauth.changeClientHint" : "oauth.needClient")}
-          link={{ label: t("oauth.howTo"), url: OAUTH_DOCS[lang] }}
+          text={
+            google
+              ? t(editingId ? "oauth.googleChangeClientHint" : "oauth.googleNeedClient")
+              : t(editingId ? "oauth.changeClientHint" : "oauth.needClient")
+          }
+          link={{ label: t("oauth.howTo"), url: OAUTH_DOCS[provider][lang] }}
         />
-        <div className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <Field label={t("oauth.clientId")}>
-              <TextInput
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-              />
-            </Field>
-          </div>
+        <Field label={t("oauth.clientId")}>
+          <TextInput
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder={google ? "1234567890-abc.apps.googleusercontent.com" : "00000000-0000-0000-0000-000000000000"}
+          />
+        </Field>
+        {google && (
+          <Field label={t("oauth.clientSecret")}>
+            <TextInput
+              type="password"
+              autoComplete="off"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              placeholder="GOCSPX-…"
+            />
+          </Field>
+        )}
+        <div className="flex justify-end gap-2">
           {editingId && (
             <Button variant="ghost" onClick={() => setEditingId(false)}>
               {t("action.cancel")}
             </Button>
           )}
-          <Button busy={saving} disabled={!clientId.trim()} onClick={() => void saveClientId()}>
+          <Button
+            busy={saving}
+            disabled={!clientId.trim() || (google && !clientSecret.trim())}
+            onClick={() => void saveClientId()}
+          >
             {t("action.save")}
           </Button>
         </div>
@@ -254,15 +301,20 @@ function MicrosoftSignIn({
     );
   }
 
-  // 微软登录按钮的四色方块
-  const logo = (
-    <svg viewBox="0 0 21 21" width={14} height={14} aria-hidden>
-      <rect x="0" y="0" width="10" height="10" fill="#f25022" />
-      <rect x="11" y="0" width="10" height="10" fill="#7fba00" />
-      <rect x="0" y="11" width="10" height="10" fill="#00a4ef" />
-      <rect x="11" y="11" width="10" height="10" fill="#ffb900" />
-    </svg>
-  );
+  // 登录按钮上的标志：微软的四色方块，Google 的 G
+  const logo =
+    provider === "google" ? (
+      <svg viewBox="0 0 24 24" width={14} height={14} aria-hidden>
+        <path d={siGoogle.path} fill="currentColor" />
+      </svg>
+    ) : (
+      <svg viewBox="0 0 21 21" width={14} height={14} aria-hidden>
+        <rect x="0" y="0" width="10" height="10" fill="#f25022" />
+        <rect x="11" y="0" width="10" height="10" fill="#7fba00" />
+        <rect x="0" y="11" width="10" height="10" fill="#00a4ef" />
+        <rect x="11" y="11" width="10" height="10" fill="#ffb900" />
+      </svg>
+    );
 
   return (
     <div className="flex flex-col gap-3">
@@ -274,7 +326,7 @@ function MicrosoftSignIn({
           onClick={() => void start()}
         >
           {logo}
-          {again ? t("oauth.signInAgain") : t("oauth.signIn")}
+          {again ? t("oauth.signInAgain", { provider: name }) : t("oauth.signIn", { provider: name })}
         </Button>
       )}
       {phase === "idle" && (
@@ -295,7 +347,7 @@ function MicrosoftSignIn({
             <Spinner size={13} />
           </span>
           <div className="min-w-0 flex-1">
-            <p>{phase === "waiting" ? t("oauth.waiting") : t("oauth.finishing")}</p>
+            <p>{phase === "waiting" ? t("oauth.waiting", { provider: name }) : t("oauth.finishing")}</p>
             {phase === "waiting" && url && (
               <button
                 type="button"
@@ -582,6 +634,8 @@ export function AddAccountDialog() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  /** Gmail 用 Google 账户登录，不用应用专用密码。 */
+  const [useGoogle, setUseGoogle] = useState(false);
   const [name, setName] = useState("");
   const [server, setServer] = useState<Server>(EMPTY_SERVER);
   const [presetId, setPresetId] = useState("");
@@ -792,7 +846,17 @@ export function AddAccountDialog() {
             {t("account.detected", { name: providerName(preset, lang) })} · {preset.imap_host}
           </p>
         )}
-        {!usesOAuth(preset) && (
+        {canUseGoogle(preset) && (
+          <Segmented
+            value={useGoogle ? "google" : "password"}
+            options={[
+              { value: "password", label: t("account.useAppPassword") },
+              { value: "google", label: t("account.useGoogle") },
+            ]}
+            onChange={(v) => setUseGoogle(v === "google")}
+          />
+        )}
+        {!usesOAuth(preset) && !(canUseGoogle(preset) && useGoogle) && (
           <Field label={passwordLabel(t, preset)}>
             <TextInput
               type="password"
@@ -803,7 +867,7 @@ export function AddAccountDialog() {
             />
           </Field>
         )}
-        {hint && (
+        {hint && !(canUseGoogle(preset) && useGoogle) && (
           <Hint
             text={t(hint)}
             tone="info"
@@ -835,8 +899,12 @@ export function AddAccountDialog() {
           )}
         </div>
 
-        {usesOAuth(preset) ? (
-          <MicrosoftSignIn email={address} onSignedIn={(flow) => addWithOAuth(flow)} />
+        {usesOAuth(preset) || (canUseGoogle(preset) && useGoogle) ? (
+          <OAuthSignIn
+            provider={usesOAuth(preset) ? "microsoft" : "google"}
+            email={address}
+            onSignedIn={(flow) => addWithOAuth(flow)}
+          />
         ) : (
           <p className="text-[12px] leading-relaxed text-fg-3">{t("account.passwordStored")}</p>
         )}
@@ -852,7 +920,7 @@ export function AddAccountDialog() {
           <Button variant="ghost" onClick={() => setDialog(null)}>
             {t("action.cancel")}
           </Button>
-          {!usesOAuth(preset) && (
+          {!usesOAuth(preset) && !(canUseGoogle(preset) && useGoogle) && (
             <Button variant="primary" type="submit" disabled={!address || !password || busy}>
               {t("action.add")}
             </Button>
@@ -911,6 +979,15 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
 
   const preset = presets.data?.find((p) => p.imap_host === account.imap_host) ?? null;
   const oauth = usesOAuth(preset);
+  // Gmail：这台设备上是用 Google 账户登录的，就接着用；用户也可以换成应用专用密码
+  const method = useQuery({
+    queryKey: ["sign-in-method", account.id],
+    queryFn: () => api.signInMethod(account.id),
+    enabled: canUseGoogle(preset),
+  });
+  const [googleChoice, setGoogleChoice] = useState<boolean | null>(null);
+  const google = canUseGoogle(preset) && (googleChoice ?? method.data?.method === "google");
+  const signInName = providerLabel(google ? "google" : "microsoft", lang);
 
   /** 重新用微软账户登录，顺便保存改过的名字。 */
   const signInAgain = async (flow: string) => {
@@ -973,7 +1050,9 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
         <span className="shrink-0 text-[12px] text-fg-3">{status}</span>
       </div>
       {needsPassword ? (
-        <Hint text={oauth ? t("oauth.needsSignIn") : t("account.needsPassword")} />
+        <Hint
+          text={oauth || google ? t("oauth.needsSignIn", { provider: signInName }) : t("account.needsPassword")}
+        />
       ) : (
         account.error_code && (
           <Hint
@@ -1010,8 +1089,23 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
           className="w-full resize-y rounded-md border border-line-strong bg-bg px-2.5 py-1.5 text-[13px] leading-relaxed text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </Field>
-      {oauth ? (
-        <MicrosoftSignIn email={account.email} again={!needsPassword} onSignedIn={signInAgain} />
+      {canUseGoogle(preset) && (
+        <Segmented
+          value={google ? "google" : "password"}
+          options={[
+            { value: "password", label: t("account.useAppPassword") },
+            { value: "google", label: t("account.useGoogle") },
+          ]}
+          onChange={(v) => setGoogleChoice(v === "google")}
+        />
+      )}
+      {oauth || google ? (
+        <OAuthSignIn
+          provider={oauth ? "microsoft" : "google"}
+          email={account.email}
+          again={!needsPassword}
+          onSignedIn={signInAgain}
+        />
       ) : (
         <Field label={passwordLabel(t, preset)}>
           <TextInput
@@ -1046,7 +1140,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
         <Button variant="ghost" onClick={onDone}>
           {t("action.cancel")}
         </Button>
-        <Button variant="primary" type="submit" busy={busy} disabled={needsPassword && (oauth || !password)}>
+        <Button variant="primary" type="submit" busy={busy} disabled={needsPassword && (oauth || google || !password)}>
           {t("action.save")}
         </Button>
       </div>

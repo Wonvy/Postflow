@@ -226,6 +226,9 @@ export interface OlderTarget {
   mailbox?: string;
 }
 
+/** 用哪家的账户登录邮箱。 */
+export type OAuthProvider = "microsoft" | "google";
+
 /** 邮箱里的一个普通文件夹。 */
 export interface FolderInfo {
   /** 服务器上的原名，打开时用。 */
@@ -589,9 +592,13 @@ export const api = {
   /** 账户现在用的发信服务器。 */
   smtpSettings: (id: string) => rpc<SmtpSettings>("accounts.smtp", { id }),
   /** 能不能用微软账户登录（要有 Azure 应用 ID）。 */
-  oauthConfig: () => rpc<{ microsoft: boolean }>("accounts.oauth_config"),
+  oauthConfig: () => rpc<{ microsoft: boolean; google: boolean }>("accounts.oauth_config"),
+  /** 这个邮箱在这台设备上怎么登录。 */
+  signInMethod: (id: string) =>
+    rpc<{ method: "password" | "microsoft" | "google" | "none" }>("accounts.sign_in_method", { id }),
   /** 开始用微软账户登录，返回要在浏览器里打开的地址。 */
-  oauthStart: (email: string) => rpc<{ flow_id: string; url: string }>("accounts.oauth_start", { email }),
+  oauthStart: (email: string, provider: OAuthProvider = "microsoft") =>
+    rpc<{ flow_id: string; url: string }>("accounts.oauth_start", { email, provider }),
   /** 等用户在浏览器里登录完。 */
   oauthWait: (flowId: string) => rpc<void>("accounts.oauth_wait", { flow_id: flowId }),
   oauthCancel: (flowId: string) => rpc<void>("accounts.oauth_cancel", { flow_id: flowId }),

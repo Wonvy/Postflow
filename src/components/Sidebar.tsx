@@ -347,7 +347,7 @@ function AccountRow({
                     needsPassword
                       ? // Outlook、Microsoft 365 不用密码，要用微软账户登录
                         presets.data?.find((p) => p.id === provider)?.password_kind === "oauth"
-                        ? t("oauth.needsSignIn")
+                        ? t("oauth.needsSignIn", { provider: t("oauth.microsoftName") })
                         : t("account.needsPassword")
                       : errorText(t, { code: account.error_code })
                   }

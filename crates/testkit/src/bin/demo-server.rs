@@ -705,7 +705,13 @@ fn fake_services(
 ) -> Option<(&'static str, &'static str, String)> {
     let json = "application/json";
     match (method, path) {
-        ("GET", "/common/oauth2/v2.0/authorize") => {
+        // 假的微软和 Google 登录页：Google 的在 /google 下面
+        ("GET", "/common/oauth2/v2.0/authorize" | "/google/o/oauth2/v2/auth") => {
+            let who = if path.starts_with("/google") {
+                "Google"
+            } else {
+                "Microsoft"
+            };
             let q = form(query);
             let back = get(&q, "redirect_uri");
             let state = get(&q, "state");
@@ -731,7 +737,7 @@ fn fake_services(
                 format!(
                     "<!doctype html><html><head><meta charset=\"utf-8\"><title>Demo sign-in</title></head>\
                      <body style=\"font:15px system-ui;max-width:420px;margin:12vh auto\">\
-                     <h2>Demo Microsoft sign-in</h2><p>Postflow wants to read mail for <b>{user}</b>.</p>\
+                     <h2>Demo {who} sign-in</h2><p>Postflow wants to read mail for <b>{user}</b>.</p>\
                      <p>This page is fake and only exists for the demo.</p>\
                      <p><a id=\"allow\" href=\"{}\">Allow</a> &nbsp; <a id=\"deny\" href=\"{}\">Deny</a></p></body></html>",
                     escape(&allow),
@@ -755,9 +761,11 @@ fn fake_services(
                 )
             })
         }
-        ("POST", "/common/oauth2/v2.0/token") => {
+        ("POST", "/common/oauth2/v2.0/token" | "/google/token") => {
             let f = form(body);
+            // Google 的桌面应用换令牌时还要客户端密钥
             let ok = !get(&f, "client_id").is_empty()
+                && (path != "/google/token" || !get(&f, "client_secret").is_empty())
                 && match get(&f, "grant_type") {
                     "authorization_code" => {
                         use sha2::{Digest, Sha256};
@@ -898,6 +906,13 @@ async fn main() {
     );
     println!(
         "  then add an Outlook account {OUTLOOK_USER}, server 127.0.0.1 port {OUTLOOK_PORT}, encryption none."
+    );
+    println!("Google sign-in (OAuth): start the app with");
+    println!(
+        "  POSTFLOW_GOOGLE_AUTHORITY=http://127.0.0.1:{FEED_PORT}/google POSTFLOW_GOOGLE_CLIENT_ID=demo POSTFLOW_GOOGLE_CLIENT_SECRET=demo"
+    );
+    println!(
+        "  then add a Gmail account me@example.org, server 127.0.0.1 port 1144, encryption none."
     );
 
     let mut n = 0;

@@ -74,7 +74,8 @@ click **More info → Run anyway**.
 - Each mailbox can have a signature (in its settings), added below what you write and above the quote in replies.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
-  [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365).
+  [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365). Gmail can sign in with your Google account the
+  same way, or with an app password; see [Gmail with a Google account](#gmail-with-a-google-account).
 
 **Feeds**
 
@@ -165,8 +166,8 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** OAuth sign-in for Gmail (use an app password), a command palette, snoozing, rules, a tray
-icon, mobile apps, and installers signed by Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
+**Not yet available:** a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by Apple
+and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
 ## Keyboard shortcuts
@@ -222,6 +223,25 @@ sign-in button replaces it (mailboxes already signed in keep working). Developer
 have to approve the app. To send mail, Microsoft 365 also needs SMTP sending (authenticated SMTP) allowed for the
 mailbox. Mailboxes signed in before Postflow could send keep receiving mail; sign in again from the mailbox's
 settings to allow sending.
+
+## Gmail with a Google account
+
+Gmail and Google Workspace work with an app password, which is the quickest way. Postflow can also sign in with your
+Google account (OAuth 2.0 with PKCE, in your browser, the same way as for Microsoft). Like Microsoft, Google needs an
+OAuth client that you register yourself, once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com), create a project, open **APIs & Services → OAuth
+   consent screen** and set it up (External, or Internal for a Workspace domain). Add your own address as a test
+   user.
+2. Under **Credentials**, create an **OAuth client ID** of type **Desktop app**, and copy its client ID and client
+   secret. Google needs the secret even for desktop apps; it isn't really secret there.
+3. In Postflow, add a Gmail account, choose **Google account**, paste the ID and secret, and click **Sign in with
+   Google**. They are saved in your settings and sync to your other devices.
+
+While the consent screen is in **Testing**, Google ends sign-ins after seven days; publish it (**In production**) to
+keep them. Google then warns that the app isn't verified, because it asks for full mail access; for an app only you
+use, continue past the warning under **Advanced**. Developers can set `POSTFLOW_GOOGLE_CLIENT_ID` and
+`POSTFLOW_GOOGLE_CLIENT_SECRET` instead.
 
 ## Your data
 

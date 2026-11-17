@@ -27,14 +27,26 @@ pub const MICROSOFT_SCOPE: &str = "offline_access https://outlook.office.com/IMA
 const MICROSOFT_IMAP_SCOPE: &str =
     "offline_access https://outlook.office.com/IMAP.AccessAsUser.All";
 
-/// 一个 OAuth 服务的地址。
+/// Google 的登录页和换令牌的地址。
+pub const GOOGLE_AUTHORIZE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
+pub const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+/// 用 IMAP 收信、SMTP 发信的权限。Google 只有这一个范围涵盖两者。
+pub const GOOGLE_SCOPE: &str = "https://mail.google.com/";
+
+/// 一个 OAuth 服务的地址和做法。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Provider {
+    /// microsoft 或 google，存在钥匙串里，刷新时据此找回这个服务。
+    pub name: &'static str,
     pub authorize_url: String,
     pub token_url: String,
     pub scope: String,
     /// 刷新时拿不到 `scope` 里全部权限的话，退而求其次要这些。
     pub fallback_scope: Option<String>,
+    /// 登录地址上额外的参数。
+    pub authorize_params: Vec<(&'static str, &'static str)>,
+    /// 刷新时要不要带上 `scope`。微软要，Google 不要。
+    pub refresh_with_scope: bool,
 }
 
 impl Provider {
@@ -42,10 +54,28 @@ impl Provider {
     pub fn microsoft(authority: &str) -> Provider {
         let base = authority.trim_end_matches('/');
         Provider {
+            name: "microsoft",
             authorize_url: format!("{base}/oauth2/v2.0/authorize"),
             token_url: format!("{base}/oauth2/v2.0/token"),
             scope: MICROSOFT_SCOPE.to_string(),
             fallback_scope: Some(MICROSOFT_IMAP_SCOPE.to_string()),
+            // 已经登录着别的微软账户时，让用户选对账户
+            authorize_params: vec![("response_mode", "query"), ("prompt", "select_account")],
+            refresh_with_scope: true,
+        }
+    }
+
+    /// Google。一般是 [`GOOGLE_AUTHORIZE_URL`] 和 [`GOOGLE_TOKEN_URL`]，测试时换成本机的模拟服务。
+    pub fn google(authorize_url: &str, token_url: &str) -> Provider {
+        Provider {
+            name: "google",
+            authorize_url: authorize_url.to_string(),
+            token_url: token_url.to_string(),
+            scope: GOOGLE_SCOPE.to_string(),
+            fallback_scope: None,
+            // 要刷新令牌得说明离线使用；consent 保证每次登录都给刷新令牌
+            authorize_params: vec![("access_type", "offline"), ("prompt", "consent")],
+            refresh_with_scope: false,
         }
     }
 }
@@ -134,14 +164,12 @@ pub fn authorize_url(
         .append_pair("client_id", client_id)
         .append_pair("response_type", "code")
         .append_pair("redirect_uri", redirect_uri)
-        .append_pair("response_mode", "query")
         .append_pair("scope", &provider.scope)
         .append_pair("state", state)
         .append_pair("code_challenge", challenge)
         .append_pair("code_challenge_method", "S256")
         .append_pair("login_hint", login_hint)
-        // 已经登录着别的微软账户时，让用户选对账户
-        .append_pair("prompt", "select_account");
+        .extend_pairs(&provider.authorize_params);
     url.into()
 }
 
@@ -181,52 +209,67 @@ pub(crate) fn http() -> &'static reqwest::Client {
     })
 }
 
+/// 一个在服务商那里注册的应用。Google 的桌面应用还要一个「客户端密钥」，
+/// 它和 ID 一样写在应用里，不算真正的秘密。
+#[derive(Debug, Clone, Copy)]
+pub struct Client<'a> {
+    pub id: &'a str,
+    pub secret: Option<&'a str>,
+}
+
 /// 用授权码换令牌。
 pub async fn exchange_code(
     provider: &Provider,
-    client_id: &str,
+    client: Client<'_>,
     code: &str,
     redirect_uri: &str,
     verifier: &str,
 ) -> Result<Tokens, OAuthError> {
-    token_request(
-        provider,
-        &[
-            ("client_id", client_id),
-            ("grant_type", "authorization_code"),
-            ("code", code),
-            ("redirect_uri", redirect_uri),
-            ("code_verifier", verifier),
-            ("scope", &provider.scope),
-        ],
-    )
-    .await
+    let mut form = vec![
+        ("client_id", client.id),
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", redirect_uri),
+        ("code_verifier", verifier),
+        ("scope", provider.scope.as_str()),
+    ];
+    if let Some(secret) = client.secret {
+        form.push(("client_secret", secret));
+    }
+    token_request(provider, &form).await
 }
 
 /// 用刷新令牌换新的访问令牌。
 pub async fn refresh(
     provider: &Provider,
-    client_id: &str,
+    client: Client<'_>,
     refresh_token: &str,
 ) -> Result<Tokens, OAuthError> {
-    let request = |scope: &str| {
-        let form = [
-            ("client_id", client_id),
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token),
-            ("scope", scope),
-        ]
-        .map(|(k, v)| (k, v.to_string()));
+    let request = |scope: Option<&str>| {
+        let mut form = vec![
+            ("client_id", client.id.to_string()),
+            ("grant_type", "refresh_token".to_string()),
+            ("refresh_token", refresh_token.to_string()),
+        ];
+        if let Some(scope) = scope {
+            form.push(("scope", scope.to_string()));
+        }
+        if let Some(secret) = client.secret {
+            form.push(("client_secret", secret.to_string()));
+        }
         async move {
             let form: Vec<(&str, &str)> = form.iter().map(|(k, v)| (*k, v.as_str())).collect();
             token_request(provider, &form).await
         }
     };
-    match request(&provider.scope).await {
+    let scope = provider
+        .refresh_with_scope
+        .then_some(provider.scope.as_str());
+    match request(scope).await {
         Err(err @ (OAuthError::Expired(_) | OAuthError::Denied(_) | OAuthError::Failed(_))) => {
             match &provider.fallback_scope {
                 // 早先登录时没同意过新加的权限：用原来的权限刷新，不同意的那部分功能用不了
-                Some(fallback) => request(fallback).await.map_err(|_| err),
+                Some(fallback) => request(Some(fallback)).await.map_err(|_| err),
                 None => Err(err),
             }
         }
@@ -485,6 +528,32 @@ mod tests {
         assert_eq!(get("code_challenge_method").as_deref(), Some("S256"));
         assert_eq!(get("scope").as_deref(), Some(MICROSOFT_SCOPE));
         assert_eq!(get("login_hint").as_deref(), Some("me@example.com"));
+    }
+
+    #[test]
+    fn google_asks_for_offline_access() {
+        let p = Provider::google(GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL);
+        let url = authorize_url(
+            &p,
+            "id",
+            "http://127.0.0.1:4000",
+            "st",
+            "ch",
+            "me@gmail.com",
+        );
+        let parsed = url::Url::parse(&url).unwrap();
+        let get = |k: &str| {
+            parsed
+                .query_pairs()
+                .find(|(key, _)| key == k)
+                .map(|(_, v)| v.into_owned())
+        };
+        assert_eq!(parsed.host_str(), Some("accounts.google.com"));
+        assert_eq!(get("scope").as_deref(), Some(GOOGLE_SCOPE));
+        assert_eq!(get("access_type").as_deref(), Some("offline"));
+        assert_eq!(get("prompt").as_deref(), Some("consent"));
+        assert_eq!(get("response_mode"), None);
+        assert!(!p.refresh_with_scope);
     }
 
     #[test]
