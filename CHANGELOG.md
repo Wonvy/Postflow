@@ -17,6 +17,16 @@ that heading into the version number and date.
 - Right-click menus everywhere in the sidebar: "Mark all as read" on every list, folder and category, and menus on
   the Mail, Categories and Feeds headings. The system's own right-click menu (Reload, Inspect) is gone; text fields
   and selected text keep theirs.
+- RSSHub in Add feed: search thousands of sites that have no feed of their own, pick one, and fill in its
+  settings as fields, with menus where RSSHub lists the choices. Pasting a page like a GitHub repo or a bilibili
+  profile also suggests what RSSHub can follow there. The RSSHub address is set right in the dialog and syncs to
+  your other devices; the public rsshub.app limits feed readers, so your own instance is recommended.
+- Windows: the system title bar is gone; minimize, maximize and close are drawn by the app at the top right.
+- Settings → Storage shows how much space the data folder and this device use, which feeds and mailboxes take the
+  most, and clears local caches: mail older than 30 days (it downloads again when opened), fetched full text and
+  sender logos. It can also compact the local index.
+- Language files: export the interface text, translate it, and import it to use Postflow in your own language
+  (Settings → Appearance). The format is in docs/language-files.md.
 
 ### 中文
 
@@ -25,6 +35,13 @@ that heading into the version number and date.
 - 有新版本时右下角提示一次，侧栏顶上留一个更新图标，直到更新为止。
 - 侧栏处处有右键菜单：每个列表、文件夹和分类都能「全部标为已读」，「邮箱」「分类」「订阅」标题上也有菜单。
   系统自带的右键菜单（重新载入、检查元素）不再出现；输入框和选中的文字仍保留系统菜单。
+- 添加订阅里可以用 RSSHub：搜索几千个没有 RSS 的网站，选一项后按表单填参数，RSSHub 给了可选值的显示成下拉框。
+  粘贴 GitHub 仓库、bilibili 空间这类网页时，也会提示 RSSHub 能订阅的内容。RSSHub 实例地址直接在对话框里改，会同步到其他设备；
+  公共实例 rsshub.app 对阅读器有限制，建议用自建实例。
+- Windows：去掉系统标题栏，右上角的最小化、最大化和关闭由应用自己画。
+- 「设置 → 存储空间」：数据目录和本机各占多少、哪些订阅和邮箱占得最多；可以清理本机缓存（30 天前的邮件原文，打开时重新下载；
+  抓取的全文；发件人图标），以及压缩本机索引。
+- 语言文件：导出界面文字，翻译后导入，就能用自己的语言（设置 → 外观）。格式见 docs/language-files.md。
 
 ## 0.1.12 — 2026-11-17
 
