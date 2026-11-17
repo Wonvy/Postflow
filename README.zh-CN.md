@@ -152,7 +152,8 @@ Postflow 用它换来令牌（OAuth 2.0 授权码 + PKCE）。刷新令牌和密
 5. 可选，工作账户常常需要：在「API 权限」里添加委托权限 `IMAP.AccessAsUser.All` 和 `offline_access`。
 
 然后在 Postflow 里添加 Outlook 或 Microsoft 365 邮箱，按提示粘贴这个 ID，点「用微软账户登录」。ID 存在设置里，
-会同步到你的其他设备；开发时也可以用环境变量 `POSTFLOW_MICROSOFT_CLIENT_ID`。工作和学校邮箱要开启 IMAP，
+会同步到你的其他设备；登录按钮下面的「更换应用 ID」可以换一个（已经登录的邮箱不受影响）。开发时也可以用环境变量
+`POSTFLOW_MICROSOFT_CLIENT_ID`。工作和学校邮箱要开启 IMAP，
 管理员可能需要先批准这个应用。
 
 ## 数据

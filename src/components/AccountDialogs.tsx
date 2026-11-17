@@ -11,7 +11,7 @@ import {
 } from "../lib/api";
 import { errorDetail, errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { openExternal } from "../lib/platform";
-import { keys, useNav, usePresets } from "../lib/queries";
+import { keys, useNav, usePresets, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
 import { ProviderIcon, providerName, providerOf } from "./ProviderIcon";
@@ -161,7 +161,11 @@ function MicrosoftSignIn({
   const [phase, setPhase] = useState<"idle" | "waiting" | "finishing">("idle");
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<Failure | null>(null);
+  const settings = useSettings();
+  const savedId = settings.data?.["mail.microsoft_client_id"];
   const [clientId, setClientId] = useState("");
+  /** 已经有应用 ID 时，用户点了「更换应用 ID」。填错了 ID 也能改回来。 */
+  const [editingId, setEditingId] = useState(false);
   const [saving, setSaving] = useState(false);
   /** 当前这次登录。取消或者换了一次时，旧的结果作废。 */
   const flow = useRef<string | null>(null);
@@ -209,6 +213,8 @@ function MicrosoftSignIn({
       await api.setSetting("mail.microsoft_client_id", clientId.trim());
       await qc.invalidateQueries({ queryKey: ["oauth-config"] });
       void qc.invalidateQueries({ queryKey: keys.settings });
+      setEditingId(false);
+      setError(null);
     } catch (err) {
       setError(failure(t, err));
     } finally {
@@ -216,10 +222,14 @@ function MicrosoftSignIn({
     }
   };
 
-  if (config.data && !config.data.microsoft) {
+  if ((config.data && !config.data.microsoft) || editingId) {
     return (
       <div className="flex flex-col gap-3">
-        <Hint tone="warning" text={t("oauth.needClient")} link={{ label: t("oauth.howTo"), url: OAUTH_DOCS[lang] }} />
+        <Hint
+          tone={editingId ? "info" : "warning"}
+          text={t(editingId ? "oauth.changeClientHint" : "oauth.needClient")}
+          link={{ label: t("oauth.howTo"), url: OAUTH_DOCS[lang] }}
+        />
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
             <Field label={t("oauth.clientId")}>
@@ -230,6 +240,11 @@ function MicrosoftSignIn({
               />
             </Field>
           </div>
+          {editingId && (
+            <Button variant="ghost" onClick={() => setEditingId(false)}>
+              {t("action.cancel")}
+            </Button>
+          )}
           <Button busy={saving} disabled={!clientId.trim()} onClick={() => void saveClientId()}>
             {t("action.save")}
           </Button>
@@ -251,7 +266,7 @@ function MicrosoftSignIn({
 
   return (
     <div className="flex flex-col gap-3">
-      {phase === "idle" ? (
+      {phase === "idle" && (
         <Button
           variant="primary"
           className="h-9 w-full"
@@ -261,7 +276,20 @@ function MicrosoftSignIn({
           {logo}
           {again ? t("oauth.signInAgain") : t("oauth.signIn")}
         </Button>
-      ) : (
+      )}
+      {phase === "idle" && (
+        <button
+          type="button"
+          onClick={() => {
+            setClientId(typeof savedId === "string" ? savedId : "");
+            setEditingId(true);
+          }}
+          className="-mt-1 self-center text-[12px] text-fg-3 hover:text-accent hover:underline"
+        >
+          {t("oauth.changeClient")}
+        </button>
+      )}
+      {phase !== "idle" && (
         <div className="flex items-start gap-3 rounded-md border border-line bg-hover px-3 py-2.5 text-[12px] leading-relaxed text-fg-2">
           <span className="mt-0.5 text-fg-3">
             <Spinner size={13} />

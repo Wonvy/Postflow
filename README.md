@@ -177,7 +177,8 @@ takes a few minutes:
    `IMAP.AccessAsUser.All` and `offline_access`.
 
 Then add an Outlook or Microsoft 365 account in Postflow, paste the ID when it asks, and click **Sign in with
-Microsoft**. The ID is saved in your settings and syncs to your other devices; developers can also set the
+Microsoft**. The ID is saved in your settings and syncs to your other devices; **Change application ID** under the
+sign-in button replaces it (mailboxes already signed in keep working). Developers can also set the
 `POSTFLOW_MICROSOFT_CLIENT_ID` environment variable. Work and school mailboxes need IMAP turned on, and your admin may
 have to approve the app.
 
