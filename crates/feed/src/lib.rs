@@ -10,9 +10,9 @@ pub mod opml;
 mod parse;
 mod preview;
 pub mod rsshub;
-mod source;
 mod sanitize;
 mod site_icon;
+mod source;
 mod youtube;
 
 pub use client::{Client, Conditional, FetchResult, Fetched};
@@ -20,9 +20,9 @@ pub use discover::Candidate;
 pub use frame::FramePolicy;
 pub use parse::{ParsedEntry, ParsedFeed, parse_feed};
 pub use preview::{FeedPreview, Preview, PreviewEntry};
-pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html};
-pub use source::{item_xml, whole_feed};
+pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html, with_player};
 pub use site_icon::valid_domain;
+pub use source::{item_xml, whole_feed};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

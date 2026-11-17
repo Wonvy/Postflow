@@ -40,7 +40,9 @@ fn blocks<'a>(xml: &'a str, tag: &str) -> Vec<&'a str> {
 }
 
 fn escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// 在源的原文里找出 guid 是 `guid`、或者链接是 `link` 的那一篇。找不到返回 `None`。
@@ -104,12 +106,19 @@ mod tests {
             item_xml(atom, "tag:x,2", None).as_deref(),
             Some("<entry><id>tag:x,2</id></entry>")
         );
-        assert!(item_xml(atom, "tag:x,1", None).unwrap().contains("<title>A</title>"));
+        assert!(
+            item_xml(atom, "tag:x,1", None)
+                .unwrap()
+                .contains("<title>A</title>")
+        );
     }
 
     #[test]
     fn ignores_lookalike_tags() {
         let xml = "<items><item><guid>g</guid></item></items>";
-        assert_eq!(item_xml(xml, "g", None).as_deref(), Some("<item><guid>g</guid></item>"));
+        assert_eq!(
+            item_xml(xml, "g", None).as_deref(),
+            Some("<item><guid>g</guid></item>")
+        );
     }
 }

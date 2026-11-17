@@ -521,11 +521,13 @@ impl Core {
                         .await;
                 }
                 let base = detail.item.url.as_deref();
-                let content = postflow_feed::sanitize_html(&detail.content, base);
-                let full_text = detail
-                    .full_text
-                    .as_deref()
-                    .map(|h| postflow_feed::sanitize_html(h, base));
+                // YouTube、B 站的视频页：正文里没有播放器时补上一个
+                let show = |html: &str| match postflow_feed::with_player(html, base) {
+                    Some(with) => postflow_feed::sanitize_html(&with, base),
+                    None => postflow_feed::sanitize_html(html, base),
+                };
+                let content = show(&detail.content);
+                let full_text = detail.full_text.as_deref().map(show);
                 let mut value = reply(&detail.item)?;
                 value["content"] = json!(content);
                 value["full_text"] = json!(full_text);
@@ -567,7 +569,10 @@ impl Core {
                     .url
                     .ok_or_else(|| RpcError::new("extract_failed", "item has no link"))?;
                 let raw = self.client.full_text(&url).await?;
-                let clean = postflow_feed::sanitize_html(&raw, Some(&url));
+                let clean = match postflow_feed::with_player(&raw, Some(&url)) {
+                    Some(with) => postflow_feed::sanitize_html(&with, Some(&url)),
+                    None => postflow_feed::sanitize_html(&raw, Some(&url)),
+                };
                 // 原网页上的正文比源里给的还短：多半只给了没登录的人看开头，不如源里的内容
                 let chars = |html: &str| {
                     postflow_feed::html_to_text(html)
@@ -598,7 +603,9 @@ impl Core {
                     let raw = session
                         .db(move |s| s.mail_body(&id))
                         .await?
-                        .ok_or_else(|| RpcError::new("not_found", "the message isn't downloaded yet"))?;
+                        .ok_or_else(|| {
+                            RpcError::new("not_found", "the message isn't downloaded yet")
+                        })?;
                     return reply(json!({
                         "kind": "mail",
                         "source": String::from_utf8_lossy(&raw),
@@ -612,8 +619,11 @@ impl Core {
                     .await?;
                 let feed = feed.ok_or_else(|| RpcError::new("not_found", "the feed is gone"))?;
                 let xml = self.client.fetch_text(&feed.url).await?;
-                let found =
-                    postflow_feed::item_xml(&xml, guid.as_deref().unwrap_or(""), detail.item.url.as_deref());
+                let found = postflow_feed::item_xml(
+                    &xml,
+                    guid.as_deref().unwrap_or(""),
+                    detail.item.url.as_deref(),
+                );
                 // 这一篇已经不在源里了（源只保留最近几篇），给整个源
                 let whole = found.is_none();
                 let source = found.unwrap_or_else(|| postflow_feed::whole_feed(xml));

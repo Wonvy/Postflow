@@ -72,6 +72,92 @@ fn drop_empty_iframes(html: String) -> String {
     out
 }
 
+/// 视频网页（YouTube、B 站）对应的嵌入播放器地址。
+fn page_player(link: &str) -> Option<String> {
+    let url = ammonia::Url::parse(link.trim()).ok()?;
+    let host = url
+        .host_str()?
+        .trim_start_matches("www.")
+        .trim_start_matches("m.");
+    let segments: Vec<&str> = url.path_segments()?.filter(|s| !s.is_empty()).collect();
+    let valid = |id: &str| {
+        id.len() == 11
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    };
+    match host {
+        "youtube.com" | "music.youtube.com" => {
+            let id = match segments.as_slice() {
+                ["watch"] => url
+                    .query_pairs()
+                    .find(|(k, _)| k == "v")
+                    .map(|(_, v)| v.into_owned()),
+                ["shorts" | "live" | "embed", id, ..] => Some((*id).to_string()),
+                _ => None,
+            }?;
+            valid(&id).then(|| format!("https://www.youtube-nocookie.com/embed/{id}"))
+        }
+        "youtu.be" => {
+            let id = segments.first()?;
+            valid(id).then(|| format!("https://www.youtube-nocookie.com/embed/{id}"))
+        }
+        "bilibili.com" => match segments.as_slice() {
+            ["video", id, ..]
+                if id.starts_with("BV") && id.bytes().all(|b| b.is_ascii_alphanumeric()) =>
+            {
+                Some(format!(
+                    "https://player.bilibili.com/player.html?bvid={id}&autoplay=0"
+                ))
+            }
+            ["video", id, ..]
+                if id.starts_with("av")
+                    && id[2..].bytes().all(|b| b.is_ascii_digit())
+                    && id.len() > 2 =>
+            {
+                Some(format!(
+                    "https://player.bilibili.com/player.html?aid={}&autoplay=0",
+                    &id[2..]
+                ))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// 链接是 YouTube、B 站的视频页、正文里又没有播放器时（比如 YouTube 自己的订阅源），在正文最前面放上播放器，
+/// 净化时和源里自带的播放器一样处理。不是视频页、或者已经有播放器时返回 `None`。
+pub fn with_player(content: &str, link: Option<&str>) -> Option<String> {
+    let player = page_player(link?)?;
+    if [
+        "youtube.com/embed",
+        "youtube-nocookie.com/embed",
+        "player.bilibili.com",
+    ]
+    .iter()
+    .any(|p| content.contains(p))
+    {
+        return None;
+    }
+    let mut body = content;
+    // YouTube 源里的缩略图就是播放器的封面，不用再显示一遍
+    if player.contains("youtube") {
+        let trimmed = body.trim_start();
+        let head = trimmed.get(..trimmed.len().min(200)).unwrap_or(trimmed);
+        if trimmed.starts_with("<p><img src=\"https://i")
+            && head.contains("ytimg.com/")
+            && let Some(end) = trimmed.find("</p>")
+        {
+            body = &trimmed[end + "</p>".len()..];
+        }
+    }
+    Some(format!(
+        "<iframe src=\"{}\" width=\"640\" height=\"360\"></iframe>{body}",
+        player.replace('&', "&amp;")
+    ))
+}
+
 /// 把不可信的 HTML 净化成可以直接放进界面的 HTML。
 ///
 /// 脚本、样式、事件属性、表单一律去掉，只留排版用的标签。内嵌框架只留已知网站的视频、音频播放器
@@ -96,10 +182,18 @@ pub fn sanitize_html(html: &str, base_url: Option<&str>) -> String {
             "sandbox",
             "allow-scripts allow-same-origin allow-presentation allow-popups",
         )
-        .set_tag_attribute_value("iframe", "allow", "fullscreen; picture-in-picture; encrypted-media")
+        .set_tag_attribute_value(
+            "iframe",
+            "allow",
+            "fullscreen; picture-in-picture; encrypted-media",
+        )
         .set_tag_attribute_value("iframe", "allowfullscreen", "")
         .set_tag_attribute_value("iframe", "loading", "lazy")
-        .set_tag_attribute_value("iframe", "referrerpolicy", "strict-origin-when-cross-origin")
+        .set_tag_attribute_value(
+            "iframe",
+            "referrerpolicy",
+            "strict-origin-when-cross-origin",
+        )
         .attribute_filter(|element, attribute, value| match (element, attribute) {
             ("iframe", "src") => player_src(value).map(Cow::Owned),
             _ => Some(Cow::Borrowed(value)),
@@ -119,7 +213,9 @@ pub fn sanitize_html(html: &str, base_url: Option<&str>) -> String {
         None => builder.url_relative(UrlRelative::Deny),
     };
     // 不带协议的地址（`//player.bilibili.com/…`）没有基准地址时会被当成相对地址丢掉，先补上 https
-    let html = html.replace("src=\"//", "src=\"https://").replace("src='//", "src='https://");
+    let html = html
+        .replace("src=\"//", "src=\"https://")
+        .replace("src='//", "src='https://");
     drop_empty_iframes(builder.clean(&html).to_string())
 }
 
@@ -258,7 +354,9 @@ mod tests {
         let html = r#"<p>before</p><iframe width="640" height="360" src="//player.bilibili.com/player.html?aid=1&amp;bvid=BV1" frameborder="0" allowfullscreen="" onload="evil()"></iframe><iframe src="https://evil.test/embed/x"></iframe><iframe src="https://www.youtube.com/watch?v=x"></iframe><p>after</p>"#;
         let clean = sanitize_html(html, None);
         assert!(
-            clean.contains(r#"src="https://player.bilibili.com/player.html?aid=1&amp;bvid=BV1&amp;autoplay=0""#),
+            clean.contains(
+                r#"src="https://player.bilibili.com/player.html?aid=1&amp;bvid=BV1&amp;autoplay=0""#
+            ),
             "{clean}"
         );
         assert!(clean.contains("sandbox="), "{clean}");
@@ -310,5 +408,68 @@ mod tests {
             html_to_text("<p>keep</p><script>drop()</script><style>.x{}</style>"),
             "keep"
         );
+    }
+
+    #[test]
+    fn adds_a_player_for_video_pages() {
+        let yt = with_player(
+            r#"<p><img src="https://i2.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"></p><p>About</p>"#,
+            Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+        )
+        .unwrap();
+        assert!(
+            yt.starts_with(r#"<iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ""#),
+            "{yt}"
+        );
+        assert!(!yt.contains("ytimg"), "{yt}");
+        assert!(yt.ends_with("<p>About</p>"));
+        let clean = sanitize_html(&yt, None);
+        assert!(
+            clean.contains("youtube-nocookie.com/embed/dQw4w9WgXcQ"),
+            "{clean}"
+        );
+
+        for link in [
+            "https://youtu.be/dQw4w9WgXcQ",
+            "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+        ] {
+            assert!(
+                with_player("", Some(link))
+                    .unwrap()
+                    .contains("embed/dQw4w9WgXcQ"),
+                "{link}"
+            );
+        }
+        let bili = with_player(
+            "<p>hi</p>",
+            Some("https://www.bilibili.com/video/BV17osu6pEP9"),
+        )
+        .unwrap();
+        assert!(
+            bili.contains("player.bilibili.com/player.html?bvid=BV17osu6pEP9&amp;autoplay=0"),
+            "{bili}"
+        );
+
+        // 已经有播放器、不是视频页、地址不对的都不加
+        assert_eq!(
+            with_player(
+                r#"<iframe src="https://player.bilibili.com/x"></iframe>"#,
+                Some("https://www.bilibili.com/video/BV1")
+            ),
+            None
+        );
+        assert_eq!(
+            with_player("", Some("https://www.youtube.com/@someone")),
+            None
+        );
+        assert_eq!(
+            with_player("", Some("https://www.youtube.com/watch?v=short")),
+            None
+        );
+        assert_eq!(
+            with_player("", Some("https://example.com/watch?v=dQw4w9WgXcQ")),
+            None
+        );
+        assert_eq!(with_player("", None), None);
     }
 }

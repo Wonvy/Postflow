@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  ChevronsUpDown,
   Inbox,
   Languages,
   LayoutGrid,
@@ -24,6 +25,7 @@ import {
   RefreshCw,
   Search,
   Rows3,
+  Settings2,
   Rss,
   Sparkles,
   Star,
@@ -95,6 +97,7 @@ import {
   Menu,
   MenuItem,
   MenuSeparator,
+  MenuSub,
   Modal,
   Segmented,
   Spinner,
@@ -864,6 +867,19 @@ export function ItemList({ width }: { width: number }) {
       {searchOpen && <SearchBar scopeName={title} fetching={query.isFetching} firstId={stops[0]?.id} />}
       {listTranslate && engine === "offline" && <ModelPrompt />}
 
+      {/* 空白处右键：列表的显示方式和常用操作。行上右键是那一行自己的菜单 */}
+      <ContextMenu
+        bare
+        items={
+          <ListMenu
+            hasUnread={hasUnread}
+            onMarkAllRead={confirmMarkAllRead}
+            onRefresh={refresh}
+            onSearch={() => (searchOpen ? closeSearch() : openSearch())}
+            searchOpen={searchOpen}
+          />
+        }
+      >
       <div
         ref={scroller}
         role="listbox"
@@ -1071,6 +1087,7 @@ export function ItemList({ width }: { width: number }) {
         {/* 给底部的操作条留出位置，最后几行不被它挡住 */}
         {selection.length > 0 && <div className="h-14" />}
       </div>
+      </ContextMenu>
       {selection.length > 0 && <SelectionBar count={selection.length} />}
       <StatusBar
         toolbar="list"
@@ -1108,6 +1125,105 @@ export function ItemList({ width }: { width: number }) {
         }
       />
     </section>
+  );
+}
+
+/** 列表空白处的右键菜单：常用操作，以及工具栏「列表样式」「折叠」里的常用设置。 */
+function ListMenu({
+  hasUnread,
+  searchOpen,
+  onMarkAllRead,
+  onRefresh,
+  onSearch,
+}: {
+  hasUnread: boolean;
+  searchOpen: boolean;
+  onMarkAllRead: () => void;
+  onRefresh: () => void;
+  onSearch: () => void;
+}) {
+  const t = useT();
+  const ui = useUi();
+  const view = useListView();
+  const groupMode = useGroupMode();
+  const style = useListStyle();
+  const check = (on: boolean) => (on ? <Check size={14} /> : null);
+  const oneLine = view === "list" && ui.density === "compact";
+  const toggle = (key: "showSummary" | "showIcon" | "showSource" | "showImage" | "dateSections", label: MessageKey) => (
+    <MenuItem icon={check(style[key])} onSelect={() => ui.setListStyle({ [key]: !style[key] })}>
+      {t(label)}
+    </MenuItem>
+  );
+  return (
+    <>
+      <MenuItem icon={<RefreshCw size={14} />} onSelect={onRefresh}>
+        {t("action.refresh")}
+      </MenuItem>
+      {hasUnread && (
+        <MenuItem icon={<CheckCheck size={14} />} onSelect={onMarkAllRead}>
+          {t("action.markAllRead")}
+        </MenuItem>
+      )}
+      <MenuItem icon={<Search size={14} />} onSelect={onSearch}>
+        {searchOpen ? t("search.close") : t("search.label")}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuSub icon={<List size={14} />} label={t("listStyle.view")}>
+        {VIEW_OPTIONS.map(({ value, label }) => (
+          <MenuItem key={value} icon={check(view === value)} onSelect={() => ui.setListView(ui.scope, value)}>
+            {t(label)}
+          </MenuItem>
+        ))}
+        {view === "list" && (
+          <>
+            <MenuSeparator />
+            <MenuItem icon={check(ui.density === "compact")} onSelect={() => ui.setDensity("compact")}>
+              {t("listStyle.oneLine")}
+            </MenuItem>
+            <MenuItem icon={check(ui.density === "comfortable")} onSelect={() => ui.setDensity("comfortable")}>
+              {t("listStyle.twoLines")}
+            </MenuItem>
+          </>
+        )}
+      </MenuSub>
+      <MenuSub icon={<ListCollapse size={14} />} label={t("group.label")}>
+        {GROUP_OPTIONS.map(({ value, label }) => (
+          <MenuItem key={value} icon={check(groupMode === value)} onSelect={() => ui.setGroupMode(value)}>
+            {t(label)}
+          </MenuItem>
+        ))}
+      </MenuSub>
+      {ui.scope.kind === "view" && (
+        <MenuSub icon={<Layers size={14} />} label={t("listMenu.show")}>
+          {KIND_OPTIONS.map(({ value, label }) => (
+            <MenuItem key={label} icon={check(ui.kindFilter === value)} onSelect={() => ui.setKindFilter(value)}>
+              {t(label)}
+            </MenuItem>
+          ))}
+        </MenuSub>
+      )}
+      <MenuSub icon={<ChevronsUpDown size={14} />} label={t("listStyle.paging")}>
+        <MenuItem icon={check(ui.listPaging === "scroll")} onSelect={() => ui.setListPaging("scroll")}>
+          {t("listStyle.pagingScroll")}
+        </MenuItem>
+        <MenuItem icon={check(ui.listPaging === "pages")} onSelect={() => ui.setListPaging("pages")}>
+          {t("listStyle.pagingPages")}
+        </MenuItem>
+      </MenuSub>
+      <MenuSeparator />
+      {toggle("dateSections", "listStyle.dateSections")}
+      {!oneLine && toggle("showSummary", "listStyle.showSummary")}
+      {toggle("showIcon", "listStyle.showIcon")}
+      {toggle("showSource", "listStyle.showSource")}
+      {view !== "list" && toggle("showImage", "listStyle.showImage")}
+      <MenuItem icon={check(ui.listTranslate)} onSelect={ui.toggleListTranslate}>
+        {t("list.translate")}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem icon={<Settings2 size={14} />} onSelect={() => ui.setDialog({ type: "toolbars", toolbar: "list" })}>
+        {t("tool.customize")}
+      </MenuItem>
+    </>
   );
 }
 

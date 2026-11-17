@@ -131,7 +131,9 @@ fn summarize(
             .into_iter()
             .take(SAMPLE)
             .map(|e| PreviewEntry {
-                image: e.image.or_else(|| content_image(&e.content, e.url.as_deref())),
+                image: e
+                    .image
+                    .or_else(|| content_image(&e.content, e.url.as_deref())),
                 title: e.title,
                 url: e.url,
                 published_ms: e.published_ms,
@@ -217,15 +219,23 @@ fn content_image(html: &str, base: Option<&str>) -> Option<String> {
     if !html.contains("<img") {
         return None;
     }
-    const SKIP: &[&str] = &["feedburner.com", "pixel", "emoji", "gravatar.com/avatar", "/1x1."];
+    const SKIP: &[&str] = &[
+        "feedburner.com",
+        "pixel",
+        "emoji",
+        "gravatar.com/avatar",
+        "/1x1.",
+    ];
     let fragment = scraper::Html::parse_fragment(html);
     let selector = scraper::Selector::parse("img[src]").ok()?;
     let base = base.and_then(|b| url::Url::parse(b).ok());
     fragment.select(&selector).find_map(|img| {
         let el = img.value();
-        let tiny = ["width", "height"]
-            .iter()
-            .any(|a| el.attr(a).and_then(|v| v.trim().parse::<u32>().ok()).is_some_and(|n| n <= 2));
+        let tiny = ["width", "height"].iter().any(|a| {
+            el.attr(a)
+                .and_then(|v| v.trim().parse::<u32>().ok())
+                .is_some_and(|n| n <= 2)
+        });
         if tiny {
             return None;
         }

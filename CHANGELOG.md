@@ -18,6 +18,8 @@ that heading into the version number and date.
 - Videos play in the reader: players that feeds embed (Bilibili, as RSSHub's Bilibili feeds do, YouTube, Vimeo,
   Tencent Video, Youku, Xigua, and Spotify, SoundCloud, Apple Music and NetEase Cloud Music for audio) are kept,
   full width and sandboxed. Other embedded frames are still removed. Bilibili's player no longer starts on its own.
+  Items that link to a YouTube video (YouTube's own channel and playlist feeds) or a Bilibili video page get the
+  player too, in place of the thumbnail.
 - Turning off web-page view (or opening an item without a link) now empties the page, so a video in it stops
   instead of playing on in the background.
 - View source: right-click an item for "View XML source" (that item as it appears in its feed, fetched again) or,
@@ -26,6 +28,9 @@ that heading into the version number and date.
   feeds); the name fills in with the feed's title until you change it; you can pick the feed's icon (the feed's
   own, the site's, or any image address); the name, folder and Add button stay at the bottom while long forms
   scroll. Going back from an RSSHub route keeps your search and its results.
+- Right-click the empty part of the list for refresh, mark all as read and search, the layout (list, summary, cards,
+  one or two lines), folding, browsing by scroll or pages, mail or feeds only, the show/hide switches, list
+  translation and Customize toolbar.
 
 ### 中文
 - 新手引导：第一次安装后，一步步带你选语言和主题、添加邮箱、添加订阅（或导入 OPML）、认识界面和常用快捷键，
@@ -37,11 +42,14 @@ that heading into the version number and date.
 - 阅读区能直接播放视频：订阅源里嵌的播放器（RSSHub 的 B 站订阅就带着，还有 YouTube、Vimeo、腾讯视频、优酷、西瓜视频，
   以及 Spotify、SoundCloud、Apple Music、网易云音乐的音频播放器）会保留下来，占满正文宽度，放在沙箱里。别的内嵌框架仍然去掉。
   B 站播放器不再一打开就自动播放。
+  链接是 YouTube 视频（YouTube 自己的频道、播放列表订阅）或 B 站视频页的条目，也会在正文上方放上播放器，代替原来的缩略图。
 - 关掉原网页模式（或者打开没有链接的条目）时，网页会清空，里面的视频随之停下，不会在后台接着放。
 - 查看源代码：在条目上右键选「查看 XML 源代码」（这一篇在订阅源里的原文，重新读取），邮件是「查看邮件源代码」（原始邮件），可以一键拷贝。
 - 添加订阅：只在正文里放图的订阅源（比如 RSSHub 的 B 站订阅）预览里也有缩略图；名称自动填上订阅源的名字，改过就不再覆盖；
   可以选图标（订阅源的、网站的，或者填一个图片地址）；名称、文件夹和「添加」按钮固定在底部，表单再长也看得到。
   从 RSSHub 的路由返回时，搜索词和结果都还在。
+- 中间列表的空白处可以右键：刷新、全部标为已读、搜索，显示方式（列表、摘要、卡片，一行或两行）、折叠、滚动或分页、
+  只看邮件或订阅、各项显示开关、列表翻译，以及自定义工具栏。
 
 ## 0.1.15 — 2026-11-17
 
