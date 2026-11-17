@@ -8,12 +8,15 @@ mod frame;
 mod fulltext;
 pub mod opml;
 mod parse;
+mod preview;
 mod sanitize;
+mod youtube;
 
 pub use client::{Client, Conditional, FetchResult, Fetched};
 pub use discover::Candidate;
 pub use frame::FramePolicy;
 pub use parse::{ParsedEntry, ParsedFeed, parse_feed};
+pub use preview::{FeedPreview, Preview, PreviewEntry};
 pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html};
 
 #[derive(Debug, thiserror::Error)]

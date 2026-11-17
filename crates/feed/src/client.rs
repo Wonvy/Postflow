@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use reqwest::header::{CONTENT_TYPE, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED};
+use reqwest::header::{
+    CONTENT_TYPE, COOKIE, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED,
+};
 
 use crate::parse::{ParsedFeed, parse_feed};
 use crate::{Error, Result};
@@ -75,7 +77,21 @@ impl Client {
         cond: Option<&Conditional>,
         timeout: Option<Duration>,
     ) -> Result<Option<Page>> {
+        self.get_with_cookie(url, cond, timeout, None).await
+    }
+
+    /// 同 `get`，可以带一个 Cookie 头。有的网站（YouTube）不带同意 Cookie 时先给一个确认页。
+    pub(crate) async fn get_with_cookie(
+        &self,
+        url: &str,
+        cond: Option<&Conditional>,
+        timeout: Option<Duration>,
+        cookie: Option<&str>,
+    ) -> Result<Option<Page>> {
         let mut req = self.http.get(url);
+        if let Some(cookie) = cookie {
+            req = req.header(COOKIE, cookie);
+        }
         if let Some(cond) = cond {
             if let Some(etag) = &cond.etag {
                 req = req.header(IF_NONE_MATCH, etag);

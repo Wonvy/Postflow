@@ -11,6 +11,8 @@ pub struct ParsedFeed {
     pub title: String,
     pub site_url: Option<String>,
     pub icon_url: Option<String>,
+    /// 源自己的一句话介绍，纯文本。
+    pub description: Option<String>,
     pub entries: Vec<ParsedEntry>,
 }
 
@@ -61,6 +63,11 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
             .or(feed.logo)
             .map(|i| i.uri)
             .filter(|u| !u.is_empty()),
+        description: feed
+            .description
+            .as_ref()
+            .map(|d| truncate(&html_to_text(&as_html(d)), SUMMARY_CHARS))
+            .filter(|d| !d.is_empty()),
         entries,
     })
 }
@@ -316,7 +323,7 @@ fn media_as_html(entry: &Entry) -> String {
     html
 }
 
-fn truncate(s: &str, max_chars: usize) -> String {
+pub(crate) fn truncate(s: &str, max_chars: usize) -> String {
     if s.chars().count() <= max_chars {
         return s.to_string();
     }

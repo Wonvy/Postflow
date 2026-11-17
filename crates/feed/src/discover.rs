@@ -30,6 +30,14 @@ impl Client {
     /// 用户可能贴的是订阅地址，也可能只是网站首页。找出可订阅的源。
     pub async fn discover(&self, input: &str) -> Result<Vec<Candidate>> {
         let url = normalize_url(input)?;
+        // YouTube 频道页上声明的源只叫「RSS」，直接换算成频道的源，用频道名作标题
+        if let Some(found) = self.youtube(&url).await? {
+            let title = found.title.unwrap_or_default();
+            return Ok(vec![Candidate {
+                url: found.feed_url,
+                title,
+            }]);
+        }
         let page = self
             .get(url.as_str(), None, None)
             .await?
@@ -52,7 +60,7 @@ impl Client {
         }
     }
 
-    async fn probe_common_paths(&self, page_url: &Url) -> Option<Candidate> {
+    pub(crate) async fn probe_common_paths(&self, page_url: &Url) -> Option<Candidate> {
         let mut urls: Vec<Url> = Vec::new();
         let mut bases = vec![page_url.join("/").ok()?];
         // 博客挂在子路径下时，源往往也在子路径下
@@ -94,7 +102,7 @@ impl Client {
 }
 
 /// 读出网页 `<head>` 里用 `<link rel="alternate">` 声明的订阅源。
-fn links_in_html(html: &str, base: &Url) -> Vec<Candidate> {
+pub(crate) fn links_in_html(html: &str, base: &Url) -> Vec<Candidate> {
     let doc = Html::parse_document(html);
     let link_selector = Selector::parse("link[href]").expect("valid selector");
     let title_selector = Selector::parse("title").expect("valid selector");

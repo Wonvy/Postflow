@@ -108,6 +108,9 @@ struct AddFeed {
     folder: String,
     #[serde(default)]
     title: Option<String>,
+    /// 预览时找到的图标（比如 YouTube 频道头像），比源里的更合适时由界面带上。
+    #[serde(default)]
+    icon_url: Option<String>,
 }
 
 /// 侧栏里拖动后，一个文件夹（空字符串是文件夹外）里订阅源的新顺序。
@@ -315,6 +318,11 @@ impl Core {
             "feeds.discover" => {
                 let p: UrlParam = parse(params)?;
                 reply(self.client.discover(&p.url).await?)
+            }
+            // 添加订阅前的预览：图标、标题、介绍和最近几篇
+            "feeds.preview" => {
+                let p: UrlParam = parse(params)?;
+                reply(self.client.preview(&p.url).await?)
             }
             "feeds.add" => {
                 let feed = self.add_feed(&session, parse(params)?).await?;
@@ -639,11 +647,12 @@ impl Core {
             .or_else(|| Some(fetched.feed.title.clone()).filter(|t| !t.is_empty()))
             .or_else(|| host_of(&url))
             .unwrap_or_default();
+        let given_icon = p
+            .icon_url
+            .filter(|u| u.starts_with("https://") || u.starts_with("http://"));
         let new = NewFeed {
-            icon_url: fetched
-                .feed
-                .icon_url
-                .clone()
+            icon_url: given_icon
+                .or_else(|| fetched.feed.icon_url.clone())
                 .or_else(|| favicon_url(fetched.feed.site_url.as_deref(), &url)),
             site_url: fetched.feed.site_url.clone(),
             url: url.clone(),
