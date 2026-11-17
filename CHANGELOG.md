@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.11 — 2026-11-17
+
+### English
+
 - Write, reply, reply all and forward mail (`C`, `⌘R`, `⇧⌘R`, `⇧⌘F`; `Ctrl` on Windows and Linux). Replies quote
   the original and stay in the same conversation, recipients are suggested from people who have written to you, and
   `⌘↩` sends. Mail goes straight from your device to your provider's outgoing server, which is set up for you; a copy
