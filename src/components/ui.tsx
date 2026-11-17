@@ -503,10 +503,17 @@ export function Avatar({ name, seed, size = 16 }: { name: string; seed?: string 
   );
 }
 
+/** 应用图标，和 src-tauri/app-icon.svg、public/favicon.svg 是同一个图形。 */
 export function Logo({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
-      <rect width="64" height="64" rx="15" fill="var(--accent-strong)" />
+      <defs>
+        <linearGradient id="postflow-logo" x1="0.15" y1="0" x2="0.85" y2="1">
+          <stop offset="0" stopColor="#A25BFF" />
+          <stop offset="1" stopColor="#6A1FE0" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="15" fill="url(#postflow-logo)" />
       <g fill="none" stroke="#fff" strokeWidth="5.5" strokeLinecap="round">
         <path d="M17 22h30" />
         <path d="M17 32h22" opacity=".8" />
