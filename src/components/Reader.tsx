@@ -960,6 +960,7 @@ function Empty() {
     [["X"], t("reader.hintSelect")],
     [["T"], t("reader.hintTranslate")],
     [["W"], t("reader.hintWeb")],
+    [["/"], t("reader.hintSearch")],
     [["A"], t("reader.hintAi")],
     [["+", "−"], t("reader.hintSize")],
     [["→", "←"], t("reader.hintGroup")],

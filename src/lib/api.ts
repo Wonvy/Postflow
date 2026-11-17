@@ -92,6 +92,8 @@ export interface Item {
   image: string | null;
   /** 分类。 */
   label: string | null;
+  /** 搜索时，正文里命中搜索词的那一小段。 */
+  snippet?: string | null;
 }
 
 export interface Mailbox {
@@ -177,12 +179,15 @@ export interface Cursor {
 }
 
 export interface ItemFilter {
-  view: View;
+  /** 「all」是收件箱和归档里的全部，搜索「全部」时用。 */
+  view: View | "all";
   source_id?: string;
   kind?: ItemKind;
   folder?: string;
   since?: number;
   label?: string;
+  /** 全文搜索：标题、发件人、作者和正文里都要有这些词。 */
+  query?: string;
 }
 
 export interface ItemPage {

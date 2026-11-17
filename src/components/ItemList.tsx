@@ -20,6 +20,7 @@ import {
   Paperclip,
   Plus,
   RefreshCw,
+  Search,
   Rows3,
   Rss,
   Sparkles,
@@ -444,7 +445,13 @@ export function ItemList({ width }: { width: number }) {
   const nav = useNav();
   const setGroupExpanded = useUi((s) => s.setGroupExpanded);
   const { confirmMarkAllRead, refresh, membersOf } = useActions();
-  const { query, items, rows: listRows, stops, groupMode } = useListModel();
+  const { query, items, rows: listRows, stops, groupMode, search } = useListModel();
+  const searchOpen = useUi((s) => s.searchOpen);
+  const searchAll = useUi((s) => s.searchAll);
+  const openSearch = useUi((s) => s.openSearch);
+  const closeSearch = useUi((s) => s.closeSearch);
+  const setSearchAll = useUi((s) => s.setSearchAll);
+  const terms = useMemo(() => searchTerms(search), [search]);
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   const view = useListView();
   const cardSize = useUi((s) => s.cardSize);
@@ -482,7 +489,9 @@ export function ItemList({ width }: { width: number }) {
   const cardWidth = Math.floor((inner - cardGap * (columns - 1)) / columns);
   const imageHeight = style.showImage ? Math.round(cardWidth * 0.56) : 0;
   const cardHeight = imageHeight + metrics.cardText;
-  const rowHeight = view === "summary" ? metrics.summaryRow : density === "compact" ? metrics.compact : metrics.comfortable;
+  // 搜索结果总用两行，第二行放正文里命中的那一段
+  const rows: Density = search ? "comfortable" : density;
+  const rowHeight = view === "summary" ? metrics.summaryRow : rows === "compact" ? metrics.compact : metrics.comfortable;
 
   // 按日期分段：分段的界线每分钟重算一次，过了午夜「今天」的就挪到「昨天」
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / 60_000));
@@ -655,6 +664,14 @@ export function ItemList({ width }: { width: number }) {
           {title}
         </h1>
         {scope.kind === "view" && layout !== "tabs" && <KindFilter />}
+        <IconButton
+          label={t("search.label")}
+          shortcut="/"
+          active={searchOpen}
+          onClick={() => (searchOpen ? closeSearch() : openSearch())}
+        >
+          <Search {...ICON} />
+        </IconButton>
         <IconButton label={t("list.translate")} active={listTranslate} onClick={toggleListTranslate}>
           <Languages {...ICON} />
         </IconButton>
@@ -668,6 +685,7 @@ export function ItemList({ width }: { width: number }) {
         </IconButton>
       </header>
 
+      {searchOpen && <SearchBar scopeName={title} fetching={query.isFetching} firstId={stops[0]?.id} />}
       {listTranslate && engine === "offline" && <ModelPrompt />}
 
       <div ref={scroller} role="listbox" aria-label={title} aria-multiselectable className="min-h-0 flex-1 overflow-y-auto">
@@ -677,6 +695,7 @@ export function ItemList({ width }: { width: number }) {
           </div>
         ) : items.length === 0 ? (
           <EmptyList
+            search={search ? { query: search, all: searchAll, onAll: () => setSearchAll(true) } : undefined}
             noSources={feeds !== undefined && feeds.length === 0 && accounts !== undefined && accounts.length === 0}
             caughtUp={scope.kind === "view" && (scope.view === "inbox" || scope.view === "unread")}
             folderHint={scope.kind === "view" && isMailOnlyView(scope.view)}
@@ -733,9 +752,11 @@ export function ItemList({ width }: { width: number }) {
                 const original = row.kind === "item" ? row.item : row.group.lead;
                 // 翻译模式下显示译文，原文放在悬停提示里
                 const translated = listTranslate ? translations[`${translateTo}:${original.id}`] : undefined;
-                const item = translated
+                const shown = translated
                   ? { ...original, title: translated.title || original.title, summary: translated.summary || original.summary }
                   : original;
+                // 搜索时摘要换成正文里命中的那一段
+                const item = search && shown.snippet ? { ...shown, summary: shown.snippet } : shown;
                 const group = row.kind === "group" ? row.group : undefined;
                 const members = group ? group.items.map((i) => i.id) : [item.id];
                 const props: RowProps = {
@@ -746,8 +767,8 @@ export function ItemList({ width }: { width: number }) {
                   untitled: t("reader.untitled"),
                   onExpand: group ? () => setGroupExpanded(group.key, true) : undefined,
                   expandLabel: t("group.expand"),
-                  abstract: showAbstracts ? abstracts[`${lang}:${item.id}`] : undefined,
-                  look: { style, m: metrics, badge: mixedAccounts },
+                  abstract: showAbstracts && !search ? abstracts[`${lang}:${item.id}`] : undefined,
+                  look: { style, m: metrics, badge: mixedAccounts, terms },
                 };
                 return {
                   id,
@@ -820,7 +841,7 @@ export function ItemList({ width }: { width: number }) {
                       "absolute inset-x-0 top-0 flex rounded-md transition-colors",
                       view === "summary"
                         ? "items-center gap-3"
-                        : density === "compact"
+                        : rows === "compact"
                           ? "items-center gap-2.5"
                           : "flex-col justify-center gap-1",
                       d.child && "ml-5",
@@ -832,7 +853,7 @@ export function ItemList({ width }: { width: number }) {
                   >
                     {view === "summary" ? (
                       <SummaryRow {...d.props} />
-                    ) : density === "compact" ? (
+                    ) : rows === "compact" ? (
                       <CompactRow {...d.props} />
                     ) : (
                       <ComfortableRow {...d.props} />
@@ -941,6 +962,123 @@ export function MarkAllReadDialog() {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** 搜索框里的词：按空格拆开、去掉引号，长的排前面，高亮时先匹配长的。 */
+function searchTerms(query: string): string[] {
+  const words = query
+    .split(/\s+/)
+    .map((w) => w.replace(/^"+|"+$/g, ""))
+    .filter(Boolean);
+  return [...new Set(words)].sort((a, b) => b.length - a.length);
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 把文字里的搜索词标出来。 */
+function Hl({ text, terms }: { text: string; terms: string[] }) {
+  if (terms.length === 0 || !text) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="rounded-[2px] bg-warning/30 text-inherit">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
+/** 单行列表里，搜索命中在正文时，在标题后面跟上那一段。 */
+function SearchSnippet({ item, look }: { item: Item; look: Look }) {
+  if (look.terms.length === 0 || !item.snippet) return null;
+  return (
+    <span className="font-normal text-fg-3" style={{ fontSize: look.m.summary.size }}>
+      {" · "}
+      <Hl text={item.snippet} terms={look.terms} />
+    </span>
+  );
+}
+
+/**
+ * 列表上方的搜索栏。打字停一下才去搜；回车或 ↓ 打开第一条结果，焦点交给列表，接着用 J / K。
+ * Esc 先清空，再按一次收起。
+ */
+function SearchBar({ scopeName, fetching, firstId }: { scopeName: string; fetching: boolean; firstId?: string }) {
+  const t = useT();
+  const query = useUi((s) => s.searchQuery);
+  const setQuery = useUi((s) => s.setSearchQuery);
+  const all = useUi((s) => s.searchAll);
+  const setAll = useUi((s) => s.setSearchAll);
+  const close = useUi((s) => s.closeSearch);
+  const focus = useUi((s) => s.searchFocus);
+  const [text, setText] = useState(query);
+  const input = useRef<HTMLInputElement>(null);
+
+  // 按 / 或点放大镜时把焦点放进来，选中已有的词
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, [focus]);
+
+  useEffect(() => {
+    if (text.trim() === query.trim()) return;
+    const timer = setTimeout(() => setQuery(text), 250);
+    return () => clearTimeout(timer);
+  }, [text, query, setQuery]);
+
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line pl-4 pr-2">
+      <Search size={14} strokeWidth={1.75} className="shrink-0 text-fg-3" />
+      <input
+        ref={input}
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            if (text) {
+              setText("");
+              setQuery("");
+            } else {
+              close();
+            }
+          } else if (e.key === "Enter" || e.key === "ArrowDown") {
+            e.preventDefault();
+            setQuery(text);
+            if (firstId) {
+              useUi.getState().open(firstId);
+              input.current?.blur();
+            }
+          }
+        }}
+        placeholder={all ? t("search.placeholderAll") : t("search.placeholderIn", { name: scopeName })}
+        aria-label={t("search.label")}
+        spellCheck={false}
+        autoComplete="off"
+        className="h-7 min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-3"
+      />
+      {fetching && text.trim() !== "" && <Spinner size={13} />}
+      <Segmented<"here" | "all">
+        value={all ? "all" : "here"}
+        onChange={(v) => setAll(v === "all")}
+        options={[
+          { value: "here", label: t("search.here") },
+          { value: "all", label: t("search.all") },
+        ]}
+      />
+      <IconButton label={t("search.close")} shortcut="Esc" className="size-6" onClick={close}>
+        <X size={14} strokeWidth={1.75} />
+      </IconButton>
+    </div>
   );
 }
 
@@ -1057,6 +1195,8 @@ interface RowProps {
 
 /** 列表样式算出来的尺寸，以及邮件要不要标出是哪个邮箱的。 */
 interface Look {
+  /** 搜索时要高亮的词。 */
+  terms: string[];
   style: ListStyle;
   m: ListMetrics;
   badge: boolean;
@@ -1133,15 +1273,17 @@ function CompactRow(props: RowProps) {
       {item.kind === "mail" ? (
         <>
           <span className={cx("w-[110px] shrink-0 truncate", unreadText)} style={font}>
-            {senderLabel(item, group, groupMode)}
+            <Hl text={senderLabel(item, group, groupMode)} terms={look.terms} />
           </span>
           <span className={cx("min-w-0 flex-1 truncate", unread ? "text-fg" : "text-fg-3")} style={font}>
-            {item.title || untitled}
+            <Hl text={item.title || untitled} terms={look.terms} />
+            <SearchSnippet item={item} look={look} />
           </span>
         </>
       ) : (
         <span className={cx("min-w-0 flex-1 truncate", unreadText)} style={font}>
-          {item.title || untitled}
+          <Hl text={item.title || untitled} terms={look.terms} />
+          <SearchSnippet item={item} look={look} />
         </span>
       )}
       <Trailing {...props} />
@@ -1161,15 +1303,22 @@ function ComfortableRow(props: RowProps) {
           className={cx("min-w-0 flex-1 truncate", unread ? "font-medium text-fg" : "text-fg-3")}
           style={text(look.m.title)}
         >
-          {item.title || untitled}
+          <Hl text={item.title || untitled} terms={look.terms} />
         </span>
         <Trailing {...props} />
       </div>
       <div className="flex items-center gap-2 pl-4 text-fg-3" style={text(look.m.summary)}>
         <Sender item={item} look={look} size={14} />
         <span className="min-w-0 truncate">
-          <span className="text-fg-2">{source}</span>
-          {look.style.showSummary && item.summary && <span> · {item.summary}</span>}
+          <span className="text-fg-2">
+            <Hl text={source} terms={look.terms} />
+          </span>
+          {(look.style.showSummary || look.terms.length > 0) && item.summary && (
+            <span>
+              {" · "}
+              <Hl text={item.summary} terms={look.terms} />
+            </span>
+          )}
         </span>
       </div>
     </>
@@ -1183,7 +1332,9 @@ function SourceLine(props: RowProps & { size?: number }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-fg-3" style={text(look.m.summary)}>
       <Sender item={item} look={look} size={size} />
-      <span className="min-w-0 flex-1 truncate">{source}</span>
+      <span className="min-w-0 flex-1 truncate">
+        <Hl text={source} terms={look.terms} />
+      </span>
       <Trailing {...props} />
     </div>
   );
@@ -1210,8 +1361,8 @@ function Picture({ src, className, style }: { src: string; className?: string; s
 }
 
 /** 摘要文字：有 AI 摘要时显示它，前面带一个小标记。 */
-function Excerpt({ item, abstract }: { item: Item; abstract?: string }) {
-  if (!abstract) return <>{item.summary}</>;
+function Excerpt({ item, abstract, terms = [] }: { item: Item; abstract?: string; terms?: string[] }) {
+  if (!abstract) return <Hl text={item.summary} terms={terms} />;
   return (
     <>
       <Sparkles size={11} strokeWidth={2} className="mr-1 inline-block align-[-1px] text-accent" />
@@ -1237,7 +1388,7 @@ function SummaryRow(props: RowProps) {
       <UnreadDot unread={unread} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className={cx("truncate", unread ? "font-semibold text-fg" : "text-fg-2")} style={text(look.m.bigTitle)}>
-          {item.title || untitled}
+          <Hl text={item.title || untitled} terms={look.terms} />
         </span>
         {look.style.showSummary && (
           <p
@@ -1248,7 +1399,7 @@ function SummaryRow(props: RowProps) {
               height: look.m.summary.line * look.style.summaryLines,
             }}
           >
-            <Excerpt item={item} abstract={props.abstract} />
+            <Excerpt item={item} abstract={props.abstract} terms={look.terms} />
           </p>
         )}
         <SourceLine {...props} />
@@ -1302,7 +1453,7 @@ function Card(props: RowProps & { imageHeight: number }) {
           className={cx("shrink-0", unread ? "font-semibold text-fg" : "text-fg-2")}
           style={{ ...text(look.m.bigTitle), ...clampLines(picture || !look.style.showSummary ? 2 : 3) }}
         >
-          {item.title || untitled}
+          <Hl text={item.title || untitled} terms={look.terms} />
         </span>
         {look.style.showSummary && (
           <p
@@ -1312,7 +1463,7 @@ function Card(props: RowProps & { imageHeight: number }) {
             )}
             style={{ ...text(look.m.summary), ...(picture ? clampLines(2) : {}) }}
           >
-            <Excerpt item={item} abstract={props.abstract} />
+            <Excerpt item={item} abstract={props.abstract} terms={look.terms} />
           </p>
         )}
       </div>
@@ -1321,12 +1472,15 @@ function Card(props: RowProps & { imageHeight: number }) {
 }
 
 function EmptyList({
+  search,
   noSources,
   caughtUp,
   folderHint,
   onAddAccount,
   onAddFeed,
 }: {
+  /** 搜索没有结果。 */
+  search?: { query: string; all: boolean; onAll: () => void };
   noSources: boolean;
   caughtUp: boolean;
   /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
@@ -1335,6 +1489,18 @@ function EmptyList({
   onAddFeed: () => void;
 }) {
   const t = useT();
+  if (search) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+        <Search size={26} strokeWidth={1.25} className="text-fg-4" />
+        <div>
+          <p className="text-fg-2">{t("search.empty", { query: search.query })}</p>
+          <p className="mt-1 max-w-[260px] text-[12px] leading-relaxed text-fg-3">{t("search.emptyHint")}</p>
+        </div>
+        {!search.all && <Button onClick={search.onAll}>{t("search.tryAll")}</Button>}
+      </div>
+    );
+  }
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
       <Inbox size={28} strokeWidth={1.25} className="text-fg-4" />

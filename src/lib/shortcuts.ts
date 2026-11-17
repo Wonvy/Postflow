@@ -22,6 +22,18 @@ export function useShortcuts() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // ⌘F / Ctrl+F：搜索（输入框里打字时也行，对话框开着时不抢）
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "f" &&
+        useUi.getState().dialog === null
+      ) {
+        e.preventDefault();
+        useUi.getState().openSearch();
+        return;
+      }
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTyping(e.target) || useUi.getState().dialog !== null) return;
       // 菜单打开时按键属于菜单
@@ -90,6 +102,9 @@ export function useShortcuts() {
           // 选项卡模式下切换选项卡
           if (ui.sidebarLayout !== "tabs") return;
           ui.setTab((["all", "mail", "feeds"] as const)[Number(key) - 1] ?? "all");
+          break;
+        case "/":
+          ui.openSearch();
           break;
         case "x":
           // 勾选或取消勾选当前打开的那一行，配合 J / K 可以只用键盘多选

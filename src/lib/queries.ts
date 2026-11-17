@@ -48,6 +48,8 @@ export function useItems(filter: ItemFilter) {
     queryFn: ({ pageParam }) => api.listItems(filter, pageParam),
     initialPageParam: undefined as Cursor | undefined,
     getNextPageParam: (last) => last.next ?? undefined,
+    // 搜索时一边打字一边换结果：新结果到之前先留着上一次的，列表不闪成空白
+    placeholderData: filter.query ? (previous) => previous : undefined,
   });
   const items = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
   return { ...query, items };
@@ -78,7 +80,8 @@ export function useDevices() {
 /** 条目被归档或取消归档后，是否应当从这个列表里消失。 */
 function leavesList(filter: ItemFilter, patch: ItemPatch): boolean {
   if (patch.archived === undefined) return false;
-  if (filter.view === "starred") return false;
+  // 星标和搜索「全部」里，归档与否都还在列表里
+  if (filter.view === "starred" || filter.view === "all") return false;
   return isArchiveLike(filter.view) ? !patch.archived : patch.archived;
 }
 

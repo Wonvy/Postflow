@@ -56,6 +56,7 @@ export function useActions() {
       const leaves =
         patch.archived !== undefined &&
         filter.view !== "starred" &&
+        filter.view !== "all" &&
         (isArchiveLike(filter.view) ? !patch.archived : patch.archived);
       if (leaves) {
         const gone = new Set(ids);

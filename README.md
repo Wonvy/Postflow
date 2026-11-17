@@ -108,6 +108,10 @@ click **More info → Run anyway**.
   the title or sender, and go to the source. In the reader it also copies selected text and links under the pointer.
   Right-click a selected row to act on the whole selection.
 - Mark all as read (the double check in the list toolbar, or `Shift` + `A`) asks before it runs.
+- Full-text search (the magnifier in the list toolbar, `/` or `⌘F`): titles, senders, authors and the full text of
+  articles and mail, Chinese included. Search the current list or everything, including archived items; results show
+  where the words appear and highlight them. Enter opens the first result. The index stays on this device and is
+  built in the background.
 - Offline translation for mail and articles. The translate button in the reader (or `T`) is a switch: while it is on,
   every message and article you open is translated on your device as it opens, keeping its layout and links; turn it
   off for the original. The language is detected for you, and models for more than 50 languages download once (about
@@ -135,7 +139,7 @@ click **More info → Run anyway**.
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
 **Not yet available:** writing and replying, OAuth sign-in for Gmail (use an app password), folders other than the
-inbox, spam and trash, search, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
+inbox, spam and trash, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
 Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
@@ -153,6 +157,7 @@ download page instead.
 | `Shift` + `A` | Mark everything in the list as read (asks first) |
 | `T` | Auto-translate on / off |
 | `W` | Web page view on / off |
+| `/` or `⌘F` / `Ctrl+F` | Search |
 | `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |
 | `1` `2` `3` | Switch sidebar tab (in the tabs layout) |

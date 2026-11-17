@@ -563,6 +563,16 @@ const zh = {
   "edit.errorHint": "如果这个源换了地址，在上面填新的地址就行。",
   "edit.checking": "正在检查…",
   "error.feed_exists": "已经订阅过这个地址了",
+  "search.label": "搜索",
+  "search.placeholderIn": "在「{name}」里搜索",
+  "search.placeholderAll": "搜索全部邮件和文章",
+  "search.here": "此列表",
+  "search.all": "全部",
+  "search.close": "关闭搜索",
+  "search.empty": "没有找到「{query}」",
+  "search.emptyHint": "标题、发件人、作者和正文都搜过了。试试别的词，或者少输几个字。",
+  "search.tryAll": "在全部里搜索",
+  "reader.hintSearch": "搜索",
 } as const;
 
 export type MessageKey = keyof typeof zh;
@@ -1128,6 +1138,16 @@ const en: Record<MessageKey, string> = {
   "edit.errorHint": "If the feed has moved, enter its new address above.",
   "edit.checking": "Checking…",
   "error.feed_exists": "You're already subscribed to this address",
+  "search.label": "Search",
+  "search.placeholderIn": "Search in “{name}”",
+  "search.placeholderAll": "Search all mail and articles",
+  "search.here": "This list",
+  "search.all": "Everything",
+  "search.close": "Close search",
+  "search.empty": "Nothing matches “{query}”",
+  "search.emptyHint": "Titles, senders, authors and full text were all searched. Try other words, or fewer.",
+  "search.tryAll": "Search everything",
+  "reader.hintSearch": "Search",
 };
 
 const messages: Record<Lang, Record<MessageKey, string>> = { zh, en };

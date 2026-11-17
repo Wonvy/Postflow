@@ -73,6 +73,14 @@ interface UiState {
   expandedGroups: string[];
   /** 按 T 键时加一，阅读面板据此切换译文。 */
   translateRequest: number;
+  /** 列表上方的搜索栏开着。 */
+  searchOpen: boolean;
+  /** 正在搜的词（输入停顿一下才更新）。为空时列表照常显示。 */
+  searchQuery: string;
+  /** 在全部内容里搜，而不是只在当前列表里。 */
+  searchAll: boolean;
+  /** 按 / 时加一，搜索框据此获得焦点。 */
+  searchFocus: number;
 
   // 以下是这台设备上的界面偏好，存在浏览器本地
   theme: ThemePref;
@@ -151,6 +159,10 @@ interface UiState {
   setWebLandscape: (landscape: boolean) => void;
   rememberFolder: (folder: string) => void;
   requestTranslate: () => void;
+  openSearch: () => void;
+  closeSearch: () => void;
+  setSearchQuery: (query: string) => void;
+  setSearchAll: (all: boolean) => void;
 }
 
 export const SIDEBAR_MIN = 200;
@@ -176,6 +188,10 @@ export const useUi = create<UiState>()(
       kindFilter: null,
       expandedGroups: [],
       translateRequest: 0,
+      searchOpen: false,
+      searchQuery: "",
+      searchAll: false,
+      searchFocus: 0,
 
       theme: "system",
       density: "compact",
@@ -204,7 +220,17 @@ export const useUi = create<UiState>()(
       webLandscape: false,
       recentFolders: [],
 
-      setScope: (scope) => set({ scope, mainView: "list", openId: null, selection: [], expandedGroups: [] }),
+      // 换列表时收起搜索
+      setScope: (scope) =>
+        set({
+          scope,
+          mainView: "list",
+          openId: null,
+          selection: [],
+          expandedGroups: [],
+          searchOpen: false,
+          searchQuery: "",
+        }),
       setMainView: (mainView) => set({ mainView }),
       open: (id) => set({ openId: id }),
       setSelection: (ids) => set({ selection: ids }),
@@ -291,6 +317,10 @@ export const useUi = create<UiState>()(
         }),
       setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
+      openSearch: () => set((s) => ({ searchOpen: true, searchFocus: s.searchFocus + 1, mainView: "list" })),
+      closeSearch: () => set({ searchOpen: false, searchQuery: "", selection: [] }),
+      setSearchQuery: (searchQuery) => set({ searchQuery, selection: [], expandedGroups: [] }),
+      setSearchAll: (searchAll) => set({ searchAll, selection: [] }),
     }),
     {
       name: "postflow.ui",
@@ -319,6 +349,7 @@ export const useUi = create<UiState>()(
         webDevice: s.webDevice,
         webLandscape: s.webLandscape,
         recentFolders: s.recentFolders,
+        searchAll: s.searchAll,
       }),
     },
   ),
@@ -326,7 +357,7 @@ export const useUi = create<UiState>()(
 
 /** 列表范围的标识，用来分别记住每个列表的显示方式。 */
 /** 这些视图里的条目都不在收件箱，取消归档（移回收件箱）会让它们离开列表。 */
-export function isArchiveLike(view: View | undefined): boolean {
+export function isArchiveLike(view: View | "all" | undefined): boolean {
   return view === "archived" || view === "junk" || view === "trash";
 }
 
@@ -364,6 +395,15 @@ export function useListView(): ListView {
 /** 当前列表的折叠方式。 */
 export function useGroupMode(): GroupMode {
   return useUi((s) => s.groupModes[listKey(s.scope, s.kindFilter)] ?? "none");
+}
+
+/**
+ * 搜索时的查询条件：在当前列表里搜，或者在全部内容（收件箱和归档）里搜。
+ * 只看邮件、只看订阅的切换仍然有效。
+ */
+export function searchFilterOf(scope: ListScope, kind: ItemKind | null, query: string, all: boolean): ItemFilter {
+  const base: ItemFilter = all ? { view: "all", ...(kind ? { kind } : {}) } : filterOf(scope, kind);
+  return { ...base, query };
 }
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */

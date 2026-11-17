@@ -4,7 +4,7 @@
 import { useMemo } from "react";
 import { groupItems, rowsOf, type Stop, stopOf } from "./grouping";
 import { useItems } from "./queries";
-import { filterOf, useGroupMode, useUi } from "./store";
+import { filterOf, searchFilterOf, useGroupMode, useUi } from "./store";
 
 export function useListModel() {
   const scope = useUi((s) => s.scope);
@@ -12,12 +12,18 @@ export function useListModel() {
   const groupMode = useGroupMode();
   const expandedGroups = useUi((s) => s.expandedGroups);
 
-  const filter = useMemo(() => filterOf(scope, kindFilter), [scope, kindFilter]);
+  // 搜索栏开着、输入了词时，列表换成搜索结果
+  const search = useUi((s) => (s.searchOpen ? s.searchQuery.trim() : ""));
+  const searchAll = useUi((s) => s.searchAll);
+  const filter = useMemo(
+    () => (search ? searchFilterOf(scope, kindFilter, search, searchAll) : filterOf(scope, kindFilter)),
+    [scope, kindFilter, search, searchAll],
+  );
   const query = useItems(filter);
   const { items } = query;
   const groups = useMemo(() => groupItems(items, groupMode), [items, groupMode]);
   const rows = useMemo(() => rowsOf(groups, new Set(expandedGroups)), [groups, expandedGroups]);
   const stops = useMemo(() => rows.map(stopOf).filter((s): s is Stop => s !== null), [rows]);
 
-  return { filter, query, items, groups, rows, stops, groupMode };
+  return { filter, query, items, groups, rows, stops, groupMode, search };
 }

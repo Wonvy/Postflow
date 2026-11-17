@@ -13,12 +13,16 @@ that heading into the version number and date.
   refresh failed.
 - The update window shows what's new right inside the app, and checking for updates in Settings opens it straight
   away.
+- Full-text search: the magnifier in the list toolbar, `/` or `⌘F`. It searches titles, senders, authors and the full
+  text of articles and mail, Chinese included, in the current list or everywhere, and highlights what it found.
 
 ### 中文
 
 - 订阅源换了地址时，可以在它的「编辑」里改订阅地址。Postflow 先检查新地址能用才换，还是同一个订阅源，
   已读、星标和以前的文章都保留。订阅源旁边的黄色三角表示上次刷新失败。
 - 更新窗口里直接显示更新说明；在设置里点「检查更新」，发现新版本时直接打开这个窗口。
+- 全文搜索：列表工具栏的放大镜、`/` 或 `⌘F`。搜标题、发件人、作者和文章、邮件的正文，中文按词也能搜到；
+  可以只搜当前列表，也可以搜全部，结果里标出命中的词。
 
 ## 0.1.9 — 2026-11-17
 
