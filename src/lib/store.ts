@@ -65,6 +65,8 @@ export type Dialog =
   | { type: "mark-all-read"; scope?: ListScope }
   /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
   | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string }
+  /** 查看一封邮件或一篇文章的源代码。 */
+  | { type: "source"; itemId: string; title: string }
   | null;
 
 interface UiState {

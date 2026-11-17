@@ -385,9 +385,10 @@ function NativeFrame({
     let off: (() => void) | undefined;
     let cancelled = false;
     void import("@tauri-apps/api/event").then(({ listen }) =>
-      listen<{ url: string; loading: boolean }>("postflow:web", (e) =>
-        onLoadingRef.current(e.payload.loading, e.payload.url),
-      ).then((fn) => {
+      listen<{ url: string; loading: boolean }>("postflow:web", (e) => {
+        // 收起时换上的空白页不算
+        if (e.payload.url !== "about:blank") onLoadingRef.current(e.payload.loading, e.payload.url);
+      }).then((fn) => {
         if (cancelled) fn();
         else off = fn;
       }),
@@ -453,10 +454,10 @@ function NativeFrame({
     if (reloads > 0) void call("web_reload");
   }, [reloads]);
 
-  // 离开原网页模式、换到别的条目
+  // 离开原网页模式、换到没有链接的条目：换成空白页，视频不会在后台接着放
   useEffect(
     () => () => {
-      void call("web_hide");
+      void call("web_hide", { clear: true });
     },
     [],
   );

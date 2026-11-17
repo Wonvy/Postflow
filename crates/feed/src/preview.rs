@@ -131,11 +131,11 @@ fn summarize(
             .into_iter()
             .take(SAMPLE)
             .map(|e| PreviewEntry {
+                image: e.image.or_else(|| content_image(&e.content, e.url.as_deref())),
                 title: e.title,
                 url: e.url,
                 published_ms: e.published_ms,
                 summary: truncate(&e.summary, SAMPLE_CHARS),
-                image: e.image,
             })
             .collect(),
         kind,
@@ -211,6 +211,36 @@ impl Client {
     }
 }
 
+/// 正文里第一张像样的配图（没有媒体缩略图的源，比如 RSSHub 的 B 站视频，封面在正文里）。
+/// 列表里的封面图由存档按同样的思路另算（postflow-store 的 `first_image`）。
+fn content_image(html: &str, base: Option<&str>) -> Option<String> {
+    if !html.contains("<img") {
+        return None;
+    }
+    const SKIP: &[&str] = &["feedburner.com", "pixel", "emoji", "gravatar.com/avatar", "/1x1."];
+    let fragment = scraper::Html::parse_fragment(html);
+    let selector = scraper::Selector::parse("img[src]").ok()?;
+    let base = base.and_then(|b| url::Url::parse(b).ok());
+    fragment.select(&selector).find_map(|img| {
+        let el = img.value();
+        let tiny = ["width", "height"]
+            .iter()
+            .any(|a| el.attr(a).and_then(|v| v.trim().parse::<u32>().ok()).is_some_and(|n| n <= 2));
+        if tiny {
+            return None;
+        }
+        let src = el.attr("src")?.trim();
+        let url = match &base {
+            Some(base) => base.join(src).ok()?,
+            None => url::Url::parse(src).ok()?,
+        };
+        let url = url.to_string();
+        (url.starts_with("https://") || url.starts_with("http://"))
+            .then_some(url)
+            .filter(|u| !SKIP.iter().any(|s| u.contains(s)))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,5 +291,15 @@ mod tests {
             p.icon_url.as_deref(),
             Some("https://example.com/favicon.ico")
         );
+    }
+
+    #[test]
+    fn falls_back_to_the_first_image_in_the_content() {
+        let html = r#"<iframe src="https://player.bilibili.com/x"></iframe><br><img src="https://feeds.feedburner.com/~r/x.gif" width="1" height="1"><img src="//i2.hdslb.com/cover.jpg"><img src="https://b.test/2.jpg">"#;
+        assert_eq!(
+            content_image(html, Some("https://www.bilibili.com/video/BV1")).as_deref(),
+            Some("https://i2.hdslb.com/cover.jpg")
+        );
+        assert_eq!(content_image("<p>no images</p>", None), None);
     }
 }

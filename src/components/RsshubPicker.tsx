@@ -42,12 +42,23 @@ function Badges({ route }: { route: RsshubRoute }) {
   );
 }
 
-/** 搜索框和结果。选中一条交给 `onPick`。 */
-export function RsshubSearch({ onPick }: { onPick: (route: RsshubRoute) => void }) {
+/**
+ * 搜索框和结果。选中一条交给 `onPick`。搜索词由外面保管（`query`），
+ * 选了路由再返回时还在，结果马上出来，不用重新输入。
+ */
+export function RsshubSearch({
+  query,
+  onQuery,
+  onPick,
+}: {
+  query: string;
+  onQuery: (query: string) => void;
+  onPick: (route: RsshubRoute) => void;
+}) {
   const t = useT();
   const lang = useLang();
-  const [query, setQuery] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const setQuery = onQuery;
+  const [debounced, setDebounced] = useState(() => query.trim());
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query.trim()), 250);
     return () => clearTimeout(timer);

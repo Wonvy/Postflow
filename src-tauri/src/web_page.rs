@@ -180,17 +180,28 @@ pub async fn web_frame<R: Runtime>(
     Ok(())
 }
 
-/// 收起网页视图：关掉了原网页模式、换到没有链接的条目，或者上面要弹出菜单和对话框。
-/// 不销毁，下次显示更快，登录状态之类也还在。
+/// 收起网页视图：上面要弹出菜单和对话框（`clear` 为否，菜单关了原样显示回来），或者关掉了原网页模式、
+/// 换到没有链接的条目（`clear`：换成空白页，正在播的视频、音频随之停下，不会在后台接着放）。
+/// 网页视图本身不销毁，下次显示更快，登录状态之类也还在。
 #[tauri::command]
 pub async fn web_hide<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, WebPageState>,
+    clear: Option<bool>,
 ) -> Result<(), String> {
-    match current(&app, &state) {
-        Some(webview) => webview.hide().map_err(|e| e.to_string()),
-        None => Ok(()),
+    let Some(webview) = current(&app, &state) else {
+        return Ok(());
+    };
+    webview.hide().map_err(|e| e.to_string())?;
+    if clear == Some(true) {
+        let blank: Url = "about:blank".parse().map_err(|_| "invalid blank url")?;
+        webview.navigate(blank.clone()).map_err(|e| e.to_string())?;
+        // 下次要同一个地址时重新加载
+        if let Some(c) = state.current.lock().map_err(|e| e.to_string())?.as_mut() {
+            c.url = blank;
+        }
     }
+    Ok(())
 }
 
 #[tauri::command]

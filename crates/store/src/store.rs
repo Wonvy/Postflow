@@ -638,6 +638,15 @@ impl Store {
         Ok(items)
     }
 
+    /// 条目在订阅源里的 guid（Atom 的 id），「查看源代码」时用它在源里找回这一篇。
+    pub fn item_guid(&self, id: &str) -> Result<Option<String>> {
+        let guard = self.lock();
+        Ok(guard
+            .conn
+            .query_row("SELECT guid FROM items WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?)
+    }
+
     pub fn item(&self, id: &str) -> Result<Option<ItemDetail>> {
         let guard = self.lock();
         let sql = format!(

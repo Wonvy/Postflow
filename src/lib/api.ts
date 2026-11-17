@@ -542,6 +542,9 @@ export const api = {
   markAllRead: (filter: ItemFilter) =>
     rpc<{ count: number }>("items.mark_all_read", { filter }),
   fullText: (id: string) => rpc<{ full_text: string }>("items.full_text", { id }),
+  /** 查看源代码：邮件的原始邮件，或者文章在订阅源里的 XML（`whole`：这篇已经不在源里，给的是整个源）。 */
+  itemSource: (id: string) =>
+    rpc<{ kind: "mail" | "xml"; source: string; whole: boolean; url?: string }>("items.source", { id }),
   /** 原网页能不能嵌进 `origin` 这个页面（界面自己的地址）。 */
   rsshubSearch: (query: string, zh: boolean) =>
     rpc<{ routes: RsshubRoute[]; total: number }>("rsshub.search", { query, zh }),

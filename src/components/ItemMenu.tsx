@@ -7,6 +7,7 @@ import {
   AtSign,
   Copy,
   ExternalLink,
+  FileCode,
   FilePen,
   Folder,
   FolderInput,
@@ -198,6 +199,14 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
       {lead.kind === "mail" && lead.sender_address && (
         <MenuItem icon={<AtSign size={14} />} onSelect={() => void copyText(lead.sender_address ?? "")}>
           {t("menu.copySender")}
+        </MenuItem>
+      )}
+      {items.length === 1 && !lead.draft && (
+        <MenuItem
+          icon={<FileCode size={14} />}
+          onSelect={() => useUi.getState().setDialog({ type: "source", itemId: lead.id, title: lead.title })}
+        >
+          {lead.kind === "mail" ? t("source.mail") : t("source.xml")}
         </MenuItem>
       )}
       {oneSource && lead.source_title && (

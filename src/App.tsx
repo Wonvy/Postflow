@@ -9,6 +9,7 @@ import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
 import { ToolbarsDialog } from "./components/Toolbars";
+import { SourceDialog } from "./components/SourceDialog";
 import { watchFullscreen } from "./lib/fullscreen";
 import { usePluginLoader } from "./lib/plugins";
 import { WindowControls } from "./components/WindowControls";
@@ -160,6 +161,7 @@ function Shell() {
       <SettingsDialog />
       <ToolbarsDialog />
       <ComposeDialog />
+      <SourceDialog />
       <WelcomeGuide />
       <Toaster />
     </div>

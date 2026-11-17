@@ -15,6 +15,17 @@ that heading into the version number and date.
   doesn't load; commands in it have a copy button. When a route fails with HTTP 503 even though the connection test
   passes, Postflow now says the route needs setup on the RSSHub server (YouTube routes need YOUTUBE_KEY) and, for
   YouTube, points to Follow directly, which needs no RSSHub.
+- Videos play in the reader: players that feeds embed (Bilibili, as RSSHub's Bilibili feeds do, YouTube, Vimeo,
+  Tencent Video, Youku, Xigua, and Spotify, SoundCloud, Apple Music and NetEase Cloud Music for audio) are kept,
+  full width and sandboxed. Other embedded frames are still removed. Bilibili's player no longer starts on its own.
+- Turning off web-page view (or opening an item without a link) now empties the page, so a video in it stops
+  instead of playing on in the background.
+- View source: right-click an item for "View XML source" (that item as it appears in its feed, fetched again) or,
+  for mail, "View message source" (the raw message), with a button to copy it.
+- Add feed: the preview shows thumbnails for feeds that only put pictures in the text (such as RSSHub's Bilibili
+  feeds); the name fills in with the feed's title until you change it; you can pick the feed's icon (the feed's
+  own, the site's, or any image address); the name, folder and Add button stay at the bottom while long forms
+  scroll. Going back from an RSSHub route keeps your search and its results.
 
 ### 中文
 - 新手引导：第一次安装后，一步步带你选语言和主题、添加邮箱、添加订阅（或导入 OPML）、认识界面和常用快捷键，
@@ -23,6 +34,14 @@ that heading into the version number and date.
 - RSSHub：「怎么部署自己的 RSSHub」改为在 Postflow 里直接打开，打不开 GitHub 的网络也能看，里面的命令可以一键拷贝。
   测试连接通过、但某个路由返回 HTTP 503 时，会说明这个路由要在 RSSHub 服务器上另外配置（YouTube 路由要设置 YOUTUBE_KEY），
   YouTube 还会提示用不需要 RSSHub 的「直接订阅」。
+- 阅读区能直接播放视频：订阅源里嵌的播放器（RSSHub 的 B 站订阅就带着，还有 YouTube、Vimeo、腾讯视频、优酷、西瓜视频，
+  以及 Spotify、SoundCloud、Apple Music、网易云音乐的音频播放器）会保留下来，占满正文宽度，放在沙箱里。别的内嵌框架仍然去掉。
+  B 站播放器不再一打开就自动播放。
+- 关掉原网页模式（或者打开没有链接的条目）时，网页会清空，里面的视频随之停下，不会在后台接着放。
+- 查看源代码：在条目上右键选「查看 XML 源代码」（这一篇在订阅源里的原文，重新读取），邮件是「查看邮件源代码」（原始邮件），可以一键拷贝。
+- 添加订阅：只在正文里放图的订阅源（比如 RSSHub 的 B 站订阅）预览里也有缩略图；名称自动填上订阅源的名字，改过就不再覆盖；
+  可以选图标（订阅源的、网站的，或者填一个图片地址）；名称、文件夹和「添加」按钮固定在底部，表单再长也看得到。
+  从 RSSHub 的路由返回时，搜索词和结果都还在。
 
 ## 0.1.15 — 2026-11-17
 

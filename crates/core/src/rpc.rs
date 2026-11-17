@@ -585,6 +585,41 @@ impl Core {
                 reply(json!({ "full_text": clean }))
             }
 
+            // 查看源代码：邮件是原始邮件，文章是它在订阅源里的那一段 XML（重新抓一次源找出来）
+            "items.source" => {
+                let p: IdParam = parse(params)?;
+                let id = p.id.clone();
+                let detail = session
+                    .db(move |s| s.item(&id))
+                    .await?
+                    .ok_or_else(|| RpcError::new("not_found", "no such item"))?;
+                if detail.item.kind == "mail" {
+                    let id = p.id.clone();
+                    let raw = session
+                        .db(move |s| s.mail_body(&id))
+                        .await?
+                        .ok_or_else(|| RpcError::new("not_found", "the message isn't downloaded yet"))?;
+                    return reply(json!({
+                        "kind": "mail",
+                        "source": String::from_utf8_lossy(&raw),
+                        "whole": false,
+                    }));
+                }
+                let source_id = detail.item.source_id.clone();
+                let id = p.id.clone();
+                let (feed, guid) = session
+                    .db(move |s| Ok((s.feed(&source_id)?, s.item_guid(&id)?)))
+                    .await?;
+                let feed = feed.ok_or_else(|| RpcError::new("not_found", "the feed is gone"))?;
+                let xml = self.client.fetch_text(&feed.url).await?;
+                let found =
+                    postflow_feed::item_xml(&xml, guid.as_deref().unwrap_or(""), detail.item.url.as_deref());
+                // 这一篇已经不在源里了（源只保留最近几篇），给整个源
+                let whole = found.is_none();
+                let source = found.unwrap_or_else(|| postflow_feed::whole_feed(xml));
+                reply(json!({ "kind": "xml", "source": source, "whole": whole, "url": feed.url }))
+            }
+
             // 订阅统计。阅读记录只在本机
             "stats.reading" => {
                 let p: ReadingParams = parse(params)?;

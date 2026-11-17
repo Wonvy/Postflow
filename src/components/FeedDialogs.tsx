@@ -1,5 +1,6 @@
+import * as Popover from "@radix-ui/react-popover";
 import { useQueryClient } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import { siYoutube } from "simple-icons";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type Candidate, type Feed, type FeedPreview, type Preview } from "../lib/api";
@@ -201,6 +202,10 @@ export function AddFeedDialog() {
   feedUrlRef.current = url;
   const [folder, setFolder] = useState("");
   const [name, setName] = useState("");
+  /** 用户自己改过名称：之后不再用订阅源的名字覆盖。 */
+  const nameEdited = useRef(false);
+  /** 用户选的图标。`undefined` 是用订阅源自己的。 */
+  const [icon, setIcon] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<"idle" | "searching" | "adding">("idle");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -212,6 +217,8 @@ export function AddFeedDialog() {
   modeRef.current = mode;
   /** RSSHub 模式下选中的路由，以及从网址里取到的参数值。 */
   const [picked, setPicked] = useState<{ route: RsshubRoute; found: Record<string, string> } | null>(null);
+  /** RSSHub 搜索框里的词。选了路由再返回时保留。 */
+  const [rsshubQuery, setRsshubQuery] = useState("");
   /** 「常用网站」里选中的网站。 */
   const [quick, setQuick] = useState<QuickSourceId | null>(null);
   /** 只认最后一次预览的结果，前面没回来的作废。 */
@@ -223,6 +230,8 @@ export function AddFeedDialog() {
       setUrl("");
       setFolder(startFolder);
       setName("");
+      nameEdited.current = false;
+      setIcon(undefined);
       setPhase("idle");
       setCandidates([]);
       setPreview(null);
@@ -230,11 +239,20 @@ export function AddFeedDialog() {
       setError(null);
       setMode("url");
       setPicked(null);
+      setRsshubQuery("");
       setQuick(null);
       request.current += 1;
     }
     return () => clearTimeout(timer.current);
   }, [open, startFolder]);
+
+  // 名称自动填上订阅源的名字（用户改过就不动）；换了源，自己选的图标也作废
+  const previewUrl = preview?.feed.url ?? null;
+  const previewTitle = preview?.feed.title ?? "";
+  useEffect(() => {
+    if (!nameEdited.current) setName(previewTitle);
+    setIcon(undefined);
+  }, [previewUrl, previewTitle]);
 
   /** 出错时的说明。订阅地址在 RSSHub 实例上、对方返回 4xx/5xx 时，说清楚是 RSSHub 实例的问题。 */
   const explain = (err: unknown, target: string): string => {
@@ -319,7 +337,7 @@ export function AddFeedDialog() {
     e.preventDefault();
     if (!url.trim() || phase !== "idle") return;
     // 已经预览过：就订阅预览的那个
-    if (preview) return void add(preview.feed.url, preview.feed.icon_url);
+    if (preview) return void add(preview.feed.url, icon ?? preview.feed.icon_url);
     setPhase("searching");
     setError(null);
     setCandidates([]);
@@ -382,8 +400,9 @@ export function AddFeedDialog() {
   };
 
   return (
-    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={560}>
-      <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4 p-4">
+    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={600}>
+      <form onSubmit={(e) => void submit(e)} className="flex flex-col">
+        <div className="flex flex-col gap-4 p-4">
         <Segmented<"url" | "rsshub">
           value={mode}
           onChange={switchMode}
@@ -412,7 +431,7 @@ export function AddFeedDialog() {
               }}
             />
           ) : (
-            <RsshubSearch onPick={(r) => pickRoute(r)} />
+            <RsshubSearch query={rsshubQuery} onQuery={setRsshubQuery} onPick={(r) => pickRoute(r)} />
           ))}
         {mode === "url" && quick && (
           <QuickForm
@@ -496,40 +515,57 @@ export function AddFeedDialog() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t("add.name")}>
-            <TextInput
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={preview?.feed.title || t("add.namePlaceholder")}
-              disabled={busy}
-            />
-          </Field>
-          <Field label={t("add.folder")}>
-            <FolderPicker value={folder} onChange={setFolder} folders={folders} placeholder={t("add.folderPlaceholder")} />
-          </Field>
-        </div>
-
         {error && (
-          <p role="alert" className="flex items-center gap-2 text-[13px] text-danger">
-            <TriangleAlert size={14} strokeWidth={2} className="shrink-0" />
-            {error}
+          <p role="alert" className="flex items-start gap-2 text-[13px] text-danger">
+            <TriangleAlert size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
+            <span className="select-text">{error}</span>
           </p>
         )}
+        </div>
 
-        <div className="flex items-center justify-end gap-2">
-          {busy && (
-            <span className="mr-auto flex items-center gap-2 text-[12px] text-fg-3">
-              <Spinner size={12} />
-              {phase === "searching" ? t("add.searching") : t("add.adding")}
-            </span>
-          )}
-          <Button variant="ghost" onClick={() => setDialog(null)}>
-            {t("action.cancel")}
-          </Button>
-          <Button variant="primary" type="submit" disabled={!url.trim() || busy || previewing}>
-            {t("action.add")}
-          </Button>
+        {/* 订阅设置和按钮固定在底部，表单再长也看得到 */}
+        <div className="sticky bottom-0 flex flex-col gap-3 border-t border-line bg-surface px-4 pb-4 pt-3">
+          <div className="flex items-end gap-3">
+            <IconPicker
+              value={icon ?? preview?.feed.icon_url ?? null}
+              choices={iconChoices(preview?.feed ?? null)}
+              chosen={icon !== undefined}
+              disabled={busy}
+              onChange={setIcon}
+            />
+            <div className="min-w-0 flex-1">
+              <Field label={t("add.name")}>
+                <TextInput
+                  value={name}
+                  onChange={(e) => {
+                    nameEdited.current = e.target.value.trim() !== "";
+                    setName(e.target.value);
+                  }}
+                  placeholder={preview?.feed.title || t("add.namePlaceholder")}
+                  disabled={busy}
+                />
+              </Field>
+            </div>
+            <div className="min-w-0 flex-1">
+              <Field label={t("add.folder")}>
+                <FolderPicker value={folder} onChange={setFolder} folders={folders} placeholder={t("add.folderPlaceholder")} />
+              </Field>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            {busy && (
+              <span className="mr-auto flex items-center gap-2 text-[12px] text-fg-3">
+                <Spinner size={12} />
+                {phase === "searching" ? t("add.searching") : t("add.adding")}
+              </span>
+            )}
+            <Button variant="ghost" onClick={() => setDialog(null)}>
+              {t("action.cancel")}
+            </Button>
+            <Button variant="primary" type="submit" disabled={!url.trim() || busy || previewing}>
+              {t("action.add")}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>
@@ -722,5 +758,118 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** 可以选的图标：订阅源自己的、网站的（不是订阅源所在服务器的，比如 RSSHub）。 */
+function iconChoices(feed: FeedPreview | null): string[] {
+  if (!feed) return [];
+  const out = [feed.icon_url];
+  try {
+    if (feed.site_url) out.push(`${new URL(feed.site_url).origin}/favicon.ico`);
+  } catch {
+    // 不是地址
+  }
+  return [...new Set(out.filter((u): u is string => Boolean(u)))];
+}
+
+/**
+ * 订阅源的图标：点开可以在订阅源和网站的图标之间选，或者填一个图片地址。
+ * `chosen` 时显示「恢复默认」。
+ */
+function IconPicker({
+  value,
+  choices,
+  chosen,
+  disabled,
+  onChange,
+}: {
+  value: string | null;
+  choices: string[];
+  chosen: boolean;
+  disabled: boolean;
+  onChange: (icon: string | undefined) => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState("");
+  const pick = (icon: string | undefined) => {
+    onChange(icon);
+    setOpen(false);
+  };
+  const customOk = /^https?:\/\/\S+$/i.test(custom.trim());
+  return (
+    <Field label={t("add.icon")}>
+      <Popover.Root
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) setCustom("");
+        }}
+      >
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={t("add.iconChange")}
+            title={t("add.iconChange")}
+            className="flex size-8 items-center justify-center rounded-md border border-line-strong bg-bg hover:bg-hover disabled:opacity-50"
+          >
+            <Favicon src={value} size={20} />
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            side="top"
+            sideOffset={6}
+            collisionPadding={8}
+            className="anim-pop z-50 flex w-[280px] flex-col gap-2.5 rounded-lg bg-surface p-3 shadow-pop outline-none"
+          >
+            {choices.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {choices.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    title={c}
+                    onClick={() => pick(c)}
+                    className={cx(
+                      "relative flex size-10 items-center justify-center rounded-md border hover:bg-hover",
+                      c === value ? "border-accent" : "border-line",
+                    )}
+                  >
+                    <Favicon src={c} size={24} />
+                    {c === value && <Check size={11} className="absolute right-0.5 top-0.5 text-accent" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-1.5">
+              <TextInput
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (customOk) pick(custom.trim());
+                  }
+                }}
+                placeholder={t("add.iconUrl")}
+                spellCheck={false}
+              />
+              <Button disabled={!customOk} onClick={() => pick(custom.trim())} className="h-8 shrink-0">
+                {t("add.iconUse")}
+              </Button>
+            </div>
+            {chosen && (
+              <button type="button" onClick={() => pick(undefined)} className="self-start text-[12px] text-fg-3 hover:text-fg">
+                {t("add.iconReset")}
+              </button>
+            )}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </Field>
   );
 }

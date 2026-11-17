@@ -1,10 +1,81 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use ammonia::{Builder, UrlRelative};
 
+/// 可以嵌在文章里的播放器：主机名，以及地址要以什么路径开头。订阅源里常带着这些网站的播放器
+/// （比如 RSSHub 的 B 站视频），别的内嵌框架一律去掉。
+const PLAYERS: &[(&str, &str)] = &[
+    ("player.bilibili.com", "/"),
+    ("www.bilibili.com", "/blackboard/"),
+    ("www.youtube.com", "/embed/"),
+    ("www.youtube-nocookie.com", "/embed/"),
+    ("player.vimeo.com", "/video/"),
+    ("v.qq.com", "/txp/iframe/"),
+    ("player.youku.com", "/embed/"),
+    ("www.ixigua.com", "/iframe/"),
+    ("open.spotify.com", "/embed/"),
+    ("w.soundcloud.com", "/player/"),
+    ("embed.music.apple.com", "/"),
+    ("embed.podcasts.apple.com", "/"),
+    ("music.163.com", "/outchain/player"),
+];
+
+/// `src` 是不是允许的播放器。返回补全了协议的地址（`//player…` 这种写法补成 https）。
+fn player_src(src: &str) -> Option<String> {
+    let src = src.trim();
+    let full = if src.starts_with("//") {
+        format!("https:{src}")
+    } else {
+        src.to_string()
+    };
+    let url = ammonia::Url::parse(&full).ok()?;
+    if !matches!(url.scheme(), "https" | "http") {
+        return None;
+    }
+    let host = url.host_str()?.to_string();
+    PLAYERS
+        .iter()
+        .any(|(h, path)| *h == host && url.path().starts_with(path))
+        .then(|| {
+            // 播放器一律用 https，免得在应用里被当成不安全内容拦下
+            let mut url = url;
+            let _ = url.set_scheme("https");
+            // B 站的播放器默认一打开就播放，打开文章时不该自己出声
+            if host == "player.bilibili.com" && !url.query_pairs().any(|(k, _)| k == "autoplay") {
+                url.query_pairs_mut().append_pair("autoplay", "0");
+            }
+            url.to_string()
+        })
+}
+
+/// 去掉没有地址的内嵌框架（不是允许的播放器，地址已经被去掉了）。
+fn drop_empty_iframes(html: String) -> String {
+    if !html.contains("<iframe") {
+        return html;
+    }
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html.as_str();
+    while let Some(start) = rest.find("<iframe") {
+        out.push_str(&rest[..start]);
+        let tail = &rest[start..];
+        let open_end = tail.find('>').map_or(tail.len(), |i| i + 1);
+        let close = tail.find("</iframe>").map(|i| i + "</iframe>".len());
+        let end = close.unwrap_or(open_end).max(open_end);
+        let element = &tail[..end];
+        if tail[..open_end].contains(" src=") {
+            out.push_str(element);
+        }
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// 把不可信的 HTML 净化成可以直接放进界面的 HTML。
 ///
-/// 脚本、样式、事件属性、表单、内嵌框架一律去掉，只留排版用的标签。
+/// 脚本、样式、事件属性、表单一律去掉，只留排版用的标签。内嵌框架只留已知网站的视频、音频播放器
+/// （`PLAYERS`），放在沙箱里，不能弹窗、不能改动阅读区。
 /// 存档里保存的是原文，每次展示前才净化，所以净化规则以后收紧或放宽都会对旧文章生效。
 pub fn sanitize_html(html: &str, base_url: Option<&str>) -> String {
     let mut builder = Builder::default();
@@ -16,7 +87,23 @@ pub fn sanitize_html(html: &str, base_url: Option<&str>) -> String {
             "source",
             "video",
             "audio",
+            "iframe",
         ])
+        .add_tag_attributes("iframe", ["src", "width", "height"])
+        // 播放器要跑自己的脚本；同源指的是播放器自己的网站，碰不到阅读区
+        .set_tag_attribute_value(
+            "iframe",
+            "sandbox",
+            "allow-scripts allow-same-origin allow-presentation allow-popups",
+        )
+        .set_tag_attribute_value("iframe", "allow", "fullscreen; picture-in-picture; encrypted-media")
+        .set_tag_attribute_value("iframe", "allowfullscreen", "")
+        .set_tag_attribute_value("iframe", "loading", "lazy")
+        .set_tag_attribute_value("iframe", "referrerpolicy", "strict-origin-when-cross-origin")
+        .attribute_filter(|element, attribute, value| match (element, attribute) {
+            ("iframe", "src") => player_src(value).map(Cow::Owned),
+            _ => Some(Cow::Borrowed(value)),
+        })
         .add_tag_attributes("video", ["src", "poster", "controls", "width", "height"])
         .add_tag_attributes("audio", ["src", "controls"])
         .add_tag_attributes("source", ["src", "type"])
@@ -31,7 +118,9 @@ pub fn sanitize_html(html: &str, base_url: Option<&str>) -> String {
         Some(base) => builder.url_relative(UrlRelative::RewriteWithBase(base)),
         None => builder.url_relative(UrlRelative::Deny),
     };
-    builder.clean(html).to_string()
+    // 不带协议的地址（`//player.bilibili.com/…`）没有基准地址时会被当成相对地址丢掉，先补上 https
+    let html = html.replace("src=\"//", "src=\"https://").replace("src='//", "src='https://");
+    drop_empty_iframes(builder.clean(&html).to_string())
 }
 
 /// 去掉所有标签，得到折叠了空白的纯文本。
@@ -162,6 +251,21 @@ mod tests {
             assert!(!clean.contains(needle), "{needle} survived: {clean}");
         }
         assert!(clean.contains("Hi"));
+    }
+
+    #[test]
+    fn keeps_known_video_players_only() {
+        let html = r#"<p>before</p><iframe width="640" height="360" src="//player.bilibili.com/player.html?aid=1&amp;bvid=BV1" frameborder="0" allowfullscreen="" onload="evil()"></iframe><iframe src="https://evil.test/embed/x"></iframe><iframe src="https://www.youtube.com/watch?v=x"></iframe><p>after</p>"#;
+        let clean = sanitize_html(html, None);
+        assert!(
+            clean.contains(r#"src="https://player.bilibili.com/player.html?aid=1&amp;bvid=BV1&amp;autoplay=0""#),
+            "{clean}"
+        );
+        assert!(clean.contains("sandbox="), "{clean}");
+        assert!(!clean.contains("evil"), "{clean}");
+        assert!(!clean.contains("watch"), "{clean}");
+        assert_eq!(clean.matches("<iframe").count(), 1, "{clean}");
+        assert!(clean.contains("before") && clean.contains("after"));
     }
 
     #[test]

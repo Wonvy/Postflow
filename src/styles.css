@@ -219,6 +219,16 @@
   height: auto;
   border-radius: 6px;
 }
+/* 文章里内嵌的视频播放器（B 站、YouTube 等）：占满正文宽度，16:9 */
+.article iframe {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 6px;
+  background: #000;
+}
 .article figure {
   margin-inline: 0;
 }
@@ -400,4 +410,15 @@
 }
 .slider:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent);
+}
+
+/* 音频播放器不是 16:9 */
+.article iframe[src*="spotify.com"],
+.article iframe[src*="soundcloud.com"],
+.article iframe[src*="music.apple.com"],
+.article iframe[src*="podcasts.apple.com"],
+.article iframe[src*="music.163.com"] {
+  aspect-ratio: auto;
+  height: 160px;
+  background: transparent;
 }
