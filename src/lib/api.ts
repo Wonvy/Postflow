@@ -1,5 +1,6 @@
 import type { ReplyContext } from "./compose";
 import { rpc } from "./transport";
+import type { RsshubRoute } from "./rsshub";
 
 /** junk 和 trash 是邮箱里的垃圾邮件和已删除邮件。 */
 export type View =
@@ -541,6 +542,10 @@ export const api = {
     rpc<{ count: number }>("items.mark_all_read", { filter }),
   fullText: (id: string) => rpc<{ full_text: string }>("items.full_text", { id }),
   /** 原网页能不能嵌进 `origin` 这个页面（界面自己的地址）。 */
+  rsshubSearch: (query: string, zh: boolean) =>
+    rpc<{ routes: RsshubRoute[]; total: number }>("rsshub.search", { query, zh }),
+  rsshubRadar: (url: string, zh: boolean) =>
+    rpc<{ matches: { route: RsshubRoute; values: Record<string, string> }[] }>("rsshub.radar", { url, zh }),
   storageUsage: () => rpc<StorageUsage>("storage.usage"),
   /** 清理本机缓存：抓取的全文、30 天前的邮件原文、发件人图标。清完会顺手压缩索引。 */
   clearCache: (what: "fulltext" | "mail" | "icons") => rpc<{ count: number }>("storage.clear", { what }),
@@ -675,7 +680,7 @@ export const api = {
 };
 
 export interface StoragePart {
-  key: "articles" | "oplog" | "index" | "translation" | "logs" | "icons" | "other";
+  key: "articles" | "oplog" | "index" | "translation" | "logs" | "icons" | "rsshub" | "other";
   bytes: number;
 }
 

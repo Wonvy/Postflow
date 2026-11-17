@@ -286,6 +286,8 @@ impl Core {
                 let p: LoggingParams = parse(params)?;
                 return reply(json!({ "ok": crate::logging::set_verbose(p.verbose) }));
             }
+            // RSSHub 路由：搜索、按网址猜、重新下载目录
+            m if m.starts_with("rsshub.") => return self.rsshub_rpc(m, params).await,
             // 发件人头像：发件人所在网站的图标
             "mail.senderIcon" => {
                 let p: DomainParam = parse(params)?;

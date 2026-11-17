@@ -11,6 +11,7 @@ mod mail_rpc;
 mod oauth;
 mod refresh;
 mod rpc;
+mod rsshub;
 mod secrets;
 mod sender_icon;
 mod storage;
@@ -219,6 +220,8 @@ pub struct Core {
     pub(crate) uploads: Mutex<compose::Uploads>,
     /// 发件人头像用的网站图标，见 sender_icon.rs。
     pub(crate) sender_icons: sender_icon::SenderIcons,
+    /// RSSHub 路由目录，见 rsshub.rs。
+    pub(crate) rsshub: rsshub::Rsshub,
 }
 
 impl Core {
@@ -238,6 +241,7 @@ impl Core {
         let translator = Arc::new(Translator::new(local_dir.join("translation"))?);
         let core = Arc::new(Core {
             sender_icons: sender_icon::SenderIcons::new(&local_dir),
+            rsshub: rsshub::Rsshub::new(&local_dir),
             ai: Default::default(),
             translator,
             local_dir,

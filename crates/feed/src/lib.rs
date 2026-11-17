@@ -9,6 +9,7 @@ mod fulltext;
 pub mod opml;
 mod parse;
 mod preview;
+pub mod rsshub;
 mod sanitize;
 mod site_icon;
 mod youtube;

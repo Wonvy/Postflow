@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { siYoutube } from "simple-icons";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type Candidate, type Feed, type FeedPreview, type Preview } from "../lib/api";
 import { errorText, type Translate, useLang, useT } from "../lib/i18n";
 import { useFolders } from "../lib/folders";
@@ -9,8 +9,10 @@ import { openExternal } from "../lib/platform";
 import { keys, useNav, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { type Lang, shortTime } from "../lib/time";
+import type { RsshubRoute } from "../lib/rsshub";
 import { FolderPicker } from "./FolderPicker";
-import { Button, cx, Favicon, Field, Modal, Select, Spinner, TextInput } from "./ui";
+import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
+import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, TextInput } from "./ui";
 
 /** 可选的刷新间隔，单位分钟。 */
 export const INTERVALS = [15, 30, 60, 120, 360, 720, 1440];
@@ -199,6 +201,10 @@ export function AddFeedDialog() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 「网址」直接填地址；「RSSHub」搜网站、填参数，拼出地址。 */
+  const [mode, setMode] = useState<"url" | "rsshub">("url");
+  /** RSSHub 模式下选中的路由，以及从网址里取到的参数值。 */
+  const [picked, setPicked] = useState<{ route: RsshubRoute; found: Record<string, string> } | null>(null);
   /** 只认最后一次预览的结果，前面没回来的作废。 */
   const request = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -213,6 +219,8 @@ export function AddFeedDialog() {
       setPreview(null);
       setPreviewing(false);
       setError(null);
+      setMode("url");
+      setPicked(null);
       request.current += 1;
     }
     return () => clearTimeout(timer.current);
@@ -291,9 +299,74 @@ export function AddFeedDialog() {
 
   const busy = phase !== "idle";
 
+  // RSSHub 表单拼出的地址：和手动输入的一样走预览
+  const onRsshubUrl = useCallback(
+    (next: string | null) => {
+      if (next === null) {
+        clearTimeout(timer.current);
+        request.current += 1;
+        setUrl("");
+        setPreview(null);
+        setPreviewing(false);
+        return;
+      }
+      onUrlChangeRef.current(next);
+    },
+    [],
+  );
+  const onUrlChangeRef = useRef(onUrlChange);
+  onUrlChangeRef.current = onUrlChange;
+
+  const pickRoute = (route: RsshubRoute, found: Record<string, string> = {}) => {
+    setMode("rsshub");
+    setPicked({ route, found });
+    setUrl("");
+    setPreview(null);
+    setCandidates([]);
+    setError(null);
+  };
+
+  const switchMode = (next: "url" | "rsshub") => {
+    if (next === mode) return;
+    setMode(next);
+    setPicked(null);
+    setUrl("");
+    setPreview(null);
+    setPreviewing(false);
+    setCandidates([]);
+    setError(null);
+    clearTimeout(timer.current);
+    request.current += 1;
+  };
+
   return (
-    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={520}>
+    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={560}>
       <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4 p-4">
+        <Segmented<"url" | "rsshub">
+          value={mode}
+          onChange={switchMode}
+          options={[
+            { value: "url", label: t("add.modeUrl") },
+            { value: "rsshub", label: "RSSHub" },
+          ]}
+        />
+        {mode === "rsshub" &&
+          (picked ? (
+            <RsshubForm
+              key={`${picked.route.namespace}${picked.route.path}`}
+              route={picked.route}
+              found={picked.found}
+              onBack={() => {
+                setPicked(null);
+                onRsshubUrl(null);
+                setError(null);
+              }}
+              onUrl={onRsshubUrl}
+            />
+          ) : (
+            <RsshubSearch onPick={(r) => pickRoute(r)} />
+          ))}
+        {mode === "url" && (
         <Field label={t("add.url")}>
           <div className="relative">
             <TextInput
@@ -321,6 +394,10 @@ export function AddFeedDialog() {
             )}
           </div>
         </Field>
+        )}
+        {mode === "url" && looksLikeUrl(url) && (
+          <RadarSuggestions url={url.trim()} onPick={pickRoute} />
+        )}
 
         {preview && (
           <PreviewCard preview={preview} busy={busy || previewing} onPick={(u) => void load(u, true)} />

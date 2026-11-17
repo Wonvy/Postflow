@@ -83,6 +83,7 @@ impl Core {
                             ("translation", &["translation"]),
                             ("logs", &["logs"]),
                             ("icons", &["sender-icons.json"]),
+                            ("rsshub", &["rsshub-routes.json"]),
                         ],
                     );
                     (data, local)

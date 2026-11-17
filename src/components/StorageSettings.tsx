@@ -24,6 +24,7 @@ const PART_LABEL: Record<StoragePart["key"], MessageKey> = {
   translation: "storage.translation",
   logs: "storage.logs",
   icons: "storage.icons",
+  rsshub: "storage.rsshub",
   other: "storage.other",
 };
 
