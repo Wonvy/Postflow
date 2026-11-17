@@ -69,13 +69,28 @@ click **More info → Run anyway**.
   layout and links; press it again for the original. The language is detected for you, and models for more than 50
   languages download once (about 40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read
   is sent anywhere.
+- The sidebar's Mail and Feeds sections fold away, or switch to tabs (All / Mail / Feeds, keys `1` `2` `3`): each tab
+  is its own workspace with its own views, last list and display mode.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - The same interface also runs in your browser, served by the app on your own machine.
 - Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
   packages are signed, and the app refuses any package whose signature doesn't match.
 
+**AI (optional, bring your own key)**
+
+- Works with any OpenAI-compatible service: DeepSeek, Qwen, Gemini, OpenAI, Kimi, Zhipu GLM, SiliconFlow, OpenRouter,
+  or Ollama and LM Studio running on your own computer. Requests go straight from your computer to the service; keys
+  stay in the system keychain. A per-service proxy is supported, otherwise the system proxy is used.
+- Press `A` for an AI panel beside the reader: a summary with key points and keywords, and a chat about the message
+  or article (key points, what you need to do, draft a reply).
+- Translate with AI instead of the offline model, keeping layout and links.
+- One-line AI summaries in the summary and card views, and automatic sorting into categories you define, with a
+  Categories section in the sidebar. Your own corrections always win.
+- Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
+  stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
+
 **Not yet available:** writing and replying, OAuth sign-in for Outlook and Microsoft 365, folders other than the
-inbox, search, a command palette, snoozing, labels and rules, a tray icon, mobile apps, and installers signed by
+inbox, search, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
 Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
@@ -92,6 +107,8 @@ download page instead.
 | `→` / `←` | Expand / collapse a group |
 | `Shift` + `A` | Mark everything in the list as read |
 | `T` | Translate / show the original |
+| `A` | AI panel: summary and questions |
+| `1` `2` `3` | Switch sidebar tab (in the tabs layout) |
 | `R` | Refresh all feeds and mail |
 | `Esc` | Clear the selection, or close the reader |
 
@@ -234,6 +251,7 @@ the build step, following [Tauri's signing guide](https://v2.tauri.app/distribut
 crates/store/     data layer: logs in the data folder, merging across devices, local SQLite index
 crates/feed/      feeds: fetching, parsing, discovery, OPML, sanitizing, full-text extraction
 crates/mail/      mail: provider detection, IMAP, parsing and safe rendering
+crates/ai/        AI services: OpenAI-compatible client, provider presets, prompts and answer parsing
 crates/translate/ offline translation: model download and checks, language detection, keeping links and formatting
 crates/core/      sessions, scheduling, folder watching; one rpc entry point and one event stream
 crates/web/       serves the core over HTTP for the browser interface
