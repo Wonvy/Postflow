@@ -37,6 +37,12 @@ test("values are escaped, except slashes in multi-segment parameters", () => {
 test("instance addresses are tidied up", () => {
   assert.equal(normalizeInstance(""), "https://rsshub.app");
   assert.equal(normalizeInstance("rsshub.example.com/"), "https://rsshub.example.com");
+  assert.equal(normalizeInstance("127.0.0.1:1200/"), "http://127.0.0.1:1200");
+  assert.equal(normalizeInstance("192.168.1.20:1200"), "http://192.168.1.20:1200");
+  assert.equal(normalizeInstance("localhost:1200"), "http://localhost:1200");
+  assert.equal(normalizeInstance("nas.local:1200"), "http://nas.local:1200");
+  assert.equal(normalizeInstance("rsshub.example.com:8443"), "http://rsshub.example.com:8443");
+  assert.equal(normalizeInstance("https://192.168.1.20:1200"), "https://192.168.1.20:1200");
   assert.equal(normalizeInstance("http://localhost:1200"), "http://localhost:1200");
   assert.equal(normalizeInstance("https://example.com/rsshub/"), "https://example.com/rsshub");
   assert.equal(normalizeInstance("not a host"), null);
@@ -68,4 +74,11 @@ test("YouTube routes point at the channel page Postflow can follow by itself", (
 test("the HTTP status comes out of the core's error message", () => {
   assert.equal(httpStatusOf("server returned HTTP 403"), 403);
   assert.equal(httpStatusOf("request failed: timed out"), null);
+});
+
+test("an access key is added to the feed address", () => {
+  assert.equal(
+    buildFeedUrl("https://r.example", { namespace: "hn", path: "/best" }, {}, " s3cret&x "),
+    "https://r.example/hn/best?key=s3cret%26x",
+  );
 });

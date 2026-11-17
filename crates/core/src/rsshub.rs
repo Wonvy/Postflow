@@ -41,6 +41,13 @@ struct RadarParams {
 }
 
 #[derive(Deserialize)]
+struct CheckParams {
+    instance: String,
+    #[serde(default)]
+    key: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct RefreshParams {
     #[serde(default)]
     zh: bool,
@@ -122,6 +129,15 @@ impl Core {
                 let p: RadarParams = parse(params)?;
                 let catalog = self.rsshub_catalog(p.zh, false).await?;
                 reply(json!({ "matches": catalog.radar(&p.url, 8) }))
+            }
+            // 测试一个实例能不能用（设置里的「测试连接」）
+            "rsshub.check" => {
+                let p: CheckParams = parse(params)?;
+                reply(
+                    self.client
+                        .check_rsshub(&p.instance, p.key.as_deref())
+                        .await,
+                )
             }
             "rsshub.refresh" => {
                 let p: RefreshParams = parse(params)?;

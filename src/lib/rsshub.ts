@@ -4,6 +4,20 @@
 /** 用户没设置时用的实例。公共实例对阅读器有访问限制，设置里建议换成自建的。 */
 export const DEFAULT_INSTANCE = "https://rsshub.app";
 export const SETTING_KEY = "rsshub_instance";
+/** 实例设了 ACCESS_KEY 时的访问密钥，订阅地址后面带上 `?key=`。 */
+export const KEY_SETTING = "rsshub_key";
+
+/** 测试实例的结果，和核心里的 InstanceCheck 对应。 */
+export type InstanceCheck =
+  | { state: "ok"; items: number }
+  | { state: "unreachable"; detail: string }
+  | { state: "challenge" | "unauthorized" | "not_rsshub" | "error"; status: number };
+
+/** 部署指南：中文界面看中文版。 */
+export function guideUrl(lang: string): string {
+  const base = "https://github.com/Wonvy/Postflow/blob/main/docs/";
+  return lang === "zh" ? `${base}rsshub.zh-CN.md` : `${base}rsshub.md`;
+}
 
 export interface RsshubParam {
   name: string;
@@ -32,7 +46,9 @@ export interface RsshubRoute {
 /** 实例地址：补上 https://、去掉末尾的斜杠。不像网址的返回 null。 */
 export function normalizeInstance(input: string | null | undefined): string | null {
   const raw = (input ?? "").trim() || DEFAULT_INSTANCE;
-  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  // 没写协议时：本机、局域网 IP、带端口的地址多半是自己部署的，用 http；其他的用 https
+  const local = /^(localhost|\d{1,3}(\.\d{1,3}){3}|\[[0-9a-f:]+\]|[^/]*\.local)(:\d+)?(\/|$)|^[^/]+:\d+(\/|$)/i.test(raw);
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `${local ? "http" : "https"}://${raw}`;
   try {
     const url = new URL(withScheme);
     if (!url.hostname.includes(".") && url.hostname !== "localhost") return null;
@@ -54,6 +70,7 @@ export function buildFeedUrl(
   instance: string,
   route: Pick<RsshubRoute, "namespace" | "path">,
   values: Record<string, string>,
+  key = "",
 ): string | null {
   const parts: string[] = [];
   for (const segment of route.path.split("/").filter(Boolean)) {
@@ -73,7 +90,8 @@ export function buildFeedUrl(
     }
     parts.push(encodeValue(value, multi));
   }
-  return `${instance}/${route.namespace}${parts.length ? `/${parts.join("/")}` : ""}`;
+  const query = key.trim() ? `?key=${encodeURIComponent(key.trim())}` : "";
+  return `${instance}/${route.namespace}${parts.length ? `/${parts.join("/")}` : ""}${query}`;
 }
 
 /** 表单的初始值：radar 从网址里取到的值优先，其次是 RSSHub 给的默认值。 */

@@ -34,6 +34,7 @@ import { StorageSettings } from "./StorageSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { RulesSettings } from "./RulesSettings";
 import { PluginsSettings } from "./PluginsSettings";
+import { RsshubServer } from "./RsshubServer";
 
 /** 设置的各页，按组排：常用的、AI、数据和应用本身。 */
 const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
@@ -235,6 +236,13 @@ export function SettingsDialog() {
             {t("settings.export")}
           </Button>
         </SettingRow>
+        <div className="flex flex-col gap-2">
+          <div>
+            <div className="text-fg">{t("settings.rsshub")}</div>
+            <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("settings.rsshubHint")}</div>
+          </div>
+          <RsshubServer />
+        </div>
       </>
     ),
     translation: () => <TranslationSettings open={open} />,

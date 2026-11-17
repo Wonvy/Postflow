@@ -36,6 +36,10 @@ that heading into the version number and date.
   HTTP 403), the message now says so and what to change, instead of "The server returned an error". YouTube
   routes offer to follow the channel directly, without RSSHub. Route and setting descriptions, which RSSHub mostly
   writes in English, are translated into your language with the offline translation model (downloaded on request).
+- RSSHub settings in Settings → Feeds (and in Add feed): instance address, access key (ACCESS_KEY, added to
+  feed addresses as ?key=), and a Test connection button that says whether the instance works, has a bot check
+  like rsshub.app, needs a key, or isn't RSSHub at all. Addresses without http:// use http for local and LAN
+  instances. New guide for running your own RSSHub on a computer, NAS or cloud server: docs/rsshub.md.
 
 ### 中文
 
@@ -58,6 +62,9 @@ that heading into the version number and date.
 - 添加订阅里的 RSSHub：RSSHub 实例拒绝访问时（公共实例 rsshub.app 会对阅读器返回 HTTP 403），提示会说明原因和该怎么改，
   不再只是「对方服务器返回了错误」。YouTube 的路由会提供「直接订阅」，不经过 RSSHub。RSSHub 的路由和参数说明大多是英文，
   现在会用离线翻译模型翻成你的语言（第一次需要点一下下载模型）。
+- 「设置 → 订阅」（以及添加订阅里）有了 RSSHub 设置：实例地址、访问密钥（ACCESS_KEY，会以 ?key= 加在订阅地址后面），
+  以及「测试连接」，能告诉你实例能不能用、是不是像 rsshub.app 那样开了防机器人验证、是否需要密钥、是不是根本不是 RSSHub。
+  没写 http:// 的本机和局域网地址会用 http。新增部署指南，介绍在电脑、NAS、云服务器上部署自己的 RSSHub：docs/rsshub.zh-CN.md。
 
 ## 0.1.13 — 2026-11-17
 

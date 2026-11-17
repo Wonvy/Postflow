@@ -433,7 +433,91 @@ fn target_values(
     Some(values)
 }
 
+/// 检查一个 RSSHub 实例能不能用的结果。
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum InstanceCheck {
+    /// 能用：测试路由返回了订阅源。
+    Ok { items: usize },
+    /// 连不上（地址不对、没开、网络不通）。
+    Unreachable { detail: String },
+    /// 有防机器人验证（比如 Cloudflare 的「Just a moment...」），阅读器过不去。公共实例 rsshub.app 就是这样。
+    Challenge { status: u16 },
+    /// 实例设了访问密钥，没填或填错了。
+    Unauthorized { status: u16 },
+    /// 返回的不是订阅源：多半不是 RSSHub，或者地址多写了路径。
+    NotRsshub { status: u16 },
+    /// 其他错误。
+    Error { status: u16 },
+}
+
+/// 测试用的路由：RSSHub 自带，生成几条示例内容，不访问别的网站。
+const CHECK_PATH: &str = "/test/1";
+
+/// 根据状态码和返回内容判断实例的情况。
+pub fn classify_check(status: u16, body: &str) -> InstanceCheck {
+    let lower = body.to_ascii_lowercase();
+    let challenge = lower.contains("just a moment")
+        || lower.contains("cf-chl")
+        || lower.contains("challenge-platform")
+        || lower.contains("attention required");
+    if (200..300).contains(&status) {
+        return match crate::parse_feed(body.as_bytes(), "http://localhost/") {
+            Ok(feed) => InstanceCheck::Ok {
+                items: feed.entries.len(),
+            },
+            Err(_) if challenge => InstanceCheck::Challenge { status },
+            Err(_) => InstanceCheck::NotRsshub { status },
+        };
+    }
+    if challenge {
+        return InstanceCheck::Challenge { status };
+    }
+    match status {
+        401 | 403 => InstanceCheck::Unauthorized { status },
+        404 => InstanceCheck::NotRsshub { status },
+        _ => InstanceCheck::Error { status },
+    }
+}
+
 impl crate::Client {
+    /// 检查一个 RSSHub 实例：请求它自带的测试路由。`instance` 是 `https://rsshub.example.com` 这样的地址。
+    pub async fn check_rsshub(&self, instance: &str, key: Option<&str>) -> InstanceCheck {
+        let mut url = match url::Url::parse(&format!(
+            "{}{CHECK_PATH}",
+            instance.trim().trim_end_matches('/')
+        )) {
+            Ok(url) if matches!(url.scheme(), "http" | "https") => url,
+            _ => {
+                return InstanceCheck::Unreachable {
+                    detail: "invalid address".into(),
+                };
+            }
+        };
+        if let Some(key) = key.map(str::trim).filter(|k| !k.is_empty()) {
+            url.query_pairs_mut().append_pair("key", key);
+        }
+        let resp = match self
+            .http
+            .get(url)
+            .timeout(std::time::Duration::from_secs(20))
+            .send()
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                return InstanceCheck::Unreachable {
+                    detail: crate::client::describe(e).to_string(),
+                };
+            }
+        };
+        let status = resp.status().as_u16();
+        // 只看开头一段就够判断了
+        let body = resp.text().await.unwrap_or_default();
+        let head: String = body.chars().take(200_000).collect();
+        classify_check(status, &head)
+    }
+
     /// 下载 RSSHub 的路由目录（几 MB 的 JSON）。
     pub async fn rsshub_catalog(&self) -> crate::Result<Vec<u8>> {
         let page = self
@@ -484,6 +568,39 @@ mod tests {
 
     fn catalog() -> Catalog {
         Catalog::parse(SAMPLE.as_bytes(), false).unwrap()
+    }
+
+    #[test]
+    fn instance_checks_tell_the_cases_apart() {
+        let feed = r#"<?xml version="1.0"?><rss version="2.0"><channel><title>Test 1</title>
+            <item><title>Title1</title><link>https://github.com/DIYgod/RSSHub/issues/1</link></item>
+            <item><title>Title2</title><link>https://github.com/DIYgod/RSSHub/issues/2</link></item></channel></rss>"#;
+        assert_eq!(classify_check(200, feed), InstanceCheck::Ok { items: 2 });
+        let cloudflare = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>";
+        assert_eq!(
+            classify_check(403, cloudflare),
+            InstanceCheck::Challenge { status: 403 }
+        );
+        assert_eq!(
+            classify_check(200, cloudflare),
+            InstanceCheck::Challenge { status: 200 }
+        );
+        assert_eq!(
+            classify_check(403, "Authentication failed. Access denied."),
+            InstanceCheck::Unauthorized { status: 403 }
+        );
+        assert_eq!(
+            classify_check(404, "Not Found"),
+            InstanceCheck::NotRsshub { status: 404 }
+        );
+        assert_eq!(
+            classify_check(200, "<html>a blog</html>"),
+            InstanceCheck::NotRsshub { status: 200 }
+        );
+        assert_eq!(
+            classify_check(503, "busy"),
+            InstanceCheck::Error { status: 503 }
+        );
     }
 
     #[test]

@@ -1,39 +1,23 @@
 // 添加订阅里的 RSSHub：搜网站、选路由、把参数填成表单；粘贴网址时提示 RSSHub 能订阅的内容。
 // 路由目录由核心下载和搜索（crates/core/src/rsshub.rs），拼订阅地址在 lib/rsshub.ts。
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ChevronDown, Languages, Search, TriangleAlert, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { keys, useSettings } from "../lib/queries";
 import { formatSize } from "../lib/platform";
 import {
   buildFeedUrl,
-  DEFAULT_INSTANCE,
   directUrl,
   initialValues,
-  normalizeInstance,
   plainDescription,
   type RsshubParam,
   type RsshubRoute,
-  SETTING_KEY,
 } from "../lib/rsshub";
 import { useModelDownloads, useTranslateTarget } from "../lib/translate";
+import { RsshubServer, useRsshubSettings } from "./RsshubServer";
 import { Button, cx, Favicon, Field, Select, Spinner, TextInput } from "./ui";
-
-/** 设置里的 RSSHub 实例地址（会同步到其他设备）。 */
-export function useRsshubInstance(): [string, (value: string) => Promise<void>] {
-  const qc = useQueryClient();
-  const settings = useSettings();
-  const raw = settings.data?.[SETTING_KEY];
-  const instance = normalizeInstance(typeof raw === "string" ? raw : "") ?? DEFAULT_INSTANCE;
-  const save = async (value: string) => {
-    await api.setSetting(SETTING_KEY, value.trim());
-    await qc.invalidateQueries({ queryKey: keys.settings });
-  };
-  return [instance, save];
-}
 
 function siteIcon(route: RsshubRoute): string | null {
   return route.site_url ? `https://${route.site_url.replace(/^https?:\/\//, "").split("/")[0]}/favicon.ico` : null;
@@ -203,11 +187,10 @@ export function RsshubForm({
 }) {
   const t = useT();
   const tr = useRouteTranslation(route);
-  const [instance, saveInstance] = useRsshubInstance();
+  const { instance, key } = useRsshubSettings();
   const [values, setValues] = useState(() => initialValues(route, found));
-  const [instanceDraft, setInstanceDraft] = useState<string | null>(null);
   const [showAbout, setShowAbout] = useState(false);
-  const url = useMemo(() => buildFeedUrl(instance, route, values), [instance, route, values]);
+  const url = useMemo(() => buildFeedUrl(instance, route, values, key), [instance, route, values, key]);
   useEffect(() => onUrl(url), [url, onUrl]);
 
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
@@ -294,28 +277,11 @@ export function RsshubForm({
         />
       ))}
 
-      <div className="rounded-md border border-line px-3 py-2">
-        <div className="flex items-center gap-2 text-[12px] text-fg-3">
-          <span className="shrink-0">{t("rsshub.instance")}</span>
-          <input
-            value={instanceDraft ?? instance}
-            onChange={(e) => setInstanceDraft(e.target.value)}
-            onBlur={() => {
-              if (instanceDraft === null) return;
-              const next = normalizeInstance(instanceDraft);
-              setInstanceDraft(null);
-              if (next && next !== instance) void saveInstance(next);
-            }}
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
-            spellCheck={false}
-            className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 font-mono text-[12px] text-fg-2 outline-none hover:bg-hover focus:bg-hover"
-          />
-        </div>
-        <p className="mt-1 break-all font-mono text-[11px] text-fg-2">{url ?? t("rsshub.fillRequired")}</p>
-        {instance === DEFAULT_INSTANCE && (
-          <p className="mt-1 text-[11px] leading-relaxed text-fg-3">{t("rsshub.publicHint")}</p>
-        )}
-      </div>
+      <RsshubServer compact>
+        <p className="mt-1 break-all font-mono text-[11px] text-fg-2">
+          {url ? url.replace(/\?key=.*$/, key ? "?key=…" : "") : t("rsshub.fillRequired")}
+        </p>
+      </RsshubServer>
     </div>
   );
 }
