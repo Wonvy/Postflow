@@ -4,7 +4,7 @@
 //! 生成的内容和对话记录只存在本机。邮件内容默认不发给云端服务，本机运行的服务不受限制。
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
@@ -22,6 +22,13 @@ const PROVIDERS: &str = "ai.providers";
 const DEFAULT: &str = "ai.default";
 const FAST: &str = "ai.fast";
 const ALLOW_MAIL: &str = "ai.allow_mail";
+const CATEGORIES: &str = "ai.categories";
+const AUTO_CLASSIFY: &str = "ai.auto_classify";
+/// 分类一次请求处理几条。只发标题和开头一小段，几条一起省请求。
+const CLASSIFY_BATCH: usize = 10;
+/// 后台自动分类每次最多处理这么多条，只看最近几天的。
+const AUTO_CLASSIFY_LIMIT: u32 = 30;
+const AUTO_CLASSIFY_DAYS: i64 = 3;
 /// 长文分段整理要点时最多分这么多段，更长的只看前面这些。
 const MAX_PARTS: usize = 8;
 /// 列表摘要一次请求处理几条。
@@ -38,6 +45,8 @@ pub(crate) struct AiRuntime {
     pub(crate) client: Client,
     running: Mutex<HashMap<String, tokio::task::AbortHandle>>,
     next: AtomicU64,
+    /// 后台分类正在进行，同一时间只跑一个。
+    classifying: AtomicBool,
 }
 
 impl From<postflow_ai::Error> for RpcError {
@@ -58,6 +67,8 @@ pub(crate) struct AiSettings {
     pub default: Option<String>,
     pub fast: Option<String>,
     pub allow_mail: bool,
+    pub categories: Vec<postflow_ai::Category>,
+    pub auto_classify: bool,
 }
 
 impl AiSettings {
@@ -214,6 +225,21 @@ fn fingerprint(p: &TranslateParams, provider: &Provider) -> String {
         .unwrap_or_default()
         .hash(&mut hasher);
     format!("{:016x}", hasher.finish())
+}
+
+#[derive(Deserialize)]
+struct ClassifyParams {
+    /// 不给就分最近还没分类的。
+    #[serde(default)]
+    ids: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+struct LabelParams {
+    ids: Vec<String>,
+    /// 空表示「哪一类都不是」。
+    #[serde(default)]
+    label: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -574,6 +600,44 @@ impl Core {
                 }
                 reply(json!({ "segments": segments }))
             }
+            "ai.classify" => {
+                let p: ClassifyParams = parse(params)?;
+                let settings = self.ai_settings(session).await?;
+                let items = match p.ids {
+                    Some(ids) => {
+                        session
+                            .db(move |s| {
+                                let mut out = Vec::new();
+                                for id in ids.iter().take(200) {
+                                    if let Some(d) = s.item(id)? {
+                                        out.push(d.item);
+                                    }
+                                }
+                                Ok(out)
+                            })
+                            .await?
+                    }
+                    None => {
+                        let mail = settings.allow_mail || settings.pick(Use::Fast)?.is_local();
+                        let since = now() - 7 * 86_400_000;
+                        session.db(move |s| s.unlabeled(since, mail, 60)).await?
+                    }
+                };
+                let labels = self.classify(session, &settings, items).await?;
+                reply(json!({ "labels": labels }))
+            }
+            "items.label" => {
+                let p: LabelParams = parse(params)?;
+                let label = p
+                    .label
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty());
+                let pairs: Vec<(String, Option<String>)> =
+                    p.ids.into_iter().map(|id| (id, label.clone())).collect();
+                session.db(move |s| s.set_labels(&pairs, true)).await?;
+                self.emit_changed(&[Scope::Feeds, Scope::Items], client);
+                reply(json!({}))
+            }
             "ai.usage" => {
                 let today = day_of(now());
                 let (day, month) = session
@@ -606,6 +670,18 @@ impl Core {
             fast: text(FAST),
             allow_mail: settings
                 .get(ALLOW_MAIL)
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            categories: settings
+                .get(CATEGORIES)
+                .cloned()
+                .and_then(|v| serde_json::from_value::<Vec<postflow_ai::Category>>(v).ok())
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|c| !c.name.trim().is_empty())
+                .collect(),
+            auto_classify: settings
+                .get(AUTO_CLASSIFY)
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
         })
@@ -848,6 +924,104 @@ impl Core {
             .save_result(session, &doc.item.id, "keywords", lang, provider, content)
             .await?;
         Ok(json!({ "task": "keywords", "result": saved }))
+    }
+
+    /// 给一组条目分类，结果存在本机。只发标题、来源和摘要开头，不取邮件正文。
+    async fn classify(
+        &self,
+        session: &Arc<Session>,
+        settings: &AiSettings,
+        items: Vec<ItemSummary>,
+    ) -> Result<HashMap<String, Option<String>>, RpcError> {
+        if settings.categories.is_empty() {
+            return Err(RpcError::new(
+                "ai_no_categories",
+                "no categories have been set up",
+            ));
+        }
+        let provider = settings.pick(Use::Fast)?;
+        let key = self.ai_key(&provider.id).await;
+        let items: Vec<ItemSummary> = items
+            .into_iter()
+            .filter(|i| settings.check(i, &provider).is_ok())
+            .collect();
+        let mut out = HashMap::new();
+        for batch in items.chunks(CLASSIFY_BATCH) {
+            let docs: Vec<(String, Doc<'_>)> = batch
+                .iter()
+                .enumerate()
+                .map(|(i, item)| {
+                    let source = if item.kind == "mail" {
+                        item.author
+                            .as_deref()
+                            .or(item.sender_address.as_deref())
+                            .unwrap_or("")
+                    } else {
+                        item.source_title.as_str()
+                    };
+                    (
+                        (i + 1).to_string(),
+                        Doc {
+                            title: &item.title,
+                            source,
+                            text: &item.summary,
+                        },
+                    )
+                })
+                .collect();
+            let answer = self
+                .complete_ai(
+                    session,
+                    &provider,
+                    key.as_deref(),
+                    &prompts::classify(&docs, &settings.categories),
+                )
+                .await?;
+            let parsed = prompts::parse_classes(&answer, &settings.categories);
+            let mut labels = Vec::new();
+            for (i, item) in batch.iter().enumerate() {
+                // 回答里漏掉的条目不记，下次再分
+                if let Some(label) = parsed.get(&(i + 1).to_string()) {
+                    labels.push((item.id.clone(), label.clone()));
+                    out.insert(item.id.clone(), label.clone());
+                }
+            }
+            session.db(move |s| s.set_labels(&labels, false)).await?;
+        }
+        if !out.is_empty() {
+            self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+        }
+        Ok(out)
+    }
+
+    /// 后台定时调用：打开了自动分类时，把最近几天新来的条目分好。
+    pub(crate) async fn auto_classify(self: &Arc<Self>, session: &Arc<Session>) {
+        if self.ai.classifying.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let result = async {
+            let settings = self.ai_settings(session).await?;
+            if !settings.auto_classify
+                || settings.categories.is_empty()
+                || settings.providers.is_empty()
+            {
+                return Ok(());
+            }
+            let mail = settings.allow_mail || settings.pick(Use::Fast)?.is_local();
+            let since = now() - AUTO_CLASSIFY_DAYS * 86_400_000;
+            let items = session
+                .db(move |s| s.unlabeled(since, mail, AUTO_CLASSIFY_LIMIT))
+                .await?;
+            if !items.is_empty() {
+                self.classify(session, &settings, items).await?;
+            }
+            Ok::<(), RpcError>(())
+        }
+        .await;
+        if let Err(e) = result {
+            tracing::warn!("auto classify: {e}");
+        }
+        self.ai.classifying.store(false, Ordering::Release);
     }
 
     /// 分批翻译带标记的段落。某一批的回答对不上数时拆成两半再试，单独一段也不行就留空（保留原文）。

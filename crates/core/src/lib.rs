@@ -398,6 +398,9 @@ async fn run_scheduler(core: Arc<Core>, session: Arc<Session>) {
             Ok(_) => {}
             Err(e) => tracing::warn!("scheduler: {}", e.message),
         }
+        // 打开了自动分类时，把新来的条目分好。在后台跑，不耽误下一次检查
+        let (c, s) = (core.clone(), session.clone());
+        tokio::spawn(async move { c.auto_classify(&s).await });
     }
 }
 

@@ -209,10 +209,19 @@ impl Core {
         match method {
             "nav.get" => {
                 let p: NavGet = parse(params)?;
-                let (counts, feeds, accounts) = session
-                    .db(move |s| Ok((s.counts(p.today_since)?, s.feeds()?, s.accounts()?)))
+                let (counts, feeds, accounts, labels) = session
+                    .db(move |s| {
+                        Ok((
+                            s.counts(p.today_since)?,
+                            s.feeds()?,
+                            s.accounts()?,
+                            s.label_counts()?,
+                        ))
+                    })
                     .await?;
-                reply(json!({ "counts": counts, "feeds": feeds, "accounts": accounts }))
+                reply(
+                    json!({ "counts": counts, "feeds": feeds, "accounts": accounts, "labels": labels }),
+                )
             }
 
             "feeds.discover" => {
@@ -406,7 +415,10 @@ impl Core {
                 reply(json!({ "full_text": clean }))
             }
 
-            m if m.starts_with("ai.") => self.ai_rpc(m, params, &session, client).await,
+            // 分类的方法也在 AI 模块里
+            m if m.starts_with("ai.") || m == "items.label" => {
+                self.ai_rpc(m, params, &session, client).await
+            }
 
             "settings.get" => reply(session.db(|s| s.settings()).await?),
             "settings.set" => {

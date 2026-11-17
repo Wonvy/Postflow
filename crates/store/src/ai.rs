@@ -39,6 +39,14 @@ pub struct AiUsage {
 
 const DAY_MS: i64 = 86_400_000;
 
+/// 一个分类里有多少条、多少未读（收件箱里的）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LabelCount {
+    pub label: String,
+    pub unread: i64,
+    pub total: i64,
+}
+
 /// 从 1970-01-01 起的第几天（UTC）。
 pub fn day_of(ms: i64) -> i64 {
     ms.div_euclid(DAY_MS)
@@ -180,6 +188,65 @@ impl Store {
                 output: r.get(3)?,
             })
         })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// 记下分类。AI 分的不会覆盖用户定的；用户定的总是生效。`None` 表示哪一类都不是。
+    pub fn set_labels(&self, labels: &[(String, Option<String>)], by_user: bool) -> Result<()> {
+        let mut guard = self.lock();
+        let tx = guard.conn.transaction()?;
+        {
+            let sql = if by_user {
+                "INSERT INTO item_labels (item_id, label, by_user, at) VALUES (?1, ?2, 1, ?3) \
+                 ON CONFLICT (item_id) DO UPDATE SET label = excluded.label, by_user = 1, at = excluded.at"
+            } else {
+                "INSERT INTO item_labels (item_id, label, by_user, at) VALUES (?1, ?2, 0, ?3) \
+                 ON CONFLICT (item_id) DO UPDATE SET label = excluded.label, at = excluded.at \
+                 WHERE item_labels.by_user = 0"
+            };
+            let mut stmt = tx.prepare(sql)?;
+            let at = now_ms() as i64;
+            for (id, label) in labels {
+                stmt.execute(params![id, label.as_deref().unwrap_or(""), at])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 收件箱里每个分类的条数和未读数。
+    pub fn label_counts(&self) -> Result<Vec<LabelCount>> {
+        let guard = self.lock();
+        let sql = format!(
+            "SELECT l.label, COALESCE(SUM(i.read = 0), 0), COUNT(*) FROM {} \
+             WHERE l.label <> '' AND i.archived = 0 AND {} GROUP BY l.label ORDER BY l.label",
+            crate::store::ITEM_FROM,
+            crate::store::ALIVE
+        );
+        let mut stmt = guard.conn.prepare(&sql)?;
+        let rows = stmt.query_map([], |r| {
+            Ok(LabelCount {
+                label: r.get(0)?,
+                unread: r.get(1)?,
+                total: r.get(2)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// 还没分类的条目，新的在前。只看收件箱里 `since` 之后的；`mail` 为假时只要文章。
+    pub fn unlabeled(&self, since: i64, mail: bool, limit: u32) -> Result<Vec<crate::ItemSummary>> {
+        let guard = self.lock();
+        let sql = format!(
+            "SELECT {} FROM {} WHERE l.item_id IS NULL AND i.archived = 0 AND {} \
+             AND i.published_at >= ?1 AND (?2 OR i.kind = 'article') \
+             ORDER BY i.published_at DESC LIMIT ?3",
+            crate::store::ITEM_COLUMNS,
+            crate::store::ITEM_FROM,
+            crate::store::ALIVE
+        );
+        let mut stmt = guard.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![since, mail, limit], crate::store::item_from_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 }

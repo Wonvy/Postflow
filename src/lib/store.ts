@@ -9,7 +9,8 @@ export type ListScope =
   | { kind: "view"; view: View }
   | { kind: "feed"; feedId: string }
   | { kind: "account"; accountId: string }
-  | { kind: "folder"; folder: string };
+  | { kind: "folder"; folder: string }
+  | { kind: "label"; label: string };
 
 export type ThemePref = "system" | "dark" | "light";
 /** 列表的显示方式：一行一条、带摘要和缩略图、卡片。 */
@@ -18,7 +19,7 @@ export type ListView = "list" | "summary" | "cards";
 /** 侧栏布局：邮箱和订阅上下排列（可折叠），或者分成选项卡。 */
 export type SidebarLayout = "groups" | "tabs";
 export type SidebarTab = "all" | "mail" | "feeds";
-export type SidebarSection = "mail" | "feeds";
+export type SidebarSection = "mail" | "feeds" | "labels";
 /** 每个选项卡只看哪一类条目。 */
 export const TAB_KIND: Record<SidebarTab, ItemKind | null> = { all: null, mail: "mail", feeds: "article" };
 
@@ -246,6 +247,8 @@ export function scopeKey(scope: ListScope): string {
       return `account:${scope.accountId}`;
     case "folder":
       return `folder:${scope.folder}`;
+    case "label":
+      return `label:${scope.label}`;
   }
 }
 
@@ -269,6 +272,8 @@ export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFi
       return { view: "inbox", source_id: scope.accountId };
     case "folder":
       return { view: "inbox", folder: scope.folder };
+    case "label":
+      return kind ? { view: "inbox", label: scope.label, kind } : { view: "inbox", label: scope.label };
     case "view": {
       const filter: ItemFilter =
         scope.view === "today" ? { view: "today", since: startOfToday() } : { view: scope.view };
@@ -283,5 +288,6 @@ export function sameScope(a: ListScope, b: ListScope): boolean {
   if (a.kind === "feed" && b.kind === "feed") return a.feedId === b.feedId;
   if (a.kind === "account" && b.kind === "account") return a.accountId === b.accountId;
   if (a.kind === "folder" && b.kind === "folder") return a.folder === b.folder;
+  if (a.kind === "label" && b.kind === "label") return a.label === b.label;
   return false;
 }

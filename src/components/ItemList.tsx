@@ -35,6 +35,7 @@ import { useListModel } from "../lib/listModel";
 import { isMac } from "../lib/platform";
 import { useNav, useSettings } from "../lib/queries";
 import { CARD_MAX, CARD_MIN, type ListScope, type ListView, listKey, useListView, useUi } from "../lib/store";
+import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
 
@@ -171,6 +172,8 @@ function scopeTitle(scope: ListScope, t: Translate, sourceTitle: (id: string) =>
       return sourceTitle(scope.feedId) ?? "";
     case "account":
       return sourceTitle(scope.accountId) ?? "";
+    case "label":
+      return scope.label;
   }
 }
 
@@ -705,11 +708,23 @@ function CountPill({ count, onExpand, label }: { count: number; onExpand: () => 
   );
 }
 
+/** 分类的小标签。 */
+export function LabelChip({ label }: { label: string }) {
+  const labelColor = useLabelColor();
+  return (
+    <span className="inline-flex max-w-[96px] shrink-0 items-center gap-1 rounded-full bg-hover px-1.5 py-px text-[11px] leading-[16px] text-fg-2">
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: labelColor(label) }} />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
 function Trailing({ item, group, time, onExpand, expandLabel }: RowProps) {
   const attachments = group ? group.hasAttachments : item.has_attachments;
   const starred = group ? group.starred : item.starred;
   return (
     <>
+      {item.label && <LabelChip label={item.label} />}
       {group && onExpand && <CountPill count={group.items.length} onExpand={onExpand} label={expandLabel} />}
       {attachments && <Paperclip size={12} className="shrink-0 text-fg-3" />}
       {starred && <Star size={12} className="shrink-0 fill-warning text-warning" />}

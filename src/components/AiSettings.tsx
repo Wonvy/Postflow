@@ -12,8 +12,9 @@ import {
   siOpenrouter,
 } from "simple-icons";
 import { type FormEvent, useEffect, useId, useState } from "react";
-import { type AiPreset, type AiProviderView, api } from "../lib/api";
-import { errorDetail, errorText, useT } from "../lib/i18n";
+import { type AiPreset, type AiProviderView, api, type Category } from "../lib/api";
+import { errorDetail, errorText, useLang, useT } from "../lib/i18n";
+import { defaultCategories, useCategories, useLabelColor } from "../lib/labels";
 import { openExternal } from "../lib/platform";
 import { keys, useSettings } from "../lib/queries";
 import { type Glyph, GlyphIcon, logo, text } from "./ProviderIcon";
@@ -173,6 +174,7 @@ export function AiSettings({ open }: { open: boolean }) {
               onChange={(v) => void set("ai.allow_mail", v)}
             />
           </SettingRow>
+          <Categories />
           {usage.data && usage.data.last30.length > 0 && (
             <SettingRow label={t("ai.usage")}>
               <span className="max-w-[300px] truncate text-[12px] text-fg-2">
@@ -192,6 +194,111 @@ export function AiSettings({ open }: { open: boolean }) {
       )}
       {error && <div className="text-[12px] text-danger">{error}</div>}
       <ProviderDialog editing={editing} onClose={() => setEditing(null)} />
+    </>
+  );
+}
+
+/** 分类的类别：名称和一句说明。改完离开输入框时保存。 */
+function Categories() {
+  const t = useT();
+  const lang = useLang();
+  const qc = useQueryClient();
+  const saved = useCategories();
+  const labelColor = useLabelColor();
+  const settings = useSettings();
+  const [draft, setDraft] = useState<Category[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const list = draft ?? saved;
+  const auto = settings.data?.["ai.auto_classify"] === true;
+
+  const save = (next: Category[]) => {
+    const clean = next.map((c) => ({ name: c.name.trim(), description: c.description.trim() })).filter((c) => c.name);
+    qc.setQueryData(keys.settings, (old: Record<string, unknown> | undefined) => ({ ...old, "ai.categories": clean }));
+    void api.setSetting("ai.categories", clean);
+    setDraft(null);
+  };
+  const change = (i: number, patch: Partial<Category>) =>
+    setDraft((list ?? []).map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const setAuto = (v: boolean) => {
+    qc.setQueryData(keys.settings, (old: Record<string, unknown> | undefined) => ({ ...old, "ai.auto_classify": v }));
+    void api.setSetting("ai.auto_classify", v);
+  };
+  const classifyNow = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const { labels } = await api.classify();
+      setNote(t("ai.classified", { n: Object.keys(labels).length }));
+      void qc.invalidateQueries({ queryKey: keys.nav });
+      void qc.invalidateQueries({ queryKey: ["items"] });
+    } catch (err) {
+      setNote(errorText(t, err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div>
+        <div className="text-fg">{t("ai.categories")}</div>
+        <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("ai.categoriesHint")}</div>
+        {list === null ? (
+          <Button className="mt-2" onClick={() => save(defaultCategories(lang))}>
+            {t("ai.useDefaults")}
+          </Button>
+        ) : (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {list.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: labelColor(c.name) }} />
+                <div className="w-28 shrink-0">
+                  <TextInput
+                    className="h-7"
+                    aria-label={t("ai.categoryName")}
+                    value={c.name}
+                    onChange={(e) => change(i, { name: e.target.value })}
+                    onBlur={() => draft && save(draft)}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <TextInput
+                    className="h-7"
+                    aria-label={t("ai.categoryDescription")}
+                    placeholder={t("ai.categoryDescription")}
+                    value={c.description}
+                    onChange={(e) => change(i, { description: e.target.value })}
+                    onBlur={() => draft && save(draft)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  aria-label={t("action.remove")}
+                  onClick={() => save(list.filter((_, j) => j !== i))}
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-hover hover:text-danger"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+            <div>
+              <Button variant="ghost" className="h-7 px-2 text-[12px]" onClick={() => setDraft([...list, { name: "", description: "" }])}>
+                <Plus size={13} />
+                {t("ai.addCategory")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      <SettingRow label={t("ai.autoClassify")} hint={t("ai.autoClassifyHint")}>
+        <Switch label={t("ai.autoClassify")} checked={auto} disabled={!list?.length} onChange={setAuto} />
+      </SettingRow>
+      <SettingRow label={t("ai.classifyNow")} hint={note ?? undefined}>
+        <Button busy={busy} disabled={!list?.length} onClick={() => void classifyNow()}>
+          {t("ai.classifyNow")}
+        </Button>
+      </SettingRow>
     </>
   );
 }

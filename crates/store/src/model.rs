@@ -138,6 +138,8 @@ pub struct ItemFilter {
     pub folder: Option<String>,
     /// 「今天」视图的起点，由界面按本地时区算出。
     pub since: Option<i64>,
+    /// 只看某个分类。
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -168,6 +170,8 @@ pub struct ItemSummary {
     pub has_attachments: bool,
     /// 卡片视图用的封面图。只有文章有。
     pub image: Option<String>,
+    /// 分类。
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

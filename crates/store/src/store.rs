@@ -33,6 +33,7 @@ const LOCAL_TABLES: &[&str] = &[
     "ai_results",
     "ai_messages",
     "ai_usage",
+    "item_labels",
 ];
 
 const SCHEMA: &str = r#"
@@ -173,6 +174,16 @@ CREATE TABLE IF NOT EXISTS ai_usage (
     PRIMARY KEY (day, provider)
 ) WITHOUT ROWID;
 
+-- 分类。AI 分的可以被用户改掉；用户定的（by_user = 1）AI 不再覆盖。
+-- label 为空字符串表示「哪一类都不是」，也算分过了
+CREATE TABLE IF NOT EXISTS item_labels (
+    item_id TEXT PRIMARY KEY,
+    label   TEXT NOT NULL,
+    by_user INTEGER NOT NULL DEFAULT 0,
+    at      INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS item_labels_by_label ON item_labels (label);
+
 CREATE TABLE IF NOT EXISTS feed_fetch (
     feed_id       TEXT PRIMARY KEY,
     etag          TEXT,
@@ -188,12 +199,13 @@ CREATE TABLE IF NOT EXISTS feed_fetch (
 pub(crate) const ITEM_FROM: &str = "items i \
      LEFT JOIN feeds f ON i.kind = 'article' AND f.id = i.source_id \
      LEFT JOIN accounts a ON i.kind = 'mail' AND a.id = i.source_id \
-     LEFT JOIN mail_meta m ON i.kind = 'mail' AND m.id = i.id";
+     LEFT JOIN mail_meta m ON i.kind = 'mail' AND m.id = i.id \
+     LEFT JOIN item_labels l ON l.item_id = i.id";
 
-const ITEM_COLUMNS: &str = "i.id, i.kind, i.source_id, \
+pub(crate) const ITEM_COLUMNS: &str = "i.id, i.kind, i.source_id, \
      CASE WHEN i.kind = 'mail' THEN COALESCE(NULLIF(a.name, ''), a.email, '') ELSE COALESCE(f.title, '') END, \
      f.icon_url, i.url, i.title, i.author, i.summary, i.published_at, i.read, i.starred, i.archived, \
-     m.from_address, COALESCE(m.has_attachments, 0), i.image";
+     m.from_address, COALESCE(m.has_attachments, 0), i.image, NULLIF(l.label, '')";
 
 /// 来源还在：订阅没退订，邮箱没移除。
 pub(crate) const ALIVE: &str = "COALESCE(f.deleted, a.deleted, 1) = 0";
@@ -566,8 +578,8 @@ impl Store {
             .query_row([id], |r| {
                 Ok(ItemDetail {
                     item: item_from_row(r)?,
-                    content: r.get(16)?,
-                    full_text: r.get(17)?,
+                    content: r.get(17)?,
+                    full_text: r.get(18)?,
                 })
             })
             .optional()?;
@@ -1027,6 +1039,10 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         args.push(SqlValue::Text(kind.as_str().to_string()));
         conds.push_str(&format!(" AND i.kind = ?{}", args.len()));
     }
+    if let Some(label) = &filter.label {
+        args.push(SqlValue::Text(label.clone()));
+        conds.push_str(&format!(" AND l.label = ?{}", args.len()));
+    }
     conds
 }
 
@@ -1058,7 +1074,7 @@ fn feed_from_row(r: &Row<'_>) -> rusqlite::Result<Feed> {
     })
 }
 
-fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
+pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
     Ok(ItemSummary {
         id: r.get(0)?,
         kind: r.get(1)?,
@@ -1076,5 +1092,6 @@ fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         sender_address: r.get(13)?,
         has_attachments: r.get(14)?,
         image: r.get(15)?,
+        label: r.get(16)?,
     })
 }

@@ -54,10 +54,18 @@ export interface Account {
   error_code: string | null;
 }
 
+export interface LabelCount {
+  label: string;
+  unread: number;
+  total: number;
+}
+
 export interface Nav {
   counts: Counts;
   feeds: Feed[];
   accounts: Account[];
+  /** 收件箱里每个分类的条数。 */
+  labels: LabelCount[];
 }
 
 export type ItemKind = "article" | "mail";
@@ -81,6 +89,8 @@ export interface Item {
   has_attachments: boolean;
   /** 卡片视图用的封面图，只有文章有。 */
   image: string | null;
+  /** 分类。 */
+  label: string | null;
 }
 
 export interface Mailbox {
@@ -166,6 +176,7 @@ export interface ItemFilter {
   kind?: ItemKind;
   folder?: string;
   since?: number;
+  label?: string;
 }
 
 export interface ItemPage {
@@ -246,6 +257,12 @@ export interface AiMessage {
   role: "user" | "assistant";
   content: string;
   created_at: number;
+}
+
+/** 用户定义的一个分类。 */
+export interface Category {
+  name: string;
+  description: string;
 }
 
 export interface AiUsage {
@@ -379,6 +396,9 @@ export const api = {
   aiChatHistory: (id: string) => rpc<{ messages: AiMessage[] }>("ai.chat.history", { id }),
   aiChatClear: (id: string) => rpc<void>("ai.chat.clear", { id }),
   aiCancel: (request_id: string) => rpc<void>("ai.cancel", { request_id }),
+  classify: (ids?: string[]) => rpc<{ labels: Record<string, string | null> }>("ai.classify", { ids }),
+  /** 手动定分类，`null` 是「哪一类都不是」。 */
+  setLabel: (ids: string[], label: string | null) => rpc<void>("items.label", { ids, label }),
   aiUsage: () => rpc<{ today: AiUsage[]; last30: AiUsage[] }>("ai.usage"),
 
   aiTranslate: (id: string | undefined, from: string, to: string, segments: SourceSegment[]) =>

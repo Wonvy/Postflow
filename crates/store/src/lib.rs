@@ -15,7 +15,7 @@ mod mail;
 mod model;
 mod store;
 
-pub use ai::{AiMessage, AiResult, AiUsage, day_of};
+pub use ai::{AiMessage, AiResult, AiUsage, LabelCount, day_of};
 pub use error::{Error, Result};
 pub use model::*;
 pub use store::Store;

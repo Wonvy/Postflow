@@ -13,6 +13,7 @@ import {
   Paperclip,
   Sparkles,
   Star,
+  Tag,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -32,7 +33,8 @@ import {
 } from "../lib/translate";
 import { isTauri } from "../lib/transport";
 import { AiPanel } from "./AiPanel";
-import { Avatar, Button, cx, Favicon, ICON, IconButton, Kbd, Spinner } from "./ui";
+import { useCategories, useLabelColor } from "../lib/labels";
+import { Avatar, Button, cx, Favicon, ICON, IconButton, Kbd, Menu, MenuItem, MenuSeparator, Spinner } from "./ui";
 
 export function Reader() {
   const openId = useUi((s) => s.openId);
@@ -160,6 +162,7 @@ function Article({ id }: { id: string }) {
                 )}
               </IconButton>
             )}
+            <LabelMenu ids={group.length > 0 ? group.map((i) => i.id) : [summary.id]} current={summary.label} />
             <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
               <Sparkles {...ICON} />
             </IconButton>
@@ -462,6 +465,55 @@ function MailFrame({ html }: { html: string }) {
       style={{ height }}
       className="block w-full rounded-lg border border-line bg-white"
     />
+  );
+}
+
+/** 工具栏里设置分类。只有在设置里定义了类别时才出现。 */
+function LabelMenu({ ids, current }: { ids: string[]; current: string | null | undefined }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const categories = useCategories();
+  const labelColor = useLabelColor();
+  if (!categories || categories.length === 0) return null;
+  const set = (label: string | null) => {
+    void api.setLabel(ids, label).then(() => {
+      void qc.invalidateQueries({ queryKey: ["items"] });
+      void qc.invalidateQueries({ queryKey: ["item"] });
+      void qc.invalidateQueries({ queryKey: keys.nav });
+    });
+  };
+  return (
+    <Menu
+      align="end"
+      trigger={
+        <button
+          type="button"
+          aria-label={t("label.set")}
+          title={current ? `${t("label.set")}：${current}` : t("label.set")}
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+        >
+          {current ? (
+            <span aria-hidden className="size-2.5 rounded-full" style={{ background: labelColor(current) }} />
+          ) : (
+            <Tag {...ICON} />
+          )}
+        </button>
+      }
+    >
+      <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{t("label.set")}</div>
+      {categories.map((c) => (
+        <MenuItem
+          key={c.name}
+          icon={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(c.name) }} />}
+          onSelect={() => set(c.name)}
+        >
+          <span className="flex-1">{c.name}</span>
+          {current === c.name && <span className="ml-3 text-fg-3">✓</span>}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuItem onSelect={() => set(null)}>{t("label.none")}</MenuItem>
+    </Menu>
   );
 }
 

@@ -268,6 +268,42 @@ async fn ai_features_end_to_end() {
     .await;
     assert_eq!(detected["from"], "zh");
 
+    // 分类：没设类别时报错；设好以后分最近没分类的；用户改过的以用户为准
+    assert_eq!(
+        error(&core, "ai.classify", json!({})).await,
+        "ai_no_categories"
+    );
+    call(
+        &core,
+        "settings.set",
+        json!({ "key": "ai.categories", "value": [
+            { "name": "技术", "description": "Software and engineering" },
+            { "name": "生活", "description": "" },
+        ] }),
+    )
+    .await;
+    let classified = call(&core, "ai.classify", json!({})).await;
+    assert_eq!(classified["labels"][&article], "技术");
+    let listed = call(
+        &core,
+        "items.list",
+        json!({ "filter": { "view": "inbox", "label": "技术" } }),
+    )
+    .await;
+    assert_eq!(listed["items"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["items"][0]["label"], "技术");
+    let nav = call(&core, "nav.get", json!({})).await;
+    assert_eq!(nav["labels"][0]["label"], "技术");
+    call(
+        &core,
+        "items.label",
+        json!({ "ids": [article], "label": "生活" }),
+    )
+    .await;
+    call(&core, "ai.classify", json!({ "ids": [article] })).await;
+    let item = call(&core, "items.get", json!({ "id": article })).await;
+    assert_eq!(item["label"], "生活", "the user's choice wins over the AI");
+
     // 邮件：默认不发给云端服务，本机的服务可以
     call(
         &core,

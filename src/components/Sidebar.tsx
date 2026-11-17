@@ -27,6 +27,7 @@ import { useActions } from "../lib/actions";
 import { type Account, api, type Feed, type ItemPatch, type Nav, type View } from "../lib/api";
 import { type DragPayload, type DropPosition, dropPosition, endDrag, isOurs, moveInList, startDrag, useDrag } from "../lib/dnd";
 import { useFolderActions } from "../lib/folders";
+import { useCategories, useLabelColor } from "../lib/labels";
 import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
 import { UpdatePill } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
@@ -400,6 +401,14 @@ export function Sidebar({ width }: { width: number }) {
   const feeds = nav.data?.feeds;
   const accounts = nav.data?.accounts;
   const counts = nav.data?.counts;
+  const categories = useCategories();
+  const labelColor = useLabelColor();
+  const labelCounts = nav.data?.labels ?? [];
+  // 设置里的类别在前，按设置的顺序；之后改了名字、只在旧条目上还有的分类跟在后面
+  const labels = [
+    ...(categories ?? []).map((c) => c.name),
+    ...labelCounts.map((l) => l.label).filter((l) => !(categories ?? []).some((c) => c.name === l)),
+  ];
 
   const { folders, loose } = useMemo(() => {
     const byFolder = new Map<string, Feed[]>(folderActions.folders.map((name) => [name, []]));
@@ -543,6 +552,20 @@ export function Sidebar({ width }: { width: number }) {
       : undefined;
   };
 
+  // 把列表里的条目拖到分类上：手动定分类
+  const labelTarget = (label: string) =>
+    target(
+      `label:${label}`,
+      (p) => (p.kind === "items" ? "inside" : null),
+      (p) => {
+        if (p.kind !== "items") return;
+        void api.setLabel(p.ids, label).then(() => {
+          void qc.invalidateQueries({ queryKey: ["items"] });
+          void qc.invalidateQueries({ queryKey: keys.nav });
+        });
+      },
+    );
+
   const isActive = (target: ListScope) => sameScope(scope, target);
   // 选项卡模式下视图的数字也只算这一类
   const kind = layout === "tabs" ? tab : "all";
@@ -673,6 +696,35 @@ export function Sidebar({ width }: { width: number }) {
                     {t("action.addAccount")}
                   </button>
                 )}
+              </div>
+            )}
+          </>
+        )}
+
+        {labels.length > 0 && (
+          <>
+            <SectionHeader
+              label={t("nav.labels")}
+              addLabel={t("label.edit")}
+              onAdd={() => setDialog({ type: "settings" })}
+              collapsed={isCollapsed("labels")}
+              onToggle={() => toggleSection("labels")}
+              unread={labelCounts.reduce((n, l) => n + l.unread, 0)}
+            />
+            {!isCollapsed("labels") && (
+              <div className="flex flex-col gap-px">
+                {labels.map((label) => (
+                  <Row
+                    key={label}
+                    active={isActive({ kind: "label", label })}
+                    onClick={() => setScope({ kind: "label", label })}
+                    drag={labelTarget(label)}
+                    drop={dropAt(`label:${label}`)}
+                    leading={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(label) }} />}
+                    label={label}
+                    trailing={<Count n={labelCounts.find((l) => l.label === label)?.unread ?? 0} />}
+                  />
+                ))}
               </div>
             )}
           </>
