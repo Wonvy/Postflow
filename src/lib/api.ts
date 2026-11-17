@@ -149,7 +149,10 @@ export interface AccountGuess {
 
 export interface NewAccount {
   email: string;
-  password: string;
+  /** 用微软账户登录时不填，改给 `oauth`。 */
+  password?: string;
+  /** `oauthStart` / `oauthWait` 完成的那次登录。 */
+  oauth?: string;
   name?: string;
   imap_host?: string;
   imap_port?: number;
@@ -160,6 +163,8 @@ export interface NewAccount {
 export interface AccountChanges {
   name?: string;
   password?: string;
+  /** 重新用微软账户登录。 */
+  oauth?: string;
   imap_host?: string;
   imap_port?: number;
   imap_security?: Security;
@@ -433,6 +438,13 @@ export const api = {
       path,
     }),
   trustSender: (address: string) => rpc<void>("mail.trust_sender", { address }),
+  /** 能不能用微软账户登录（要有 Azure 应用 ID）。 */
+  oauthConfig: () => rpc<{ microsoft: boolean }>("accounts.oauth_config"),
+  /** 开始用微软账户登录，返回要在浏览器里打开的地址。 */
+  oauthStart: (email: string) => rpc<{ flow_id: string; url: string }>("accounts.oauth_start", { email }),
+  /** 等用户在浏览器里登录完。 */
+  oauthWait: (flowId: string) => rpc<void>("accounts.oauth_wait", { flow_id: flowId }),
+  oauthCancel: (flowId: string) => rpc<void>("accounts.oauth_cancel", { flow_id: flowId }),
 
   settings: () => rpc<Settings>("settings.get"),
   setSetting: (key: string, value: unknown) => rpc<void>("settings.set", { key, value }),

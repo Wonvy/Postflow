@@ -305,7 +305,14 @@ function AccountRow({
           <>
             {account.error_code ? (
               <Tip
-                label={needsPassword ? t("account.needsPassword") : errorText(t, { code: account.error_code })}
+                label={
+                  needsPassword
+                    ? // Outlook、Microsoft 365 不用密码，要用微软账户登录
+                      presets.data?.find((p) => p.id === provider)?.password_kind === "oauth"
+                      ? t("oauth.needsSignIn")
+                      : t("account.needsPassword")
+                    : errorText(t, { code: account.error_code })
+                }
                 side="right"
               >
                 <button

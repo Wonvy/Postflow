@@ -44,6 +44,8 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - HTML 邮件经过净化，脚本一律去掉，放在沙箱里显示。远程图片常被用来追踪你什么时候打开了邮件，默认不加载，
   可以单封放行，也可以对某个发件人一直放行。
 - 已读、星标、归档写回邮件服务器，手机和网页邮箱里的状态保持一致。
+- Outlook.com、Hotmail 和 Microsoft 365 用微软账户登录（OAuth 2.0），登录在浏览器里完成，Postflow 拿不到你的密码。
+  登录状态存在这台设备的钥匙串里，会自动续期。详见 [Outlook.com 和 Microsoft 365](#outlookcom-和-microsoft-365)。
 
 **订阅**
 
@@ -109,7 +111,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 邮件默认不发给云端 AI，需要在设置里打开；本机运行的服务不受限制。生成的内容、对话和用量只存在这台设备上；
   你不点、也没打开自动功能时，什么都不会发出去。
 
-**还没有的**：写信与回复、Outlook 与 Microsoft 365 的 OAuth 登录、收件箱、垃圾邮件和已删除以外的文件夹、搜索、命令面板、
+**还没有的**：写信与回复、Gmail 的 OAuth 登录（请用应用专用密码）、收件箱、垃圾邮件和已删除以外的文件夹、搜索、命令面板、
 稍后提醒、规则、托盘常驻、移动端、苹果和微软的安装包签名。Linux 上只有 AppImage 能在应用里直接更新，
 用 `.deb`、`.rpm` 安装的会引导你去下载页。
 
@@ -132,6 +134,26 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 | `1` `2` `3` | 切换侧栏选项卡（选项卡布局下） |
 | `R` | 刷新全部订阅和邮箱 |
 | `Esc` | 取消勾选，或关闭阅读面板 |
+
+## Outlook.com 和 Microsoft 365
+
+微软已经不允许邮件应用用密码登录 Outlook.com、Hotmail 和 Microsoft 365。Postflow 按微软对桌面应用的要求登录：
+在浏览器里打开微软的登录页，微软登录完把浏览器带回你自己电脑上的一个临时地址（`http://localhost:端口`），
+Postflow 用它换来令牌（OAuth 2.0 授权码 + PKCE）。刷新令牌和密码一样存在系统钥匙串里，不进数据目录，
+所以每台设备各自登录一次。整个过程没有我们的服务器参与。
+
+这需要一个在微软注册的应用 ID。在 Postflow 自带之前，请自己注册一个，免费，几分钟就好：
+
+1. 用任意微软账户登录 [Microsoft Entra 管理中心](https://entra.microsoft.com)（或 Azure 门户），打开
+   「应用注册 → 新注册」。
+2. 名称随意；「受支持的账户类型」选「任何组织目录中的账户和个人 Microsoft 账户」。
+3. 添加重定向 URI：平台选「公共客户端/本机（移动和桌面）」，地址填 `http://localhost`。
+4. 在概述页复制「应用程序(客户端) ID」。它不是密钥，可以放心填。
+5. 可选，工作账户常常需要：在「API 权限」里添加委托权限 `IMAP.AccessAsUser.All` 和 `offline_access`。
+
+然后在 Postflow 里添加 Outlook 或 Microsoft 365 邮箱，按提示粘贴这个 ID，点「用微软账户登录」。ID 存在设置里，
+会同步到你的其他设备；开发时也可以用环境变量 `POSTFLOW_MICROSOFT_CLIENT_ID`。工作和学校邮箱要开启 IMAP，
+管理员可能需要先批准这个应用。
 
 ## 数据
 
@@ -202,6 +224,11 @@ npm run demo
 添加邮箱时，地址填 `work@example.com` 或 `me@example.org`，密码填 `demo`；
 服务器设置里填 `127.0.0.1`、端口 `1143` 或 `1144`、加密选「不加密」。订阅源地址会在命令输出里列出。
 不想让演示密码进系统钥匙串的话，把 `npm run server` 换成 `npm run server:demo`，密码只存在内存里。
+
+演示里还有一个像 Outlook.com 一样只接受 OAuth 登录的邮箱，配了一个假的微软登录页。启动应用或服务时带上
+`POSTFLOW_MICROSOFT_AUTHORITY=http://127.0.0.1:1145/common` 和 `POSTFLOW_MICROSOFT_CLIENT_ID=demo`，
+添加 **Outlook** 邮箱 `outlook-demo@example.com`，服务器设置填 `127.0.0.1`、端口 `1147`、加密选「不加密」，
+再点「用微软账户登录」、在假登录页上点 **Allow**。
 
 ### 测试与检查
 

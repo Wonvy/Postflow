@@ -46,6 +46,9 @@ click **More info → Run anyway**.
 - HTML mail is sanitized and shown in a sandbox with scripts removed. Remote images, often used to track when you
   open a message, stay blocked until you allow them for one message or for a sender.
 - Read, starred and archived states are written back to the server, so your phone and webmail stay in step.
+- Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
+  never sees the password. The sign-in stays in this device's keychain and renews itself. See
+  [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365).
 
 **Feeds**
 
@@ -128,7 +131,7 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** writing and replying, OAuth sign-in for Outlook and Microsoft 365, folders other than the
+**Not yet available:** writing and replying, OAuth sign-in for Gmail (use an app password), folders other than the
 inbox, spam and trash, search, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
 Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
@@ -152,6 +155,31 @@ download page instead.
 | `1` `2` `3` | Switch sidebar tab (in the tabs layout) |
 | `R` | Refresh all feeds and mail |
 | `Esc` | Clear the selection, or close the reader |
+
+## Outlook.com and Microsoft 365
+
+Microsoft no longer lets mail apps sign in to Outlook.com, Hotmail or Microsoft 365 with a password. Postflow signs in
+the way Microsoft asks desktop apps to: it opens Microsoft's sign-in page in your browser, Microsoft sends the browser
+back to a temporary address on your own computer (`http://localhost:<port>`), and Postflow exchanges that for tokens
+(OAuth 2.0 authorization code with PKCE). The refresh token is kept in the system keychain like a password, never in
+the data folder, so each device signs in on its own. No server of ours is involved.
+
+This needs an application ID registered with Microsoft. Until Postflow ships with its own, register one; it's free and
+takes a few minutes:
+
+1. Sign in to the [Microsoft Entra admin center](https://entra.microsoft.com) (or the Azure portal) and open
+   **App registrations → New registration**.
+2. Give it a name, and under supported account types choose **Accounts in any organizational directory and personal
+   Microsoft accounts**.
+3. Add a redirect URI with the platform **Public client/native (mobile & desktop)** and the URI `http://localhost`.
+4. Copy the **Application (client) ID** from the overview page. It isn't a secret.
+5. Optional, but work accounts often need it: under **API permissions**, add the delegated permissions
+   `IMAP.AccessAsUser.All` and `offline_access`.
+
+Then add an Outlook or Microsoft 365 account in Postflow, paste the ID when it asks, and click **Sign in with
+Microsoft**. The ID is saved in your settings and syncs to your other devices; developers can also set the
+`POSTFLOW_MICROSOFT_CLIENT_ID` environment variable. Work and school mailboxes need IMAP turned on, and your admin may
+have to approve the app.
 
 ## Your data
 
@@ -228,6 +256,11 @@ Add a mail account with the address `work@example.com` or `me@example.org` and t
 settings, use `127.0.0.1`, port `1143` or `1144`, and encryption **None**. The command prints the feed addresses.
 To keep the demo password out of your keychain, use `npm run server:demo` instead of `npm run server`; it keeps
 passwords in memory only.
+
+The demo also has a mailbox that, like Outlook.com, only accepts OAuth sign-in, with a fake Microsoft sign-in page.
+Start the app or server with `POSTFLOW_MICROSOFT_AUTHORITY=http://127.0.0.1:1145/common` and
+`POSTFLOW_MICROSOFT_CLIENT_ID=demo`, add an **Outlook** account `outlook-demo@example.com`, set the server to
+`127.0.0.1`, port `1147`, encryption **None**, then click **Sign in with Microsoft** and **Allow**.
 
 ### Tests and checks
 

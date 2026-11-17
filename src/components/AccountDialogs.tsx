@@ -1,5 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Info, Mail, TriangleAlert } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, ExternalLink, Info, Mail, TriangleAlert } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Account,
@@ -128,6 +128,165 @@ function ErrorLine({ error }: { error: Failure }) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+/** 注册 Azure 应用的说明，在说明文档里。 */
+const OAUTH_DOCS: Record<"zh" | "en", string> = {
+  en: "https://github.com/Wonvy/Postflow#outlookcom-and-microsoft-365",
+  zh: "https://github.com/Wonvy/Postflow/blob/main/README.zh-CN.md#outlookcom-和-microsoft-365",
+};
+
+/** Outlook、Microsoft 365 这类只能用微软账户登录的服务商。 */
+const usesOAuth = (preset: Preset | null | undefined) => preset?.password_kind === "oauth";
+
+/**
+ * 用微软账户登录：在系统浏览器里打开微软的登录页，等它把授权送回本机，再交给 `onSignedIn`
+ * 去添加或更新账户。还没设置 Azure 应用 ID 时，先让用户填一个。
+ */
+function MicrosoftSignIn({
+  email,
+  again,
+  onSignedIn,
+}: {
+  email: string;
+  again?: boolean;
+  onSignedIn: (flowId: string) => Promise<void>;
+}) {
+  const t = useT();
+  const lang = useLang();
+  const qc = useQueryClient();
+  const config = useQuery({ queryKey: ["oauth-config"], queryFn: api.oauthConfig });
+  const [phase, setPhase] = useState<"idle" | "waiting" | "finishing">("idle");
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<Failure | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [saving, setSaving] = useState(false);
+  /** 当前这次登录。取消或者换了一次时，旧的结果作废。 */
+  const flow = useRef<string | null>(null);
+
+  // 对话框关了还在等的话，告诉核心别等了
+  useEffect(
+    () => () => {
+      if (flow.current) void api.oauthCancel(flow.current).catch(() => {});
+    },
+    [],
+  );
+
+  const start = async () => {
+    setError(null);
+    try {
+      const started = await api.oauthStart(email);
+      flow.current = started.flow_id;
+      setUrl(started.url);
+      setPhase("waiting");
+      void openExternal(started.url);
+      await api.oauthWait(started.flow_id);
+      if (flow.current !== started.flow_id) return;
+      setPhase("finishing");
+      await onSignedIn(started.flow_id);
+      flow.current = null;
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && err.code === "oauth_cancelled") return;
+      flow.current = null;
+      setError(failure(t, err));
+      setPhase("idle");
+    }
+  };
+
+  const cancel = () => {
+    const id = flow.current;
+    flow.current = null;
+    setPhase("idle");
+    if (id) void api.oauthCancel(id).catch(() => {});
+  };
+
+  const saveClientId = async () => {
+    if (!clientId.trim()) return;
+    setSaving(true);
+    try {
+      await api.setSetting("mail.microsoft_client_id", clientId.trim());
+      await qc.invalidateQueries({ queryKey: ["oauth-config"] });
+      void qc.invalidateQueries({ queryKey: keys.settings });
+    } catch (err) {
+      setError(failure(t, err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (config.data && !config.data.microsoft) {
+    return (
+      <div className="flex flex-col gap-3">
+        <Hint tone="warning" text={t("oauth.needClient")} link={{ label: t("oauth.howTo"), url: OAUTH_DOCS[lang] }} />
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <Field label={t("oauth.clientId")}>
+              <TextInput
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+              />
+            </Field>
+          </div>
+          <Button busy={saving} disabled={!clientId.trim()} onClick={() => void saveClientId()}>
+            {t("action.save")}
+          </Button>
+        </div>
+        {error && <ErrorLine error={error} />}
+      </div>
+    );
+  }
+
+  // 微软登录按钮的四色方块
+  const logo = (
+    <svg viewBox="0 0 21 21" width={14} height={14} aria-hidden>
+      <rect x="0" y="0" width="10" height="10" fill="#f25022" />
+      <rect x="11" y="0" width="10" height="10" fill="#7fba00" />
+      <rect x="0" y="11" width="10" height="10" fill="#00a4ef" />
+      <rect x="11" y="11" width="10" height="10" fill="#ffb900" />
+    </svg>
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      {phase === "idle" ? (
+        <Button
+          variant="primary"
+          className="h-9 w-full"
+          disabled={!email.includes("@") || config.isPending}
+          onClick={() => void start()}
+        >
+          {logo}
+          {again ? t("oauth.signInAgain") : t("oauth.signIn")}
+        </Button>
+      ) : (
+        <div className="flex items-start gap-3 rounded-md border border-line bg-hover px-3 py-2.5 text-[12px] leading-relaxed text-fg-2">
+          <span className="mt-0.5 text-fg-3">
+            <Spinner size={13} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p>{phase === "waiting" ? t("oauth.waiting") : t("oauth.finishing")}</p>
+            {phase === "waiting" && url && (
+              <button
+                type="button"
+                onClick={() => void openExternal(url)}
+                className="mt-1 inline-flex items-center gap-1 text-accent hover:underline"
+              >
+                <ExternalLink size={12} />
+                {t("oauth.reopen")}
+              </button>
+            )}
+          </div>
+          {phase === "waiting" && (
+            <Button variant="ghost" className="h-6 px-2 text-[12px]" onClick={cancel}>
+              {t("action.cancel")}
+            </Button>
+          )}
+        </div>
+      )}
+      {error && <ErrorLine error={error} />}
     </div>
   );
 }
@@ -443,6 +602,30 @@ export function AddAccountDialog() {
     }
   };
 
+  /** 微软账户登录完成：用换来的授权添加邮箱。出错时抛给登录按钮去显示。 */
+  const addWithOAuth = async (flow: string) => {
+    setError(null);
+    const port = Number(server.port);
+    try {
+      const account = await api.addAccount({
+        email: address,
+        oauth: flow,
+        name: name.trim(),
+        imap_host: server.host.trim() || undefined,
+        imap_port: Number.isFinite(port) && port > 0 ? port : undefined,
+        imap_security: server.host.trim() ? server.security : undefined,
+        username: server.username.trim() || undefined,
+      });
+      void qc.invalidateQueries({ queryKey: keys.nav });
+      void qc.invalidateQueries({ queryKey: ["items"] });
+      setScope({ kind: "account", accountId: account.id });
+      setDialog(null);
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && err.code !== "mail_auth") setShowServer(true);
+      throw err;
+    }
+  };
+
   const placeholder = preset?.domains[0] ? `name@${preset.domains[0]}` : "name@example.com";
 
   return (
@@ -491,19 +674,21 @@ export function AddAccountDialog() {
             {t("account.detected", { name: providerName(preset, lang) })} · {preset.imap_host}
           </p>
         )}
-        <Field label={passwordLabel(t, preset)}>
-          <TextInput
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={busy}
-          />
-        </Field>
+        {!usesOAuth(preset) && (
+          <Field label={passwordLabel(t, preset)}>
+            <TextInput
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+            />
+          </Field>
+        )}
         {hint && (
           <Hint
             text={t(hint)}
-            tone={preset?.password_kind === "oauth" ? "warning" : "info"}
+            tone="info"
             link={preset && HELP_URL[preset.id] ? { label: t("account.makePassword"), url: HELP_URL[preset.id] ?? "" } : undefined}
           />
         )}
@@ -532,7 +717,11 @@ export function AddAccountDialog() {
           )}
         </div>
 
-        <p className="text-[12px] leading-relaxed text-fg-3">{t("account.passwordStored")}</p>
+        {usesOAuth(preset) ? (
+          <MicrosoftSignIn email={address} onSignedIn={(flow) => addWithOAuth(flow)} />
+        ) : (
+          <p className="text-[12px] leading-relaxed text-fg-3">{t("account.passwordStored")}</p>
+        )}
         {error && <ErrorLine error={error} />}
 
         <div className="flex items-center justify-end gap-2">
@@ -545,9 +734,11 @@ export function AddAccountDialog() {
           <Button variant="ghost" onClick={() => setDialog(null)}>
             {t("action.cancel")}
           </Button>
-          <Button variant="primary" type="submit" disabled={!address || !password || busy}>
-            {t("action.add")}
-          </Button>
+          {!usesOAuth(preset) && (
+            <Button variant="primary" type="submit" disabled={!address || !password || busy}>
+              {t("action.add")}
+            </Button>
+          )}
         </div>
       </form>
       )}
@@ -593,6 +784,16 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
   const [error, setError] = useState<Failure | null>(null);
 
   const preset = presets.data?.find((p) => p.imap_host === account.imap_host) ?? null;
+  const oauth = usesOAuth(preset);
+
+  /** 重新用微软账户登录，顺便保存改过的名字。 */
+  const signInAgain = async (flow: string) => {
+    const changes: AccountChanges = { oauth: flow };
+    if (name.trim() !== account.name) changes.name = name.trim();
+    await api.updateAccount(account.id, changes);
+    void qc.invalidateQueries({ queryKey: keys.nav });
+    onDone();
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -629,7 +830,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
         <span className="shrink-0 text-[12px] text-fg-3">{status}</span>
       </div>
       {needsPassword ? (
-        <Hint text={t("account.needsPassword")} />
+        <Hint text={oauth ? t("oauth.needsSignIn") : t("account.needsPassword")} />
       ) : (
         account.error_code && (
           <Hint
@@ -650,16 +851,20 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
           placeholder={t("account.namePlaceholder")}
         />
       </Field>
-      <Field label={passwordLabel(t, preset)}>
-        <TextInput
-          autoFocus={needsPassword || account.error_code === "mail_auth"}
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder={needsPassword ? "" : t("account.passwordKeep")}
-        />
-      </Field>
+      {oauth ? (
+        <MicrosoftSignIn email={account.email} again={!needsPassword} onSignedIn={signInAgain} />
+      ) : (
+        <Field label={passwordLabel(t, preset)}>
+          <TextInput
+            autoFocus={needsPassword || account.error_code === "mail_auth"}
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={needsPassword ? "" : t("account.passwordKeep")}
+          />
+        </Field>
+      )}
       <div className="flex flex-col gap-2">
         <Disclosure open={showServer} onToggle={() => setShowServer((v) => !v)} label={t("account.server")} />
         {showServer && <ServerFields value={server} onChange={setServer} />}
@@ -677,7 +882,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
         <Button variant="ghost" onClick={onDone}>
           {t("action.cancel")}
         </Button>
-        <Button variant="primary" type="submit" busy={busy} disabled={needsPassword && !password}>
+        <Button variant="primary" type="submit" busy={busy} disabled={needsPassword && (oauth || !password)}>
           {t("action.save")}
         </Button>
       </div>
