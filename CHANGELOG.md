@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.16 — 2026-11-17
+
+### English
 - Getting started guide: after a fresh install, a short guide walks through language and theme, adding a mailbox,
   adding feeds (or importing OPML), the layout and main shortcuts, and where to find rules, translation, AI and
   plugins. Every step can be skipped, and it closes for good once skipped or finished. Open it again from
