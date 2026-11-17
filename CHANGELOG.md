@@ -27,6 +27,8 @@ that heading into the version number and date.
 - Two more example plugins: important-senders (stars new mail from senders you mark as important) and
   daily-digest (copies today's unread items, or the open one, as Markdown). The plugin developer guide is now
   also available in Chinese (docs/plugins.zh-CN.md), and Settings → Plugins opens the one for your language.
+- A new look for the Windows installer: brand-purple welcome and finish pages, a header with the Postflow logo,
+  its own setup icon, and Chinese as well as English (picked from your Windows language).
 
 ### 中文
 
@@ -42,6 +44,8 @@ that heading into the version number and date.
   响应新邮件，读取和修改条目。开发文档见 docs/plugins.md，完整的例子在 examples/plugins/copy-code。插件要在每台设备上手动启用才会加载。
 - 新增两个插件例子：important-senders（给标记为重要的发件人的新邮件自动加星标）和 daily-digest（把今天的未读条目或打开的条目复制成 Markdown）。
   插件开发文档有了完整的中文版（docs/plugins.zh-CN.md），「设置 → 插件」里的开发文档按钮会按界面语言打开对应的版本。
+- Windows 安装程序换了新样子：品牌紫色的欢迎页和完成页、带 Postflow 图标的页眉、单独的安装程序图标，
+  并且有了中文界面（按 Windows 的语言自动选择）。
 
 ## 0.1.13 — 2026-11-17
 
