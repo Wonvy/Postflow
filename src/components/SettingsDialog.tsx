@@ -10,8 +10,11 @@ import {
   Sparkles,
   Tags,
 } from "lucide-react";
-import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+// 更新说明随应用打包，关于页里不联网也能看到这个版本改了什么
+import CHANGELOG from "../../CHANGELOG.md?raw";
 import { api } from "../lib/api";
+import { compareVersions, parseChangelog } from "../lib/changelog";
 import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
@@ -22,6 +25,7 @@ import { languageName, useModelDownloads, useTranslateEngine, useTranslateLangua
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
 import { SettingRow } from "./SettingsParts";
+import { NotesSection } from "./UpdateDialog";
 import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
 
 /** 设置的各页，按组排：常用的、AI、数据和应用本身。 */
@@ -264,10 +268,13 @@ export function SettingsDialog() {
     ),
     diagnostics: () => <Diagnostics open={open} />,
     about: () => (
-      <SettingRow label={t("settings.version")}>
-        <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
-        {isTauri && <UpdateCheck />}
-      </SettingRow>
+      <>
+        <SettingRow label={t("settings.version")}>
+          <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
+          {isTauri && <UpdateCheck />}
+        </SettingRow>
+        <CurrentNotes version={status.data?.version ?? null} />
+      </>
     ),
   };
 
@@ -533,6 +540,22 @@ function LogViewer({ open, onClose }: { open: boolean; onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** 关于页里：这个版本更新了什么。说明随应用一起打包，不用联网。 */
+function CurrentNotes({ version }: { version: string | null }) {
+  const t = useT();
+  const entry = useMemo(
+    () => (version ? parseChangelog(CHANGELOG).find((e) => compareVersions(e.version, version) === 0) : undefined),
+    [version],
+  );
+  if (!entry) return null;
+  return (
+    <div className="mt-2 border-t border-line pt-4">
+      <p className="mb-2.5 text-[12px] font-medium text-fg-3">{t("settings.whatsNew")}</p>
+      <NotesSection entry={entry} />
+    </div>
   );
 }
 

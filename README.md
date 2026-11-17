@@ -292,6 +292,11 @@ It needs Google Chrome or Microsoft Edge installed and writes to `docs/screensho
 
 ## Releasing
 
+First write what changed under **Unreleased** in [CHANGELOG.md](CHANGELOG.md), with an `### English` and a
+`### 中文` list. The release script turns that heading into the version and date and refuses to run while it's empty.
+The notes go at the top of the GitHub release and into `latest.json`, so the app's update window shows them (every
+version since the one you have), and Settings → About shows the notes for the installed version.
+
 ```bash
 npm run release -- 0.2.0
 ```

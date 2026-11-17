@@ -1,9 +1,48 @@
-import { ArrowUpCircle, TriangleAlert } from "lucide-react";
-import { useT } from "../lib/i18n";
+import { ArrowUpCircle, ExternalLink, TriangleAlert } from "lucide-react";
+import { useMemo } from "react";
+import { type ChangelogEntry, entriesBetween, entryText, parseChangelog } from "../lib/changelog";
+import { useLang, useT } from "../lib/i18n";
 import { openExternal, formatSize } from "../lib/platform";
 import { useStatus } from "../lib/queries";
 import { installUpdate, RELEASES_URL, useUpdater } from "../lib/updater";
+import { Markdown } from "./Markdown";
 import { Button, cx, Modal, Tip } from "./ui";
+
+/** 一个版本的更新说明：版本号、日期，下面是列表。 */
+export function NotesSection({ entry }: { entry: ChangelogEntry }) {
+  const lang = useLang();
+  return (
+    <section>
+      <h3 className="mb-1.5 flex items-baseline gap-2 text-[13px] font-semibold text-fg">
+        {entry.version}
+        {entry.date && <span className="tabular text-[12px] font-normal text-fg-3">{entry.date}</span>}
+      </h3>
+      <Markdown text={entryText(entry, lang)} className="text-[13px] leading-relaxed text-fg-2" />
+    </section>
+  );
+}
+
+/**
+ * 更新窗口里的更新说明：从当前版本之后到新版本的每一段，跳过了几个版本也都列出来。
+ * 说明不是 CHANGELOG 的格式时原样显示；没有说明时提示去发布页看。
+ */
+function ReleaseNotes({ notes, current, next }: { notes: string | null; current: string | null; next: string }) {
+  const t = useT();
+  const entries = useMemo(() => parseChangelog(notes ?? ""), [notes]);
+  const shown = entriesBetween(entries, current, next);
+  if (shown.length === 0 && !notes) {
+    return <p className="text-[12px] leading-relaxed text-fg-3">{t("update.noNotes")}</p>;
+  }
+  return (
+    <div className="flex max-h-[min(320px,40vh)] flex-col gap-4 overflow-y-auto rounded-lg border border-line bg-hover/40 px-3.5 py-3">
+      {shown.length > 0 ? (
+        shown.map((entry) => <NotesSection key={entry.version} entry={entry} />)
+      ) : (
+        <Markdown text={notes ?? ""} className="text-[13px] leading-relaxed text-fg-2" />
+      )}
+    </div>
+  );
+}
 
 /** 侧边栏底部的「有新版本」提示，点开是更新对话框。 */
 export function UpdatePill() {
@@ -33,7 +72,7 @@ export function UpdatePill() {
 export function UpdateDialog() {
   const t = useT();
   const status = useStatus();
-  const { dialogOpen, setDialogOpen, phase, version, downloaded, total, error, supported } = useUpdater();
+  const { dialogOpen, setDialogOpen, phase, version, notes, downloaded, total, error, supported } = useUpdater();
   const busy = phase === "downloading" || phase === "installing";
   const percent = total ? Math.min(100, Math.round((downloaded / total) * 100)) : null;
   const releaseUrl = version ? `${RELEASES_URL}/tag/v${version}` : RELEASES_URL;
@@ -43,7 +82,7 @@ export function UpdateDialog() {
       open={dialogOpen && version !== null}
       onClose={() => !busy && setDialogOpen(false)}
       title={t("update.title")}
-      width={420}
+      width={500}
     >
       <div className="flex flex-col gap-4 p-4">
         <div>
@@ -53,12 +92,15 @@ export function UpdateDialog() {
             <button
               type="button"
               onClick={() => void openExternal(releaseUrl)}
-              className="text-accent underline-offset-2 hover:underline"
+              className="inline-flex items-center gap-1 text-accent underline-offset-2 hover:underline"
             >
-              {t("update.notes")}
+              {t("update.releasePage")}
+              <ExternalLink size={11} />
             </button>
           </p>
         </div>
+
+        {version && <ReleaseNotes notes={notes} current={status.data?.version ?? null} next={version} />}
 
         {!supported && <p className="text-[13px] leading-relaxed text-fg-2">{t("update.manual")}</p>}
 

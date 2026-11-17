@@ -27,6 +27,8 @@ interface UpdaterState {
   supported: boolean;
   phase: UpdatePhase;
   version: string | null;
+  /** 发布流程放进 latest.json 的更新说明（CHANGELOG.md 里最近几个版本），更新窗口里直接显示。 */
+  notes: string | null;
   downloaded: number;
   total: number | null;
   error: string | null;
@@ -38,6 +40,7 @@ export const useUpdater = create<UpdaterState>()((set) => ({
   supported: false,
   phase: "idle",
   version: null,
+  notes: null,
   downloaded: 0,
   total: null,
   error: null,
@@ -52,7 +55,10 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** 查一次有没有新版本。`manual` 为 true 时，失败会显示出来；自动检查失败就安静地算了。 */
+/**
+ * 查一次有没有新版本。`manual` 为 true 时（用户点了「检查更新」），有新版本就直接打开更新窗口、
+ * 显示更新说明，失败也会显示出来；自动检查失败就安静地算了。
+ */
 export async function checkForUpdate(manual = false): Promise<void> {
   if (!isTauri) return;
   const { phase } = useUpdater.getState();
@@ -63,7 +69,12 @@ export async function checkForUpdate(manual = false): Promise<void> {
     const update = await check({ timeout: 30_000 });
     if (update) {
       pending = update;
-      useUpdater.setState({ phase: "available", version: update.version });
+      useUpdater.setState({
+        phase: "available",
+        version: update.version,
+        notes: update.body?.trim() || null,
+        ...(manual ? { dialogOpen: true } : {}),
+      });
     } else {
       useUpdater.setState({ phase: "latest" });
     }

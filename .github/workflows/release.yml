@@ -61,7 +61,9 @@ jobs:
                  --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
           if [ -z "$id" ]; then
             version="${TAG#v}"
-            sed "s/__VERSION__/$version/g" .github/release-notes.md > notes.md
+            # 最前面是 CHANGELOG.md 里这个版本的更新说明（英文，下面折叠着中文），再是下载说明
+            python3 .github/scripts/changelog.py section "$version" > notes.md
+            sed "s/__VERSION__/$version/g" .github/release-notes.md >> notes.md
             # 附上自上个版本以来的提交与合并请求列表
             gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
               -f tag_name="$TAG" --jq .body >> notes.md || true
@@ -144,6 +146,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
     steps:
+      # 要读 CHANGELOG.md，把更新说明放进 latest.json
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
       # 草稿阶段上传的文件还没有公开地址，latest.json 里写的是 api.github.com 的地址。
       # 那个地址对每个 IP 每小时只给 60 次匿名请求，用户多的网络里在线更新会下载失败，
       # 所以发布前把它们换成 github.com 的公开下载地址。
@@ -158,6 +165,8 @@ jobs:
           fi
           gh api -H "Accept: application/octet-stream" \
             "repos/$GITHUB_REPOSITORY/releases/assets/$latest_id" > latest.json
+          # 应用的更新窗口直接显示 notes：这个版本和之前几个版本的更新说明，它按语言和当前版本自己挑
+          python3 .github/scripts/changelog.py recent "${TAG#v}" > release-notes.txt
           python3 - <<'EOF'
           import csv, json, os
           repo, tag = os.environ["GITHUB_REPOSITORY"], os.environ["TAG"]
@@ -169,7 +178,10 @@ jobs:
               if url.startswith(prefix):
                   name = names[url[len(prefix):]]
                   platform["url"] = f"https://github.com/{repo}/releases/download/{tag}/{name}"
-          json.dump(data, open("latest.json", "w"), indent=2)
+          notes = open("release-notes.txt", encoding="utf-8").read().strip()
+          if notes:
+              data["notes"] = notes
+          json.dump(data, open("latest.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
           print(json.dumps({k: v["url"] for k, v in data["platforms"].items()}, indent=2))
           EOF
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$latest_id"

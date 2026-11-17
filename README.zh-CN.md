@@ -259,6 +259,10 @@ npm run screenshots
 
 ## 发布新版本
 
+先在 [CHANGELOG.md](CHANGELOG.md) 的 **Unreleased** 下面写好这一版改了什么，`### English` 和 `### 中文` 各一段列表。
+发版脚本会把这个标题换成版本号和日期，没写时不让发。这些说明放在 GitHub 发布页最前面，也放进 `latest.json`：
+应用的更新窗口直接显示它们（从你装的版本之后的每一版），设置的「关于」里显示当前这一版的说明。
+
 ```bash
 npm run release -- 0.2.0
 ```

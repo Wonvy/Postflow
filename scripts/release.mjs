@@ -27,6 +27,23 @@ if (run("git", ["tag", "--list", tag]) !== "") {
   process.exit(1);
 }
 
+// 更新说明：CHANGELOG.md 里「## Unreleased」下面写好的条目就是这个版本的说明。
+// 应用的更新窗口和 GitHub 上的发布页都显示它，所以不能是空的。
+const changelog = readFileSync("CHANGELOG.md", "utf8");
+const unreleased = /^## Unreleased[ \t]*\r?\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(changelog);
+if (!unreleased || !/^\s*- /m.test(unreleased[1] ?? "")) {
+  console.error("CHANGELOG.md 的「## Unreleased」下面还没写这个版本的更新说明（### English 和 ### 中文 各一段列表）。");
+  process.exit(1);
+}
+const today = new Date().toISOString().slice(0, 10);
+writeFileSync(
+  "CHANGELOG.md",
+  changelog.replace(
+    /^## Unreleased[ \t]*$/m,
+    `## Unreleased\n\n### English\n\n### 中文\n\n## ${version} — ${today}`,
+  ),
+);
+
 // package.json 是应用版本号的唯一来源，tauri.conf.json 直接引用它
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const previous = pkg.version;
@@ -51,7 +68,7 @@ if (updated === cargo && !cargo.includes(`version = "${version}"`)) {
 writeFileSync("Cargo.toml", updated);
 run("cargo", ["update", "--workspace", "--offline"], { stdio: ["ignore", "ignore", "inherit"] });
 
-run("git", ["add", "package.json", "package-lock.json", "Cargo.toml", "Cargo.lock"]);
+run("git", ["add", "package.json", "package-lock.json", "Cargo.toml", "Cargo.lock", "CHANGELOG.md"]);
 run("git", ["commit", "-m", `发布 ${tag}`]);
 run("git", ["tag", "-a", tag, "-m", `Postflow ${tag}`]);
 
