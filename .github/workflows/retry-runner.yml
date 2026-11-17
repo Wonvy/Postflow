@@ -1,0 +1,61 @@
+name: Retry jobs GitHub couldn't start
+
+# GitHub's macOS runners are sometimes short of capacity: a job waits about 15 minutes, then fails with
+# "The job was not acquired by Runner of type hosted even after multiple attempts" without running a step.
+# For a release that stops the whole thing at the draft. When a Release or CI run ends that way, re-run its
+# failed jobs (the publish step after them runs again too) and wait for them, up to 3 more times. Failures in
+# the code itself are left alone.
+on:
+  workflow_run:
+    workflows: [Release, CI]
+    types: [completed]
+
+permissions:
+  actions: write
+  checks: read
+
+# One retrier per run (in case a re-run's completion starts this workflow again)
+concurrency:
+  group: retry-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-run jobs that never got a runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Did a failed or cancelled job of the latest attempt never get a runner?
+          never_started() {
+            for job in $(gh api "repos/$REPO/actions/runs/$RUN/jobs?filter=latest&per_page=100" \
+                           --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled") | .id'); do
+              if gh api "repos/$REPO/check-runs/$job/annotations" --jq '.[].message' \
+                   | grep -q "was not acquired by Runner"; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          # A re-run started with this token doesn't trigger this workflow again, so keep going here
+          for attempt in 1 2 3; do
+            if ! never_started; then
+              echo "Nothing left that failed for lack of a runner."
+              exit 0
+            fi
+            echo "A job never got a runner; re-running the failed jobs of run $RUN (retry $attempt of 3)."
+            sleep 60
+            gh run rerun "$RUN" --failed --repo "$REPO"
+            sleep 30
+            gh run watch "$RUN" --repo "$REPO" --interval 60 > /dev/null || true
+            if [ "$(gh api "repos/$REPO/actions/runs/$RUN" --jq .conclusion)" = "success" ]; then
+              echo "Run $RUN succeeded."
+              exit 0
+            fi
+          done
+          echo "::warning::Run $RUN still has jobs that never got a runner after 3 retries."
