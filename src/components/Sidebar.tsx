@@ -81,6 +81,7 @@ function Row({
   trailing,
   drag,
   drop,
+  groupEnd = false,
 }: {
   active: boolean;
   onClick: () => void;
@@ -91,6 +92,8 @@ function Row({
   drag?: DragHandlers;
   /** 拖到这一行上时放下的位置：上方、下方，或者放进去。 */
   drop?: DropPosition | null;
+  /** 这是展开的文件夹里最后一个源，东西正要排到这个文件夹后面：在下沿画一条和文件夹对齐的线。 */
+  groupEnd?: boolean;
 }) {
   return (
     <div
@@ -125,6 +128,9 @@ function Row({
           )}
         />
       )}
+      {groupEnd && (
+        <span aria-hidden className="pointer-events-none absolute -bottom-px left-2 right-1 h-0.5 rounded-full bg-accent" />
+      )}
       <span className={cx("flex size-4 shrink-0 items-center justify-center", active ? "text-fg" : "text-fg-3")}>
         {leading}
       </span>
@@ -145,12 +151,14 @@ function FeedRow({
   active,
   drag,
   drop,
+  groupEnd = false,
 }: {
   feed: Feed;
   indent: boolean;
   active: boolean;
   drag: DragHandlers;
   drop: DropPosition | null;
+  groupEnd?: boolean;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -190,6 +198,7 @@ function FeedRow({
         onClick={() => setScope({ kind: "feed", feedId: feed.id })}
         drag={drag}
         drop={drop}
+        groupEnd={groupEnd}
         leading={<Favicon src={feed.icon_url} />}
         label={feed.title || feed.url}
         trailing={
@@ -521,9 +530,10 @@ export function Sidebar({ width }: { width: number }) {
       (p, position) => position !== "inside" && placeTop(p, { kind: "feed", id: feed.id }, position),
     );
 
-  // 文件夹：订阅源拖到上沿排在文件夹前面，拖到中间放进去；拖到下沿时，文件夹展开着就放进去
-  // 排第一，收起着就排在文件夹后面。文件夹拖到文件夹上只排前后。
-  const folderTarget = (name: string, open: boolean, list: Feed[]) =>
+  // 文件夹：订阅源拖到上三分之一排在文件夹前面，中间放进去，下三分之一排在文件夹后面（同级）。
+  // 展开着的文件夹也一样：排在整组后面，提示线画在组里最后一个源下面。
+  // 想放进文件夹排第一，拖到文件夹里第一个源的上沿。文件夹拖到文件夹上只排前后。
+  const folderTarget = (name: string) =>
     target(
       `folder:${name}`,
       (p, e) => {
@@ -534,13 +544,10 @@ export function Sidebar({ width }: { width: number }) {
         return p.kind === "folder" && p.name !== name ? dropPosition(e) : null;
       },
       (p, position) => {
-        const self: TopEntry = { kind: "folder", name };
         if (position === "inside") {
           if (p.kind === "feed") moveFeed(p.id, name, null, "inside");
-        } else if (p.kind === "feed" && position === "after" && open && list[0]) {
-          if (list[0].id !== p.id) moveFeed(p.id, name, list[0].id, "before");
         } else {
-          placeTop(p, self, position);
+          placeTop(p, { kind: "folder", name }, position);
         }
       },
     );
@@ -821,14 +828,17 @@ export function Sidebar({ width }: { width: number }) {
                   const folder = entry.name;
                   const list = byFolder.get(folder) ?? [];
                   const open = !collapsed.includes(folder);
+                  const folderDrop = dropAt(`folder:${folder}`);
+                  // 展开着的文件夹，排到它后面时提示线画在整组下面
+                  const afterGroup = folderDrop === "after" && open && list.length > 0;
                   return (
                     <div key={`folder:${folder}`} className="flex flex-col gap-px">
                       <ContextMenu items={<FolderMenuItems folder={folder} />}>
                         <Row
                           active={isActive({ kind: "folder", folder })}
                           onClick={() => setScope({ kind: "folder", folder })}
-                          drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder, open, list) }}
-                          drop={dropAt(`folder:${folder}`)}
+                          drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder) }}
+                          drop={afterGroup ? null : folderDrop}
                           leading={
                             <button
                               type="button"
@@ -852,7 +862,7 @@ export function Sidebar({ width }: { width: number }) {
                         />
                       </ContextMenu>
                       {open &&
-                        list.map((feed) => (
+                        list.map((feed, i) => (
                           <FeedRow
                             key={feed.id}
                             feed={feed}
@@ -860,6 +870,7 @@ export function Sidebar({ width }: { width: number }) {
                             active={isActive({ kind: "feed", feedId: feed.id })}
                             drag={{ ...source({ kind: "feed", id: feed.id, folder: feed.folder }, feed.title), ...feedTarget(feed) }}
                             drop={dropAt(`feed:${feed.id}`)}
+                            groupEnd={afterGroup && i === list.length - 1}
                           />
                         ))}
                     </div>

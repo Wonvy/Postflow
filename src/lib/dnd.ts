@@ -34,11 +34,18 @@ export function isOurs(e: DragEvent): boolean {
 
 export type DropPosition = "before" | "after" | "inside";
 
-/** 指针在目标的上半还是下半；`inside` 为真时中间那段算放进去。 */
+/**
+ * 指针在目标的上半还是下半；`inside` 为真时分成三等份，中间那段算放进去。
+ * 一行只有 28px，上下各留三分之一，拖到文件夹前后才不至于总被当成放进去。
+ */
 export function dropPosition(e: DragEvent, inside = false): DropPosition {
   const rect = e.currentTarget.getBoundingClientRect();
-  const y = (e.clientY - rect.top) / Math.max(1, rect.height);
-  if (inside) return y < 0.25 ? "before" : y > 0.75 ? "after" : "inside";
+  return positionAt((e.clientY - rect.top) / Math.max(1, rect.height), inside);
+}
+
+/** `y` 是指针在行里的相对高度，0 是上沿，1 是下沿。 */
+export function positionAt(y: number, inside = false): DropPosition {
+  if (inside) return y < 1 / 3 ? "before" : y > 2 / 3 ? "after" : "inside";
   return y < 0.5 ? "before" : "after";
 }
 
