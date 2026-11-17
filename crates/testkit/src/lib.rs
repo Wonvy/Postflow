@@ -125,6 +125,15 @@ impl FakeImap {
         self.changes.send_modify(|v| *v += 1);
     }
 
+    /// 再加一个邮箱。`special` 是 LIST 里标的用途，比如 `\\Junk`。
+    pub fn add_mailbox(&self, name: &str, special: Option<&'static str>) {
+        let mut s = self.lock();
+        let validity = 3000 + s.mailboxes.len() as u32;
+        s.mailboxes
+            .entry(name.to_string())
+            .or_insert_with(|| Mbox::new(validity, special));
+    }
+
     /// 之后的登录都被拒绝，回 `NO <reason>`；传 `None` 恢复正常。
     pub fn refuse_logins(&self, reason: Option<&str>) {
         self.lock().refuse_login = reason.map(str::to_string);

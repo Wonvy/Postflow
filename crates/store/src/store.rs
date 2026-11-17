@@ -144,6 +144,15 @@ CREATE TABLE IF NOT EXISTS mail_state (
     error_code   TEXT
 ) WITHOUT ROWID;
 
+-- 收件箱以外另外同步的文件夹（垃圾邮件、已删除）在服务器上叫什么、UIDVALIDITY 是多少
+CREATE TABLE IF NOT EXISTS mail_folders (
+    account_id  TEXT NOT NULL,
+    folder      INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    uidvalidity INTEGER NOT NULL,
+    PRIMARY KEY (account_id, folder)
+) WITHOUT ROWID;
+
 -- AI 生成的内容和对话，只在本机
 CREATE TABLE IF NOT EXISTS ai_results (
     item_id    TEXT NOT NULL,
@@ -1036,9 +1045,11 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
             )
         }
         View::Unread => format!("i.read = 0 AND i.archived = 0 AND {ALIVE}"),
-        // 星标的文章即使退订了也保留
-        View::Starred => "i.starred = 1".to_string(),
+        // 星标的文章即使退订了也保留。垃圾邮件和已删除的不算
+        View::Starred => "i.starred = 1 AND i.archived < 2".to_string(),
         View::Archived => format!("i.archived = 1 AND {ALIVE}"),
+        View::Junk => format!("i.archived = 2 AND {ALIVE}"),
+        View::Trash => format!("i.archived = 3 AND {ALIVE}"),
     };
     if let Some(source_id) = &filter.source_id {
         args.push(SqlValue::Text(source_id.clone()));

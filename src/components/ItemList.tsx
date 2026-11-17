@@ -42,6 +42,7 @@ import { useNav, useSettings } from "../lib/queries";
 import {
   CARD_MAX,
   CARD_MIN,
+  isMailOnlyView,
   type ListScope,
   type ListView,
   listKey,
@@ -495,6 +496,7 @@ export function ItemList({ width }: { width: number }) {
           <EmptyList
             noSources={feeds !== undefined && feeds.length === 0 && accounts !== undefined && accounts.length === 0}
             caughtUp={scope.kind === "view" && (scope.view === "inbox" || scope.view === "unread")}
+            folderHint={scope.kind === "view" && isMailOnlyView(scope.view)}
             onAddAccount={() => setDialog({ type: "add-account" })}
             onAddFeed={() => setDialog({ type: "add-feed" })}
           />
@@ -982,11 +984,14 @@ function Card(props: RowProps & { imageHeight: number }) {
 function EmptyList({
   noSources,
   caughtUp,
+  folderHint,
   onAddAccount,
   onAddFeed,
 }: {
   noSources: boolean;
   caughtUp: boolean;
+  /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
+  folderHint: boolean;
   onAddAccount: () => void;
   onAddFeed: () => void;
 }) {
@@ -1012,7 +1017,12 @@ function EmptyList({
           </div>
         </>
       ) : (
-        <p className="text-fg-3">{caughtUp ? t("list.caughtUp") : t("list.empty")}</p>
+        <div>
+          <p className="text-fg-3">{caughtUp ? t("list.caughtUp") : t("list.empty")}</p>
+          {folderHint && (
+            <p className="mt-1 max-w-[280px] text-[12px] leading-relaxed text-fg-3">{t("list.folderHint")}</p>
+          )}
+        </div>
       )}
     </div>
   );

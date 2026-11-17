@@ -99,6 +99,29 @@ pub enum FlagChange {
     Flagged(bool),
 }
 
+/// 除了收件箱，还会同步的两个邮箱。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpecialMailbox {
+    /// 垃圾邮件。
+    Junk,
+    /// 已删除的邮件。
+    Trash,
+}
+
+/// LIST 列出的一个邮箱。
+#[derive(Debug, Clone)]
+struct MailboxEntry {
+    /// 服务器上的原名，选中邮箱时用。
+    name: String,
+    /// 最后一级的名字，解码成正常文字、转成小写，按名字找时用。
+    leaf: String,
+    selectable: bool,
+    archive: bool,
+    all: bool,
+    junk: bool,
+    trash: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdleOutcome {
     /// 服务器说邮箱有变化。
@@ -201,6 +224,7 @@ pub struct Connection {
     uidplus: bool,
     selected: Option<String>,
     archive: Option<String>,
+    mailboxes: Option<Vec<MailboxEntry>>,
 }
 
 impl Connection {
@@ -252,6 +276,7 @@ impl Connection {
             uidplus: false,
             selected: None,
             archive: None,
+            mailboxes: None,
         };
         let caps = timed(async { Ok(conn.session.capabilities().await?) }).await?;
         conn.idle = caps.has_str("IDLE");
@@ -404,43 +429,60 @@ impl Connection {
         Ok(())
     }
 
+    /// 服务器上所有的邮箱，第一次用到时取一次。
+    async fn mailboxes(&mut self) -> Result<&[MailboxEntry]> {
+        if self.mailboxes.is_none() {
+            let names = timed(async {
+                let names: Vec<_> = self
+                    .session
+                    .list(Some(""), Some("*"))
+                    .await?
+                    .try_collect()
+                    .await?;
+                Ok(names)
+            })
+            .await?;
+            let entries = names
+                .iter()
+                .map(|n| {
+                    let attrs = n.attributes();
+                    let leaf = match n.delimiter() {
+                        Some(d) => n.name().rsplit(d).next().unwrap_or(n.name()),
+                        None => n.name(),
+                    };
+                    MailboxEntry {
+                        name: n.name().to_string(),
+                        leaf: decode_mailbox_name(leaf).trim().to_lowercase(),
+                        selectable: !attrs.contains(&NameAttribute::NoSelect),
+                        archive: attrs.contains(&NameAttribute::Archive),
+                        all: attrs.contains(&NameAttribute::All),
+                        junk: attrs.contains(&NameAttribute::Junk),
+                        trash: attrs.contains(&NameAttribute::Trash),
+                    }
+                })
+                .collect();
+            self.mailboxes = Some(entries);
+        }
+        Ok(self.mailboxes.as_deref().unwrap_or_default())
+    }
+
     /// 找到用来存放归档邮件的邮箱。找不到就建一个叫 Archive 的。
     pub async fn archive_mailbox(&mut self) -> Result<String> {
         if let Some(name) = &self.archive {
             return Ok(name.clone());
         }
-        let names = timed(async {
-            let names: Vec<_> = self
-                .session
-                .list(Some(""), Some("*"))
-                .await?
-                .try_collect()
-                .await?;
-            Ok(names)
-        })
-        .await?;
-        let by_attr = |attr: &NameAttribute<'_>| {
-            names
-                .iter()
-                .find(|n| n.attributes().contains(attr))
-                .map(|n| n.name().to_string())
-        };
+        let list = self.mailboxes().await?;
         let by_name = || {
-            names
-                .iter()
-                .find(|n| {
-                    let leaf = match n.delimiter() {
-                        Some(d) => n.name().rsplit(d).next().unwrap_or(n.name()),
-                        None => n.name(),
-                    };
-                    matches!(leaf.to_ascii_lowercase().as_str(), "archive" | "archives")
-                })
-                .map(|n| n.name().to_string())
+            list.iter()
+                .find(|m| m.selectable && matches!(m.leaf.as_str(), "archive" | "archives"))
         };
         // Gmail 没有归档文件夹，「所有邮件」就是归档：移出收件箱即可
-        let found = by_attr(&NameAttribute::Archive)
+        let found = list
+            .iter()
+            .find(|m| m.selectable && m.archive)
             .or_else(by_name)
-            .or_else(|| by_attr(&NameAttribute::All));
+            .or_else(|| list.iter().find(|m| m.selectable && m.all))
+            .map(|m| m.name.clone());
         let name = match found {
             Some(name) => name,
             None => {
@@ -450,6 +492,48 @@ impl Connection {
         };
         self.archive = Some(name.clone());
         Ok(name)
+    }
+
+    /// 找到垃圾邮件或已删除邮件所在的邮箱。服务器标了用途的优先，否则按常见的名字找。
+    /// 都没有就返回 `None`，比如 Gmail 设置里关掉了在 IMAP 中显示这个标签。
+    pub async fn special_mailbox(&mut self, kind: SpecialMailbox) -> Result<Option<String>> {
+        let list = self.mailboxes().await?;
+        let names: &[&str] = match kind {
+            SpecialMailbox::Junk => &[
+                "junk",
+                "spam",
+                "junk e-mail",
+                "junk email",
+                "junk mail",
+                "bulk mail",
+                "垃圾邮件",
+                "垃圾箱",
+            ],
+            SpecialMailbox::Trash => &[
+                "trash",
+                "bin",
+                "deleted",
+                "deleted items",
+                "deleted messages",
+                "已删除",
+                "已删除邮件",
+                "废纸篓",
+            ],
+        };
+        let marked = |m: &MailboxEntry| match kind {
+            SpecialMailbox::Junk => m.junk,
+            SpecialMailbox::Trash => m.trash,
+        };
+        Ok(list
+            .iter()
+            .filter(|m| m.selectable)
+            .find(|m| marked(m))
+            .or_else(|| {
+                list.iter()
+                    .filter(|m| m.selectable)
+                    .find(|m| names.contains(&m.leaf.as_str()))
+            })
+            .map(|m| m.name.clone()))
     }
 
     /// 在当前选中的邮箱里按 Message-ID 找邮件。
@@ -478,6 +562,7 @@ impl Connection {
             uidplus,
             selected,
             archive,
+            mailboxes,
         } = self;
         let mut handle = session.idle();
         timed(async { Ok(handle.init().await?) }).await?;
@@ -518,6 +603,7 @@ impl Connection {
             uidplus,
             selected,
             archive,
+            mailboxes,
         };
         conn.drain_unsolicited();
         let outcome = match outcome {
@@ -590,6 +676,61 @@ pub(crate) fn uid_set(uids: &[u32]) -> String {
     parts.join(",")
 }
 
+/// 把 IMAP 邮箱名用的改良 UTF-7（RFC 3501 5.1.3）解码成正常文字。
+/// 网易等服务器的中文邮箱名是这样写的。格式不对时原样返回。
+fn decode_mailbox_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut rest = name;
+    while let Some(start) = rest.find('&') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('-') else {
+            return name.to_string();
+        };
+        let encoded = &after[..end];
+        if encoded.is_empty() {
+            out.push('&');
+        } else {
+            match utf16_base64(encoded).and_then(|units| String::from_utf16(&units).ok()) {
+                Some(text) => out.push_str(&text),
+                None => return name.to_string(),
+            }
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// 改良 base64（用「,」代替「/」，不补「=」）里装着的 UTF-16BE。
+fn utf16_base64(s: &str) -> Option<Vec<u16>> {
+    let mut bits: u32 = 0;
+    let mut count = 0;
+    let mut bytes = Vec::new();
+    for c in s.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b',' => 63,
+            _ => return None,
+        };
+        bits = (bits << 6) | u32::from(v);
+        count += 6;
+        if count >= 8 {
+            count -= 8;
+            bytes.push((bits >> count) as u8);
+            bits &= (1 << count) - 1;
+        }
+    }
+    let (pairs, rest) = bytes.as_chunks::<2>();
+    if !rest.is_empty() {
+        return None;
+    }
+    Some(pairs.iter().map(|p| u16::from_be_bytes(*p)).collect())
+}
+
 fn quote(s: &str) -> String {
     let cleaned: String = s.chars().filter(|c| !c.is_control()).collect();
     format!("\"{}\"", cleaned.replace('\\', "\\\\").replace('"', "\\\""))
@@ -603,6 +744,16 @@ mod tests {
     fn uid_sets() {
         assert_eq!(uid_set(&[5, 1, 2, 3, 9, 10, 7, 3]), "1:3,5,7,9:10");
         assert_eq!(uid_set(&[42]), "42");
+    }
+
+    #[test]
+    fn mailbox_names_are_decoded() {
+        assert_eq!(decode_mailbox_name("&V4NXPpCuTvY-"), "垃圾邮件");
+        assert_eq!(decode_mailbox_name("&XfJSIJZk-"), "已删除");
+        assert_eq!(decode_mailbox_name("Sent &- Received"), "Sent & Received");
+        assert_eq!(decode_mailbox_name("INBOX"), "INBOX");
+        assert_eq!(decode_mailbox_name("bad &!!-"), "bad &!!-");
+        assert_eq!(decode_mailbox_name("open &V4NX"), "open &V4NX");
     }
 
     #[test]

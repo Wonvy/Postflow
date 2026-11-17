@@ -445,6 +445,103 @@ async fn renumbered_mailbox_is_resynced() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn junk_and_trash_are_listed_on_their_own() {
+    let server = FakeImap::start(USER, PASS).await;
+    // 垃圾邮件标了用途；已删除只有名字，还是网易那样的中文名（「已删除」）
+    server.add_mailbox("Junk", Some("\\Junk"));
+    server.add_mailbox("&XfJSIJZk-", None);
+    server.deliver("INBOX", &mail("in@x", "a@x", "Hello", "1"), &[]);
+    server.deliver("Junk", &mail("spam@x", "b@x", "Win a prize", "2"), &[]);
+    server.deliver("&XfJSIJZk-", &mail("old@x", "c@x", "Old receipt", "3"), &[]);
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    let account = call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    wait_for("junk and trash synced", || async {
+        mail_items(&core, "junk").await.len() == 1 && mail_items(&core, "trash").await.len() == 1
+    })
+    .await;
+    let titles = |items: Vec<Value>| -> Vec<String> {
+        items
+            .iter()
+            .map(|i| i["title"].as_str().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(titles(mail_items(&core, "inbox").await), ["Hello"]);
+    assert_eq!(titles(mail_items(&core, "junk").await), ["Win a prize"]);
+    assert_eq!(titles(mail_items(&core, "trash").await), ["Old receipt"]);
+    assert!(mail_items(&core, "unread").await.len() == 1);
+    assert!(mail_items(&core, "archived").await.is_empty());
+    let nav = call(&core, "nav.get", json!({})).await;
+    assert_eq!(nav["accounts"][0]["unread"], 1, "junk is not counted");
+
+    // 能打开、能标记已读，写回垃圾邮件所在的邮箱
+    let spam = find(&core, "junk", "Win a prize").await.unwrap();
+    let opened = call(&core, "items.get", json!({ "id": spam["id"] })).await;
+    assert!(opened["mail"]["body"].as_str().unwrap().contains('2'));
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [spam["id"]], "read": true }),
+    )
+    .await;
+    wait_for("seen in junk on the server", || async {
+        server.flags("Junk", "spam@x").unwrap_or_default() == ["\\Seen"]
+    })
+    .await;
+
+    // 归档对它不起作用；移回收件箱才行
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [spam["id"]], "archived": true }),
+    )
+    .await;
+    assert!(find(&core, "junk", "Win a prize").await.is_some());
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [spam["id"]], "archived": false }),
+    )
+    .await;
+    wait_for("moved to the inbox on the server", || async {
+        server.contains("INBOX", "spam@x") && !server.contains("Junk", "spam@x")
+    })
+    .await;
+    call(&core, "accounts.sync", json!({ "id": account["id"] })).await;
+    wait_for("listed once, in the inbox", || async {
+        let inbox = titles(mail_items(&core, "inbox").await);
+        inbox.len() == 2
+            && inbox.contains(&"Win a prize".to_string())
+            && mail_items(&core, "junk").await.is_empty()
+    })
+    .await;
+
+    // 在别的客户端里删掉的邮件，同步后出现在已删除里
+    server.remove("INBOX", "in@x");
+    server.deliver(
+        "&XfJSIJZk-",
+        &mail("in@x", "a@x", "Hello", "1"),
+        &["\\Seen"],
+    );
+    call(&core, "accounts.sync", json!({ "id": account["id"] })).await;
+    wait_for("deleted elsewhere shows in trash", || async {
+        titles(mail_items(&core, "trash").await).contains(&"Hello".to_string())
+            && find(&core, "inbox", "Hello").await.is_none()
+    })
+    .await;
+    core.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn refresh_reconnects_after_a_refused_login() {
     // 有的邮箱会临时拒绝登录（比如 QQ 邮箱登录太频繁时）。之后点刷新要重新连，
     // 不能一直停在那里，否则新邮件再也收不到

@@ -9,6 +9,8 @@ const zh = {
   "nav.unread": "未读",
   "nav.starred": "星标",
   "nav.archived": "已归档",
+  "nav.junk": "垃圾邮件",
+  "nav.trash": "已删除",
   "nav.feeds": "订阅",
   "nav.mail": "邮箱",
   "nav.account": "邮箱",
@@ -237,6 +239,7 @@ const zh = {
 
   "list.empty": "这里没有内容",
   "list.caughtUp": "都处理完了",
+  "list.folderHint": "邮件服务器没有让邮件应用看到这个文件夹时，这里会一直是空的。Gmail 可以在网页版的设置 → 标签里，给「垃圾邮件」和「已删除邮件」勾上「在 IMAP 中显示」。",
   "list.noFeedsTitle": "还没有订阅",
   "list.noFeedsBody": "添加一个订阅源，或者在设置里从其他阅读器导入 OPML。",
   "list.loading": "加载中…",
@@ -469,6 +472,8 @@ const en: Record<MessageKey, string> = {
   "nav.unread": "Unread",
   "nav.starred": "Starred",
   "nav.archived": "Archive",
+  "nav.junk": "Spam",
+  "nav.trash": "Trash",
   "nav.feeds": "Feeds",
   "nav.mail": "Mail",
   "nav.account": "Mail",
@@ -697,6 +702,7 @@ const en: Record<MessageKey, string> = {
 
   "list.empty": "Nothing here",
   "list.caughtUp": "You're all caught up",
+  "list.folderHint": "This stays empty if your mail server hides the folder from mail apps. In Gmail on the web, open Settings → Labels and tick \"Show in IMAP\" for Spam and Trash.",
   "list.noFeedsTitle": "No feeds yet",
   "list.noFeedsBody": "Add a feed, or import an OPML file from another reader in Settings.",
   "list.loading": "Loading…",

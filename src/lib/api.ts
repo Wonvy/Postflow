@@ -1,6 +1,7 @@
 import { rpc } from "./transport";
 
-export type View = "inbox" | "today" | "unread" | "starred" | "archived";
+/** junk 和 trash 是邮箱里的垃圾邮件和已删除邮件。 */
+export type View = "inbox" | "today" | "unread" | "starred" | "archived" | "junk" | "trash";
 
 export interface Status {
   configured: boolean;

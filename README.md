@@ -74,6 +74,9 @@ click **More info → Run anyway**.
   Every feed, mailbox, folder and view keeps its own display mode and grouping; changing one leaves the others alone.
 - Inbox, Today, Unread, Starred and Archive views. Drag items from the list onto Starred or Archive to star or
   archive them.
+- Spam and Trash under your mailboxes show what your mail server filed there, so a message caught by the spam
+  filter is easy to find. Move it back to the inbox with the same button (or `E`). Gmail only shares these folders
+  with mail apps when "Show in IMAP" is ticked for them in its label settings.
 - Three ways to show a list: compact rows, a summary with an excerpt and thumbnail, or a grid of cards with cover
   images. Each list remembers its own choice. Hold Ctrl (⌘ on a Mac) and scroll, or pinch on a trackpad, to resize
   the cards.
@@ -104,7 +107,7 @@ click **More info → Run anyway**.
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
 **Not yet available:** writing and replying, OAuth sign-in for Outlook and Microsoft 365, folders other than the
-inbox, search, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
+inbox, spam and trash, search, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
 Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
@@ -113,7 +116,7 @@ download page instead.
 | Key | Action |
 |---|---|
 | `J` / `K` | Next / previous item |
-| `E` | Archive (in Archive, move back to the inbox) |
+| `E` | Archive (in Archive, Spam or Trash, move back to the inbox) |
 | `S` | Star |
 | `U` | Read / unread |
 | `V` | Open the original page in your browser |

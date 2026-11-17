@@ -217,7 +217,7 @@ export const useUi = create<UiState>()(
           const kind = TAB_KIND[s.tab];
           const fits =
             s.tab === "all" ||
-            s.scope.kind === "view" ||
+            (s.scope.kind === "view" && !(s.tab === "feeds" && isMailOnlyView(s.scope.view))) ||
             (s.tab === "mail" ? s.scope.kind === "account" : s.scope.kind !== "account");
           return {
             sidebarLayout,
@@ -282,6 +282,16 @@ export const useUi = create<UiState>()(
 );
 
 /** 列表范围的标识，用来分别记住每个列表的显示方式。 */
+/** 这些视图里的条目都不在收件箱，取消归档（移回收件箱）会让它们离开列表。 */
+export function isArchiveLike(view: View | undefined): boolean {
+  return view === "archived" || view === "junk" || view === "trash";
+}
+
+/** 只有邮件才有的视图：垃圾邮件和已删除。 */
+export function isMailOnlyView(view: View): boolean {
+  return view === "junk" || view === "trash";
+}
+
 export function scopeKey(scope: ListScope): string {
   switch (scope.kind) {
     case "view":

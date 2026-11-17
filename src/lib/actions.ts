@@ -8,7 +8,7 @@ import { api, type Item, type ItemDetail, type ItemPatch } from "./api";
 import { useListModel } from "./listModel";
 import { openExternal } from "./platform";
 import { keys, useMarkAllRead, useSetItems } from "./queries";
-import { useUi } from "./store";
+import { isArchiveLike, useUi } from "./store";
 
 type Flag = "read" | "starred" | "archived";
 
@@ -56,7 +56,7 @@ export function useActions() {
       const leaves =
         patch.archived !== undefined &&
         filter.view !== "starred" &&
-        (filter.view === "archived" ? !patch.archived : patch.archived);
+        (isArchiveLike(filter.view) ? !patch.archived : patch.archived);
       if (leaves) {
         const gone = new Set(ids);
         const remaining = (members: string[]) => members.some((m) => !gone.has(m));

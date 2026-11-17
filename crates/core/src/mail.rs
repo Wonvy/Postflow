@@ -6,8 +6,10 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use postflow_mail::{Connection, FlagChange, Listing, Security, ServerConfig};
-use postflow_store::{Account, ItemPatch, MailRef, MailSync, MailSyncStats, NewMail, ids};
+use postflow_mail::{Connection, FlagChange, Listing, Security, ServerConfig, SpecialMailbox};
+use postflow_store::{
+    Account, ItemPatch, MailFolder, MailRef, MailSync, MailSyncStats, NewMail, ids,
+};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
@@ -16,6 +18,8 @@ use crate::{Core, Event, RpcError, Scope, Session};
 const INBOX: &str = "INBOX";
 /// 第一次同步取最新的这么多封。
 const INITIAL_COUNT: u32 = 200;
+/// 垃圾邮件和已删除第一次同步取最新的这么多封。
+const OTHER_INITIAL_COUNT: u32 = 100;
 /// 一次同步最多新取这么多封，防止一下子涌进几万封时卡住。
 const MAX_NEW_PER_SYNC: usize = 500;
 /// 只核对最新这么多封的状态。更早的邮件很少会被改动。
@@ -490,7 +494,7 @@ async fn serve(
             let active = core.refreshing.fetch_add(1, Ordering::SeqCst) + 1;
             core.emit(Event::Refresh { active });
         }
-        let result = sync_inbox(&mut conn, session, account_id).await;
+        let result = sync_all_folders(&mut conn, session, account_id).await;
         if announce {
             let active = core.refreshing.fetch_sub(1, Ordering::SeqCst) - 1;
             core.emit(Event::Refresh { active });
@@ -503,10 +507,10 @@ async fn serve(
                 added = stats.added,
                 updated = stats.updated,
                 removed = stats.removed,
-                "inbox synced"
+                "mail synced"
             );
         } else {
-            tracing::debug!(account = %account_id, "inbox synced, nothing new");
+            tracing::debug!(account = %account_id, "mail synced, nothing new");
         }
         if !healthy {
             healthy = true;
@@ -554,36 +558,78 @@ async fn serve(
     }
 }
 
-/// 同步收件箱：新邮件取回来，状态变了的更新，服务器上没了的删掉。
-async fn sync_inbox(
+/// 同步收件箱，再同步垃圾邮件和已删除，最后回到收件箱，好接着用 IDLE 等新邮件。
+/// 后两个文件夹服务器不让打开时跳过，不影响收件箱。
+async fn sync_all_folders(
     conn: &mut Connection,
     session: &Arc<Session>,
     account_id: &str,
 ) -> Result<MailSyncStats, postflow_mail::Error> {
+    let mut stats = sync_folder(conn, session, account_id, MailFolder::Inbox, INBOX).await?;
+    for (folder, kind) in [
+        (MailFolder::Junk, SpecialMailbox::Junk),
+        (MailFolder::Trash, SpecialMailbox::Trash),
+    ] {
+        let result = match conn.special_mailbox(kind).await {
+            Ok(Some(mailbox)) => sync_folder(conn, session, account_id, folder, &mailbox).await,
+            Ok(None) => continue,
+            Err(err) => Err(err),
+        };
+        match result {
+            Ok(s) => {
+                stats.added += s.added;
+                stats.updated += s.updated;
+                stats.removed += s.removed;
+            }
+            Err(err) if is_connection_error(&err) => return Err(err),
+            Err(err) => {
+                tracing::warn!(account = %account_id, ?folder, "mail: skipped a folder: {err}")
+            }
+        }
+    }
+    if conn.selected() != Some(INBOX) {
+        conn.select(INBOX).await?;
+    }
+    Ok(stats)
+}
+
+/// 同步一个文件夹：新邮件取回来，状态变了的更新，服务器上没了的删掉。
+async fn sync_folder(
+    conn: &mut Connection,
+    session: &Arc<Session>,
+    account_id: &str,
+    folder: MailFolder,
+    mailbox: &str,
+) -> Result<MailSyncStats, postflow_mail::Error> {
     let started_at = crate::refresh::now();
-    let info = conn.select(INBOX).await?;
+    let info = conn.select(mailbox).await?;
     let id = account_id.to_string();
     let previous = session
-        .db(move |s| s.mail_uidvalidity(&id))
+        .db(move |s| s.mail_folder(&id, folder))
         .await
         .ok()
         .flatten();
-    if previous.is_some_and(|v| v != info.uidvalidity) {
+    // 文件夹被服务器重建了，或者这次找到的是另一个文件夹
+    if previous.is_some_and(|(name, v)| name != mailbox || v != info.uidvalidity) {
         let id = account_id.to_string();
-        let _ = session.db(move |s| s.reset_inbox(&id)).await;
+        let _ = session.db(move |s| s.reset_mail_folder(&id, folder)).await;
     }
 
-    let id = account_id.to_string();
+    let (id, name) = (account_id.to_string(), mailbox.to_string());
     let known = session
-        .db(move |s| s.known_mail(&id))
+        .db(move |s| s.known_mail(&id, &name))
         .await
         .unwrap_or_default();
     let mut window: Vec<u32> = known.iter().map(|k| k.uid).collect();
     window.sort_unstable_by(|a, b| b.cmp(a));
     window.truncate(FLAG_WINDOW);
 
+    let initial = match folder {
+        MailFolder::Inbox => INITIAL_COUNT,
+        _ => OTHER_INITIAL_COUNT,
+    };
     let listing: Vec<Listing> = match window.last() {
-        None => conn.list_newest(info.exists, INITIAL_COUNT).await?,
+        None => conn.list_newest(info.exists, initial).await?,
         Some(&from) => conn.list_from(from).await?,
     };
 
@@ -629,6 +675,7 @@ async fn sync_inbox(
                 };
                 let mail = new_mail(
                     account_id,
+                    folder,
                     info.uidvalidity,
                     l,
                     raw,
@@ -648,15 +695,17 @@ async fn sync_inbox(
         flags,
         vanished,
     };
-    let id = account_id.to_string();
+    let (id, name) = (account_id.to_string(), mailbox.to_string());
     session
-        .db(move |s| s.apply_mail_sync(&id, sync))
+        .db(move |s| s.apply_folder_sync(&id, folder, &name, sync))
         .await
         .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn new_mail(
     account_id: &str,
+    folder: MailFolder,
     uidvalidity: u32,
     l: &Listing,
     raw: &[u8],
@@ -669,6 +718,13 @@ fn new_mail(
         .message_id
         .clone()
         .unwrap_or_else(|| format!("uid:{uidvalidity}:{}", l.uid));
+    // 有的服务器删除时是复制一份到已删除，同一封邮件可能同时在收件箱和已删除里。
+    // 各用各的 ID，免得两边的同步互相覆盖
+    let key = match folder {
+        MailFolder::Inbox => key,
+        MailFolder::Junk => format!("junk:{key}"),
+        MailFolder::Trash => format!("trash:{key}"),
+    };
     let mut id = ids::mail_id(account_id, &key);
     if taken.get(&id).is_some_and(|uid| *uid != l.uid) {
         id = ids::mail_id(account_id, &format!("{key}#{}", l.uid));
@@ -699,7 +755,8 @@ fn new_mail(
     }
 }
 
-/// 找出一批邮件在某个邮箱里的 UID。收件箱里有记录的直接用，其他的按 Message-ID 搜。
+/// 找出一批邮件在某个邮箱里的 UID。同步过的文件夹里有记录的直接用；
+/// 移到归档以后不知道新 UID 的，按 Message-ID 搜。
 async fn resolve(
     conn: &mut Connection,
     mailbox: &str,
@@ -708,10 +765,10 @@ async fn resolve(
     conn.select(mailbox).await?;
     let mut out = Vec::new();
     for r in refs {
-        let uid = match (mailbox == INBOX, r.uid, &r.message_id) {
-            (true, Some(uid), _) => Some(uid),
-            (_, _, Some(mid)) => conn.find_by_message_id(mid).await?.into_iter().next(),
-            (_, uid, None) => uid,
+        let uid = match (r.uid, &r.message_id) {
+            (Some(uid), _) => Some(uid),
+            (None, Some(mid)) => conn.find_by_message_id(mid).await?.into_iter().next(),
+            (None, None) => None,
         };
         if let Some(uid) = uid {
             out.push((r.id.clone(), uid));

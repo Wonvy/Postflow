@@ -252,6 +252,45 @@ fn seed_mail(work: &FakeImap, personal: &FakeImap) {
             "Thanks for your payment of $5.00.\r\n\r\nView it online: https://acme-hosting.example/billing"),
         &["\\Seen"],
     );
+    // Gmail 那样标了用途的垃圾邮件和已删除
+    personal.add_mailbox("[Gmail]/Spam", Some("\\Junk"));
+    personal.add_mailbox("[Gmail]/Trash", Some("\\Trash"));
+    personal.deliver(
+        "[Gmail]/Spam",
+        &text_mail(
+            "prize-1@lucky-draw.example",
+            "Lucky Draw <win@lucky-draw.example>",
+            p,
+            "You have been selected!",
+            5 * HOUR,
+            "Claim your prize today. This offer expires soon.",
+        ),
+        &[],
+    );
+    personal.deliver(
+        "[Gmail]/Spam",
+        &text_mail(
+            "tickets-1@example.org",
+            "Concert Hall <tickets@example.org>",
+            p,
+            "Your tickets for Saturday",
+            9 * HOUR,
+            "Two seats, row F. Show this email at the door.",
+        ),
+        &[],
+    );
+    personal.deliver(
+        "[Gmail]/Trash",
+        &text_mail(
+            "old-plan-1@example.org",
+            "Alex Kim <alex@example.org>",
+            p,
+            "Old travel plan",
+            2 * DAY,
+            "Ignore the earlier plan, we changed the dates.",
+        ),
+        &["\\Seen"],
+    );
     personal.deliver(
         "INBOX",
         &text_mail(

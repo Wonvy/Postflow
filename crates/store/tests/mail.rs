@@ -3,8 +3,8 @@
 use std::fs;
 
 use postflow_store::{
-    AccountConfig, Article, ItemFilter, ItemKind, ItemPatch, MailSync, NewFeed, NewMail, Store,
-    View, ids,
+    AccountConfig, Article, ItemFilter, ItemKind, ItemPatch, MailFolder, MailSync, NewFeed,
+    NewMail, Store, View, ids,
 };
 
 fn open(dir: &std::path::Path, data: &std::path::Path, device: &str) -> Store {
@@ -329,8 +329,14 @@ fn uidvalidity_reset_drops_stale_uids() {
         )
         .unwrap();
 
-    store.reset_inbox(&acc).unwrap();
-    assert!(store.known_mail(&acc).unwrap().iter().all(|m| m.archived));
+    store.reset_mail_folder(&acc, MailFolder::Inbox).unwrap();
+    assert!(
+        store
+            .known_mail(&acc, "INBOX")
+            .unwrap()
+            .iter()
+            .all(|m| m.archived)
+    );
     assert_eq!(
         store.items(&ItemFilter::default(), None, 10).unwrap().len(),
         0

@@ -109,6 +109,10 @@ pub enum View {
     Unread,
     Starred,
     Archived,
+    /// 邮箱里的垃圾邮件。
+    Junk,
+    /// 邮箱里已删除的邮件。
+    Trash,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -314,7 +318,29 @@ pub struct NewMail {
     pub raw: Option<Vec<u8>>,
 }
 
-/// 一次收件箱同步的结果，一次性写入。
+/// 同步的是邮箱里的哪个文件夹。
+///
+/// 邮件在哪个文件夹记在 `items.archived` 列里：0 收件箱，1 归档，2 垃圾邮件，3 已删除。
+/// 这样所有按 `archived = 0` 筛收件箱的地方（列表、未读数、今天）自然不含后两种。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MailFolder {
+    Inbox,
+    Junk,
+    Trash,
+}
+
+impl MailFolder {
+    /// 存在 `items.archived` 里的值。
+    pub fn code(self) -> i64 {
+        match self {
+            MailFolder::Inbox => 0,
+            MailFolder::Junk => 2,
+            MailFolder::Trash => 3,
+        }
+    }
+}
+
+/// 一次同步一个文件夹的结果，一次性写入。
 #[derive(Debug, Clone, Default)]
 pub struct MailSync {
     pub uidvalidity: u32,

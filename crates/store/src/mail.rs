@@ -107,6 +107,10 @@ fn delete_account_mail(conn: &Connection, account_id: &str) -> Result<()> {
     )?;
     conn.execute("DELETE FROM mail_meta WHERE account_id = ?1", [account_id])?;
     conn.execute("DELETE FROM mail_state WHERE account_id = ?1", [account_id])?;
+    conn.execute(
+        "DELETE FROM mail_folders WHERE account_id = ?1",
+        [account_id],
+    )?;
     Ok(())
 }
 
@@ -239,15 +243,37 @@ impl Store {
             .flatten())
     }
 
-    /// 本机已有的、还在收件箱里的邮件。
-    pub fn known_mail(&self, account_id: &str) -> Result<Vec<KnownMail>> {
+    /// 上次同步时，这个文件夹在服务器上叫什么、UIDVALIDITY 是多少。
+    pub fn mail_folder(
+        &self,
+        account_id: &str,
+        folder: MailFolder,
+    ) -> Result<Option<(String, u32)>> {
+        if folder == MailFolder::Inbox {
+            return Ok(self
+                .mail_uidvalidity(account_id)?
+                .map(|v| (INBOX.to_string(), v)));
+        }
+        Ok(self
+            .lock()
+            .conn
+            .query_row(
+                "SELECT name, uidvalidity FROM mail_folders WHERE account_id = ?1 AND folder = ?2",
+                params![account_id, folder.code()],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?)
+    }
+
+    /// 本机已有的、上次同步时还在 `mailbox` 里的邮件。
+    pub fn known_mail(&self, account_id: &str, mailbox: &str) -> Result<Vec<KnownMail>> {
         let guard = self.lock();
         let mut stmt = guard.conn.prepare(
             "SELECT m.id, m.uid, i.read, i.starred, i.archived, m.touched_at \
              FROM mail_meta m JOIN items i ON i.id = m.id \
              WHERE m.account_id = ?1 AND m.mailbox = ?2 AND m.uid IS NOT NULL",
         )?;
-        let rows = stmt.query_map(params![account_id, INBOX], |r| {
+        let rows = stmt.query_map(params![account_id, mailbox], |r| {
             Ok(KnownMail {
                 id: r.get(0)?,
                 uid: r.get(1)?,
@@ -260,16 +286,17 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    /// 收件箱被服务器重建了（UIDVALIDITY 变了）：本机记的 UID 全部作废。
-    /// 本机归档、还没写回服务器的那些保留。
-    pub fn reset_inbox(&self, account_id: &str) -> Result<()> {
+    /// 文件夹被服务器重建了（UIDVALIDITY 变了），或者换了一个文件夹：本机记的 UID 全部作废。
+    /// 收件箱里本机归档、还没写回服务器的那些保留。
+    pub fn reset_mail_folder(&self, account_id: &str, folder: MailFolder) -> Result<()> {
         let guard = self.lock();
         let ids: Vec<String> = {
             let mut stmt = guard.conn.prepare(
                 "SELECT m.id FROM mail_meta m JOIN items i ON i.id = m.id \
-                 WHERE m.account_id = ?1 AND m.mailbox = ?2 AND i.archived = 0",
+                 WHERE m.account_id = ?1 AND i.archived = ?2 \
+                   AND (?2 != 0 OR m.mailbox = ?3)",
             )?;
-            let rows = stmt.query_map(params![account_id, INBOX], |r| r.get(0))?;
+            let rows = stmt.query_map(params![account_id, folder.code(), INBOX], |r| r.get(0))?;
             rows.collect::<rusqlite::Result<_>>()?
         };
         for id in ids {
@@ -278,18 +305,37 @@ impl Store {
         Ok(())
     }
 
-    /// 把一次同步的结果写进去。
+    /// 把一次收件箱同步的结果写进去。
     pub fn apply_mail_sync(&self, account_id: &str, sync: MailSync) -> Result<MailSyncStats> {
+        self.apply_folder_sync(account_id, MailFolder::Inbox, INBOX, sync)
+    }
+
+    /// 把一次同步的结果写进去。`mailbox` 是这个文件夹在服务器上的名字。
+    pub fn apply_folder_sync(
+        &self,
+        account_id: &str,
+        folder: MailFolder,
+        mailbox: &str,
+        sync: MailSync,
+    ) -> Result<MailSyncStats> {
         let mut guard = self.lock();
         let tx = guard.conn.transaction()?;
         let mut stats = MailSyncStats::default();
         let now = now_ms() as i64;
 
-        tx.execute(
-            "INSERT INTO mail_state (account_id, uidvalidity) VALUES (?1, ?2) \
-             ON CONFLICT (account_id) DO UPDATE SET uidvalidity = excluded.uidvalidity",
-            params![account_id, sync.uidvalidity],
-        )?;
+        if folder == MailFolder::Inbox {
+            tx.execute(
+                "INSERT INTO mail_state (account_id, uidvalidity) VALUES (?1, ?2) \
+                 ON CONFLICT (account_id) DO UPDATE SET uidvalidity = excluded.uidvalidity",
+                params![account_id, sync.uidvalidity],
+            )?;
+        } else {
+            tx.execute(
+                "INSERT OR REPLACE INTO mail_folders (account_id, folder, name, uidvalidity) \
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![account_id, folder.code(), mailbox, sync.uidvalidity],
+            )?;
+        }
 
         for mail in sync.new {
             // 同一封邮件可能因为被移回收件箱而换了 UID，按 ID 合并
@@ -297,9 +343,9 @@ impl Store {
                 "INSERT INTO items \
                  (id, kind, source_id, guid, url, title, author, summary, published_at, fetched_at, \
                   read, starred, archived) \
-                 VALUES (?1, 'mail', ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0) \
+                 VALUES (?1, 'mail', ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
                  ON CONFLICT (id) DO UPDATE SET read = excluded.read, starred = excluded.starred, \
-                     archived = 0",
+                     archived = excluded.archived",
                 params![
                     mail.id,
                     account_id,
@@ -311,6 +357,7 @@ impl Store {
                     now,
                     mail.read,
                     mail.starred,
+                    folder.code(),
                 ],
             )?;
             tx.execute(
@@ -323,7 +370,7 @@ impl Store {
                 params![
                     mail.id,
                     account_id,
-                    INBOX,
+                    mailbox,
                     sync.uidvalidity,
                     mail.uid,
                     mail.message_id,
@@ -348,7 +395,7 @@ impl Store {
                 .query_row(
                     "SELECT id, touched_at FROM mail_meta \
                      WHERE account_id = ?1 AND mailbox = ?2 AND uid = ?3",
-                    params![account_id, INBOX, uid],
+                    params![account_id, mailbox, uid],
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .optional()?;
@@ -365,12 +412,21 @@ impl Store {
             )?;
         }
 
+        // 垃圾邮件和已删除以服务器为准：本机点了移回收件箱、却没移成的，放回原处
+        if folder != MailFolder::Inbox {
+            stats.updated += tx.execute(
+                "UPDATE items SET archived = ?3 WHERE archived != ?3 AND id IN \
+                 (SELECT id FROM mail_meta WHERE account_id = ?1 AND mailbox = ?2 AND touched_at < ?4)",
+                params![account_id, mailbox, folder.code(), sync.started_at],
+            )?;
+        }
+
         for uid in sync.vanished {
-            let row: Option<(String, i64, bool)> = tx
+            let row: Option<(String, i64, i64)> = tx
                 .query_row(
                     "SELECT m.id, m.touched_at, i.archived FROM mail_meta m JOIN items i ON i.id = m.id \
                      WHERE m.account_id = ?1 AND m.mailbox = ?2 AND m.uid = ?3",
-                    params![account_id, INBOX, uid],
+                    params![account_id, mailbox, uid],
                     |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .optional()?;
@@ -378,7 +434,7 @@ impl Store {
                 continue;
             };
             // 本机刚归档、正等着写回服务器的，不算消失
-            if archived || touched_at >= sync.started_at {
+            if archived == 1 || touched_at >= sync.started_at {
                 continue;
             }
             delete_mail(&tx, &id)?;
@@ -448,8 +504,9 @@ impl Store {
                 )?;
             }
             if let Some(archived) = patch.archived {
+                // 垃圾邮件和已删除的只能移回收件箱，不能归档
                 tx.execute(
-                    "UPDATE items SET archived = ?2 WHERE id = ?1",
+                    "UPDATE items SET archived = ?2 WHERE id = ?1 AND (?2 = 0 OR archived < 2)",
                     params![id, archived],
                 )?;
             }
@@ -474,8 +531,22 @@ impl Store {
     }
 
     /// 写回服务器之后，记下邮件现在在哪个邮箱、UID 是多少。
+    ///
+    /// 从垃圾邮件或已删除移回收件箱的，本机这条直接删掉：它在收件箱里是另一个 ID，
+    /// 下次同步收件箱时会重新取回来。
     pub fn mail_moved(&self, id: &str, mailbox: &str, uid: Option<u32>) -> Result<()> {
-        self.lock().conn.execute(
+        let guard = self.lock();
+        let from_other: bool = guard.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM mail_meta m JOIN mail_folders f \
+                 ON f.account_id = m.account_id AND f.name = m.mailbox \
+             WHERE m.id = ?1 AND m.mailbox != ?2)",
+            params![id, mailbox],
+            |r| r.get(0),
+        )?;
+        if from_other {
+            return delete_mail(&guard.conn, id);
+        }
+        guard.conn.execute(
             "UPDATE mail_meta SET mailbox = ?2, uid = ?3 WHERE id = ?1",
             params![id, mailbox, uid],
         )?;

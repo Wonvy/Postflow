@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Rss,
   Settings,
+  ShieldAlert,
   Star,
   Sun,
   Trash2,
@@ -61,6 +62,12 @@ const VIEWS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
   { view: "unread", icon: CircleDot, label: "nav.unread" },
   { view: "starred", icon: Star, label: "nav.starred" },
   { view: "archived", icon: Archive, label: "nav.archived" },
+];
+
+/** 邮箱里另外同步的两个文件夹，放在邮箱列表下面。 */
+const MAIL_FOLDERS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
+  { view: "junk", icon: ShieldAlert, label: "nav.junk" },
+  { view: "trash", icon: Trash2, label: "nav.trash" },
 ];
 
 /** 拖放用到的事件，挂在一行上。 */
@@ -742,6 +749,17 @@ export function Sidebar({ width }: { width: number }) {
                     drop={dropAt(`account:${account.id}`)}
                   />
                 ))}
+                {accounts &&
+                  accounts.length > 0 &&
+                  MAIL_FOLDERS.map(({ view, icon: Icon, label }) => (
+                    <Row
+                      key={view}
+                      active={isActive({ kind: "view", view })}
+                      onClick={() => setScope({ kind: "view", view })}
+                      leading={<Icon {...ICON} />}
+                      label={t(label)}
+                    />
+                  ))}
                 {accounts && accounts.length === 0 && (
                   <button
                     type="button"

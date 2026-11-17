@@ -18,7 +18,7 @@ import {
   type ItemPage,
   type ItemPatch,
 } from "./api";
-import { useUi } from "./store";
+import { isArchiveLike, useUi } from "./store";
 import { useAiStreams } from "./ai";
 import { retryBlocked } from "./listTranslate";
 import { useModelDownloads } from "./translate";
@@ -79,7 +79,7 @@ export function useDevices() {
 function leavesList(filter: ItemFilter, patch: ItemPatch): boolean {
   if (patch.archived === undefined) return false;
   if (filter.view === "starred") return false;
-  return filter.view === "archived" ? !patch.archived : patch.archived;
+  return isArchiveLike(filter.view) ? !patch.archived : patch.archived;
 }
 
 /**

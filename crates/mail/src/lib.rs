@@ -6,7 +6,10 @@ mod imap;
 mod message;
 mod presets;
 
-pub use imap::{Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig};
+pub use imap::{
+    Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig,
+    SpecialMailbox,
+};
 pub use message::{
     AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, Summary, attachment, base64,
     render, summarize,
