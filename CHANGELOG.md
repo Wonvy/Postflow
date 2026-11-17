@@ -40,6 +40,9 @@ that heading into the version number and date.
   feed addresses as ?key=), and a Test connection button that says whether the instance works, has a bot check
   like rsshub.app, needs a key, or isn't RSSHub at all. Addresses without http:// use http for local and LAN
   instances. New guide for running your own RSSHub on a computer, NAS or cloud server: docs/rsshub.md.
+- Add feed shows popular sites with official feeds as icons: YouTube, GitHub (releases, commits, tags or a user),
+  Reddit, Bluesky, Mastodon, Medium, Substack, Stack Overflow, Hacker News, V2EX and arXiv. Click one, type a name
+  (or paste the page address), and the preview appears; no RSSHub needed.
 
 ### 中文
 
@@ -65,6 +68,8 @@ that heading into the version number and date.
 - 「设置 → 订阅」（以及添加订阅里）有了 RSSHub 设置：实例地址、访问密钥（ACCESS_KEY，会以 ?key= 加在订阅地址后面），
   以及「测试连接」，能告诉你实例能不能用、是不是像 rsshub.app 那样开了防机器人验证、是否需要密钥、是不是根本不是 RSSHub。
   没写 http:// 的本机和局域网地址会用 http。新增部署指南，介绍在电脑、NAS、云服务器上部署自己的 RSSHub：docs/rsshub.zh-CN.md。
+- 添加订阅里多了「常用网站」图标：YouTube、GitHub（发布版本、提交记录、标签或用户动态）、Reddit、Bluesky、Mastodon、
+  Medium、Substack、Stack Overflow、Hacker News、V2EX、arXiv。点一个，填个名字（或粘贴网页地址）就能预览订阅，不需要 RSSHub。
 
 ## 0.1.13 — 2026-11-17
 

@@ -9,9 +9,11 @@ import { openExternal } from "../lib/platform";
 import { keys, useNav, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { type Lang, shortTime } from "../lib/time";
+import type { QuickSourceId } from "../lib/quickSources";
 import { httpStatusOf, type RsshubRoute } from "../lib/rsshub";
 import { RpcError } from "../lib/transport";
 import { FolderPicker } from "./FolderPicker";
+import { QuickForm, QuickGrid } from "./QuickSources";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, TextInput } from "./ui";
 
@@ -210,6 +212,8 @@ export function AddFeedDialog() {
   modeRef.current = mode;
   /** RSSHub 模式下选中的路由，以及从网址里取到的参数值。 */
   const [picked, setPicked] = useState<{ route: RsshubRoute; found: Record<string, string> } | null>(null);
+  /** 「常用网站」里选中的网站。 */
+  const [quick, setQuick] = useState<QuickSourceId | null>(null);
   /** 只认最后一次预览的结果，前面没回来的作废。 */
   const request = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -226,6 +230,7 @@ export function AddFeedDialog() {
       setError(null);
       setMode("url");
       setPicked(null);
+      setQuick(null);
       request.current += 1;
     }
     return () => clearTimeout(timer.current);
@@ -349,6 +354,7 @@ export function AddFeedDialog() {
   };
 
   const switchMode = (next: "url" | "rsshub") => {
+    setQuick(null);
     if (next === mode) return;
     setMode(next);
     setPicked(null);
@@ -394,6 +400,18 @@ export function AddFeedDialog() {
           ) : (
             <RsshubSearch onPick={(r) => pickRoute(r)} />
           ))}
+        {mode === "url" && quick && (
+          <QuickForm
+            key={quick}
+            id={quick}
+            onBack={() => {
+              setQuick(null);
+              onRsshubUrl(null);
+              setError(null);
+            }}
+            onUrl={onRsshubUrl}
+          />
+        )}
         {mode === "url" && (
         <Field label={t("add.url")}>
           <div className="relative">
@@ -424,7 +442,8 @@ export function AddFeedDialog() {
         </Field>
         )}
         {/* Postflow 自己能订阅的（YouTube 频道）就不再提 RSSHub */}
-        {mode === "url" && looksLikeUrl(url) && preview?.feed.kind !== "youtube" && (
+        {mode === "url" && !quick && !url.trim() && <QuickGrid onPick={(id) => setQuick(id)} />}
+        {mode === "url" && !quick && looksLikeUrl(url) && preview?.feed.kind !== "youtube" && (
           <RadarSuggestions url={url.trim()} onPick={pickRoute} />
         )}
 
