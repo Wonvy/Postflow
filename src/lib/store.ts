@@ -120,6 +120,10 @@ interface UiState {
   webLandscape: boolean;
   /** 最近放进去过订阅的文件夹，新的在前。添加订阅时排在最前面。 */
   recentFolders: string[];
+  /** 应用不在前台时，新邮件弹系统通知。 */
+  notifyMail: boolean;
+  /** 图标上显示收件箱的未读邮件数。 */
+  badgeUnread: boolean;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
   mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
@@ -158,6 +162,8 @@ interface UiState {
   setWebDevice: (device: WebDevice) => void;
   setWebLandscape: (landscape: boolean) => void;
   rememberFolder: (folder: string) => void;
+  setNotifyMail: (on: boolean) => void;
+  setBadgeUnread: (on: boolean) => void;
   requestTranslate: () => void;
   openSearch: () => void;
   closeSearch: () => void;
@@ -219,6 +225,8 @@ export const useUi = create<UiState>()(
       webDevice: "desktop",
       webLandscape: false,
       recentFolders: [],
+      notifyMail: true,
+      badgeUnread: true,
 
       // 换列表时收起搜索
       setScope: (scope) =>
@@ -288,6 +296,8 @@ export const useUi = create<UiState>()(
       setReaderWeb: (readerWeb) => set({ readerWeb }),
       setWebDevice: (webDevice) => set({ webDevice: devicePreset(webDevice).id }),
       setWebLandscape: (webLandscape) => set({ webLandscape }),
+      setNotifyMail: (notifyMail) => set({ notifyMail }),
+      setBadgeUnread: (badgeUnread) => set({ badgeUnread }),
       rememberFolder: (folder) =>
         set((s) => {
           const name = folder.trim();
@@ -350,6 +360,8 @@ export const useUi = create<UiState>()(
         webLandscape: s.webLandscape,
         recentFolders: s.recentFolders,
         searchAll: s.searchAll,
+        notifyMail: s.notifyMail,
+        badgeUnread: s.badgeUnread,
       }),
     },
   ),

@@ -120,6 +120,8 @@ export interface MailDetail {
   cc: Mailbox[];
   reply_to: Mailbox[];
   attachments: Attachment[];
+  /** 邮件列表的退订方式；不是邮件列表时为空。 */
+  unsubscribe?: { url: string | null; mailto: string | null; one_click: boolean } | null;
 }
 
 export interface ItemDetail extends Item {
@@ -443,6 +445,8 @@ export const api = {
       path,
     }),
   trustSender: (address: string) => rpc<void>("mail.trust_sender", { address }),
+  /** 一键退订（RFC 8058）。 */
+  unsubscribe: (id: string) => rpc<void>("mail.unsubscribe", { id }),
   /** 能不能用微软账户登录（要有 Azure 应用 ID）。 */
   oauthConfig: () => rpc<{ microsoft: boolean }>("accounts.oauth_config"),
   /** 开始用微软账户登录，返回要在浏览器里打开的地址。 */

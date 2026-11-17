@@ -12,7 +12,8 @@ import { StatsPage } from "./components/StatsPage";
 import { Button, Spinner } from "./components/ui";
 import { api } from "./lib/api";
 import { resolveLang } from "./lib/i18n";
-import { useCoreEvents, useStatus } from "./lib/queries";
+import { useUnreadBadge } from "./lib/notify";
+import { useCoreEvents, useNav, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
 import { isTauri } from "./lib/transport";
@@ -96,6 +97,7 @@ function Resizer({ width, onResize }: { width: number; onResize: (width: number)
 function Shell() {
   useShortcuts();
   useMailCatchUp();
+  useUnreadBadge(useNav().data?.counts.unread_mail);
   useEffect(() => startUpdateChecks(), []);
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);

@@ -17,11 +17,13 @@ import {
   type ItemFilter,
   type ItemPage,
   type ItemPatch,
+  type Nav,
 } from "./api";
 import { isArchiveLike, useUi } from "./store";
 import { useAiStreams } from "./ai";
 import { retryBlocked } from "./listTranslate";
 import { useModelDownloads } from "./translate";
+import { notifyNewMail } from "./notify";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
 
@@ -151,6 +153,9 @@ export function useCoreEvents() {
       switch (event.type) {
         case "refresh":
           setRefreshing(event.active);
+          break;
+        case "new_mail":
+          notifyNewMail(event, qc.getQueryData<Nav>(keys.nav));
           break;
         case "status":
           void qc.invalidateQueries({ queryKey: keys.status });

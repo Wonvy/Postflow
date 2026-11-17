@@ -15,6 +15,11 @@ that heading into the version number and date.
   away.
 - Full-text search: the magnifier in the list toolbar, `/` or `⌘F`. It searches titles, senders, authors and the full
   text of articles and mail, Chinese included, in the current list or everywhere, and highlights what it found.
+- New mail notifications while Postflow is in the background, and the number of unread inbox messages on the app
+  icon. Both can be turned off in Settings → Appearance.
+- Unsubscribe from newsletters right from the message header; lists that support it are unsubscribed in one click.
+- Feeds that move with a permanent redirect switch to their new address by themselves, and a broken feed's Edit
+  dialog can look for the feed on its site again.
 
 ### 中文
 
@@ -23,6 +28,9 @@ that heading into the version number and date.
 - 更新窗口里直接显示更新说明；在设置里点「检查更新」，发现新版本时直接打开这个窗口。
 - 全文搜索：列表工具栏的放大镜、`/` 或 `⌘F`。搜标题、发件人、作者和文章、邮件的正文，中文按词也能搜到；
   可以只搜当前列表，也可以搜全部，结果里标出命中的词。
+- 应用在后台时新邮件弹出系统通知，应用图标上显示收件箱的未读邮件数。两项都可以在设置 → 外观里关掉。
+- 可以在邮件的信头上直接退订电子报；支持一键退订的点一下就好。
+- 用永久跳转搬了家的订阅源会自动换成新地址；打不开的订阅源可以在「编辑」里到网站上重新找。
 
 ## 0.1.9 — 2026-11-17
 

@@ -51,6 +51,10 @@ export function SettingsDialog() {
   const setTheme = useUi((s) => s.setTheme);
   const density = useUi((s) => s.density);
   const setDensity = useUi((s) => s.setDensity);
+  const notifyMail = useUi((s) => s.notifyMail);
+  const setNotifyMail = useUi((s) => s.setNotifyMail);
+  const badgeUnread = useUi((s) => s.badgeUnread);
+  const setBadgeUnread = useUi((s) => s.setBadgeUnread);
   const lang = useUi((s) => s.lang);
   const setLang = useUi((s) => s.setLang);
   const sidebarLayout = useUi((s) => s.sidebarLayout);
@@ -166,6 +170,12 @@ export function SettingsDialog() {
               { value: "tabs", label: t("settings.sidebarTabs") },
             ]}
           />
+        </SettingRow>
+        <SettingRow label={t("settings.notifyMail")} hint={t("settings.notifyMailHint")}>
+          <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />
+        </SettingRow>
+        <SettingRow label={t("settings.badge")} hint={t("settings.badgeHint")}>
+          <Switch label={t("settings.badge")} checked={badgeUnread} onChange={setBadgeUnread} />
         </SettingRow>
         <SettingRow label={t("settings.language")}>
           <Segmented<LangPref>

@@ -397,6 +397,71 @@ export function AddFeedDialog() {
   );
 }
 
+/**
+ * 源打不开时，到它的网站上重新找订阅源：先看源里写的网站地址，再看网站首页。
+ * 找到的列出来，点一个就填进上面的地址框。
+ */
+function FindAgain({ feed, onPick }: { feed: Feed; onPick: (url: string) => void }) {
+  const t = useT();
+  const [state, setState] = useState<"idle" | "busy" | "none">("idle");
+  const [found, setFound] = useState<Candidate[]>([]);
+
+  const search = async () => {
+    setState("busy");
+    const origin = (() => {
+      try {
+        return new URL(feed.site_url || feed.url).origin;
+      } catch {
+        return null;
+      }
+    })();
+    const places = [...new Set([feed.site_url, origin].filter((p): p is string => Boolean(p)))];
+    for (const place of places) {
+      try {
+        const candidates = (await api.discover(place)).filter((c) => c.url !== feed.url);
+        if (candidates.length > 0) {
+          setFound(candidates);
+          setState("idle");
+          return;
+        }
+      } catch {
+        // 这个地址也打不开，试下一个
+      }
+    }
+    setState("none");
+  };
+
+  if (found.length > 0) {
+    return (
+      <div className="mt-2">
+        <p className="mb-1 text-fg-3">{t("edit.foundFeeds")}</p>
+        <ul className="flex flex-col gap-px">
+          {found.map((c) => (
+            <li key={c.url}>
+              <button
+                type="button"
+                onClick={() => onPick(c.url)}
+                className="flex w-full flex-col rounded px-1.5 py-1 text-left hover:bg-active"
+              >
+                <span className="truncate text-fg">{c.title || c.url}</span>
+                <span className="truncate text-[11px] text-fg-3">{c.url}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <Button className="h-6 px-2 text-[12px]" busy={state === "busy"} onClick={() => void search()}>
+        {t("edit.findAgain")}
+      </Button>
+      {state === "none" && <span className="text-fg-3">{t("edit.foundNone")}</span>}
+    </div>
+  );
+}
+
 export function EditFeedDialog() {
   const dialog = useUi((s) => s.dialog);
   const setDialog = useUi((s) => s.setDialog);
@@ -492,13 +557,16 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
         />
       </Field>
       {feed.error && !urlChanged && (
-        <p className="-mt-2 flex items-start gap-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
+        <div className="-mt-2 flex items-start gap-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
           <TriangleAlert size={14} strokeWidth={2} className="mt-px shrink-0 text-warning" />
-          <span className="select-text">
-            {t("edit.lastError")}: {feed.error}
-            <span className="mt-1 block text-fg-3">{t("edit.errorHint")}</span>
-          </span>
-        </p>
+          <div className="min-w-0 flex-1">
+            <p className="select-text">
+              {t("edit.lastError")}: {feed.error}
+            </p>
+            <p className="mt-1 text-fg-3">{t("edit.errorHint")}</p>
+            <FindAgain feed={feed} onPick={setUrl} />
+          </div>
+        </div>
       )}
       {error && (
         <p role="alert" className="text-[13px] text-danger">

@@ -6,6 +6,12 @@ export type Scope = "feeds" | "items" | "settings" | "devices";
 export type CoreEvent =
   | { type: "changed"; scope: Scope[]; source?: string }
   | { type: "refresh"; active: number }
+  | {
+      type: "new_mail";
+      account_id: string;
+      mails: { id: string; from: string; subject: string; date: number }[];
+      total: number;
+    }
   | { type: "status" }
   | {
       type: "model";

@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   BookOpenText,
+  Check,
   Download,
   Copy,
   ExternalLink,
@@ -57,6 +58,7 @@ import {
   Menu,
   MenuItem,
   MenuSeparator,
+  Modal,
   Spinner,
   Tip,
 } from "./ui";
@@ -623,6 +625,7 @@ function MailView({
             <AccountIcon accountId={item.source_id} fallback={item.source_title} size={13} />
             <span className="truncate">{item.source_title}</span>
           </div>
+          <Unsubscribe id={item.id} info={mail.unsubscribe ?? null} sender={sender} />
         </div>
       </div>
 
@@ -658,6 +661,87 @@ function MailView({
 
       {mail.attachments.length > 0 && <Attachments itemId={item.id} mail={mail} />}
     </article>
+  );
+}
+
+/**
+ * 邮件列表的退订：能一键退订的由 Postflow 替用户发退订请求；否则打开退订网页，或者写一封退订邮件。
+ * 都先确认一下。
+ */
+function Unsubscribe({
+  id,
+  info,
+  sender,
+}: {
+  id: string;
+  info: MailDetail["unsubscribe"] | null;
+  sender: string;
+}) {
+  const t = useT();
+  const [asking, setAsking] = useState(false);
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  if (!info) return null;
+  const how = info.one_click ? "one_click" : info.url ? "page" : "mail";
+
+  const run = async () => {
+    if (how !== "one_click") {
+      void openExternal((how === "page" ? info.url : info.mailto) ?? "");
+      setAsking(false);
+      return;
+    }
+    setState("busy");
+    setError(null);
+    try {
+      await api.unsubscribe(id);
+      setState("done");
+      setAsking(false);
+    } catch (err) {
+      setError(errorText(t, err));
+      setState("idle");
+    }
+  };
+
+  return (
+    <>
+      {state === "done" ? (
+        <span className="mt-0.5 inline-flex items-center gap-1 text-fg-3">
+          <Check size={12} strokeWidth={2} />
+          {t("unsub.done")}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="mt-0.5 text-fg-3 underline-offset-2 hover:text-accent hover:underline"
+        >
+          {t("unsub.button")}
+        </button>
+      )}
+      <Modal open={asking} onClose={() => setAsking(false)} title={t("unsub.title")} width={400}>
+        <div className="flex flex-col gap-4 p-4 text-left">
+          <p className="leading-relaxed text-fg-2">{t(`unsub.body_${how}`, { sender: sender || "?" })}</p>
+          {error && (
+            <p role="alert" className="text-[13px] text-danger">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            {how === "one_click" && error && info.url && (
+              <Button variant="ghost" className="mr-auto" onClick={() => void openExternal(info.url ?? "")}>
+                {t("unsub.openPage")}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setAsking(false)}>
+              {t("action.cancel")}
+            </Button>
+            <Button variant="primary" busy={state === "busy"} data-autofocus="" onClick={() => void run()}>
+              {how === "one_click" ? t("unsub.confirm") : how === "page" ? t("unsub.openPage") : t("unsub.writeMail")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

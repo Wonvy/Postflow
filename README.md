@@ -46,6 +46,10 @@ click **More info → Run anyway**.
 - HTML mail is sanitized and shown in a sandbox with scripts removed. Remote images, often used to track when you
   open a message, stay blocked until you allow them for one message or for a sender.
 - Read, starred and archived states are written back to the server, so your phone and webmail stay in step.
+- New mail shows a system notification while Postflow is in the background, and the Dock or taskbar icon shows how
+  many inbox messages are unread (the tab title does in a browser). Both can be turned off in Settings → Appearance.
+- Newsletters and mailing lists get an Unsubscribe link in the message header. Lists that support one-click
+  unsubscribe are unsubscribed right away; otherwise their unsubscribe page or an unsubscribe email opens.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
   [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365).
@@ -63,9 +67,10 @@ click **More info → Run anyway**.
   folder to move it in, or above or below a folder to keep it outside; feeds outside folders and folders can be mixed
   in any order. Mailboxes can be dragged into order too, and the order syncs to your other devices. Right-click a
   mailbox, feed or folder for its menu.
-- A warning sign next to a feed means its last refresh failed; hover over it for the reason. When a feed has moved,
-  enter its new address in the feed's Edit dialog: Postflow checks it first and keeps the same feed, with its read
-  and starred states and earlier items.
+- A warning sign next to a feed means its last refresh failed; hover over it for the reason. Feeds that move with a
+  permanent redirect are updated to their new address automatically. When a feed has moved without one, its Edit
+  dialog can look for the feed on the site again, or take a new address: Postflow checks it first and keeps the same
+  feed, with its read and starred states and earlier items.
 - Load the full article from the original page for feeds that only publish a summary. The full-text button in the
   reader is a switch: while it is on, every article you open loads in full. WeChat articles and pages that describe
   their article in structured data are supported. When a page can't be loaded, the reader says why (the site blocks
