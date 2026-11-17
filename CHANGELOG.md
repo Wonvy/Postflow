@@ -7,8 +7,15 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Getting started guide: after a fresh install, a short guide walks through language and theme, adding a mailbox,
+  adding feeds (or importing OPML), the layout and main shortcuts, and where to find rules, translation, AI and
+  plugins. Every step can be skipped, and it closes for good once skipped or finished. Open it again from
+  Settings → About. People upgrading with mail or feeds already set up don't see it.
 
 ### 中文
+- 新手引导：第一次安装后，一步步带你选语言和主题、添加邮箱、添加订阅（或导入 OPML）、认识界面和常用快捷键，
+  并告诉你自动规则、翻译、AI 和插件在哪里。每一步都可以跳过，跳过或看完后不再自动弹出，设置 → 关于里可以再打开。
+  已经有邮箱或订阅的老用户升级后不会看到。
 
 ## 0.1.15 — 2026-11-17
 

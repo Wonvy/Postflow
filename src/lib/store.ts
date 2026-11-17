@@ -143,6 +143,10 @@ interface UiState {
   readerMaximized: boolean;
   /** 在这台设备上启用的插件 ID。插件只有手动启用才会加载。 */
   enabledPlugins: string[];
+  /** 新手引导开着时停在第几步，关着是 null。别的对话框打开时引导先藏起来，关掉后接着显示。不保存。 */
+  welcomeStep: number | null;
+  /** 这台设备上看完或跳过了新手引导，以后不再自动弹出（关于页里可以再打开）。 */
+  welcomeDone: boolean;
   /** 变一下就重新扫描插件目录、重新加载插件。不保存。 */
   pluginReload: number;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
@@ -189,6 +193,10 @@ interface UiState {
   setListPaging: (mode: "scroll" | "pages") => void;
   setReaderMaximized: (on: boolean) => void;
   setPluginEnabled: (id: string, on: boolean) => void;
+  /** 打开新手引导，或者翻到第 `step` 步。 */
+  setWelcomeStep: (step: number) => void;
+  /** 看完或跳过新手引导。 */
+  finishWelcome: () => void;
   reloadPlugins: () => void;
   requestTranslate: () => void;
   openSearch: () => void;
@@ -259,6 +267,10 @@ export const useUi = create<UiState>()(
       readerMaximized: false,
       enabledPlugins: [],
       pluginReload: 0,
+      welcomeStep: null,
+      welcomeDone: false,
+      setWelcomeStep: (welcomeStep) => set({ welcomeStep }),
+      finishWelcome: () => set({ welcomeStep: null, welcomeDone: true }),
 
       // 换列表时收起搜索
       setScope: (scope) =>
@@ -397,6 +409,7 @@ export const useUi = create<UiState>()(
         toolbars: s.toolbars,
         listPaging: s.listPaging,
         enabledPlugins: s.enabledPlugins,
+        welcomeDone: s.welcomeDone,
       }),
     },
   ),

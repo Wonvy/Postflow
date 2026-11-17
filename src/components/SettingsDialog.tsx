@@ -285,6 +285,16 @@ export function SettingsDialog() {
           <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
           {isTauri && <UpdateCheck />}
         </SettingRow>
+        <SettingRow label={t("welcome.reopen")} hint={t("welcome.reopenHint")}>
+          <Button
+            onClick={() => {
+              setDialog(null);
+              useUi.getState().setWelcomeStep(0);
+            }}
+          >
+            {t("welcome.reopenButton")}
+          </Button>
+        </SettingRow>
         <CurrentNotes version={status.data?.version ?? null} />
       </>
     ),

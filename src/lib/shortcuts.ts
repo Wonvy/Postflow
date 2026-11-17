@@ -22,6 +22,11 @@ export function useShortcuts() {
   latest.current = actions;
 
   useEffect(() => {
+    // 对话框或新手引导开着时，按键属于它们
+    const dialogOpen = () => {
+      const ui = useUi.getState();
+      return ui.dialog !== null || ui.welcomeStep !== null;
+    };
     const onKeyDown = (e: KeyboardEvent) => {
       // ⌘F / Ctrl+F：搜索（输入框里打字时也行，对话框开着时不抢）
       if (
@@ -29,7 +34,7 @@ export function useShortcuts() {
         !e.altKey &&
         !e.shiftKey &&
         e.key.toLowerCase() === "f" &&
-        useUi.getState().dialog === null
+        !dialogOpen()
       ) {
         e.preventDefault();
         useUi.getState().openSearch();
@@ -40,7 +45,7 @@ export function useShortcuts() {
         (e.metaKey || e.ctrlKey) &&
         !e.altKey &&
         !isTyping(e.target) &&
-        useUi.getState().dialog === null &&
+        !dialogOpen() &&
         useUi.getState().openId !== null
       ) {
         const k = e.key.toLowerCase();
@@ -52,7 +57,7 @@ export function useShortcuts() {
         }
       }
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isTyping(e.target) || useUi.getState().dialog !== null) return;
+      if (isTyping(e.target) || dialogOpen()) return;
       // 菜单打开时按键属于菜单
       if (document.querySelector("[role=menu]")) return;
 

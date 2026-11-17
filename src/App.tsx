@@ -12,6 +12,7 @@ import { ToolbarsDialog } from "./components/Toolbars";
 import { watchFullscreen } from "./lib/fullscreen";
 import { usePluginLoader } from "./lib/plugins";
 import { WindowControls } from "./components/WindowControls";
+import { useFirstRunWelcome, WelcomeGuide } from "./components/WelcomeGuide";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
@@ -107,6 +108,7 @@ function Shell() {
   useEffect(() => startUpdateChecks(), []);
   useEffect(() => watchFullscreen(), []);
   usePluginLoader();
+  useFirstRunWelcome();
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);
   const setSidebarWidth = useUi((s) => s.setSidebarWidth);
@@ -158,6 +160,7 @@ function Shell() {
       <SettingsDialog />
       <ToolbarsDialog />
       <ComposeDialog />
+      <WelcomeGuide />
       <Toaster />
     </div>
   );
