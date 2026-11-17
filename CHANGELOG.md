@@ -7,8 +7,13 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Sent mail shows up in Sent a few seconds after sending, instead of waiting for the next time new mail arrives.
+  Folders created or renamed on the server while Postflow is running (such as a Sent folder made when the first
+  message is sent) are found without restarting. Sent has its own hint when it's empty.
 
 ### 中文
+- 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
+  （比如第一次发信时才建出来的「已发送」）不用重启也能找到。「已发送」为空时有了自己的提示。
 
 ## 0.1.14 — 2026-11-17
 

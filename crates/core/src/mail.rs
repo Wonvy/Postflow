@@ -288,6 +288,14 @@ impl Core {
         }
     }
 
+    /// 让一个邮箱悄悄同步一次（不显示正在刷新），比如刚发了信，要把「已发送」里的新邮件收进来。
+    pub(crate) fn nudge_mail(session: &Session, account_id: &str) -> bool {
+        session
+            .workers()
+            .get(account_id)
+            .is_some_and(|w| w.send(Command::CatchUp))
+    }
+
     pub(crate) fn send_mail(&self, session: &Session, account_id: &str, cmd: Command) -> bool {
         session
             .workers()
@@ -799,6 +807,8 @@ async fn sync_all_folders(
     watched: &[String],
 ) -> Result<MailSyncStats, postflow_mail::Error> {
     let mut stats = sync_folder(conn, session, account_id, MailFolder::Inbox, INBOX).await?;
+    // 每次都重新看一下有哪些文件夹，连接期间新建、改名的（比如发信时才建的「已发送」）也能找到
+    conn.forget_mailboxes();
     let mut others: Vec<(MailFolder, Option<SpecialMailbox>, Option<&str>)> = vec![
         (MailFolder::Junk, Some(SpecialMailbox::Junk), None),
         (MailFolder::Trash, Some(SpecialMailbox::Trash), None),

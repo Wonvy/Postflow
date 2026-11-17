@@ -728,6 +728,11 @@ async fn replies_are_sent_threaded_and_saved_to_sent() {
     })
     .await;
     assert_eq!(server.count("Sent"), 1);
+    // 不用等下一次收信：发出后马上同步「已发送」，刚发的信出现在「已发送」里
+    wait_for("sent mail listed", || async {
+        !mail_items(&core, "sent").await.is_empty()
+    })
+    .await;
     core.shutdown();
 }
 

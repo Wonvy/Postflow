@@ -701,6 +701,12 @@ impl Connection {
             .map(|m| m.name.clone()))
     }
 
+    /// 下次用到时重新列一遍邮箱：连接期间服务器上可能新建或改名了文件夹
+    /// （比如发信时才建出来的「已发送」）。
+    pub fn forget_mailboxes(&mut self) {
+        self.mailboxes = None;
+    }
+
     /// 找到存放已发送邮件的邮箱。找不到就建一个叫 Sent 的。
     pub async fn sent_mailbox(&mut self) -> Result<String> {
         self.special_or_create(SpecialMailbox::Sent, "Sent").await

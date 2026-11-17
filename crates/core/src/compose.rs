@@ -25,6 +25,8 @@ use crate::{Core, RpcError, Session};
 
 /// 发完等一会儿再看「已发送」里有没有：有的服务器自己存一份，但不是马上就能看到。
 const SENT_COPY_DELAY: Duration = Duration::from_secs(3);
+/// 服务器自己存「已发送」时，发出后等多久再去同步。
+const SENT_REFRESH_DELAY: Duration = Duration::from_secs(5);
 /// 收件人一栏最多提示这么多联系人。
 const MAX_CONTACTS: usize = 500;
 /// 发信后会自己在「已发送」里存一份的服务器。
@@ -461,8 +463,10 @@ impl Core {
         let saves_itself = SAVES_SENT_ITSELF
             .iter()
             .any(|h| smtp.host.eq_ignore_ascii_case(h));
+        // 发出去以后，把「已发送」同步一次，刚发的信马上出现在「已发送」里，不用等下一次收信
+        let session = session.clone();
+        let account_id = account.id.clone();
         if !saves_itself && let Ok(imap) = server_config(&account) {
-            let account_id = account.id.clone();
             let message_id = built.message_id.clone();
             let raw = built.raw;
             tokio::spawn(async move {
@@ -470,6 +474,13 @@ impl Core {
                 if let Err(e) = save_sent_copy(&imap, &auth, &message_id, &raw).await {
                     tracing::warn!(account = %account_id, code = e.code(), "saving a copy to Sent failed: {e}");
                 }
+                Core::nudge_mail(&session, &account_id);
+            });
+        } else {
+            // 服务器自己存「已发送」的（Gmail、Outlook），给它几秒钟存好
+            tokio::spawn(async move {
+                tokio::time::sleep(SENT_REFRESH_DELAY).await;
+                Core::nudge_mail(&session, &account_id);
             });
         }
         reply(json!({ "message_id": built.message_id }))

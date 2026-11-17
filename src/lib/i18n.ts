@@ -291,6 +291,7 @@ const zh = {
   "list.empty": "这里没有内容",
   "list.caughtUp": "都处理完了",
   "list.folderHint": "邮件服务器没有让邮件应用看到这个文件夹时，这里会一直是空的。Gmail 可以在网页版的设置 → 标签里，给「垃圾邮件」和「已删除邮件」勾上「在 IMAP 中显示」。",
+  "list.sentHint": "发出的信会出现在这里，刚发的信几秒钟后就会出现。如果一直是空的，可能是邮箱没让邮件应用看到「已发送」文件夹：Gmail 可以在网页版的设置 → 标签里，给「已发送邮件」勾上「在 IMAP 中显示」。",
   "list.draftsHint": "写信时会自动存草稿，没发出去的信都在这里，手机和网页邮箱里写的草稿也会出现。",
   "list.mailboxHint": "刚打开的文件夹要先收一会儿信。",
   "folders.show": "显示文件夹",
@@ -1250,6 +1251,7 @@ const en: Record<MessageKey, string> = {
 
   "list.empty": "Nothing here",
   "list.caughtUp": "You're all caught up",
+  "list.sentHint": "Mail you send shows up here a few seconds after sending. If it stays empty, your mail server may be hiding the Sent folder from mail apps: in Gmail on the web, open Settings → Labels and tick \"Show in IMAP\" for Sent Mail.",
   "list.folderHint": "This stays empty if your mail server hides the folder from mail apps. In Gmail on the web, open Settings → Labels and tick \"Show in IMAP\" for Spam and Trash.",
   "list.draftsHint": "Messages you're writing are saved here as drafts, along with drafts from your phone and webmail.",
   "list.mailboxHint": "A folder you just opened takes a moment to sync.",

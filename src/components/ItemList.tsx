@@ -888,7 +888,9 @@ export function ItemList({ width }: { width: number }) {
                   ? null
                   : scope.view === "drafts"
                     ? "list.draftsHint"
-                    : "list.folderHint"
+                    : scope.view === "sent"
+                      ? "list.sentHint"
+                      : "list.folderHint"
             }
             onAddAccount={() => setDialog({ type: "add-account" })}
             onAddFeed={() => setDialog({ type: "add-feed" })}
@@ -1727,7 +1729,7 @@ function EmptyList({
   caughtUp: boolean;
   /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
   /** 邮箱文件夹空着时的说明。 */
-  folderHint: "list.folderHint" | "list.draftsHint" | "list.mailboxHint" | null;
+  folderHint: "list.folderHint" | "list.draftsHint" | "list.mailboxHint" | "list.sentHint" | null;
   onAddAccount: () => void;
   onAddFeed: () => void;
 }) {
