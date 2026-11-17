@@ -444,7 +444,7 @@ export function ItemList({ width }: { width: number }) {
   const setDialog = useUi((s) => s.setDialog);
   const nav = useNav();
   const setGroupExpanded = useUi((s) => s.setGroupExpanded);
-  const { confirmMarkAllRead, refresh, membersOf } = useActions();
+  const { confirmMarkAllRead, refresh, membersOf, compose } = useActions();
   const { query, items, rows: listRows, stops, groupMode, search } = useListModel();
   const searchOpen = useUi((s) => s.searchOpen);
   const searchAll = useUi((s) => s.searchAll);
@@ -619,6 +619,12 @@ export function ItemList({ width }: { width: number }) {
     startDrag(e, { kind: "items", ids }, label);
   };
 
+  /** 双击草稿：接着写。 */
+  const onRowDoubleClick = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (item?.draft) compose("draft", item);
+  };
+
   const onRowClick = (e: MouseEvent, id: string) => {
     const ui = useUi.getState();
     const members = membersOf(id);
@@ -698,7 +704,13 @@ export function ItemList({ width }: { width: number }) {
             search={search ? { query: search, all: searchAll, onAll: () => setSearchAll(true) } : undefined}
             noSources={feeds !== undefined && feeds.length === 0 && accounts !== undefined && accounts.length === 0}
             caughtUp={scope.kind === "view" && (scope.view === "inbox" || scope.view === "unread")}
-            folderHint={scope.kind === "view" && isMailOnlyView(scope.view)}
+            folderHint={
+              scope.kind !== "view" || !isMailOnlyView(scope.view)
+                ? null
+                : scope.view === "drafts"
+                  ? "list.draftsHint"
+                  : "list.folderHint"
+            }
             onAddAccount={() => setDialog({ type: "add-account" })}
             onAddFeed={() => setDialog({ type: "add-feed" })}
           />
@@ -806,6 +818,7 @@ export function ItemList({ width }: { width: number }) {
                             role="option"
                             aria-selected={d.opened || d.selected}
                             onClick={(e) => onRowClick(e, d.id)}
+                            onDoubleClick={() => onRowDoubleClick(d.id)}
                             title={d.tooltip}
                             {...d.drag}
                             className={cx(
@@ -835,6 +848,7 @@ export function ItemList({ width }: { width: number }) {
                     role="option"
                     aria-selected={d.opened || d.selected}
                     onClick={(e) => onRowClick(e, d.id)}
+                    onDoubleClick={() => onRowDoubleClick(d.id)}
                     title={d.tooltip}
                     {...d.drag}
                     className={cx(
@@ -1484,7 +1498,8 @@ function EmptyList({
   noSources: boolean;
   caughtUp: boolean;
   /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
-  folderHint: boolean;
+  /** 邮箱文件夹空着时的说明。 */
+  folderHint: "list.folderHint" | "list.draftsHint" | null;
   onAddAccount: () => void;
   onAddFeed: () => void;
 }) {
@@ -1525,7 +1540,7 @@ function EmptyList({
         <div>
           <p className="text-fg-3">{caughtUp ? t("list.caughtUp") : t("list.empty")}</p>
           {folderHint && (
-            <p className="mt-1 max-w-[280px] text-[12px] leading-relaxed text-fg-3">{t("list.folderHint")}</p>
+            <p className="mt-1 max-w-[280px] text-[12px] leading-relaxed text-fg-3">{t(folderHint)}</p>
           )}
         </div>
       )}

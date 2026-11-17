@@ -11,18 +11,26 @@ that heading into the version number and date.
 - Write, reply, reply all and forward mail (`C`, `⌘R`, `⇧⌘R`, `⇧⌘F`; `Ctrl` on Windows and Linux). Replies quote
   the original and stay in the same conversation, recipients are suggested from people who have written to you, and
   `⌘↩` sends. Mail goes straight from your device to your provider's outgoing server, which is set up for you; a copy
-  is saved to Sent on the server. Plain text only for now, and forwarding doesn't carry attachments yet.
+  is saved to Sent on the server. Plain text only for now.
 - A mailbox's settings show its outgoing (SMTP) server, which can be set by hand.
 - Outlook and Microsoft 365 now ask for permission to send mail when you sign in. Mailboxes signed in earlier keep
   receiving mail; sign in again from the mailbox's settings to send from them.
+- Attachments: add files with the paperclip, by dropping them on the message or by pasting an image. Forwarding
+  carries the original's attachments.
+- Drafts save themselves to your mailbox's Drafts folder while you write, so other devices and webmail see them,
+  and closing the window keeps the draft. A new Drafts view under your mailboxes opens them to keep writing;
+  sending or deleting a draft removes it from the server.
 
 ### 中文
 
 - 可以写信、回复、全部回复和转发了（`C`、`⌘R`、`⇧⌘R`、`⇧⌘F`；Windows 和 Linux 上是 `Ctrl`）。回复时引用原信，
   在别的邮件程序里也归在同一个对话里；收件人会从给你来过信的人里提示；`⌘↩` 发送。信从你的设备直接交给邮箱的
-  发信服务器，服务器自动选好；发出的信在服务器的「已发送」里存一份。目前只能写纯文本，转发暂时不带附件。
+  发信服务器，服务器自动选好；发出的信在服务器的「已发送」里存一份。目前只能写纯文本。
 - 邮箱设置里显示发信（SMTP）服务器，也可以自己填。
 - Outlook 和 Microsoft 365 登录时会多申请一项发信权限。以前登录的邮箱照常收信；要发信时在邮箱设置里重新登录一次。
+- 附件：点回形针、把文件拖进写信窗口或者粘贴图片都能添加。转发时会带上原信的附件。
+- 写信时自动存草稿，存进邮箱的「草稿」文件夹，其他设备和网页邮箱里也看得到；关掉窗口草稿还在。
+  邮箱列表下面新增「草稿」，打开就能接着写；发出去或者删掉时，服务器上的草稿也一起删掉。
 
 ## 0.1.10 — 2026-11-17
 

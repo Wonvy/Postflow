@@ -7,6 +7,7 @@ import {
   AtSign,
   Copy,
   ExternalLink,
+  FilePen,
   Forward,
   Link,
   Mail,
@@ -15,6 +16,7 @@ import {
   ReplyAll,
   Star,
   Tag,
+  Trash2,
 } from "lucide-react";
 import { useActions } from "../lib/actions";
 import { api, type Item } from "../lib/api";
@@ -68,7 +70,7 @@ function LabelSub({ items }: { items: Item[] }) {
  */
 export function ItemMenuItems({ items }: { items: Item[] }) {
   const t = useT();
-  const { toggle, goToSource, compose } = useActions();
+  const { toggle, goToSource, compose, deleteDrafts } = useActions();
   const lead = items[0];
   if (!lead) return null;
   const all = (flag: "read" | "starred" | "archived") => items.every((i) => i[flag]);
@@ -78,7 +80,20 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
   return (
     <>
       {items.length > 1 && <MenuLabel>{t("menu.items", { n: items.length })}</MenuLabel>}
-      {items.length === 1 && lead.kind === "mail" && (
+      {items.every((i) => i.draft) && (
+        <>
+          {items.length === 1 && (
+            <MenuItem icon={<FilePen size={14} />} onSelect={() => compose("draft", lead)}>
+              {t("compose.editDraft")}
+            </MenuItem>
+          )}
+          <MenuItem icon={<Trash2 size={14} />} onSelect={() => deleteDrafts(items)}>
+            {t("compose.deleteDraft")}
+          </MenuItem>
+          <MenuSeparator />
+        </>
+      )}
+      {items.length === 1 && lead.kind === "mail" && !lead.draft && (
         <>
           <MenuItem icon={<Reply size={14} />} onSelect={() => compose("reply", lead)}>
             {t("compose.reply")}
@@ -101,12 +116,14 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
       >
         {all("starred") ? t("action.unstar") : t("action.star")}
       </MenuItem>
-      <MenuItem
-        icon={all("archived") ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-        onSelect={() => toggle("archived", items)}
-      >
-        {all("archived") ? t("action.unarchive") : t("action.archive")}
-      </MenuItem>
+      {!lead.draft && (
+        <MenuItem
+          icon={all("archived") ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          onSelect={() => toggle("archived", items)}
+        >
+          {all("archived") ? t("action.unarchive") : t("action.archive")}
+        </MenuItem>
+      )}
       <LabelSub items={items} />
       <MenuSeparator />
       {lead.url && (

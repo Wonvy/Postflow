@@ -1,8 +1,9 @@
 // 回复、全部回复、转发时，信的收件人、主题和正文怎么预先填好。不碰界面，方便测试。
 
-import type { Mailbox } from "./api";
+import type { AttachedFile, Mailbox, Thread } from "./api";
 
-export type ComposeMode = "new" | "reply" | "reply-all" | "forward";
+/** 写新邮件、回复、全部回复、转发，或者接着写一封草稿。 */
+export type ComposeMode = "new" | "reply" | "reply-all" | "forward" | "draft";
 
 /** 回复、转发要用到的原信内容（`mail.compose_context` 的返回）。 */
 export interface ReplyContext {
@@ -17,6 +18,10 @@ export interface ReplyContext {
   cc: Mailbox[];
   /** 原信正文的文字，保留分行。 */
   text: string;
+  /** 回复时接上讨论用的信头。 */
+  thread: Thread;
+  /** 转发时原信的附件（已经交给核心了）。 */
+  attachments: AttachedFile[];
 }
 
 /** 写信窗口里一开始填好的内容。 */
@@ -192,7 +197,7 @@ export function forwardHeader(ctx: ReplyContext, lang: "zh" | "en"): string {
 
 /** 按方式预先填好收件人、主题和正文。光标放在最前面，引文在下面。 */
 export function prefill(mode: ComposeMode, ctx: ReplyContext | null, self: string[], lang: "zh" | "en"): Prefill {
-  if (mode === "new" || !ctx) return { to: [], cc: [], subject: "", text: "" };
+  if (mode === "new" || mode === "draft" || !ctx) return { to: [], cc: [], subject: "", text: "" };
   if (mode === "forward") {
     return {
       to: [],

@@ -4,7 +4,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { api, type Item, type ItemDetail, type ItemPatch, type Nav } from "./api";
+import type { InfiniteData } from "@tanstack/react-query";
+import { api, type Item, type ItemDetail, type ItemPage, type ItemPatch, type Nav } from "./api";
 import type { ComposeMode } from "./compose";
 import { useListModel } from "./listModel";
 import { openExternal } from "./platform";
@@ -87,8 +88,10 @@ export function useActions() {
   /** 全都已经是这个状态就取消，否则全部设上。 */
   const toggle = useCallback(
     (flag: Flag, list = targets()) => {
-      if (list.length === 0) return;
-      apply(list, { [flag]: !list.every((i) => i[flag]) });
+      // 草稿只在「草稿」里，不能归档
+      const usable = flag === "archived" ? list.filter((i) => !i.draft) : list;
+      if (usable.length === 0) return;
+      apply(usable, { [flag]: !usable.every((i) => i[flag]) });
     },
     [apply, targets],
   );
@@ -178,9 +181,30 @@ export function useActions() {
         return;
       }
       if (target?.kind !== "mail") return;
-      ui.setDialog({ type: "compose", mode, itemId: target.id, accountId: target.source_id });
+      // 对草稿回复、转发没有意义：接着写它
+      const m = target.draft ? "draft" : mode;
+      ui.setDialog({ type: "compose", mode: m, itemId: target.id, accountId: target.source_id });
     },
     [qc, resolve, scope],
+  );
+
+  /** 删掉列表里的草稿：先从列表里拿掉，再让后台去邮箱里删。 */
+  const deleteDrafts = useCallback(
+    (list: Item[]) => {
+      const drafts = list.filter((i) => i.draft);
+      if (drafts.length === 0) return;
+      const gone = new Set(drafts.map((i) => i.id));
+      const ui = useUi.getState();
+      if (ui.openId && gone.has(ui.openId)) ui.open(null);
+      ui.setSelection(ui.selection.filter((id) => !gone.has(id)));
+      qc.setQueriesData<InfiniteData<ItemPage>>({ queryKey: ["items"] }, (old) =>
+        old
+          ? { ...old, pages: old.pages.map((p) => ({ ...p, items: p.items.filter((i) => !gone.has(i.id)) })) }
+          : old,
+      );
+      for (const d of drafts) void api.deleteDraftItem(d.id).catch(() => void qc.invalidateQueries({ queryKey: ["items"] }));
+    },
+    [qc],
   );
 
   /** 列表换成这一条所在的订阅源或邮箱，阅读面板里还开着它。 */
@@ -214,5 +238,6 @@ export function useActions() {
     refresh,
     refreshAll,
     compose,
+    deleteDrafts,
   };
 }

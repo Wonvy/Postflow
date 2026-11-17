@@ -6,6 +6,7 @@ import {
   CircleDot,
   Copy,
   Ellipsis,
+  FilePen,
   FolderPlus,
   Inbox,
   KeyRound,
@@ -65,8 +66,9 @@ const VIEWS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
   { view: "archived", icon: Archive, label: "nav.archived" },
 ];
 
-/** 邮箱里另外同步的两个文件夹，放在邮箱列表下面。 */
+/** 邮箱里另外同步的几个文件夹，放在邮箱列表下面。 */
 const MAIL_FOLDERS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
+  { view: "drafts", icon: FilePen, label: "nav.drafts" },
   { view: "junk", icon: ShieldAlert, label: "nav.junk" },
   { view: "trash", icon: Trash2, label: "nav.trash" },
 ];

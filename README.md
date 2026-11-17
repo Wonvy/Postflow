@@ -55,6 +55,11 @@ click **More info → Run anyway**.
   mailbox to send from can be picked when you have several. Mail goes from your device straight to your provider's
   outgoing (SMTP) server, which is chosen for you from the provider; set it yourself in the mailbox's settings if
   needed. A copy goes to the Sent folder on the server, unless the provider files one itself (Gmail, Outlook).
+- Attach files with the paperclip, by dropping them on the message, or by pasting an image. Forwarding carries the
+  original's attachments, which you can remove.
+- Drafts save themselves to the mailbox's Drafts folder a few seconds after you stop typing, so your phone and
+  webmail see them too, and closing the window keeps the draft. Drafts appear under your mailboxes; open one to
+  keep writing. Sending or deleting it removes it from the server.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
   [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365).
@@ -148,8 +153,7 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** drafts, attachments in mail you write (forwarding doesn't carry the original's attachments
-yet), formatted (HTML) mail, OAuth sign-in for Gmail (use an app password), folders other than the inbox, spam and
+**Not yet available:** formatted (HTML) mail, signatures, a Sent folder in Postflow, OAuth sign-in for Gmail (use an app password), folders other than the inbox, spam and
 trash, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
 Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.

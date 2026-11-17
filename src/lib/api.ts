@@ -2,7 +2,7 @@ import type { ReplyContext } from "./compose";
 import { rpc } from "./transport";
 
 /** junk 和 trash 是邮箱里的垃圾邮件和已删除邮件。 */
-export type View = "inbox" | "today" | "unread" | "starred" | "archived" | "junk" | "trash";
+export type View = "inbox" | "today" | "unread" | "starred" | "archived" | "junk" | "trash" | "drafts";
 
 export interface Status {
   configured: boolean;
@@ -93,6 +93,8 @@ export interface Item {
   read: boolean;
   starred: boolean;
   archived: boolean;
+  /** 邮箱「草稿」里的一封草稿：打开时接着写。 */
+  draft?: boolean;
   sender_address: string | null;
   has_attachments: boolean;
   /** 卡片视图用的封面图，只有文章有。 */
@@ -187,7 +189,21 @@ export interface AccountChanges {
   sender_name?: string;
 }
 
-/** 写好要发的一封信。 */
+/** 回复时接上同一个讨论用的两个信头。 */
+export interface Thread {
+  in_reply_to: string | null;
+  references: string[];
+}
+
+/** 交给核心的一个附件：之后发信、存草稿只传 `token`。 */
+export interface AttachedFile {
+  token: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** 写信窗口里的一封信。发送和存草稿用同一个样子。 */
 export interface Outgoing {
   account_id: string;
   to: string[];
@@ -195,8 +211,25 @@ export interface Outgoing {
   bcc: string[];
   subject: string;
   text: string;
-  /** 回复的那封信的 ID，用来接上同一个讨论。 */
-  in_reply_to?: string;
+  in_reply_to?: string | null;
+  references?: string[];
+  /** 附件的 token。 */
+  attachments?: string[];
+  /** 这封信上次存成的草稿的 Message-ID：发出去或者再存时删掉它。 */
+  draft?: string | null;
+}
+
+/** 一封草稿里写了什么（`mail.draft`）。 */
+export interface DraftContents {
+  account_id: string;
+  message_id: string | null;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  text: string;
+  thread: Thread;
+  attachments: AttachedFile[];
 }
 
 export interface Contact {
@@ -485,9 +518,22 @@ export const api = {
   trustSender: (address: string) => rpc<void>("mail.trust_sender", { address }),
   /** 一键退订（RFC 8058）。 */
   unsubscribe: (id: string) => rpc<void>("mail.unsubscribe", { id }),
-  /** 回复、转发一封信要用到的原信内容。 */
-  composeContext: (id: string) => rpc<ReplyContext>("mail.compose_context", { id }),
+  /** 回复、转发一封信要用到的原信内容。转发时原信的附件也放进待发的附件里。 */
+  composeContext: (id: string, forward = false) =>
+    rpc<ReplyContext>("mail.compose_context", { id, forward }),
   send: (mail: Outgoing) => rpc<{ message_id: string }>("mail.send", mail),
+  /** 存成草稿，返回新草稿的 Message-ID 和它在列表里的 ID。 */
+  saveDraft: (mail: Outgoing) => rpc<{ message_id: string; item_id: string }>("mail.save_draft", mail),
+  deleteDraft: (accountId: string, messageId: string) =>
+    rpc<void>("mail.delete_draft", { account_id: accountId, message_id: messageId }),
+  /** 删掉列表里的一封草稿。 */
+  deleteDraftItem: (id: string) => rpc<void>("mail.delete_draft", { id }),
+  /** 接着写一封草稿。 */
+  draft: (id: string) => rpc<DraftContents>("mail.draft", { id }),
+  /** 加一个附件，`data` 是 Base64。 */
+  attach: (name: string, mime: string, data: string) => rpc<AttachedFile>("mail.attach", { name, mime, data }),
+  /** 写信窗口关了：附件不用再留着。 */
+  attachDrop: (tokens: string[]) => rpc<void>("mail.attach_drop", { tokens }),
   /** 给你来过信的人，写信时提示收件人。 */
   contacts: () => rpc<{ contacts: Contact[] }>("mail.contacts"),
   /** 账户现在用的发信服务器。 */

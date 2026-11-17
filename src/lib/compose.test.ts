@@ -29,6 +29,8 @@ const CTX: ReplyContext = {
   to: [mb("me@example.com", "Me"), mb("bob@example.com", "Bob")],
   cc: [mb("carol@example.com"), mb("ME@example.com")],
   text: "Noon?\n\n> earlier\nOK",
+  thread: { in_reply_to: "m@example.com", references: ["m@example.com"] },
+  attachments: [],
 };
 
 test("addresses are shown with their names and parsed back", () => {

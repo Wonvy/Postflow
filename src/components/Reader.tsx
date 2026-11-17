@@ -7,6 +7,7 @@ import {
   Download,
   Copy,
   ExternalLink,
+  FilePen,
   Forward,
   Globe,
   ImageOff,
@@ -21,6 +22,7 @@ import {
   Sparkles,
   Star,
   Tag,
+  Trash2,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -182,7 +184,7 @@ function Article({ id }: { id: string }) {
   const qc = useQueryClient();
   const [allowRemote, setAllowRemote] = useState(false);
   const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote);
-  const { items, apply, toggle, openOriginal, openTargets, compose } = useActions();
+  const { items, apply, toggle, openOriginal, openTargets, compose, deleteDrafts } = useActions();
   const autoRead = useRef<string | null>(null);
   const [mode, setMode] = useState<"feed" | "full">("feed");
   const [loadingFull, setLoadingFull] = useState(false);
@@ -322,7 +324,18 @@ function Article({ id }: { id: string }) {
       <Toolbar leading={summary && <SourceChip item={summary} />}>
         {summary && (
           <>
-            {isMail && (
+            {summary.draft && (
+              <>
+                <IconButton label={t("compose.editDraft")} onClick={() => compose("draft", summary)}>
+                  <FilePen {...ICON} />
+                </IconButton>
+                <IconButton label={t("compose.deleteDraft")} onClick={() => deleteDrafts([summary])}>
+                  <Trash2 {...ICON} />
+                </IconButton>
+                <span aria-hidden className="mx-1 h-4 w-px bg-line" />
+              </>
+            )}
+            {isMail && !summary.draft && (
               <>
                 <IconButton label={t("compose.reply")} shortcut={MOD + "R"} onClick={() => compose("reply", summary)}>
                   <Reply {...ICON} />
@@ -404,13 +417,15 @@ function Article({ id }: { id: string }) {
             >
               <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
             </IconButton>
-            <IconButton
-              label={all("archived") ? t("action.unarchive") : t("action.archive")}
-              shortcut="E"
-              onClick={() => toggle("archived", group.length > 0 ? group : [summary])}
-            >
-              {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
-            </IconButton>
+            {!summary.draft && (
+              <IconButton
+                label={all("archived") ? t("action.unarchive") : t("action.archive")}
+                shortcut="E"
+                onClick={() => toggle("archived", group.length > 0 ? group : [summary])}
+              >
+                {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
+              </IconButton>
+            )}
             {!isMail && summary.url && (
               <IconButton label={t("action.openOriginal")} shortcut="V" onClick={openOriginal}>
                 <ExternalLink {...ICON} />
@@ -460,6 +475,7 @@ function Article({ id }: { id: string }) {
             <MailView
               item={item}
               mail={item.mail}
+              onEditDraft={() => compose("draft", item)}
               shown={shown}
               bar={<TranslateBar translation={translation} />}
               onShowImages={() => setAllowRemote(true)}
@@ -588,9 +604,11 @@ function MailView({
   onShowImages,
   onTrusted,
   onContext,
+  onEditDraft,
 }: {
   item: ItemDetail;
   mail: MailDetail;
+  onEditDraft: () => void;
   shown: Shown;
   bar: ReactNode;
   onShowImages: () => void;
@@ -615,6 +633,15 @@ function MailView({
       className="mx-auto px-8 pb-24 pt-8"
       style={{ maxWidth: readerWidth(style, "mail"), ...readerVars(style) } as CSSProperties}
     >
+      {item.draft && (
+        <div className="mb-5 flex items-center gap-3 rounded-lg border border-line bg-hover px-3 py-2 text-[13px] text-fg-2">
+          <FilePen size={15} className="shrink-0 text-fg-3" />
+          <span className="flex-1">{t("compose.draftNote")}</span>
+          <Button variant="primary" onClick={onEditDraft}>
+            {t("compose.editDraft")}
+          </Button>
+        </div>
+      )}
       <h1
         className="cursor-auto select-text font-semibold leading-[1.3] tracking-[-0.015em]"
         style={{ fontSize: titleSize(style, "mail") }}

@@ -376,9 +376,9 @@ export function isArchiveLike(view: View | "all" | undefined): boolean {
   return view === "archived" || view === "junk" || view === "trash";
 }
 
-/** 只有邮件才有的视图：垃圾邮件和已删除。 */
+/** 只有邮件才有的视图：垃圾邮件、已删除和草稿。 */
 export function isMailOnlyView(view: View): boolean {
-  return view === "junk" || view === "trash";
+  return view === "junk" || view === "trash" || view === "drafts";
 }
 
 export function scopeKey(scope: ListScope): string {

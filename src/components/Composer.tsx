@@ -1,28 +1,32 @@
-// 写信窗口：写新邮件、回复、全部回复和转发。
+// 写信窗口：写新邮件、回复、全部回复、转发，以及接着写草稿。
 //
 // 信由本机直接交给邮箱的发信服务器，不经过别处。只写纯文本；回复时原信用「>」引在下面。
+// 写的时候停一会儿就自动存进邮箱的「草稿」，手机和网页邮箱里也看得到；发出去或者丢弃时删掉。
+// 附件先交给核心，这里只拿着编号。
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Paperclip, Send, TriangleAlert, X } from "lucide-react";
+import { FileText, Paperclip, Send, TriangleAlert, X } from "lucide-react";
 import {
   type ClipboardEvent,
+  type DragEvent,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { api, type Contact } from "../lib/api";
+import { api, type Contact, type Outgoing, type Thread } from "../lib/api";
 import { addressOf, type ComposeMode, isValidAddress, prefill, splitAddresses } from "../lib/compose";
 import { errorDetail, errorText, useLang, useT } from "../lib/i18n";
-import { isMac } from "../lib/platform";
-import { keys, useItem, useNav } from "../lib/queries";
+import { formatSize, isMac } from "../lib/platform";
+import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { toast } from "./Toast";
-import { Button, cx, ICON, Select, Spinner, Tip } from "./ui";
+import { Button, cx, IconButton, ICON, Select, Spinner, Tip } from "./ui";
 
 /** 一栏收件人：已经确认的几个，加上正在输入还没确认的那段文字。 */
 interface Recipients {
@@ -31,10 +35,47 @@ interface Recipients {
 }
 
 const EMPTY: Recipients = { list: [], draft: "" };
+const NO_THREAD: Thread = { in_reply_to: null, references: [] };
+
+/** 停下来这么久没再改，就存一次草稿。 */
+const AUTOSAVE_MS = 3000;
+/** 附件加起来超过这么大时提醒一句：很多邮箱最多收 25 MB。 */
+const BIG_ATTACHMENTS = 25 * 1024 * 1024;
+/** 单个文件再大就不收了，和核心的上限一致。 */
+const MAX_FILE = 50 * 1024 * 1024;
+
+/** 写信窗口里的一个附件。`token` 有了才算加好。 */
+interface FileEntry {
+  key: number;
+  name: string;
+  size: number;
+  token: string | null;
+  failed: boolean;
+}
 
 /** 确认的加上正在输入的。发信和判断「写了没有」时用。 */
 function everyone(r: Recipients): string[] {
   return [...r.list, ...splitAddresses(r.draft)];
+}
+
+function readBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      resolve(url.slice(url.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function errorCode(err: unknown): string {
+  return err && typeof err === "object" && "code" in err ? String(err.code) : "";
+}
+
+function errorMessage(err: unknown): string {
+  return err && typeof err === "object" && "message" in err ? String(err.message) : "";
 }
 
 export const sendShortcut = isMac ? "⌘↩" : "Ctrl+Enter";
@@ -46,6 +87,18 @@ export function ComposeDialog() {
   return <Composer mode={dialog.mode} itemId={dialog.itemId ?? null} accountId={dialog.accountId ?? null} />;
 }
 
+type Footer =
+  /** 平常：附件按钮、草稿状态、放弃和发送。 */
+  | "normal"
+  /** 还没存过草稿的信，问要不要放弃。 */
+  | "discard"
+  /** 存过草稿的信，问要不要连草稿一起删掉。 */
+  | "delete-draft"
+  /** 草稿没存上，关掉会丢。 */
+  | "unsaved";
+
+type DraftStatus = { kind: "idle" } | { kind: "saving" } | { kind: "saved"; at: number } | { kind: "failed" };
+
 function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: string | null; accountId: string | null }) {
   const t = useT();
   const lang = useLang();
@@ -54,25 +107,33 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const scope = useUi((s) => s.scope);
   const accounts = useNav().data?.accounts ?? [];
 
+  const replying = mode === "reply" || mode === "reply-all" || mode === "forward";
   const context = useQuery({
-    queryKey: ["compose", itemId],
-    queryFn: () => api.composeContext(itemId as string),
-    enabled: itemId !== null && mode !== "new",
-    staleTime: 0,
+    queryKey: ["compose", itemId, mode],
+    queryFn: () => api.composeContext(itemId as string, mode === "forward"),
+    enabled: itemId !== null && replying,
+    staleTime: Infinity,
     gcTime: 0,
     retry: false,
   });
+  const saved = useQuery({
+    queryKey: ["draft", itemId],
+    queryFn: () => api.draft(itemId as string),
+    enabled: itemId !== null && mode === "draft",
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
+  const loading = mode === "draft" ? saved : context;
   const contacts = useQuery({
     queryKey: ["contacts"],
     queryFn: () => api.contacts().then((r) => r.contacts),
     staleTime: 5 * 60_000,
   });
-  // 转发时原信的附件现在还带不过去，提前说一声
-  const original = useItem(mode === "forward" ? itemId : null);
-  const attachments = original.data?.mail?.attachments.length ?? 0;
 
   const defaultAccount =
     accountId ??
+    saved.data?.account_id ??
     context.data?.account_id ??
     (scope.kind === "account" ? scope.accountId : null) ??
     accounts[0]?.id ??
@@ -91,31 +152,62 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [text, setText] = useState("");
-  const [initialText, setInitialText] = useState("");
+  const [thread, setThread] = useState<Thread>(NO_THREAD);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; detail: string | null } | null>(null);
-  const [confirmClose, setConfirmClose] = useState(false);
+  const [footer, setFooter] = useState<Footer>("normal");
+  const [status, setStatus] = useState<DraftStatus>({ kind: "idle" });
   const body = useRef<HTMLTextAreaElement>(null);
   const toField = useRef<HTMLInputElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const nextKey = useRef(0);
 
-  // 原信取回来以后填好收件人、主题和引文，光标放在最前面
+  /** 存在邮箱里的那份草稿：哪个邮箱、Message-ID。 */
+  const draft = useRef<{ account: string; id: string } | null>(null);
+  /** 上次存下的（或者刚打开时的）内容，和现在的比，不一样就要存。 */
+  const savedKey = useRef<string | null>(null);
+  const saving = useRef<Promise<boolean> | null>(null);
+  /** 这次打开以后存过草稿。 */
+  const resaved = useRef(false);
+
+  // 原信或草稿取回来以后填好收件人、主题、正文和附件，光标放在该放的地方
   const filled = useRef(false);
-  const ready = mode === "new" || itemId === null || context.isSuccess;
+  const ready = mode === "new" || itemId === null || loading.isSuccess;
   useEffect(() => {
     if (filled.current || !ready) return;
     filled.current = true;
-    // 「自己」是收到这封信的那个邮箱。自己几个邮箱之间来往的信，回复时对方也是自己的另一个邮箱
-    const receiver = accounts.find((a) => a.id === context.data?.account_id);
-    const self = receiver ? [receiver.email] : [];
-    const p = prefill(mode, context.data ?? null, self, lang);
-    setTo({ list: p.to, draft: "" });
-    setCc({ list: p.cc, draft: "" });
-    setShowCc(p.cc.length > 0);
-    setSubject(p.subject);
-    setText(p.text);
-    setInitialText(p.text);
+    const d = saved.data;
+    if (mode === "draft" && d) {
+      setFrom(d.account_id);
+      setTo({ list: d.to, draft: "" });
+      setCc({ list: d.cc, draft: "" });
+      setBcc({ list: d.bcc, draft: "" });
+      setShowCc(d.cc.length > 0);
+      setShowBcc(d.bcc.length > 0);
+      setSubject(d.subject);
+      setText(d.text);
+      setThread(d.thread);
+      setFiles(d.attachments.map((a) => ({ ...a, key: nextKey.current++, failed: false })));
+      if (d.message_id) draft.current = { account: d.account_id, id: d.message_id };
+    } else {
+      // 「自己」是收到这封信的那个邮箱。自己几个邮箱之间来往的信，回复时对方也是自己的另一个邮箱
+      const ctx = context.data ?? null;
+      const receiver = accounts.find((a) => a.id === ctx?.account_id);
+      const p = prefill(mode, ctx, receiver ? [receiver.email] : [], lang);
+      setTo({ list: p.to, draft: "" });
+      setCc({ list: p.cc, draft: "" });
+      setShowCc(p.cc.length > 0);
+      setSubject(p.subject);
+      setText(p.text);
+      if (ctx && mode !== "forward") setThread(ctx.thread);
+      if (ctx && mode === "forward") {
+        setFiles(ctx.attachments.map((a) => ({ ...a, key: nextKey.current++, failed: false })));
+      }
+    }
     requestAnimationFrame(() => {
-      if ((mode === "reply" || mode === "reply-all") && body.current) {
+      if ((mode === "reply" || mode === "reply-all" || mode === "draft") && body.current) {
         body.current.focus();
         body.current.setSelectionRange(0, 0);
         body.current.scrollTop = 0;
@@ -123,22 +215,134 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
         toField.current?.focus();
       }
     });
-  }, [accounts, context.data, lang, mode, ready]);
+  }, [accounts, context.data, saved.data, lang, mode, ready]);
 
-  const dirty =
-    text !== initialText || (mode === "new" && (everyone(to).length > 0 || subject.trim() !== ""));
+  const tokens = files.flatMap((f) => (f.token ? [f.token] : []));
+  const uploading = files.some((f) => !f.token && !f.failed);
+  const letter: Outgoing = {
+    account_id: fromId,
+    to: everyone(to),
+    cc: everyone(cc),
+    bcc: everyone(bcc),
+    subject: subject.trim(),
+    text,
+    in_reply_to: thread.in_reply_to,
+    references: thread.references,
+    attachments: tokens,
+  };
+  const key = JSON.stringify(letter);
+  // 填好的那一刻就是「没改过」
+  if (ready && filled.current && savedKey.current === null) savedKey.current = key;
+  const dirty = savedKey.current !== null && key !== savedKey.current;
+  const latest = useRef({ letter, key });
+  latest.current = { letter, key };
 
-  const close = () => setDialog(null);
-  const requestClose = () => {
+  /** 存一次草稿。成功返回 true。正在存时等它存完再看要不要再存。 */
+  const saveDraft = useCallback(async (): Promise<boolean> => {
+    while (saving.current) await saving.current;
+    const { letter: current, key: currentKey } = latest.current;
+    if (currentKey === savedKey.current) return true;
+    if (!current.account_id) return false;
+    const run = (async () => {
+      setStatus({ kind: "saving" });
+      try {
+        const old = draft.current;
+        // 换了发件的邮箱：草稿存到新邮箱，旧邮箱里的那份删掉
+        const sameAccount = old?.account === current.account_id;
+        const result = await api.saveDraft({ ...current, draft: sameAccount ? old?.id : null });
+        if (old && !sameAccount) void api.deleteDraft(old.account, old.id).catch(() => {});
+        draft.current = { account: current.account_id, id: result.message_id };
+        resaved.current = true;
+        savedKey.current = currentKey;
+        setStatus({ kind: "saved", at: Date.now() });
+        return true;
+      } catch {
+        setStatus({ kind: "failed" });
+        return false;
+      }
+    })();
+    saving.current = run;
+    try {
+      return await run;
+    } finally {
+      saving.current = null;
+    }
+  }, []);
+
+  // 停下来一会儿就自动存。正在发信或者附件还在加的时候不存
+  useEffect(() => {
+    if (!dirty || busy || uploading) return;
+    const timer = setTimeout(() => void saveDraft(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [key, dirty, busy, uploading, saveDraft]);
+
+  // 窗口关掉：附件不用再留着
+  const tokensRef = useRef<string[]>([]);
+  tokensRef.current = tokens;
+  useEffect(() => () => void api.attachDrop(tokensRef.current).catch(() => {}), []);
+
+  /** 关窗口。打开的草稿存过新的一版（旧的那封在邮箱里已经删了），阅读区也关上。 */
+  const close = () => {
+    const ui = useUi.getState();
+    if (mode === "draft" && itemId && ui.openId === itemId && resaved.current) ui.open(null);
+    setDialog(null);
+  };
+
+  /** 关窗口：改过的先存成草稿；存不上就问一句。 */
+  const requestClose = async () => {
     if (busy) return;
-    if (dirty) setConfirmClose(true);
-    else close();
+    if (footer !== "normal") {
+      setFooter("normal");
+      return;
+    }
+    if (!dirty) {
+      close();
+      return;
+    }
+    if (await saveDraft()) {
+      close();
+      toast(t("compose.draftSaved", { time: clock(Date.now(), lang) }));
+    } else {
+      setFooter("unsaved");
+    }
+  };
+
+  /** 放弃这封信：存过草稿的连草稿一起删。 */
+  const discard = async () => {
+    while (saving.current) await saving.current;
+    const old = draft.current;
+    if (old) void api.deleteDraft(old.account, old.id).catch(() => {});
+    resaved.current = true;
+    void qc.invalidateQueries({ queryKey: ["items"] });
+    close();
+  };
+
+  const addFiles = async (list: File[]) => {
+    if (list.length === 0) return;
+    setError(null);
+    for (const file of list) {
+      const k = nextKey.current++;
+      setFiles((fs) => [...fs, { key: k, name: file.name || "attachment", size: file.size, token: null, failed: false }]);
+      try {
+        if (file.size > MAX_FILE) throw new Error("too large");
+        const data = await readBase64(file);
+        const added = await api.attach(file.name || "attachment", file.type, data);
+        setFiles((fs) => fs.map((f) => (f.key === k ? { ...f, token: added.token } : f)));
+      } catch {
+        setFiles((fs) => fs.map((f) => (f.key === k ? { ...f, failed: true } : f)));
+      }
+    }
+  };
+
+  const removeFile = (entry: FileEntry) => {
+    setFiles((fs) => fs.filter((f) => f.key !== entry.key));
+    if (entry.token) void api.attachDrop([entry.token]).catch(() => {});
   };
 
   const send = async () => {
-    if (busy) return;
-    const lists = { to: everyone(to), cc: everyone(cc), bcc: everyone(bcc) };
-    const all = [...lists.to, ...lists.cc, ...lists.bcc];
+    if (busy || uploading) return;
+    const { letter: current } = latest.current;
+    const all = [...current.to, ...current.cc, ...current.bcc];
     if (all.length === 0) {
       setError({ text: t("compose.noRecipients"), detail: null });
       return;
@@ -152,27 +356,32 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     setBusy(true);
     setError(null);
     try {
+      // 正在存的草稿存完再发，免得发完又冒出一封草稿
+      while (saving.current) await saving.current;
       if (fromAccount && !fromAccount.sender_name && senderName.trim()) {
         await api.updateAccount(fromId, { sender_name: senderName.trim() });
         void qc.invalidateQueries({ queryKey: keys.nav });
       }
-      await api.send({
-        account_id: fromId,
-        ...lists,
-        subject: subject.trim(),
-        text,
-        in_reply_to: mode === "reply" || mode === "reply-all" ? (itemId ?? undefined) : undefined,
-      });
+      const old = draft.current;
+      await api.send({ ...current, draft: old?.account === current.account_id ? old.id : null });
+      // 草稿在别的邮箱里：单独删掉
+      if (old && old.account !== current.account_id) void api.deleteDraft(old.account, old.id).catch(() => {});
+      draft.current = null;
+      tokensRef.current = [];
+      // 发的是阅读区里开着的那封草稿：它没了，阅读区也关上
+      resaved.current = true;
       close();
       toast(t("compose.sent"));
       void qc.invalidateQueries({ queryKey: ["contacts"] });
     } catch (err) {
-      const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
-      const message = err && typeof err === "object" && "message" in err ? String(err.message) : "";
+      const code = errorCode(err);
+      const message = errorMessage(err);
       setError(
         code === "send_bad_address"
           ? { text: t("compose.badAddress", { address: message }), detail: null }
-          : { text: errorText(t, err), detail: errorDetail(err) },
+          : code === "send_too_large" && /^\d+$/.test(message)
+            ? { text: t("compose.tooLarge", { n: message }), detail: null }
+            : { text: errorText(t, err), detail: errorDetail(err) },
       );
       setBusy(false);
     }
@@ -185,6 +394,31 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     }
   };
 
+  // 把文件拖进窗口：添加为附件
+  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
+  const onDragOver = (e: DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragging(true);
+  };
+  const onDragLeave = (e: DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+  };
+  const onDrop = (e: DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDragging(false);
+    void addFiles(Array.from(e.dataTransfer.files));
+  };
+  // 在正文里粘贴图片之类的文件：添加为附件
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = Array.from(e.clipboardData.files);
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    void addFiles(pasted);
+  };
+
   const title =
     mode === "reply"
       ? t("compose.reply")
@@ -192,15 +426,20 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
         ? t("compose.replyAll")
         : mode === "forward"
           ? t("compose.forward")
-          : t("compose.new");
+          : mode === "draft"
+            ? t("compose.editDraft")
+            : t("compose.new");
 
   const known = useMemo(() => {
     const own: Contact[] = accounts.map((a) => ({ name: a.name || null, address: a.email, count: 0 }));
     return [...(contacts.data ?? []), ...own];
   }, [accounts, contacts.data]);
 
+  const total = files.reduce((n, f) => n + (f.failed ? 0 : f.size), 0);
+  const hasDraft = draft.current !== null;
+
   return (
-    <Dialog.Root open onOpenChange={(next) => !next && requestClose()}>
+    <Dialog.Root open onOpenChange={(next) => !next && void requestClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="anim-fade fixed inset-0 z-40 bg-overlay" />
         <Dialog.Content
@@ -211,6 +450,9 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
             if (document.activeElement?.hasAttribute("data-suggesting")) e.preventDefault();
           }}
           onKeyDown={onKeyDown}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
           className="anim-pop fixed left-1/2 top-[7vh] z-40 flex h-[min(680px,86vh)] w-[680px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none"
         >
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-line pl-4 pr-2">
@@ -220,7 +462,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
             <button
               type="button"
               aria-label={t("action.close")}
-              onClick={requestClose}
+              onClick={() => void requestClose()}
               className="inline-flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg"
             >
               <X {...ICON} />
@@ -229,10 +471,10 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
 
           {!ready ? (
             <div className="flex flex-1 items-center justify-center gap-2 text-fg-3">
-              {context.isError ? (
+              {loading.isError ? (
                 <span className="flex items-center gap-2 text-danger">
                   <TriangleAlert size={14} strokeWidth={2} />
-                  {errorText(t, context.error)}
+                  {errorText(t, loading.error)}
                 </span>
               ) : (
                 <Spinner size={16} />
@@ -307,7 +549,12 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
                 )}
                 {showBcc && (
                   <Row label={t("compose.bcc")}>
-                    <RecipientInput value={bcc} onChange={setBcc} contacts={known} autoFocus />
+                    <RecipientInput
+                      value={bcc}
+                      onChange={setBcc}
+                      contacts={known}
+                      autoFocus={mode !== "draft" || bcc.list.length === 0}
+                    />
                   </Row>
                 )}
                 <Row label={t("compose.subject")}>
@@ -320,14 +567,60 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
                   />
                 </Row>
               </div>
-              <textarea
-                ref={body}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                aria-label={t("compose.body")}
-                placeholder={mode === "new" ? t("compose.bodyPlaceholder") : undefined}
-                className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-3"
-              />
+              <div className="relative flex min-h-0 flex-1 flex-col">
+                <textarea
+                  ref={body}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onPaste={onPaste}
+                  aria-label={t("compose.body")}
+                  placeholder={mode === "new" ? t("compose.bodyPlaceholder") : undefined}
+                  className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-3"
+                />
+                {dragging && (
+                  <div className="pointer-events-none absolute inset-2 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-accent-soft text-[13px] font-medium text-accent">
+                    {t("compose.dropHere")}
+                  </div>
+                )}
+              </div>
+              {files.length > 0 && (
+                <div className="flex shrink-0 flex-col gap-1.5 border-t border-line px-3 py-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {files.map((f) => (
+                      <span
+                        key={f.key}
+                        title={f.failed ? t("compose.attachFailed", { name: f.name }) : f.name}
+                        className={cx(
+                          "flex h-7 max-w-[260px] items-center gap-1.5 rounded-md border pl-2 pr-1 text-[12px]",
+                          f.failed ? "border-danger/40 bg-danger/10 text-danger" : "border-line bg-hover text-fg",
+                        )}
+                      >
+                        {!f.token && !f.failed ? (
+                          <Spinner size={12} />
+                        ) : (
+                          <FileText size={13} className="shrink-0 text-fg-3" />
+                        )}
+                        <span className="truncate">{f.name}</span>
+                        <span className="shrink-0 text-fg-3">{formatSize(f.size)}</span>
+                        <button
+                          type="button"
+                          aria-label={t("compose.removeAttachment", { name: f.name })}
+                          onClick={() => removeFile(f)}
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg"
+                        >
+                          <X size={12} strokeWidth={2} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  {total > BIG_ATTACHMENTS && (
+                    <p className="flex items-center gap-1.5 text-[12px] text-warning">
+                      <TriangleAlert size={13} strokeWidth={2} />
+                      {t("compose.attachBig", { size: formatSize(total) })}
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -346,31 +639,72 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
           )}
 
           <div className="flex h-14 shrink-0 items-center gap-2 border-t border-line px-3">
-            {confirmClose ? (
+            {footer === "discard" || footer === "delete-draft" || footer === "unsaved" ? (
               <>
-                <span className="mr-auto pl-1 text-[13px] text-fg-2">{t("compose.discardAsk")}</span>
-                <Button variant="ghost" onClick={() => setConfirmClose(false)}>
+                <span className="mr-auto pl-1 text-[13px] text-fg-2">
+                  {footer === "discard"
+                    ? t("compose.discardAsk")
+                    : footer === "delete-draft"
+                      ? t("compose.deleteDraftAsk")
+                      : t("compose.unsavedAsk")}
+                </span>
+                <Button variant="ghost" onClick={() => setFooter("normal")}>
                   {t("compose.keepWriting")}
                 </Button>
-                <Button variant="danger" onClick={close}>
-                  {t("compose.discard")}
+                <Button
+                  variant="danger"
+                  // 草稿没存上时只是关掉：邮箱里之前存的那一版还留着
+                  onClick={() => (footer === "unsaved" ? close() : void discard())}
+                >
+                  {footer === "delete-draft"
+                    ? t("compose.deleteDraft")
+                    : footer === "unsaved"
+                      ? t("compose.closeAnyway")
+                      : t("compose.discard")}
                 </Button>
               </>
             ) : (
               <>
-                {attachments > 0 ? (
-                  <span className="mr-auto flex min-w-0 items-center gap-1.5 pl-1 text-[12px] text-fg-3">
-                    <Paperclip size={13} className="shrink-0" />
-                    <span className="truncate">{t("compose.attachmentsNotForwarded", { n: attachments })}</span>
-                  </span>
-                ) : (
-                  <span className="mr-auto" />
-                )}
-                <Button variant="ghost" onClick={requestClose} disabled={busy}>
-                  {t("compose.discard")}
+                <IconButton label={t("compose.attach")} disabled={!ready} onClick={() => picker.current?.click()}>
+                  <Paperclip {...ICON} />
+                </IconButton>
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    void addFiles(Array.from(e.target.files ?? []));
+                    e.target.value = "";
+                  }}
+                />
+                <span className="mr-auto min-w-0 truncate pl-1 text-[12px] text-fg-3" aria-live="polite">
+                  {status.kind === "saving"
+                    ? t("compose.draftSaving")
+                    : status.kind === "saved"
+                      ? t("compose.draftSaved", { time: clock(status.at, lang) })
+                      : status.kind === "failed"
+                        ? t("compose.draftFailed")
+                        : ""}
+                </span>
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    if (hasDraft) setFooter("delete-draft");
+                    else if (dirty) setFooter("discard");
+                    else close();
+                  }}
+                >
+                  {hasDraft ? t("compose.deleteDraft") : t("compose.discard")}
                 </Button>
                 <Tip label={t("compose.send")} shortcut={sendShortcut} side="top">
-                  <Button variant="primary" busy={busy} disabled={!ready || !fromId} onClick={() => void send()}>
+                  <Button
+                    variant="primary"
+                    busy={busy}
+                    disabled={!ready || !fromId || uploading}
+                    onClick={() => void send()}
+                  >
                     <Send size={14} strokeWidth={2} />
                     {t("compose.send")}
                   </Button>
@@ -381,6 +715,13 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** 几点几分。 */
+function clock(at: number, lang: "zh" | "en"): string {
+  return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }).format(
+    new Date(at),
   );
 }
 
