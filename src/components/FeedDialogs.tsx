@@ -9,7 +9,8 @@ import { openExternal } from "../lib/platform";
 import { keys, useNav, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { type Lang, shortTime } from "../lib/time";
-import type { RsshubRoute } from "../lib/rsshub";
+import { httpStatusOf, type RsshubRoute } from "../lib/rsshub";
+import { RpcError } from "../lib/transport";
 import { FolderPicker } from "./FolderPicker";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, TextInput } from "./ui";
@@ -194,6 +195,8 @@ export function AddFeedDialog() {
   const folders = useFolders();
 
   const [url, setUrl] = useState("");
+  const feedUrlRef = useRef(url);
+  feedUrlRef.current = url;
   const [folder, setFolder] = useState("");
   const [name, setName] = useState("");
   const [phase, setPhase] = useState<"idle" | "searching" | "adding">("idle");
@@ -203,6 +206,8 @@ export function AddFeedDialog() {
   const [error, setError] = useState<string | null>(null);
   /** 「网址」直接填地址；「RSSHub」搜网站、填参数，拼出地址。 */
   const [mode, setMode] = useState<"url" | "rsshub">("url");
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   /** RSSHub 模式下选中的路由，以及从网址里取到的参数值。 */
   const [picked, setPicked] = useState<{ route: RsshubRoute; found: Record<string, string> } | null>(null);
   /** 只认最后一次预览的结果，前面没回来的作废。 */
@@ -226,6 +231,23 @@ export function AddFeedDialog() {
     return () => clearTimeout(timer.current);
   }, [open, startFolder]);
 
+  /** 出错时的说明。订阅地址在 RSSHub 实例上、对方返回 4xx/5xx 时，说清楚是 RSSHub 实例的问题。 */
+  const explain = (err: unknown, target: string): string => {
+    const status = err instanceof RpcError && err.code === "http_status" ? httpStatusOf(err.message) : null;
+    if (status !== null && modeRef.current === "rsshub") {
+      let host = target;
+      try {
+        host = new URL(target).host;
+      } catch {
+        // 用原样
+      }
+      return status === 401 || status === 403 || status === 429
+        ? t("rsshub.refused", { host, status })
+        : t("rsshub.serverError", { host, status });
+    }
+    return errorText(t, err);
+  };
+
   /** 读取预览。`keepCandidates` 时是在同一个网站的几个源之间换，候选列表保留。 */
   const load = async (target: string, keepCandidates = false) => {
     clearTimeout(timer.current);
@@ -240,7 +262,7 @@ export function AddFeedDialog() {
     } catch (err) {
       if (id !== request.current) return;
       setPreview(null);
-      setError(errorText(t, err));
+      setError(explain(err, target));
     } finally {
       if (id === request.current) setPreviewing(false);
     }
@@ -269,7 +291,7 @@ export function AddFeedDialog() {
       setScope({ kind: "feed", feedId: feed.id });
       setDialog(null);
     } catch (err) {
-      setError(errorText(t, err));
+      setError(explain(err, feedUrlRef.current));
       setPhase("idle");
     }
   };
@@ -292,7 +314,7 @@ export function AddFeedDialog() {
         setPhase("idle");
       }
     } catch (err) {
-      setError(errorText(t, err));
+      setError(explain(err, feedUrlRef.current));
       setPhase("idle");
     }
   };
@@ -362,6 +384,12 @@ export function AddFeedDialog() {
                 setError(null);
               }}
               onUrl={onRsshubUrl}
+              onDirect={(pageUrl) => {
+                // 换到「网址」，用 Postflow 自己的方式订阅（YouTube 频道）
+                switchMode("url");
+                setUrl(pageUrl);
+                void load(pageUrl);
+              }}
             />
           ) : (
             <RsshubSearch onPick={(r) => pickRoute(r)} />
@@ -395,7 +423,8 @@ export function AddFeedDialog() {
           </div>
         </Field>
         )}
-        {mode === "url" && looksLikeUrl(url) && (
+        {/* Postflow 自己能订阅的（YouTube 频道）就不再提 RSSHub */}
+        {mode === "url" && looksLikeUrl(url) && preview?.feed.kind !== "youtube" && (
           <RadarSuggestions url={url.trim()} onPick={pickRoute} />
         )}
 

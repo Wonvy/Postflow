@@ -2,14 +2,16 @@
 // 路由目录由核心下载和搜索（crates/core/src/rsshub.rs），拼订阅地址在 lib/rsshub.ts。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronDown, Search, TriangleAlert, Zap } from "lucide-react";
+import { ArrowLeft, ChevronDown, Languages, Search, TriangleAlert, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
 import { keys, useSettings } from "../lib/queries";
+import { formatSize } from "../lib/platform";
 import {
   buildFeedUrl,
   DEFAULT_INSTANCE,
+  directUrl,
   initialValues,
   normalizeInstance,
   plainDescription,
@@ -17,7 +19,8 @@ import {
   type RsshubRoute,
   SETTING_KEY,
 } from "../lib/rsshub";
-import { cx, Favicon, Field, Select, Spinner, TextInput } from "./ui";
+import { useModelDownloads, useTranslateTarget } from "../lib/translate";
+import { Button, cx, Favicon, Field, Select, Spinner, TextInput } from "./ui";
 
 /** 设置里的 RSSHub 实例地址（会同步到其他设备）。 */
 export function useRsshubInstance(): [string, (value: string) => Promise<void>] {
@@ -129,20 +132,77 @@ export function RsshubSearch({ onPick }: { onPick: (route: RsshubRoute) => void 
   );
 }
 
+/**
+ * RSSHub 的说明大多是英文（或中文）写的。和界面要的语言不一样时，用离线翻译翻一下：
+ * 路由名、路由说明、每个参数的说明。没装对应的模型时返回要下载的模型，由界面问用户要不要下。
+ */
+function useRouteTranslation(route: RsshubRoute) {
+  const target = useTranslateTarget();
+  const texts = useMemo(
+    () => [route.name, plainDescription(route.description), ...route.params.map((p) => plainDescription(p.description))],
+    [route],
+  );
+  const sample = texts.filter(Boolean).join("\n").slice(0, 2000);
+  const downloads = useModelDownloads((s) => s.byPair);
+  const plan = useQuery({
+    queryKey: ["rsshub", "plan", sample, target],
+    queryFn: () => api.translatePlan(sample, target),
+    enabled: sample.trim().length > 0,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  const missing = plan.data?.missing ?? [];
+  const installing = missing.some((m) => downloads[m.pair]?.state === "downloading");
+  const installed = missing.length > 0 && missing.every((m) => downloads[m.pair]?.state === "installed");
+  // 模型刚装好：重新看一下能不能翻
+  useEffect(() => {
+    if (installed) void plan.refetch();
+  }, [installed, plan.refetch]);
+  const ready = plan.data && !plan.data.same && plan.data.from && missing.length === 0;
+  const translated = useQuery({
+    queryKey: ["rsshub", "translated", route.namespace, route.path, target],
+    queryFn: async () => {
+      const p = plan.data;
+      if (!p?.from) return null;
+      const { segments } = await api.translateText(
+        p.from,
+        p.to,
+        texts.map((text) => ({ text, marks: [] })),
+      );
+      return segments.map((seg, i) => (texts[i] ? seg.text : ""));
+    },
+    enabled: Boolean(ready),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  return {
+    /** 第 i 段的译文，没有就是原文。0 是路由名，1 是路由说明，之后是各参数的说明。 */
+    text: (i: number) => translated.data?.[i] || texts[i] || "",
+    translating: translated.isFetching,
+    translatedNow: Boolean(translated.data),
+    missing: plan.data?.same ? [] : missing,
+    installing,
+  };
+}
+
 /** 一条路由的参数表单。参数填好后把拼出来的订阅地址交给 `onUrl`（没填完是 null）。 */
 export function RsshubForm({
   route,
   found,
   onBack,
   onUrl,
+  onDirect,
 }: {
   route: RsshubRoute;
   /** 从网址里取到的参数值。 */
   found?: Record<string, string>;
   onBack: () => void;
   onUrl: (url: string | null) => void;
+  /** Postflow 自己就能订阅这个网站时，改用网页地址直接订阅。 */
+  onDirect: (pageUrl: string) => void;
 }) {
   const t = useT();
+  const tr = useRouteTranslation(route);
   const [instance, saveInstance] = useRsshubInstance();
   const [values, setValues] = useState(() => initialValues(route, found));
   const [instanceDraft, setInstanceDraft] = useState<string | null>(null);
@@ -151,7 +211,8 @@ export function RsshubForm({
   useEffect(() => onUrl(url), [url, onUrl]);
 
   const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
-  const about = plainDescription(route.description);
+  const about = tr.text(1);
+  const direct = directUrl(route, values);
 
   return (
     <div className="flex flex-col gap-3">
@@ -168,7 +229,7 @@ export function RsshubForm({
         <Favicon src={siteIcon(route)} size={16} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-fg">
-            {route.site} <span className="text-fg-3">·</span> {route.name}
+            {route.site} <span className="text-fg-3">·</span> {tr.text(0)}
           </p>
           {about && (
             <button
@@ -189,9 +250,48 @@ export function RsshubForm({
         </p>
       )}
 
+      {route.namespace === "youtube" && (
+        <div className="flex items-center gap-3 rounded-md bg-accent-soft px-3 py-2 text-[12px] leading-relaxed text-fg-2">
+          <span className="min-w-0 flex-1">{t("rsshub.youtubeDirect")}</span>
+          <Button disabled={!direct} onClick={() => direct && onDirect(direct)}>
+            {t("rsshub.subscribeDirect")}
+          </Button>
+        </div>
+      )}
+
+      {(tr.missing.length > 0 || tr.translating || tr.translatedNow) && (
+        <p className="flex items-center gap-1.5 text-[11px] text-fg-3">
+          <Languages size={12} className="shrink-0" />
+          {tr.translating ? (
+            t("rsshub.translating")
+          ) : tr.translatedNow ? (
+            t("rsshub.translated")
+          ) : tr.installing ? (
+            t("rsshub.installingModel")
+          ) : (
+            <>
+              {t("rsshub.untranslated")}
+              <button
+                type="button"
+                onClick={() => void api.downloadModels(tr.missing.map((m) => m.pair))}
+                className="text-accent hover:underline"
+              >
+                {t("rsshub.installModel", { size: formatSize(tr.missing.reduce((n, m) => n + m.size, 0)) })}
+              </button>
+            </>
+          )}
+        </p>
+      )}
+
       {route.params.length === 0 && <p className="text-[12px] text-fg-3">{t("rsshub.noParams")}</p>}
-      {route.params.map((p) => (
-        <ParamField key={p.name} param={p} value={values[p.name] ?? ""} onChange={(v) => set(p.name, v)} />
+      {route.params.map((p, i) => (
+        <ParamField
+          key={p.name}
+          param={p}
+          hint={tr.text(i + 2)}
+          value={values[p.name] ?? ""}
+          onChange={(v) => set(p.name, v)}
+        />
       ))}
 
       <div className="rounded-md border border-line px-3 py-2">
@@ -220,9 +320,19 @@ export function RsshubForm({
   );
 }
 
-function ParamField({ param, value, onChange }: { param: RsshubParam; value: string; onChange: (v: string) => void }) {
+function ParamField({
+  param,
+  hint,
+  value,
+  onChange,
+}: {
+  param: RsshubParam;
+  /** 参数说明（可能是译文）。 */
+  hint: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   const t = useT();
-  const hint = plainDescription(param.description);
   const [expanded, setExpanded] = useState(false);
   const long = hint.length > 140 || hint.includes("\n");
   const label = param.optional ? `${param.name} · ${t("rsshub.optional")}` : param.name;

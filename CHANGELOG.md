@@ -32,6 +32,10 @@ that heading into the version number and date.
 - Windows: updating works when Postflow is installed in a folder that needs administrator rights (such as
   D:\Program Files). Postflow notices, downloads and checks the update, and asks for permission through the
   Windows prompt instead of failing.
+- RSSHub in Add feed: when an RSSHub instance refuses (the public rsshub.app turns feed readers away with
+  HTTP 403), the message now says so and what to change, instead of "The server returned an error". YouTube
+  routes offer to follow the channel directly, without RSSHub. Route and setting descriptions, which RSSHub mostly
+  writes in English, are translated into your language with the offline translation model (downloaded on request).
 
 ### 中文
 
@@ -51,6 +55,9 @@ that heading into the version number and date.
   并且有了中文界面（按 Windows 的语言自动选择）。
 - Windows：Postflow 装在需要管理员权限的文件夹（比如 D:\Program Files）时也能在线更新了。Postflow 会发现这种情况，
   下载并校验更新后，通过系统的授权窗口请求权限，而不是直接安装失败。
+- 添加订阅里的 RSSHub：RSSHub 实例拒绝访问时（公共实例 rsshub.app 会对阅读器返回 HTTP 403），提示会说明原因和该怎么改，
+  不再只是「对方服务器返回了错误」。YouTube 的路由会提供「直接订阅」，不经过 RSSHub。RSSHub 的路由和参数说明大多是英文，
+  现在会用离线翻译模型翻成你的语言（第一次需要点一下下载模型）。
 
 ## 0.1.13 — 2026-11-17
 

@@ -92,3 +92,34 @@ export function plainDescription(text: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+/**
+ * 有些网站 Postflow 自己就能订阅，不需要 RSSHub（YouTube 的频道和播放列表）。
+ * 能的话返回该网站的网页地址，交给「网址」那边直接订阅；不能返回 null。
+ */
+export function directUrl(route: Pick<RsshubRoute, "namespace" | "path">, values: Record<string, string>): string | null {
+  if (route.namespace !== "youtube") return null;
+  const v = (name: string) => (values[name] ?? "").trim();
+  const head = route.path.split("/").filter(Boolean)[0] ?? "";
+  const username = v("username");
+  const id = v("id");
+  switch (head) {
+    case "user":
+    case "c":
+      if (!username) return null;
+      if (username.startsWith("@")) return `https://www.youtube.com/${username}`;
+      return head === "c" ? `https://www.youtube.com/c/${encodeURIComponent(username)}` : `https://www.youtube.com/@${username}`;
+    case "channel":
+      return id ? `https://www.youtube.com/channel/${encodeURIComponent(id)}` : null;
+    case "playlist":
+      return id ? `https://www.youtube.com/playlist?list=${encodeURIComponent(id)}` : null;
+    default:
+      return null;
+  }
+}
+
+/** 订阅地址出错时，从核心的错误信息里取出 HTTP 状态码（「server returned HTTP 403」）。 */
+export function httpStatusOf(message: string): number | null {
+  const m = /HTTP (\d{3})/.exec(message);
+  return m ? Number(m[1]) : null;
+}

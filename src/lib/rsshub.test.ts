@@ -2,7 +2,15 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildFeedUrl, initialValues, normalizeInstance, plainDescription, type RsshubRoute } from "./rsshub.ts";
+import {
+  buildFeedUrl,
+  directUrl,
+  httpStatusOf,
+  initialValues,
+  normalizeInstance,
+  plainDescription,
+  type RsshubRoute,
+} from "./rsshub.ts";
 
 const issues = { namespace: "github", path: "/issue/:user/:repo/:state?" };
 
@@ -46,4 +54,18 @@ test("form starts with values found in the page address, then defaults", () => {
 
 test("markdown in descriptions becomes plain text", () => {
   assert.equal(plainDescription("See [the docs](https://x.y) and `code`\n\n\n::: tip\n**bold**"), "See the docs and code\n\n\nbold".replace("\n\n\n", "\n\n"));
+});
+
+test("YouTube routes point at the channel page Postflow can follow by itself", () => {
+  assert.equal(directUrl({ namespace: "youtube", path: "/c/:username/:embed?" }, { username: "@buckppt" }), "https://www.youtube.com/@buckppt");
+  assert.equal(directUrl({ namespace: "youtube", path: "/user/:username/:embed?" }, { username: "LinusTech" }), "https://www.youtube.com/@LinusTech");
+  assert.equal(directUrl({ namespace: "youtube", path: "/channel/:id/:embed?" }, { id: "UC123" }), "https://www.youtube.com/channel/UC123");
+  assert.equal(directUrl({ namespace: "youtube", path: "/playlist/:id/:embed?" }, { id: "PL9" }), "https://www.youtube.com/playlist?list=PL9");
+  assert.equal(directUrl({ namespace: "youtube", path: "/c/:username" }, {}), null);
+  assert.equal(directUrl({ namespace: "github", path: "/activity/:user" }, { user: "x" }), null);
+});
+
+test("the HTTP status comes out of the core's error message", () => {
+  assert.equal(httpStatusOf("server returned HTTP 403"), 403);
+  assert.equal(httpStatusOf("request failed: timed out"), null);
 });
