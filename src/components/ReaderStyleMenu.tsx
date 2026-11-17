@@ -1,20 +1,28 @@
 import * as Popover from "@radix-ui/react-popover";
-import { ALargeSmall, Minus, Plus } from "lucide-react";
+import { ALargeSmall } from "lucide-react";
 import type { ReactNode } from "react";
-import { useT } from "../lib/i18n";
+import { type MessageKey, useT } from "../lib/i18n";
 import {
+  clampTo,
+  formatReaderValue,
   isDefaultStyle,
   READER_DEFAULT,
-  READER_SIZE_MAX,
-  READER_SIZE_MIN,
+  READER_RANGE,
   type ReaderFont,
-  type ReaderLeading,
-  type ReaderWidth,
+  type ReaderNumber,
 } from "../lib/readerStyle";
 import { useReaderStyle, useUi } from "../lib/store";
-import { ICON, Segmented, Tip } from "./ui";
+import { ICON, Segmented, Slider, Tip } from "./ui";
 
-/** 阅读区工具栏上的「Aa」：改字号、行距、字体和宽度，立即生效。 */
+const SLIDERS: [ReaderNumber, MessageKey][] = [
+  ["size", "reader.fontSize"],
+  ["leading", "reader.lineHeight"],
+  ["tracking", "reader.letterSpacing"],
+  ["spacing", "reader.paragraphSpacing"],
+  ["width", "reader.width"],
+];
+
+/** 阅读区工具栏上的「Aa」：用滑块改字号、行距、字间距、段间距和宽度，选字体，立即生效。双击滑块回到默认。 */
 export function ReaderStyleMenu() {
   const t = useT();
   const style = useReaderStyle();
@@ -40,38 +48,6 @@ export function ReaderStyleMenu() {
           aria-label={t("reader.style")}
           className="anim-pop z-50 flex w-[304px] flex-col gap-3 rounded-lg bg-surface p-3 shadow-pop outline-none"
         >
-          <Line label={t("reader.fontSize")}>
-            <div className="flex items-center gap-1">
-              <Step
-                label={t("reader.smaller")}
-                disabled={style.size <= READER_SIZE_MIN}
-                onClick={() => set({ size: style.size - 1 })}
-              >
-                <Minus size={14} strokeWidth={2} />
-              </Step>
-              <output aria-live="polite" className="tabular w-9 text-center text-[13px] text-fg">
-                {style.size}
-              </output>
-              <Step
-                label={t("reader.larger")}
-                disabled={style.size >= READER_SIZE_MAX}
-                onClick={() => set({ size: style.size + 1 })}
-              >
-                <Plus size={14} strokeWidth={2} />
-              </Step>
-            </div>
-          </Line>
-          <Line label={t("reader.lineHeight")}>
-            <Segmented<ReaderLeading>
-              value={style.leading}
-              onChange={(leading) => set({ leading })}
-              options={[
-                { value: "compact", label: t("reader.leadingCompact") },
-                { value: "normal", label: t("reader.leadingNormal") },
-                { value: "relaxed", label: t("reader.leadingRelaxed") },
-              ]}
-            />
-          </Line>
           <Line label={t("reader.font")}>
             <Segmented<ReaderFont>
               value={style.font}
@@ -82,17 +58,17 @@ export function ReaderStyleMenu() {
               ]}
             />
           </Line>
-          <Line label={t("reader.width")}>
-            <Segmented<ReaderWidth>
-              value={style.width}
-              onChange={(width) => set({ width })}
-              options={[
-                { value: "narrow", label: t("reader.widthNarrow") },
-                { value: "normal", label: t("reader.widthNormal") },
-                { value: "wide", label: t("reader.widthWide") },
-              ]}
-            />
-          </Line>
+          {SLIDERS.map(([key, label]) => (
+            <Row key={key} label={t(label)} value={formatReaderValue(key, style[key])}>
+              <Slider
+                label={t(label)}
+                {...READER_RANGE[key]}
+                value={style[key]}
+                defaultValue={READER_DEFAULT[key]}
+                onChange={(v) => set({ [key]: clampTo(key, v) })}
+              />
+            </Row>
+          ))}
           <div className="flex items-center justify-between gap-3 border-t border-line pt-2.5">
             <span className="text-[11px] leading-snug text-fg-3">{t("reader.styleHint")}</span>
             <button
@@ -119,27 +95,17 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Step({
-  label,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+/** 一行滑块：上面是名字和当前数值，下面是滑块。 */
+function Row({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="inline-flex size-7 items-center justify-center rounded-md border border-line-strong text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-40"
-    >
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] text-fg-2">{label}</span>
+        <output aria-live="polite" className="tabular text-[12px] text-fg-3">
+          {value}
+        </output>
+      </div>
       {children}
-    </button>
+    </div>
   );
 }

@@ -1,45 +1,87 @@
-// 阅读区的排版：字号、行距、字体和版心宽度。和主题一样只存在这台设备上，不同步。
+// 阅读区的排版：字号、行距、字间距、段间距、字体和版心宽度。和主题一样只存在这台设备上，不同步。
 //
 // 文章和纯文本邮件用这些设置排版；HTML 邮件有自己的样式，只跟着字号整体缩放。
+// 数值都用滑块调，范围和步长见下面的 READER_RANGE。
 // 这里只有纯函数，方便测试：npm run test:ui
 
 export type ReaderFont = "sans" | "serif";
-export type ReaderLeading = "compact" | "normal" | "relaxed";
-export type ReaderWidth = "narrow" | "normal" | "wide";
 
 export interface ReaderStyle {
+  /** 字号，px。 */
   size: number;
-  leading: ReaderLeading;
+  /** 行距，字号的倍数。 */
+  leading: number;
+  /** 字间距，em。 */
+  tracking: number;
+  /** 段落之间的空，em。 */
+  spacing: number;
   font: ReaderFont;
-  width: ReaderWidth;
+  /** 文章的版心宽度，px；邮件再宽 40px。 */
+  width: number;
 }
 
-export const READER_SIZE_MIN = 12;
-export const READER_SIZE_MAX = 24;
-export const READER_DEFAULT: ReaderStyle = { size: 15, leading: "normal", font: "sans", width: "normal" };
+export type ReaderNumber = Exclude<keyof ReaderStyle, "font">;
 
-const LEADING: Record<ReaderLeading, number> = { compact: 1.55, normal: 1.72, relaxed: 1.95 };
-/** 文章的版心宽度；邮件的信头信息多一些，再宽 40px。 */
-const WIDTH: Record<ReaderWidth, number> = { narrow: 600, normal: 720, wide: 900 };
+export interface Range {
+  min: number;
+  max: number;
+  step: number;
+}
+
+export const READER_RANGE: Record<ReaderNumber, Range> = {
+  size: { min: 12, max: 24, step: 1 },
+  leading: { min: 1.3, max: 2.4, step: 0.05 },
+  tracking: { min: -0.02, max: 0.12, step: 0.005 },
+  spacing: { min: 0.4, max: 2, step: 0.05 },
+  width: { min: 480, max: 1100, step: 20 },
+};
+
+export const READER_SIZE_MIN = READER_RANGE.size.min;
+export const READER_SIZE_MAX = READER_RANGE.size.max;
+export const READER_DEFAULT: ReaderStyle = {
+  size: 15,
+  leading: 1.72,
+  tracking: 0,
+  spacing: 1.15,
+  font: "sans",
+  width: 720,
+};
+
+/** 以前行距和宽度是三档选项，旧版本存下来的是这些名字。 */
+const OLD_LEADING: Record<string, number> = { compact: 1.55, normal: 1.72, relaxed: 1.95 };
+const OLD_WIDTH: Record<string, number> = { narrow: 600, normal: 720, wide: 900 };
+
 /** 系统自带的衬线字体：先西文，再中文（macOS 宋体、思源宋体、Windows 宋体）。 */
 const SERIF =
   '"Iowan Old Style", Charter, Georgia, "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", SimSun, serif';
 
-const pick = <T extends string>(value: unknown, allowed: Record<T, unknown>, fallback: T): T =>
-  typeof value === "string" && value in allowed ? (value as T) : fallback;
+/** 限制在范围内，并对齐到步长（顺带去掉浮点误差）。 */
+export function clampTo(key: ReaderNumber, value: number): number {
+  const { min, max, step } = READER_RANGE[key];
+  const snapped = Math.round((value - min) / step) * step + min;
+  return Math.round(Math.min(max, Math.max(min, snapped)) * 1000) / 1000;
+}
 
 export function clampSize(size: number): number {
-  return Math.min(READER_SIZE_MAX, Math.max(READER_SIZE_MIN, Math.round(size)));
+  return clampTo("size", size);
+}
+
+function num(key: ReaderNumber, value: unknown, old?: Record<string, number>): number {
+  if (typeof value === "number" && Number.isFinite(value)) return clampTo(key, value);
+  if (typeof value === "string" && old?.[value] !== undefined) return old[value];
+  return READER_DEFAULT[key];
 }
 
 /** 本机存的设置可能是旧版本留下的、缺字段的，补成完整的。 */
 export function normalizeReaderStyle(raw: unknown): ReaderStyle {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof ReaderStyle, unknown>>;
   return {
-    size: typeof r.size === "number" && Number.isFinite(r.size) ? clampSize(r.size) : READER_DEFAULT.size,
-    leading: pick(r.leading, LEADING, READER_DEFAULT.leading),
-    font: pick(r.font, { sans: 1, serif: 1 }, READER_DEFAULT.font),
-    width: pick(r.width, WIDTH, READER_DEFAULT.width),
+    size: num("size", r.size),
+    leading: num("leading", r.leading, OLD_LEADING),
+    tracking: num("tracking", r.tracking),
+    spacing: num("spacing", r.spacing),
+    font: r.font === "serif" ? "serif" : "sans",
+    width: num("width", r.width, OLD_WIDTH),
   };
 }
 
@@ -51,13 +93,15 @@ export function isDefaultStyle(style: ReaderStyle): boolean {
 export function readerVars(style: ReaderStyle): Record<string, string> {
   return {
     "--reader-size": `${style.size}px`,
-    "--reader-leading": String(LEADING[style.leading]),
+    "--reader-leading": String(style.leading),
+    "--reader-tracking": `${style.tracking}em`,
+    "--reader-spacing": `${style.spacing}em`,
     "--reader-font": style.font === "serif" ? SERIF : "var(--font-sans)",
   };
 }
 
 export function readerWidth(style: ReaderStyle, kind: "article" | "mail"): number {
-  return WIDTH[style.width] + (kind === "mail" ? 40 : 0);
+  return style.width + (kind === "mail" ? 40 : 0);
 }
 
 /** 标题跟着正文一起变大变小：默认字号下文章标题 26px，邮件标题 22px。 */
@@ -68,4 +112,19 @@ export function titleSize(style: ReaderStyle, kind: "article" | "mail"): number 
 /** HTML 邮件整体缩放的比例。 */
 export function mailZoom(style: ReaderStyle): number {
   return Math.round((style.size / READER_DEFAULT.size) * 1000) / 1000;
+}
+
+/** 滑块旁边显示的数值。 */
+export function formatReaderValue(key: ReaderNumber, value: number): string {
+  switch (key) {
+    case "size":
+    case "width":
+      return `${value}`;
+    case "leading":
+      return value.toFixed(2);
+    case "tracking":
+      return `${value > 0 ? "+" : ""}${value.toFixed(3)}`;
+    case "spacing":
+      return value.toFixed(2);
+  }
 }

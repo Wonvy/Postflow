@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   clampSize,
+  clampTo,
   isDefaultStyle,
   mailZoom,
   normalizeReaderStyle,
@@ -31,6 +32,8 @@ test("the defaults look the same as before reading settings existed", () => {
   assert.deepEqual(readerVars(READER_DEFAULT), {
     "--reader-size": "15px",
     "--reader-leading": "1.72",
+    "--reader-tracking": "0em",
+    "--reader-spacing": "1.15em",
     "--reader-font": "var(--font-sans)",
   });
   assert.equal(readerWidth(READER_DEFAULT, "article"), 720);
@@ -45,4 +48,21 @@ test("titles and HTML mail grow with the text", () => {
   assert.equal(titleSize(big, "article"), 31);
   assert.equal(mailZoom(big), 1.2);
   assert.ok(!isDefaultStyle(big));
+});
+
+test("leading and width saved as the old three choices carry over", () => {
+  const old = normalizeReaderStyle({ size: 16, leading: "relaxed", width: "wide", font: "serif" });
+  assert.equal(old.leading, 1.95);
+  assert.equal(old.width, 900);
+  assert.equal(old.tracking, 0);
+  assert.equal(normalizeReaderStyle({ leading: "normal", width: "normal" }).width, 720);
+  assert.ok(isDefaultStyle(normalizeReaderStyle({ leading: "normal", width: "normal" })));
+});
+
+test("slider values stay in range and snap to the step", () => {
+  assert.equal(clampTo("leading", 9), 2.4);
+  assert.equal(clampTo("leading", 1.7231), 1.7);
+  assert.equal(clampTo("tracking", 0.0124), 0.01);
+  assert.equal(clampTo("width", 726), 720);
+  assert.equal(clampTo("spacing", 0), 0.4);
 });

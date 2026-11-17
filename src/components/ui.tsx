@@ -7,6 +7,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { ChevronRight, LoaderCircle, Rss, X } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
+  type CSSProperties,
   type InputHTMLAttributes,
   type MouseEvent,
   type ReactElement,
@@ -240,6 +241,44 @@ export function Segmented<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * 滑块：拖动立即生效，双击回到默认值。用系统自带的 range 控件，键盘方向键也能调。
+ * 填充的部分用 CSS 变量 `--fill` 画，样式见 styles.css 里的 `.slider`。
+ */
+export function Slider({
+  value,
+  min,
+  max,
+  step,
+  label,
+  defaultValue,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  label: string;
+  defaultValue?: number;
+  onChange: (value: number) => void;
+}) {
+  const fill = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  return (
+    <input
+      type="range"
+      aria-label={label}
+      className="slider"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      style={{ "--fill": `${fill}%` } as CSSProperties}
+      onChange={(e) => onChange(Number(e.currentTarget.value))}
+      onDoubleClick={defaultValue === undefined ? undefined : () => onChange(defaultValue)}
+    />
   );
 }
 
