@@ -19,6 +19,10 @@ that heading into the version number and date.
   "Classify now" still asks the AI once when you click it, and logs the shape of an answer it can't read.
 - Mail: when Postflow can't find a mailbox's Sent, Drafts, Spam or Trash folder, verbose logs list the folders the
   server offers, to help with providers that name them differently.
+- Mail stays connected: Postflow checks in with the server every 2 minutes instead of waiting 5 in silence, so
+  servers and network gateways that close quiet connections (Sohu after a minute, 163 and 126, QQ and Gmail behind
+  some networks) no longer drop it. If a server still hangs up, Postflow learns how long it allows and checks in
+  sooner. These expected reconnects are no longer logged as warnings or shown as mailbox errors.
 
 ### 中文
 - 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
@@ -29,6 +33,9 @@ that heading into the version number and date.
 - 去掉了 AI 自动分类：有些模型的回答读不出来时，它会每分钟把同一批内容再发一次，白白花钱。新内容改由你的规则分类
   （设置 → 自动规则）；「立即分类」仍然可以点一下让 AI 分一次，读不出回答时日志里会记下回答的样子。
 - 邮件：找不到邮箱的「已发送」「草稿」「垃圾邮件」「已删除」文件夹时，详细日志里会列出服务器提供的文件夹，方便排查叫法不同的邮箱。
+- 邮件连接更稳：Postflow 每 2 分钟跟服务器说一句话，不再安静等 5 分钟，所以会清理安静连接的服务器和网关
+  （搜狐一分钟左右，163、126，以及部分网络下的 QQ、Gmail）不会再把连接断掉。服务器还是会断的话，Postflow 会记住它能等多久，
+  以后提前说话。这类正常的重连不再记成警告，也不会让邮箱显示出错。
 
 ## 0.1.14 — 2026-11-17
 

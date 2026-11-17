@@ -730,6 +730,14 @@ impl Connection {
             .collect())
     }
 
+    /// 跟服务器说一声「还在」（NOOP）。不支持 IDLE 的服务器两次收信之间用它保持连接，
+    /// 免得服务器或中间的网关把长时间没动静的连接关掉。
+    pub async fn noop(&mut self) -> Result<()> {
+        timed(async { Ok(self.session.noop().await?) }).await?;
+        self.drain_unsolicited();
+        Ok(())
+    }
+
     /// 下次用到时重新列一遍邮箱：连接期间服务器上可能新建或改名了文件夹
     /// （比如发信时才建出来的「已发送」）。
     pub fn forget_mailboxes(&mut self) {

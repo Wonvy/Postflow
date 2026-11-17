@@ -31,9 +31,14 @@ const EAGER_BODY_LIMIT: u32 = 2 * 1024 * 1024;
 const FETCH_BATCH: usize = 20;
 /// IDLE 最多等这么久就结束，重新同步一次再接着等。大多数服务器会在 30 分钟左右断开空闲的
 /// IDLE；有的服务器从不推送新邮件，只发「还在」，这时它就是收到新邮件的最长延迟。
-const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+/// 多久做一次完整同步（所有文件夹）。IDLE 收到新邮件时会提前。
+const FULL_SYNC_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// 服务器不支持 IDLE 时多久查一次。
-const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// 连接最多安静多久就要跟服务器说句话（重新开始 IDLE，或者发 NOOP）。
+/// 很多服务器、网关和代理会悄悄关掉一段时间没动静的连接。
+const KEEPALIVE_START: Duration = Duration::from_secs(2 * 60);
+/// 学到的间隔最短这么多，免得遇到真正的网络故障时越缩越短。
+const KEEPALIVE_MIN: Duration = Duration::from_secs(20);
 const MIN_BACKOFF: Duration = Duration::from_secs(15);
 const MAX_BACKOFF: Duration = Duration::from_secs(15 * 60);
 /// 服务器拒绝登录后，多久自己再试一次。有的拒绝是临时的（比如登录太频繁），密码真错了也只多试这一次。
@@ -101,6 +106,35 @@ pub(crate) fn mail_error(err: &postflow_mail::Error) -> RpcError {
 }
 
 /// 连接本身出了问题（断线、超时），重连可能就好了。服务器拒绝某个命令则不是。
+/// 一个邮箱的「多久说一句话」。连接在安静等待时被关掉，就按安静了多久把间隔缩短，
+/// 之后每次重连都用新的间隔（应用重启后从头学）。
+#[derive(Debug)]
+pub(crate) struct Keepalive {
+    pub(crate) window: Duration,
+    /// 正在安静等待（IDLE 或两次收信之间）时，从什么时候开始的。
+    waiting_since: Option<std::time::Instant>,
+}
+
+impl Keepalive {
+    pub(crate) fn new() -> Self {
+        Keepalive {
+            window: KEEPALIVE_START,
+            waiting_since: None,
+        }
+    }
+
+    /// 连接在安静了 `quiet` 之后被关掉了：以后在那之前就说话。返回新的间隔（没变返回 None）。
+    pub(crate) fn dropped_after(&mut self, quiet: Duration) -> Option<Duration> {
+        let next = (quiet * 7 / 10).min(self.window / 2).max(KEEPALIVE_MIN);
+        if next < self.window {
+            self.window = next;
+            Some(next)
+        } else {
+            None
+        }
+    }
+}
+
 fn is_connection_error(err: &postflow_mail::Error) -> bool {
     use postflow_mail::Error as E;
     matches!(err, E::Io(_) | E::Timeout | E::Connect(_) | E::Tls(_))
@@ -380,6 +414,8 @@ async fn run(
     let mut backoff = MIN_BACKOFF;
     // 用户打开过的普通文件夹，最近打开的在最后。断线重连后接着同步它们
     let mut watched: Vec<String> = Vec::new();
+    // 这个邮箱多久要跟服务器说一句话，重连之间保留（连接在安静时被关掉会把它缩短）
+    let mut keepalive = Keepalive::new();
     loop {
         let id = account_id.clone();
         let Ok(Some(account)) = session.db(move |s| s.account(&id)).await else {
@@ -500,18 +536,39 @@ async fn run(
             &mut pending,
             &mut watched,
             synced_before,
+            &mut keepalive,
         )
         .await
         {
             Ok(()) => return,
             Err(err) => {
-                tracing::warn!(account = %account_id, code = err.code(), "mail connection dropped: {err}");
-                core.record_mail(
-                    &session,
-                    &account_id,
-                    Some((err.code(), mail_error(&err).message)),
-                )
-                .await;
+                // 安静等待时被关掉：多半是服务器或网关清理没动静的连接，不算出错，下次早点说话
+                let quiet = keepalive
+                    .waiting_since
+                    .take()
+                    .filter(|_| is_connection_error(&err))
+                    .map(|since| since.elapsed());
+                if let Some(quiet) = quiet {
+                    match keepalive.dropped_after(quiet) {
+                        Some(window) => tracing::info!(
+                            account = %account_id,
+                            quiet_secs = quiet.as_secs(),
+                            keepalive_secs = window.as_secs(),
+                            "mail: the server closes quiet connections; checking in more often"
+                        ),
+                        None => {
+                            tracing::debug!(account = %account_id, "mail: quiet connection closed, reconnecting: {err}")
+                        }
+                    }
+                } else {
+                    tracing::warn!(account = %account_id, code = err.code(), "mail connection dropped: {err}");
+                    core.record_mail(
+                        &session,
+                        &account_id,
+                        Some((err.code(), mail_error(&err).message)),
+                    )
+                    .await;
+                }
                 fail_fetches(&mut pending, &err);
                 // 用户正等着刷新就马上重连，否则稍等一下
                 if !pending.iter().any(|c| matches!(c, Command::Sync)) {
@@ -618,6 +675,7 @@ async fn serve(
     pending: &mut Vec<Command>,
     watched: &mut Vec<String>,
     synced_before: bool,
+    keepalive: &mut Keepalive,
 ) -> Result<(), postflow_mail::Error> {
     // 刚连上的第一次同步也在界面上显示，让用户知道在收信
     let mut announce = true;
@@ -763,31 +821,42 @@ async fn serve(
         }
         notify = true;
 
-        if conn.supports_idle() {
+        let synced_at = std::time::Instant::now();
+        // 等新邮件或用户的操作。每隔一会儿跟服务器说句话保持连接；没新邮件时不用每次都完整同步
+        loop {
+            keepalive.waiting_since = Some(std::time::Instant::now());
             let mut closed = false;
-            let (next, _) = conn
-                .idle(IDLE_TIMEOUT, async {
-                    match rx.recv().await {
+            let mut new_data = false;
+            if conn.supports_idle() {
+                let (next, outcome) = conn
+                    .idle(keepalive.window, async {
+                        match rx.recv().await {
+                            Some(cmd) => pending.push(cmd),
+                            None => closed = true,
+                        }
+                    })
+                    .await?;
+                conn = next;
+                new_data = matches!(outcome, postflow_mail::IdleOutcome::NewData);
+            } else {
+                tokio::select! {
+                    cmd = rx.recv() => match cmd {
                         Some(cmd) => pending.push(cmd),
                         None => closed = true,
-                    }
-                })
-                .await?;
-            conn = next;
+                    },
+                    _ = tokio::time::sleep(keepalive.window) => {}
+                }
+                if !closed && pending.is_empty() {
+                    conn.noop().await?;
+                }
+            }
+            keepalive.waiting_since = None;
             if closed {
                 conn.logout().await;
                 return Ok(());
             }
-        } else {
-            tokio::select! {
-                cmd = rx.recv() => match cmd {
-                    Some(cmd) => pending.push(cmd),
-                    None => {
-                        conn.logout().await;
-                        return Ok(());
-                    }
-                },
-                _ = tokio::time::sleep(POLL_INTERVAL) => {}
+            if new_data || !pending.is_empty() || synced_at.elapsed() >= FULL_SYNC_INTERVAL {
+                break;
             }
         }
         // 用户连续操作时，攒一小会儿一起写回去
@@ -1276,6 +1345,38 @@ async fn fetch_body(
     let (id, copy) = (r.id.clone(), raw.clone());
     let _ = session.db(move |s| s.set_mail_body(&id, &copy)).await;
     Ok(raw)
+}
+
+#[cfg(test)]
+mod keepalive_tests {
+    use super::*;
+
+    #[test]
+    fn learns_to_check_in_before_the_server_hangs_up() {
+        let mut k = Keepalive::new();
+        assert_eq!(k.window, KEEPALIVE_START);
+        // 搜狐那样，安静 56 秒就被关掉
+        assert_eq!(
+            k.dropped_after(Duration::from_secs(56)),
+            Some(Duration::from_millis(39_200))
+        );
+        // 再被关一次也不会缩得比安静时间的七成还短太多
+        assert_eq!(
+            k.dropped_after(Duration::from_secs(39)),
+            Some(Duration::from_millis(19_600).max(KEEPALIVE_MIN))
+        );
+        // 不会低于下限
+        assert_eq!(k.dropped_after(Duration::from_secs(5)), None);
+        assert_eq!(k.window, KEEPALIVE_MIN);
+    }
+
+    #[test]
+    fn a_dead_connection_at_the_deadline_halves_the_window() {
+        // QQ、Gmail 那样：到点结束 IDLE 时连接已经断了，等 DONE 等了 15 秒
+        let mut k = Keepalive::new();
+        let quiet = KEEPALIVE_START + Duration::from_secs(15);
+        assert_eq!(k.dropped_after(quiet), Some(KEEPALIVE_START / 2));
+    }
 }
 
 #[cfg(test)]
