@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.15 — 2026-11-17
+
+### English
 - Sent mail shows up in Sent a few seconds after sending, instead of waiting for the next time new mail arrives.
   Folders created or renamed on the server while Postflow is running (such as a Sent folder made when the first
   message is sent) are found without restarting. Sent has its own hint when it's empty.
