@@ -8,7 +8,23 @@ that heading into the version number and date.
 
 ### English
 
+- Reading settings use sliders: text size, line spacing, letter spacing (new), paragraph spacing (new) and width.
+  Double-click a slider to reset it.
+- Sender avatars show the logo of the sender's website. Personal addresses (Gmail, QQ Mail and the like) keep the
+  initial. Turn it off under Settings → Appearance → Sender logos.
+- When a new version is out, a notice appears once at the bottom right, and an update icon stays at the top of the
+  sidebar until you update.
+- Right-click menus everywhere in the sidebar: "Mark all as read" on every list, folder and category, and menus on
+  the Mail, Categories and Feeds headings. The system's own right-click menu (Reload, Inspect) is gone; text fields
+  and selected text keep theirs.
+
 ### 中文
+
+- 阅读设置改用滑块：字号、行距、字间距（新增）、段间距（新增）和宽度。双击滑块回到默认。
+- 发件人头像显示发件人网站的图标；个人邮箱（Gmail、QQ 邮箱等）仍显示首字母。可以在「设置 → 外观 → 发件人显示网站图标」关掉。
+- 有新版本时右下角提示一次，侧栏顶上留一个更新图标，直到更新为止。
+- 侧栏处处有右键菜单：每个列表、文件夹和分类都能「全部标为已读」，「邮箱」「分类」「订阅」标题上也有菜单。
+  系统自带的右键菜单（重新载入、检查元素）不再出现；输入框和选中的文字仍保留系统菜单。
 
 ## 0.1.12 — 2026-11-17
 
