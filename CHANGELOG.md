@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.17 — 2026-11-17
+
+### English
 - Sidebar: Categories now sit above Mail. Mail and Feeds can be shown as two tabs side by side, one at a time:
   right-click the Mail or Feeds heading and choose Show Mail and Feeds as tabs; right-click the tabs to switch back.
   Section headings are closer together.
