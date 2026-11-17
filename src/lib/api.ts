@@ -410,6 +410,13 @@ export const api = {
   aiTranslate: (id: string | undefined, from: string, to: string, segments: SourceSegment[]) =>
     rpc<{ segments: TranslatedSegment[] }>("ai.translate", { id, from, to, segments }),
   detectLanguage: (text: string) => rpc<{ from: string | null }>("translate.detect", { text }),
+  /** 列表里条目的标题和摘要的译文。已经是目标语言的在 `same` 里；离线模型缺了的在 `missing` 里。 */
+  translateItems: (ids: string[], to: string, engine: "offline" | "ai") =>
+    rpc<{
+      items: Record<string, { from: string; title: string; summary: string }>;
+      same: string[];
+      missing: MissingModel[];
+    }>("translate.items", { ids, to, engine }),
 
   translateLanguages: () => rpc<TranslateLanguages>("translate.languages"),
   translatePlan: (text: string, to: string, from?: string) =>

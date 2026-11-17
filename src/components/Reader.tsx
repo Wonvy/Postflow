@@ -86,6 +86,14 @@ function Article({ id }: { id: string }) {
     return { id: item.id, title: item.title, html, document: false };
   }, [item, mode]);
   const translation = useTranslation(source);
+  // 翻译模式下，打开的条目自动翻译；原文已经是目标语言时什么都不显示
+  const listTranslate = useUi((s) => s.listTranslate);
+  const autoTranslated = useRef(false);
+  useEffect(() => {
+    if (!listTranslate || !source || autoTranslated.current || translation.phase.kind !== "off") return;
+    autoTranslated.current = true;
+    translation.auto();
+  }, [listTranslate, source, translation]);
   const aiPanel = useUi((s) => s.aiPanel);
   const aiPanelFor = useUi((s) => s.aiPanelFor);
   const toggleAiPanel = useUi((s) => s.toggleAiPanel);

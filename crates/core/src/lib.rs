@@ -3,6 +3,7 @@
 //! 桌面外壳通过进程内调用使用它，网页访问通过 HTTP 使用它，两边走的是同一套方法。
 
 mod ai_rpc;
+mod list_translate;
 pub mod logging;
 mod mail;
 mod mail_rpc;

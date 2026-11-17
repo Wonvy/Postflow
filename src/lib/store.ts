@@ -76,6 +76,8 @@ interface UiState {
   tab: SidebarTab;
   /** 每个选项卡上次停在的列表，切回来时回到那里。 */
   tabScopes: Partial<Record<SidebarTab, ListScope>>;
+  /** 翻译模式：列表里显示译文，打开的条目自动翻译。 */
+  listTranslate: boolean;
   /** 阅读面板右侧的 AI 栏开着。 */
   aiPanel: boolean;
   /** 用户是在哪一条上打开 AI 栏的。只有这一条会自动开始总结。 */
@@ -102,6 +104,7 @@ interface UiState {
   toggleSection: (section: SidebarSection) => void;
   setTab: (tab: SidebarTab) => void;
   toggleAiPanel: () => void;
+  toggleListTranslate: () => void;
   requestTranslate: () => void;
 }
 
@@ -142,6 +145,7 @@ export const useUi = create<UiState>()(
       tabScopes: {},
       aiPanel: false,
       aiPanelFor: null,
+      listTranslate: false,
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -190,6 +194,7 @@ export const useUi = create<UiState>()(
             ...(fits ? {} : { scope: { kind: "view", view: "inbox" } as ListScope, openId: null, selection: [] }),
           };
         }),
+      toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
       toggleAiPanel: () => set((s) => ({ aiPanel: !s.aiPanel, aiPanelFor: s.aiPanel ? null : s.openId })),
       toggleSection: (section) =>
         set((s) => ({
@@ -232,6 +237,7 @@ export const useUi = create<UiState>()(
         collapsedSections: s.collapsedSections,
         tab: s.tab,
         aiPanel: s.aiPanel,
+        listTranslate: s.listTranslate,
       }),
     },
   ),

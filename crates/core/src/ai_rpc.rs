@@ -847,7 +847,7 @@ impl Core {
             .await;
     }
 
-    async fn save_result(
+    pub(crate) async fn save_result(
         &self,
         session: &Arc<Session>,
         item_id: &str,
@@ -1032,7 +1032,7 @@ impl Core {
     }
 
     /// 分批翻译带标记的段落。某一批的回答对不上数时拆成两半再试，单独一段也不行就留空（保留原文）。
-    async fn translate_tagged(
+    pub(crate) async fn translate_tagged(
         &self,
         session: &Arc<Session>,
         provider: &Provider,

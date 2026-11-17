@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Inbox,
+  Languages,
   LayoutGrid,
   Layers,
   List,
@@ -27,6 +28,10 @@ import {
 import { type CSSProperties, type DragEvent, type MouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useActions } from "../lib/actions";
 import { requestAbstracts, useAbstracts } from "../lib/ai";
+import { api } from "../lib/api";
+import { formatSize } from "../lib/platform";
+import { requestListTranslations, useListTranslations } from "../lib/listTranslate";
+import { languageName, useModelDownloads, useTranslateEngine, useTranslateTarget } from "../lib/translate";
 import type { Item, ItemKind } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
@@ -285,6 +290,11 @@ export function ItemList({ width }: { width: number }) {
   const settings = useSettings();
   const showAbstracts = settings.data?.["ai.list_abstracts"] === true && view !== "list";
   const abstracts = useAbstracts((s) => s.byKey);
+  const listTranslate = useUi((s) => s.listTranslate);
+  const toggleListTranslate = useUi((s) => s.toggleListTranslate);
+  const translateTo = useTranslateTarget();
+  const engine = useTranslateEngine();
+  const translations = useListTranslations((s) => s.byKey);
 
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
@@ -401,6 +411,13 @@ export function ItemList({ width }: { width: number }) {
     return () => clearTimeout(timer);
   }, [lang, showAbstracts, visibleIds]);
 
+  // 翻译模式：看得到的条目的标题和摘要
+  useEffect(() => {
+    if (!listTranslate || !visibleIds) return;
+    const timer = setTimeout(() => requestListTranslations(visibleIds.split(","), translateTo, engine), 300);
+    return () => clearTimeout(timer);
+  }, [engine, listTranslate, translateTo, visibleIds]);
+
   // 拖到侧栏的视图上：勾选着的就拖勾选的那些，否则拖这一行代表的条目
   const onDragStart = (e: DragEvent, id: string, label: string) => {
     const ui = useUi.getState();
@@ -454,6 +471,9 @@ export function ItemList({ width }: { width: number }) {
           {title}
         </h1>
         {scope.kind === "view" && layout !== "tabs" && <KindFilter />}
+        <IconButton label={t("list.translate")} active={listTranslate} onClick={toggleListTranslate}>
+          <Languages {...ICON} />
+        </IconButton>
         <ViewControl />
         <GroupControl />
         <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={markAllRead}>
@@ -463,6 +483,8 @@ export function ItemList({ width }: { width: number }) {
           <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
         </IconButton>
       </header>
+
+      {listTranslate && engine === "offline" && <ModelPrompt />}
 
       <div ref={scroller} role="listbox" aria-label={title} aria-multiselectable className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
@@ -506,7 +528,12 @@ export function ItemList({ width }: { width: number }) {
 
               const describe = (row: Row) => {
                 const id = rowId(row);
-                const item = row.kind === "item" ? row.item : row.group.lead;
+                const original = row.kind === "item" ? row.item : row.group.lead;
+                // 翻译模式下显示译文，原文放在悬停提示里
+                const translated = listTranslate ? translations[`${translateTo}:${original.id}`] : undefined;
+                const item = translated
+                  ? { ...original, title: translated.title || original.title, summary: translated.summary || original.summary }
+                  : original;
                 const group = row.kind === "group" ? row.group : undefined;
                 const members = group ? group.items.map((i) => i.id) : [item.id];
                 const props: RowProps = {
@@ -521,6 +548,7 @@ export function ItemList({ width }: { width: number }) {
                 };
                 return {
                   id,
+                  tooltip: translated ? original.title : undefined,
                   key: group ? `g:${group.key}` : item.id,
                   props,
                   opened: id === openId,
@@ -554,6 +582,7 @@ export function ItemList({ width }: { width: number }) {
                           role="option"
                           aria-selected={d.opened || d.selected}
                           onClick={(e) => onRowClick(e, d.id)}
+                          title={d.tooltip}
                           {...d.drag}
                           className={cx(
                             "overflow-hidden rounded-lg border transition-colors",
@@ -580,6 +609,7 @@ export function ItemList({ width }: { width: number }) {
                   role="option"
                   aria-selected={d.opened || d.selected}
                   onClick={(e) => onRowClick(e, d.id)}
+                  title={d.tooltip}
                   {...d.drag}
                   className={cx(
                     "absolute inset-x-0 top-0 flex rounded-md px-2.5 transition-colors",
@@ -616,6 +646,44 @@ export function ItemList({ width }: { width: number }) {
       </div>
       {selection.length > 0 && <SelectionBar count={selection.length} />}
     </section>
+  );
+}
+
+/** 翻译模式用离线模型、但还缺模型时，列表上方提示下载。 */
+function ModelPrompt() {
+  const t = useT();
+  const lang = useLang();
+  const missing = useListTranslations((s) => s.missing);
+  const downloads = useModelDownloads((s) => s.byPair);
+  if (missing.length === 0) return null;
+  const states = missing.map((m) => downloads[m.pair]);
+  const downloading = states.some((s) => s?.state === "downloading");
+  const received = states.reduce((n, s) => n + (s?.received ?? 0), 0);
+  const total = states.reduce((n, s) => n + (s?.total ?? 0), 0);
+  const pairs = missing.map((m) => `${languageName(m.from, lang)} → ${languageName(m.to, lang)}`).join("、");
+  const size = formatSize(missing.reduce((n, m) => n + m.size, 0));
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-line bg-hover px-4 py-2 text-[12px] text-fg-2">
+      <Languages size={13} strokeWidth={1.75} className="shrink-0 text-fg-3" />
+      <span className="min-w-0 flex-1">
+        {downloading
+          ? `${t("translate.downloading")} ${total > 0 ? Math.floor((received / total) * 100) : 0}%`
+          : t("list.translateNeedsModel", { pairs, size })}
+      </span>
+      {!downloading && (
+        <Button
+          variant="primary"
+          className="h-6 px-2 text-[12px]"
+          onClick={() => {
+            const { update } = useModelDownloads.getState();
+            for (const m of missing) update(m.pair, { received: 0, total: 0, state: "downloading" });
+            void api.downloadModels(missing.map((m) => m.pair));
+          }}
+        >
+          {t("translate.download")}
+        </Button>
+      )}
+    </div>
   );
 }
 

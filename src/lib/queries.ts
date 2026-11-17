@@ -20,6 +20,7 @@ import {
 } from "./api";
 import { useUi } from "./store";
 import { useAiStreams } from "./ai";
+import { retryBlocked } from "./listTranslate";
 import { useModelDownloads } from "./translate";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
@@ -163,6 +164,8 @@ export function useCoreEvents() {
             error: event.error,
           });
           if (event.state !== "downloading") void qc.invalidateQueries({ queryKey: ["translate"] });
+          // 列表里因为缺模型没翻成的，模型装好以后重新翻
+          if (event.state === "installed") retryBlocked();
           break;
         case "changed":
           // 自己发起的修改已经乐观更新过了

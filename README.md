@@ -70,6 +70,8 @@ click **More info → Run anyway**.
   layout and links; press it again for the original. The language is detected for you, and models for more than 50
   languages download once (about 40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read
   is sent anywhere.
+- Translation mode (the translate button in the list toolbar): titles and summaries in the list show in your
+  language, and whatever you open is translated as it opens. Items already in your language are left alone.
 - The sidebar's Mail and Feeds sections fold away, or switch to tabs (All / Mail / Feeds, keys `1` `2` `3`): each tab
   is its own workspace with its own views, last list and display mode.
 - Dark and light themes, compact and comfortable list density, English and Chinese.

@@ -364,6 +364,9 @@ export function useTranslation(source: TranslateSource | null) {
   // 正文还没加载完就按了翻译，等它到了再开始
   const pending = useRef(false);
 
+  // 自动翻译（翻译模式下打开的条目）时，原文已经是目标语言或认不出语言就什么都不显示
+  const quiet = useRef(false);
+
   const start = useCallback(async () => {
     const src = latest.current;
     if (!src) {
@@ -384,16 +387,16 @@ export function useTranslation(source: TranslateSource | null) {
       if (engine === "ai") {
         const { from } = await api.detectLanguage(sampleOf(src));
         if (gen !== generation.current) return;
-        if (from && sameLanguage(from, to)) setPhase({ kind: "same", from });
+        if (from && sameLanguage(from, to)) setPhase(quiet.current ? { kind: "off" } : { kind: "same", from });
         else await translate(from ?? "");
         return;
       }
       const plan = await api.translatePlan(sampleOf(src), to);
       if (gen !== generation.current) return;
       if (!plan.from) {
-        setPhase({ kind: "error", error: new RpcError("translate_unknown_language", "") });
+        setPhase(quiet.current ? { kind: "off" } : { kind: "error", error: new RpcError("translate_unknown_language", "") });
       } else if (plan.same) {
-        setPhase({ kind: "same", from: plan.from });
+        setPhase(quiet.current ? { kind: "off" } : { kind: "same", from: plan.from });
       } else if (plan.missing.length > 0) {
         setPhase({ kind: "need", plan });
       } else {
@@ -454,5 +457,17 @@ export function useTranslation(source: TranslateSource | null) {
     else if (phase.kind === "on") off();
   }, [download, off, phase, start]);
 
-  return { phase, to, toggle, download, off, retry: start };
+  /** 翻译模式下打开条目时自动开始。原文已经是目标语言时不打扰。 */
+  const auto = useCallback(() => {
+    quiet.current = true;
+    void start();
+  }, [start]);
+
+  /** 用户自己按的，有结果都要说。 */
+  const manual = useCallback(() => {
+    quiet.current = false;
+    toggle();
+  }, [toggle]);
+
+  return { phase, to, toggle: manual, download, off, retry: start, auto };
 }

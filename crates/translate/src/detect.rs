@@ -24,7 +24,12 @@ pub fn detect(text: &str) -> Option<String> {
             );
         }
         // whatlang 对短句不太准，一句英文常被认成丹麦语、荷兰语。邮件里英文最常见，先单独认一下
-        _ if info.script() == whatlang::Script::Latin && looks_english(sample) => "en",
+        Lang::Eng => "en",
+        lang if info.script() == whatlang::Script::Latin
+            && (looks_english(sample) || english_beats(sample, lang)) =>
+        {
+            "en"
+        }
         lang => to_code(lang)?,
     };
     Some(code.to_string())
@@ -32,25 +37,73 @@ pub fn detect(text: &str) -> Option<String> {
 
 /// 英语里最常见的虚词占了足够多的比例。
 fn looks_english(text: &str) -> bool {
-    const COMMON: &[&str] = &[
-        "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "for", "with", "from",
-        "by", "is", "are", "was", "were", "be", "been", "it", "this", "that", "you", "your", "we",
-        "our", "i", "my", "me", "he", "she", "they", "them", "will", "would", "could", "can",
-        "should", "have", "has", "had", "do", "does", "not", "if", "as", "please", "thanks", "hi",
-        "hello", "before", "after", "about", "what", "when", "there", "here", "all", "any", "let",
-        "know",
-    ];
-    let words: Vec<String> = text
-        .split(|c: char| !c.is_alphabetic() && c != '\'')
+    let words = words(text);
+    let hits = count(&words, ENGLISH);
+    hits >= 2 && hits * 4 >= words.len()
+}
+
+const ENGLISH: &[&str] = &[
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "for", "with", "from",
+    "by", "is", "are", "was", "were", "be", "been", "it", "this", "that", "you", "your", "we",
+    "our", "i", "my", "me", "he", "she", "they", "them", "will", "would", "could", "can", "should",
+    "have", "has", "had", "do", "does", "not", "if", "as", "please", "thanks", "hi", "hello",
+    "before", "after", "about", "what", "when", "there", "here", "all", "any", "let", "lets",
+    "know", "more", "every",
+];
+
+/// 和英语容易混的几种语言最常见的虚词。
+fn function_words(lang: Lang) -> &'static [&'static str] {
+    match lang {
+        Lang::Fra => &[
+            "le", "la", "les", "des", "du", "de", "un", "une", "et", "est", "pour", "dans", "avec",
+            "sur", "pas", "que", "qui", "vous", "nous", "il", "elle", "ce", "cette", "au", "aux",
+            "ne", "sont",
+        ],
+        Lang::Deu => &[
+            "der", "die", "das", "und", "ist", "nicht", "mit", "ein", "eine", "zu", "den", "dem",
+            "für", "auf", "ich", "sie", "es", "wir", "du", "bitte", "danke", "von", "im",
+        ],
+        Lang::Spa => &[
+            "el", "la", "los", "las", "de", "que", "y", "en", "un", "una", "es", "por", "para",
+            "con", "no", "su", "se", "lo", "al", "del",
+        ],
+        Lang::Ita => &[
+            "il", "lo", "la", "gli", "le", "di", "che", "e", "è", "un", "una", "per", "con", "non",
+            "sono", "del", "della", "nel",
+        ],
+        Lang::Por => &[
+            "o", "os", "as", "de", "que", "e", "é", "um", "uma", "para", "com", "não", "do", "da",
+            "em", "por",
+        ],
+        Lang::Nld => &[
+            "de", "het", "een", "en", "van", "is", "niet", "met", "voor", "op", "dat", "die", "ik",
+            "je", "we", "zijn",
+        ],
+        Lang::Dan | Lang::Nob | Lang::Swe => &[
+            "og", "och", "er", "är", "det", "at", "att", "en", "til", "till", "på", "med", "for",
+            "för", "ikke", "inte", "jeg", "jag", "du", "vi", "som", "kan", "den",
+        ],
+        _ => &[],
+    }
+}
+
+/// whatlang 认成了别的拉丁字母语言，但英语的常用词比那种语言的还多：其实是英语。
+fn english_beats(text: &str, lang: Lang) -> bool {
+    let words = words(text);
+    let english = count(&words, ENGLISH);
+    english >= 1 && english > count(&words, function_words(lang))
+}
+
+fn words(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphabetic() && c != '\'')
         .filter(|w| !w.is_empty())
         .take(400)
         .map(|w| w.to_lowercase())
-        .collect();
-    let hits = words
-        .iter()
-        .filter(|w| COMMON.contains(&w.as_str()))
-        .count();
-    hits >= 2 && hits * 4 >= words.len()
+        .collect()
+}
+
+fn count(words: &[String], list: &[&str]) -> usize {
+    words.iter().filter(|w| list.contains(&w.as_str())).count()
 }
 
 /// whatlang 用 ISO 639-3，模型目录用 ISO 639-1。

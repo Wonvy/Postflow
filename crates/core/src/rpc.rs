@@ -217,7 +217,10 @@ impl Core {
                 self.setup(&p.data_dir, &p.device_name).await?;
                 return reply(self.status().await);
             }
-            m if m.starts_with("translate.") => return self.translate_rpc(m, params).await,
+            // 翻译列表要读条目，放在打开数据目录之后
+            m if m.starts_with("translate.") && m != "translate.items" => {
+                return self.translate_rpc(m, params).await;
+            }
             "app.logs" => {
                 let p: LogsParams = parse(params)?;
                 return reply(
@@ -461,6 +464,7 @@ impl Core {
                 reply(json!({ "full_text": clean }))
             }
 
+            "translate.items" => self.translate_items(params, &session).await,
             // 分类的方法也在 AI 模块里
             m if m.starts_with("ai.") || m == "items.label" => {
                 self.ai_rpc(m, params, &session, client).await

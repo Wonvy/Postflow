@@ -268,6 +268,33 @@ async fn ai_features_end_to_end() {
     .await;
     assert_eq!(detected["from"], "zh");
 
+    // 翻译列表：英文的标题和摘要翻过来，第二次直接用缓存
+    let sent = ai.requests().len();
+    let listed = call(
+        &core,
+        "translate.items",
+        json!({ "ids": [article], "to": "zh", "engine": "ai" }),
+    )
+    .await;
+    assert_eq!(listed["items"][&article]["title"], "〔译〕Version two");
+    assert_eq!(listed["items"][&article]["from"], "en");
+    assert_eq!(ai.requests().len(), sent + 1);
+    let again = call(
+        &core,
+        "translate.items",
+        json!({ "ids": [article], "to": "zh", "engine": "ai" }),
+    )
+    .await;
+    assert_eq!(again["items"], listed["items"]);
+    assert_eq!(ai.requests().len(), sent + 1, "cached");
+    let same = call(
+        &core,
+        "translate.items",
+        json!({ "ids": [article], "to": "en", "engine": "ai" }),
+    )
+    .await;
+    assert_eq!(same["same"], json!([article]), "already in English");
+
     // 分类：没设类别时报错；设好以后分最近没分类的；用户改过的以用户为准
     assert_eq!(
         error(&core, "ai.classify", json!({})).await,
