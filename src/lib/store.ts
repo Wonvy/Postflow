@@ -28,9 +28,21 @@ export const CARD_MAX = 480;
 export type Density = "compact" | "comfortable";
 export type LangPref = "system" | "zh" | "en";
 
+/** 设置面板的各页。 */
+export type SettingsPage =
+  | "appearance"
+  | "feeds"
+  | "translation"
+  | "ai"
+  | "categories"
+  | "data"
+  | "diagnostics"
+  | "about";
+
 export type Dialog =
   | { type: "add-feed" }
-  | { type: "settings" }
+  /** 设置。给了 `page` 就直接打开那一页，否则停在上次看的那一页。 */
+  | { type: "settings"; page?: SettingsPage }
   | { type: "edit-feed"; feedId: string }
   | { type: "add-account" }
   | { type: "edit-account"; accountId: string }

@@ -174,7 +174,6 @@ export function AiSettings({ open }: { open: boolean }) {
               onChange={(v) => void set("ai.allow_mail", v)}
             />
           </SettingRow>
-          <Categories />
           {usage.data && usage.data.last30.length > 0 && (
             <SettingRow label={t("ai.usage")}>
               <span className="max-w-[300px] truncate text-[12px] text-fg-2">
@@ -198,8 +197,8 @@ export function AiSettings({ open }: { open: boolean }) {
   );
 }
 
-/** 分类的类别：名称和一句说明。改完离开输入框时保存。 */
-function Categories() {
+/** 分类的类别：名称和一句说明。改完离开输入框时保存。标题和说明由设置页给出。 */
+export function CategorySettings() {
   const t = useT();
   const lang = useLang();
   const qc = useQueryClient();
@@ -242,14 +241,10 @@ function Categories() {
   return (
     <>
       <div>
-        <div className="text-fg">{t("ai.categories")}</div>
-        <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("ai.categoriesHint")}</div>
         {list === null ? (
-          <Button className="mt-2" onClick={() => save(defaultCategories(lang))}>
-            {t("ai.useDefaults")}
-          </Button>
+          <Button onClick={() => save(defaultCategories(lang))}>{t("ai.useDefaults")}</Button>
         ) : (
-          <div className="mt-2 flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             {list.map((c, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: labelColor(c.name) }} />

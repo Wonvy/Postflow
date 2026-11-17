@@ -1,15 +1,5 @@
 import type { ReactNode } from "react";
 
-/** 设置页里的一节。 */
-export function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="border-b border-line px-4 py-4 last:border-b-0">
-      <h2 className="mb-3 text-[12px] font-medium text-fg-3">{title}</h2>
-      <div className="flex flex-col gap-3">{children}</div>
-    </section>
-  );
-}
-
 /** 设置页里的一行：左边名称和说明，右边控件。 */
 export function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (

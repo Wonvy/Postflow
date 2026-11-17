@@ -186,7 +186,7 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
             <p className="font-medium text-fg-2">{t("ai.setup")}</p>
             <p className="mt-1 text-[12px] leading-relaxed text-fg-3">{t("ai.setupHint")}</p>
           </div>
-          <Button variant="primary" onClick={() => setDialog({ type: "settings" })}>
+          <Button variant="primary" onClick={() => setDialog({ type: "settings", page: "ai" })}>
             <Settings size={14} />
             {t("ai.openSettings")}
           </Button>
@@ -233,7 +233,7 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
                   ))}
                 </div>
               )}
-              {error !== null && <AiError text={failureText(error)} onSettings={() => setDialog({ type: "settings" })} />}
+              {error !== null && <AiError text={failureText(error)} onSettings={() => setDialog({ type: "settings", page: "ai" })} />}
             </section>
 
             <section className="mt-5 border-t border-line pt-3">
@@ -279,7 +279,7 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
                   ))}
               </div>
               {chatError !== null && (
-                <AiError text={failureText(chatError)} onSettings={() => setDialog({ type: "settings" })} />
+                <AiError text={failureText(chatError)} onSettings={() => setDialog({ type: "settings", page: "ai" })} />
               )}
             </section>
           </div>

@@ -1,22 +1,47 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  Database,
+  Info,
+  Languages,
+  type LucideIcon,
+  Palette,
+  Rss,
+  Sparkles,
+  Tags,
+} from "lucide-react";
+import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { errorText, useLang, useT } from "../lib/i18n";
+import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
-import { type Density, type LangPref, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
+import { type Density, type LangPref, type SettingsPage, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
-import { AiSettings, useAiProviders } from "./AiSettings";
-import { Section, SettingRow } from "./SettingsParts";
-import { Button, Modal, Segmented, Select, Switch, TextInput } from "./ui";
+import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
+import { SettingRow } from "./SettingsParts";
+import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
+
+/** 设置的各页，按组排：常用的、AI、数据和应用本身。 */
+const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
+  { page: "appearance", icon: Palette, label: "settings.appearance", group: 0 },
+  { page: "feeds", icon: Rss, label: "settings.feeds", group: 0 },
+  { page: "translation", icon: Languages, label: "settings.translation", group: 0 },
+  { page: "ai", icon: Sparkles, label: "settings.ai", group: 1 },
+  { page: "categories", icon: Tags, label: "ai.categories", hint: "ai.categoriesHint", group: 1 },
+  { page: "data", icon: Database, label: "settings.data", group: 2 },
+  { page: "diagnostics", icon: Activity, label: "settings.diagnostics", group: 2 },
+  { page: "about", icon: Info, label: "settings.about", group: 2 },
+];
 
 export function SettingsDialog() {
   const t = useT();
   const qc = useQueryClient();
-  const open = useUi((s) => s.dialog?.type === "settings");
+  const dialog = useUi((s) => s.dialog);
+  const open = dialog?.type === "settings";
+  const asked = dialog?.type === "settings" ? dialog.page : undefined;
   const setDialog = useUi((s) => s.setDialog);
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
@@ -31,6 +56,8 @@ export function SettingsDialog() {
   const settings = useSettings();
   const devices = useDevices();
   const fileInput = useRef<HTMLInputElement>(null);
+  // 没指定哪一页时停在上次看的那一页
+  const [page, setPage] = useState<SettingsPage>("appearance");
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState<"import" | "export" | "rebuild" | null>(null);
   const [deviceName, setDeviceName] = useState("");
@@ -43,6 +70,28 @@ export function SettingsDialog() {
     // 只在打开时同步一次，之后以用户的输入为准
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  useEffect(() => {
+    if (open && asked) setPage(asked);
+  }, [open, asked]);
+
+  const go = (next: SettingsPage) => {
+    setPage(next);
+    setNotice(null);
+  };
+
+  // 上下（窄屏上是左右）方向键在各页之间切换
+  const onNavKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const at = PAGES.findIndex((p) => p.page === page);
+    const next = PAGES[(at + step + PAGES.length) % PAGES.length]?.page;
+    if (!next) return;
+    go(next);
+    document.getElementById(`settings-tab-${next}`)?.focus();
+  };
 
   const interval =
     typeof settings.data?.refresh_interval_min === "number" ? settings.data.refresh_interval_min : 30;
@@ -80,9 +129,9 @@ export function SettingsDialog() {
     });
   };
 
-  return (
-    <Modal open={open} onClose={() => setDialog(null)} title={t("settings.title")} width={540}>
-      <Section title={t("settings.appearance")}>
+  const body: Record<SettingsPage, () => ReactNode> = {
+    appearance: () => (
+      <>
         <SettingRow label={t("settings.theme")}>
           <Segmented<ThemePref>
             value={theme}
@@ -125,17 +174,10 @@ export function SettingsDialog() {
             ]}
           />
         </SettingRow>
-      </Section>
-
-      <Section title={t("settings.translation")}>
-        <TranslationSettings open={open} />
-      </Section>
-
-      <Section title={t("settings.ai")}>
-        <AiSettings open={open} />
-      </Section>
-
-      <Section title={t("settings.feeds")}>
+      </>
+    ),
+    feeds: () => (
+      <>
         <SettingRow label={t("settings.refreshInterval")}>
           <Select
             className="w-32"
@@ -176,11 +218,15 @@ export function SettingsDialog() {
             {t("settings.export")}
           </Button>
         </SettingRow>
-      </Section>
-
-      <Section title={t("settings.data")}>
+      </>
+    ),
+    translation: () => <TranslationSettings open={open} />,
+    ai: () => <AiSettings open={open} />,
+    categories: () => <CategorySettings />,
+    data: () => (
+      <>
         <SettingRow label={t("settings.dataDir")}>
-          <span className="max-w-[300px] select-text truncate text-[12px] text-fg-2" title={status.data?.data_dir ?? ""}>
+          <span className="max-w-[150px] select-text truncate text-[12px] text-fg-2 sm:max-w-[300px]" title={status.data?.data_dir ?? ""}>
             {status.data?.data_dir}
           </span>
         </SettingRow>
@@ -195,7 +241,7 @@ export function SettingsDialog() {
         </SettingRow>
         {devices.data && devices.data.length > 1 && (
           <SettingRow label={t("settings.devices")}>
-            <span className="max-w-[300px] truncate text-[12px] text-fg-2">
+            <span className="max-w-[150px] truncate text-[12px] text-fg-2 sm:max-w-[300px]">
               {devices.data.map((d) => d.name || d.id).join("、")}
             </span>
           </SettingRow>
@@ -214,30 +260,77 @@ export function SettingsDialog() {
             {t("settings.rebuild")}
           </Button>
         </SettingRow>
-      </Section>
+      </>
+    ),
+    diagnostics: () => <Diagnostics open={open} />,
+    about: () => (
+      <SettingRow label={t("settings.version")}>
+        <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
+        {isTauri && <UpdateCheck />}
+      </SettingRow>
+    ),
+  };
 
-      <Section title={t("settings.diagnostics")}>
-        <Diagnostics open={open} />
-      </Section>
+  const current = PAGES.find((p) => p.page === page);
 
-      <Section title={t("settings.about")}>
-        <SettingRow label={t("settings.version")}>
-          <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
-          {isTauri && <UpdateCheck />}
-        </SettingRow>
-      </Section>
-
-      {notice && (
-        <p
-          role="status"
-          className={
-            "sticky bottom-0 border-t border-line bg-surface px-4 py-2.5 text-[12px] " +
-            (notice.kind === "error" ? "text-danger" : "text-fg-2")
-          }
+  return (
+    <Modal open={open} onClose={() => setDialog(null)} title={t("settings.title")} width={760}>
+      <div className="flex h-[min(600px,calc(76vh-44px))] flex-col sm:flex-row">
+        <div
+          role="tablist"
+          aria-label={t("settings.title")}
+          aria-orientation="vertical"
+          onKeyDown={onNavKey}
+          className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-line p-2 sm:w-[184px] sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:rounded-bl-xl sm:border-b-0 sm:border-r sm:bg-sidebar"
         >
-          {notice.text}
-        </p>
-      )}
+          {PAGES.map((p, i) => {
+            const selected = p.page === page;
+            return (
+              <button
+                key={p.page}
+                type="button"
+                role="tab"
+                id={`settings-tab-${p.page}`}
+                aria-selected={selected}
+                aria-controls="settings-panel"
+                tabIndex={selected ? 0 : -1}
+                onClick={() => go(p.page)}
+                className={cx(
+                  "flex h-7 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[13px] outline-offset-[-2px] transition-colors",
+                  i > 0 && PAGES[i - 1]?.group !== p.group && "sm:mt-3",
+                  selected ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
+                )}
+              >
+                <p.icon size={15} strokeWidth={1.75} className={cx("shrink-0", selected ? "text-fg" : "text-fg-3")} />
+                <span className="truncate">{t(p.label)}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div
+          role="tabpanel"
+          id="settings-panel"
+          aria-labelledby={`settings-tab-${page}`}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4">
+            {current && <h2 className="text-[15px] font-semibold text-fg">{t(current.label)}</h2>}
+            {current?.hint && <p className="mt-1 text-[12px] leading-relaxed text-fg-3">{t(current.hint)}</p>}
+            <div className="mt-4 flex flex-col gap-4">{body[page]()}</div>
+          </div>
+          {notice && (
+            <p
+              role="status"
+              className={cx(
+                "shrink-0 border-t border-line px-5 py-2.5 text-[12px]",
+                notice.kind === "error" ? "text-danger" : "text-fg-2",
+              )}
+            >
+              {notice.text}
+            </p>
+          )}
+        </div>
+      </div>
     </Modal>
   );
 }
