@@ -23,8 +23,9 @@ const FLAG_WINDOW: usize = 1000;
 /// 不超过这个大小的邮件同步时就把原文取回来，更大的打开时再取。
 const EAGER_BODY_LIMIT: u32 = 2 * 1024 * 1024;
 const FETCH_BATCH: usize = 20;
-/// 大多数服务器会在 30 分钟左右断开空闲的 IDLE，提前一些重新发起。
-const IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+/// IDLE 最多等这么久就结束，重新同步一次再接着等。大多数服务器会在 30 分钟左右断开空闲的
+/// IDLE；有的服务器从不推送新邮件，只发「还在」，这时它就是收到新邮件的最长延迟。
+const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// 服务器不支持 IDLE 时多久查一次。
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const MIN_BACKOFF: Duration = Duration::from_secs(15);

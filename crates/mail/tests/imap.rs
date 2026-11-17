@@ -128,6 +128,34 @@ async fn list_fetch_flag_move_and_search() {
 }
 
 #[tokio::test]
+async fn idle_ends_on_time_even_when_the_server_keeps_it_alive() {
+    // 有的服务器 IDLE 期间只发「还在」，从不通知新邮件。每一句「还在」都不能把结束时间往后推，
+    // 否则连接会一直停在 IDLE 里，新邮件永远收不到
+    let server = FakeImap::start("me", "pw").await;
+    server.quiet_idle(Duration::from_millis(100));
+    let mut conn = Connection::connect(&config(server.port, "me"), "pw")
+        .await
+        .unwrap();
+    conn.select("INBOX").await.unwrap();
+    let deliver = server.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        deliver.deliver("INBOX", &mail("quiet@x", "a@x", "Quiet", "b"), &[]);
+    });
+    let (mut conn, outcome) = tokio::time::timeout(
+        Duration::from_secs(5),
+        conn.idle(Duration::from_millis(600), std::future::pending()),
+    )
+    .await
+    .expect("idle should end on its own deadline despite keepalives")
+    .unwrap();
+    assert_eq!(outcome, IdleOutcome::Timeout);
+    // 结束 IDLE 以后再同步，就能看到那封没被通知的新邮件
+    conn.select("INBOX").await.unwrap();
+    assert_eq!(conn.list_from(1).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn idle_wakes_up_on_new_mail_and_can_be_interrupted() {
     let server = FakeImap::start("me", "pw").await;
     let mut conn = Connection::connect(&config(server.port, "me"), "pw")

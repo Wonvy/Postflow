@@ -41,7 +41,8 @@ click **More info → Run anyway**.
   NetEase, Fastmail, and more), then enter your address and password; the server settings are filled in for you.
 - Business addresses on your own domain are detected from their mail records: Google Workspace, Microsoft 365,
   Tencent Exmail, Alibaba Mail, NetEase Enterprise, Feishu and others.
-- New mail arrives instantly on servers that support IMAP IDLE.
+- New mail arrives instantly on servers that support IMAP IDLE. Postflow also checks every five minutes and when you
+  switch back to the app, so servers that never announce new mail are covered too.
 - HTML mail is sanitized and shown in a sandbox with scripts removed. Remote images, often used to track when you
   open a message, stay blocked until you allow them for one message or for a sender.
 - Read, starred and archived states are written back to the server, so your phone and webmail stay in step.

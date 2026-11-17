@@ -10,12 +10,37 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
 import { Button, Spinner } from "./components/ui";
+import { api } from "./lib/api";
 import { resolveLang } from "./lib/i18n";
 import { useCoreEvents, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
 import { isTauri } from "./lib/transport";
 import { startUpdateChecks } from "./lib/updater";
+
+/** 收信的间隔：窗口回到前台时，离上次超过这么久就马上收一次。 */
+const MAIL_CATCH_UP_MS = 60_000;
+
+/**
+ * 窗口回到前台（电脑睡醒、切回应用）时马上收一次信。邮箱平时靠服务器推送，
+ * 推送没到或者连接在睡眠里断了，也不用等下一轮。
+ */
+function useMailCatchUp() {
+  useEffect(() => {
+    let last = Date.now();
+    const check = () => {
+      if (document.visibilityState !== "visible" || Date.now() - last < MAIL_CATCH_UP_MS) return;
+      last = Date.now();
+      void api.syncAccount().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, []);
+}
 
 /** 把主题和语言写到 <html> 上，跟随系统时监听系统设置的变化。 */
 function useAppearance() {
@@ -70,6 +95,7 @@ function Resizer({ width, onResize }: { width: number; onResize: (width: number)
 
 function Shell() {
   useShortcuts();
+  useMailCatchUp();
   useEffect(() => startUpdateChecks(), []);
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);

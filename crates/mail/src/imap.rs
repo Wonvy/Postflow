@@ -480,16 +480,26 @@ impl Connection {
         let mut handle = session.idle();
         timed(async { Ok(handle.init().await?) }).await?;
 
+        // async-imap 的超时每收到一句服务器的回应就重新计时，连「还在」（`* OK Still here`）也算。
+        // 有的服务器 IDLE 期间只发「还在」、从不通知新邮件，只靠它的超时会一直停在 IDLE 里，
+        // 新邮件永远收不到。所以另外定一个到点就结束的时间，结束后由调用方重新同步。
+        let mut timed_out = false;
         let outcome = {
             let (wait, stop) = handle.wait_with_timeout(timeout);
             tokio::pin!(wait);
             tokio::pin!(interrupt);
+            let deadline = tokio::time::sleep(timeout);
+            tokio::pin!(deadline);
             let mut stop = Some(stop);
             loop {
                 tokio::select! {
                     res = &mut wait => break res?,
                     _ = &mut interrupt, if stop.is_some() => {
                         // 丢掉 StopSource 就会让等待提前结束
+                        stop.take();
+                    }
+                    _ = &mut deadline, if stop.is_some() => {
+                        timed_out = true;
                         stop.take();
                     }
                 }
@@ -508,6 +518,7 @@ impl Connection {
         let outcome = match outcome {
             IdleResponse::NewData(_) => IdleOutcome::NewData,
             IdleResponse::Timeout => IdleOutcome::Timeout,
+            IdleResponse::ManualInterrupt if timed_out => IdleOutcome::Timeout,
             IdleResponse::ManualInterrupt => IdleOutcome::Interrupted,
         };
         Ok((conn, outcome))

@@ -7,6 +7,9 @@
 //! - feeds on http://127.0.0.1:1145/ (see the list printed at start-up)
 //!
 //! A new message arrives in the work mailbox every minute, to show live delivery.
+//!
+//! With `DEMO_QUIET_IDLE=1` the servers behave like providers that never announce new mail
+//! during IDLE and only send keepalives, to test that Postflow still picks it up.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -515,6 +518,10 @@ async fn serve_feeds() {
 async fn main() {
     let work = FakeImap::start_on("work@example.com", "demo", 1143).await;
     let personal = FakeImap::start_on("me@example.org", "demo", 1144).await;
+    if std::env::var_os("DEMO_QUIET_IDLE").is_some() {
+        work.quiet_idle(Duration::from_secs(20));
+        personal.quiet_idle(Duration::from_secs(20));
+    }
     seed_mail(&work, &personal);
     tokio::spawn(serve_feeds());
     // 假的 AI 服务，不需要密钥，回答是从正文里拼出来的

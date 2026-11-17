@@ -9,6 +9,7 @@ pub use ai::FakeAi;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::tcp::OwnedWriteHalf;
@@ -57,6 +58,8 @@ struct State {
     mailboxes: BTreeMap<String, Mbox>,
     commands: Vec<String>,
     logins: usize,
+    /// IDLE 期间不通知新邮件，只每隔这么久发一句「还在」。有的邮件服务器就是这样。
+    quiet_idle: Option<Duration>,
 }
 
 #[derive(Clone)]
@@ -83,6 +86,7 @@ impl FakeImap {
             mailboxes,
             commands: Vec::new(),
             logins: 0,
+            quiet_idle: None,
         }));
         let (changes, _) = watch::channel(0);
         let listener = TcpListener::bind(("127.0.0.1", port))
@@ -112,6 +116,11 @@ impl FakeImap {
 
     fn changed(&self) {
         self.changes.send_modify(|v| *v += 1);
+    }
+
+    /// 之后的 IDLE 不再通知新邮件，只每隔 `keepalive` 发一句 `* OK Still here`。
+    pub fn quiet_idle(&self, keepalive: Duration) {
+        self.lock().quiet_idle = Some(keepalive);
     }
 
     /// 投递一封邮件，返回它的 UID。正在 IDLE 的连接会收到通知。
@@ -450,9 +459,12 @@ impl FakeImap {
                 }
                 "IDLE" => {
                     w.write_all(b"+ idling\r\n").await?;
+                    let quiet = self.lock().quiet_idle;
                     loop {
                         // 进入 IDLE 前就已经到了的新邮件，也要马上告诉客户端
-                        if let Some(mb) = &selected {
+                        if quiet.is_none()
+                            && let Some(mb) = &selected
+                        {
                             let n = self.count(mb);
                             if n != reported {
                                 w.write_all(format!("* {n} EXISTS\r\n").as_bytes()).await?;
@@ -469,12 +481,17 @@ impl FakeImap {
                                     break;
                                 }
                             }
+                            _ = keepalive(quiet) => {
+                                w.write_all(b"* OK Still here\r\n").await?;
+                            }
                             changed = changes.changed() => {
                                 if changed.is_err() {
                                     return Ok(());
                                 }
                                 // 标记变化也推一个 EXISTS，让客户端去同步
-                                if let Some(mb) = &selected {
+                                if quiet.is_none()
+                                    && let Some(mb) = &selected
+                                {
                                     let n = self.count(mb);
                                     w.write_all(format!("* {n} EXISTS\r\n").as_bytes()).await?;
                                     reported = n;
@@ -488,6 +505,14 @@ impl FakeImap {
             }
             write(&mut w, &out).await?;
         }
+    }
+}
+
+/// 安静模式下每隔一会儿醒一次，发「还在」；平时永远不醒。
+async fn keepalive(every: Option<Duration>) {
+    match every {
+        Some(every) => tokio::time::sleep(every).await,
+        None => std::future::pending().await,
     }
 }
 
