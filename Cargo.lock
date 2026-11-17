@@ -3916,7 +3916,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-ai"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "postflow-testkit",
  "reqwest",
@@ -3929,7 +3929,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "axum",
  "futures",
@@ -3953,7 +3953,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-desktop"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "postflow-core",
  "serde",
@@ -3970,7 +3970,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-feed"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ammonia",
  "bytes",
@@ -3989,7 +3989,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-mail"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ammonia",
  "async-imap",
@@ -4008,7 +4008,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-store"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "rand",
  "rusqlite",
@@ -4021,7 +4021,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-testkit"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "serde_json",
  "tokio",
@@ -4029,7 +4029,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-translate"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "axum",
  "flate2",
@@ -4047,7 +4047,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-web"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "axum",
  "futures",
