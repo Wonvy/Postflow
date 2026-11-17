@@ -77,6 +77,10 @@ interface UiState {
   tab: SidebarTab;
   /** 每个选项卡上次停在的列表，切回来时回到那里。 */
   tabScopes: Partial<Record<SidebarTab, ListScope>>;
+  /** 阅读面板右侧的 AI 栏开着。 */
+  aiPanel: boolean;
+  /** 用户是在哪一条上打开 AI 栏的。只有这一条会自动开始总结。 */
+  aiPanelFor: string | null;
 
   setScope: (scope: ListScope) => void;
   open: (id: string | null) => void;
@@ -98,6 +102,7 @@ interface UiState {
   setSidebarLayout: (layout: SidebarLayout) => void;
   toggleSection: (section: SidebarSection) => void;
   setTab: (tab: SidebarTab) => void;
+  toggleAiPanel: () => void;
   requestTranslate: () => void;
 }
 
@@ -137,6 +142,8 @@ export const useUi = create<UiState>()(
       collapsedSections: [],
       tab: "all",
       tabScopes: {},
+      aiPanel: false,
+      aiPanelFor: null,
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -180,6 +187,7 @@ export const useUi = create<UiState>()(
             ...(fits ? {} : { scope: { kind: "view", view: "inbox" } as ListScope, openId: null, selection: [] }),
           };
         }),
+      toggleAiPanel: () => set((s) => ({ aiPanel: !s.aiPanel, aiPanelFor: s.aiPanel ? null : s.openId })),
       toggleSection: (section) =>
         set((s) => ({
           collapsedSections: s.collapsedSections.includes(section)
@@ -221,6 +229,7 @@ export const useUi = create<UiState>()(
         sidebarLayout: s.sidebarLayout,
         collapsedSections: s.collapsedSections,
         tab: s.tab,
+        aiPanel: s.aiPanel,
       }),
     },
   ),

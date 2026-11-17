@@ -11,6 +11,7 @@ import {
   MailOpen,
   Newspaper,
   Paperclip,
+  Sparkles,
   Star,
   TriangleAlert,
   X,
@@ -30,6 +31,7 @@ import {
   useTranslation,
 } from "../lib/translate";
 import { isTauri } from "../lib/transport";
+import { AiPanel } from "./AiPanel";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Kbd, Spinner } from "./ui";
 
 export function Reader() {
@@ -82,6 +84,9 @@ function Article({ id }: { id: string }) {
     return { title: item.title, html, document: false };
   }, [item, mode]);
   const translation = useTranslation(source);
+  const aiPanel = useUi((s) => s.aiPanel);
+  const aiPanelFor = useUi((s) => s.aiPanelFor);
+  const toggleAiPanel = useUi((s) => s.toggleAiPanel);
   const phase = translation.phase;
   const shown = phase.kind === "on" ? { title: phase.title, html: phase.html } : null;
 
@@ -155,6 +160,9 @@ function Article({ id }: { id: string }) {
                 )}
               </IconButton>
             )}
+            <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
+              <Sparkles {...ICON} />
+            </IconButton>
             <IconButton
               label={phase.kind === "on" ? t("action.showOriginal") : t("action.translate")}
               shortcut="T"
@@ -199,7 +207,8 @@ function Article({ id }: { id: string }) {
         )}
       </Toolbar>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {item ? (
           item.mail ? (
             <MailView
@@ -236,6 +245,8 @@ function Article({ id }: { id: string }) {
             {isLoading && isMail && <p className="text-[12px]">{t("mail.loading")}</p>}
           </div>
         )}
+      </div>
+      {aiPanel && item && <AiPanel item={item} autoRun={aiPanelFor === item.id} />}
       </div>
     </>
   );
@@ -608,6 +619,7 @@ function Empty() {
     [["V"], t("reader.hintOpen")],
     [["X"], t("reader.hintSelect")],
     [["T"], t("reader.hintTranslate")],
+    [["A"], t("reader.hintAi")],
     [["→", "←"], t("reader.hintGroup")],
   ];
   return (

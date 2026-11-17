@@ -20,18 +20,20 @@ import {
   RefreshCw,
   Rows3,
   Rss,
+  Sparkles,
   Star,
   X,
 } from "lucide-react";
 import { type CSSProperties, type DragEvent, type MouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useActions } from "../lib/actions";
+import { requestAbstracts, useAbstracts } from "../lib/ai";
 import type { Item, ItemKind } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type Translate, useLang, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
 import { isMac } from "../lib/platform";
-import { useNav } from "../lib/queries";
+import { useNav, useSettings } from "../lib/queries";
 import { CARD_MAX, CARD_MIN, type ListScope, type ListView, listKey, useListView, useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
@@ -268,6 +270,9 @@ export function ItemList({ width }: { width: number }) {
   const layout = useUi((s) => s.sidebarLayout);
   const kindFilter = useUi((s) => s.kindFilter);
   const here = listKey(scope, kindFilter);
+  const settings = useSettings();
+  const showAbstracts = settings.data?.["ai.list_abstracts"] === true && view !== "list";
+  const abstracts = useAbstracts((s) => s.byKey);
 
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
@@ -369,6 +374,20 @@ export function ItemList({ width }: { width: number }) {
       void fetchNextPage();
     }
   }, [ahead, fetchNextPage, hasNextPage, isFetchingNextPage, lines.length, lastVisible]);
+
+  // 打开了「列表里显示 AI 摘要」：停止滚动一会儿以后，为看得到的条目要摘要
+  const visibleIds = virtualRows
+    .flatMap((v) => {
+      const line = lines[v.index];
+      if (!line || line.kind === "header") return [];
+      return (line.kind === "row" ? [line.row] : line.rows).map((r) => (r.kind === "item" ? r.item.id : r.group.lead.id));
+    })
+    .join(",");
+  useEffect(() => {
+    if (!showAbstracts || !visibleIds) return;
+    const timer = setTimeout(() => requestAbstracts(visibleIds.split(","), lang), 400);
+    return () => clearTimeout(timer);
+  }, [lang, showAbstracts, visibleIds]);
 
   // 拖到侧栏的视图上：勾选着的就拖勾选的那些，否则拖这一行代表的条目
   const onDragStart = (e: DragEvent, id: string, label: string) => {
@@ -486,6 +505,7 @@ export function ItemList({ width }: { width: number }) {
                   untitled: t("reader.untitled"),
                   onExpand: group ? () => setGroupExpanded(group.key, true) : undefined,
                   expandLabel: t("group.expand"),
+                  abstract: showAbstracts ? abstracts[`${lang}:${item.id}`] : undefined,
                 };
                 return {
                   id,
@@ -655,6 +675,8 @@ interface RowProps {
   untitled: string;
   onExpand?: () => void;
   expandLabel: string;
+  /** AI 写的一句话摘要，有的话代替原文开头。 */
+  abstract?: string;
 }
 
 function Sender({ item, size = 16 }: { item: Item; size?: number }) {
@@ -780,6 +802,17 @@ function Picture({ src, className, style }: { src: string; className?: string; s
   );
 }
 
+/** 摘要文字：有 AI 摘要时显示它，前面带一个小标记。 */
+function Excerpt({ item, abstract }: { item: Item; abstract?: string }) {
+  if (!abstract) return <>{item.summary}</>;
+  return (
+    <>
+      <Sparkles size={11} strokeWidth={2} className="mr-1 inline-block align-[-1px] text-accent" />
+      {abstract}
+    </>
+  );
+}
+
 /** 摘要视图：标题、两行摘要、来源，有图时右边一张缩略图。 */
 function SummaryRow(props: RowProps) {
   const { item, group, untitled } = props;
@@ -791,7 +824,9 @@ function SummaryRow(props: RowProps) {
         <span className={cx("truncate text-[14px]", unread ? "font-semibold text-fg" : "text-fg-2")}>
           {item.title || untitled}
         </span>
-        <p className="line-clamp-2 text-[12px] leading-[17px] text-fg-3">{item.summary}</p>
+        <p className="line-clamp-2 text-[12px] leading-[17px] text-fg-3">
+          <Excerpt item={item} abstract={props.abstract} />
+        </p>
         <SourceLine {...props} />
       </div>
       {item.image && (
@@ -845,7 +880,7 @@ function Card(props: RowProps & { imageHeight: number }) {
             picture ? "line-clamp-2" : "flex-1 [mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
           )}
         >
-          {item.summary}
+          <Excerpt item={item} abstract={props.abstract} />
         </p>
       </div>
     </div>

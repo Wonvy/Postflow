@@ -66,6 +66,10 @@ export function useShortcuts() {
           if (!ui.openId) return;
           ui.requestTranslate();
           break;
+        case "a":
+          if (!ui.openId) return;
+          ui.toggleAiPanel();
+          break;
         case "1":
         case "2":
         case "3":

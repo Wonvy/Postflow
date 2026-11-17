@@ -15,7 +15,7 @@ import { type FormEvent, useEffect, useId, useState } from "react";
 import { type AiPreset, type AiProviderView, api } from "../lib/api";
 import { errorDetail, errorText, useT } from "../lib/i18n";
 import { openExternal } from "../lib/platform";
-import { keys } from "../lib/queries";
+import { keys, useSettings } from "../lib/queries";
 import { type Glyph, GlyphIcon, logo, text } from "./ProviderIcon";
 import { SettingRow } from "./SettingsParts";
 import { Button, Field, Modal, Select, Spinner, Switch, TextInput } from "./ui";
@@ -57,6 +57,7 @@ export function AiSettings({ open }: { open: boolean }) {
   const qc = useQueryClient();
   const providers = useAiProviders(open);
   const usage = useQuery({ queryKey: aiKeys.usage, queryFn: api.aiUsage, enabled: open });
+  const settings = useSettings();
   const [editing, setEditing] = useState<AiProviderView | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,6 +158,13 @@ export function AiSettings({ open }: { open: boolean }) {
                 </option>
               ))}
             </Select>
+          </SettingRow>
+          <SettingRow label={t("ai.listAbstracts")} hint={t("ai.listAbstractsHint")}>
+            <Switch
+              label={t("ai.listAbstracts")}
+              checked={settings.data?.["ai.list_abstracts"] === true}
+              onChange={(v) => void set("ai.list_abstracts", v)}
+            />
           </SettingRow>
           <SettingRow label={t("ai.allowMail")} hint={t("ai.allowMailHint")}>
             <Switch
