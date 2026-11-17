@@ -202,6 +202,9 @@ struct CachedTranslation {
     segments: Vec<TranslatedSegment>,
 }
 
+/// 一批段落的译文：第几段，以及翻出来的文字（没翻出来是 `None`）。
+type Translated = Vec<(usize, Option<String>)>;
+
 /// 原文、语言和所用模型的指纹，原文变了缓存就不算数。
 fn fingerprint(p: &TranslateParams, provider: &Provider) -> String {
     use std::hash::{DefaultHasher, Hash, Hasher};
@@ -877,7 +880,7 @@ impl Core {
         if !current.is_empty() {
             chunks.push(current);
         }
-        let results: Vec<Result<Vec<(usize, Option<String>)>, RpcError>> = futures::stream::iter(
+        let results: Vec<Result<Translated, RpcError>> = futures::stream::iter(
             chunks
                 .into_iter()
                 .map(|chunk| self.translate_chunk(session, provider, key, texts, chunk, from, to)),
@@ -904,7 +907,7 @@ impl Core {
         chunk: Vec<usize>,
         from: &str,
         to: &str,
-    ) -> Result<Vec<(usize, Option<String>)>, RpcError> {
+    ) -> Result<Translated, RpcError> {
         let mut pending = vec![chunk];
         let mut done = Vec::new();
         while let Some(part) = pending.pop() {
