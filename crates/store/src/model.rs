@@ -112,6 +112,8 @@ pub struct ItemPatch {
 pub enum View {
     #[default]
     Inbox,
+    /// 收件箱和归档里的全部，搜索「全部」时用。不含垃圾邮件和已删除。
+    All,
     Today,
     Unread,
     Starred,
@@ -151,6 +153,8 @@ pub struct ItemFilter {
     pub since: Option<i64>,
     /// 只看某个分类。
     pub label: Option<String>,
+    /// 全文搜索：标题、发件人、作者和正文里都要有这些词。
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -183,6 +187,9 @@ pub struct ItemSummary {
     pub image: Option<String>,
     /// 分类。
     pub label: Option<String>,
+    /// 搜索时，正文里命中搜索词的那一小段。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippet: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

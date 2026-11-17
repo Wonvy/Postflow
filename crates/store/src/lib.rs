@@ -13,11 +13,13 @@ pub mod image;
 pub mod logs;
 mod mail;
 mod model;
+mod search;
 mod stats;
 mod store;
 
 pub use ai::{AiMessage, AiResult, AiUsage, LabelCount, day_of};
 pub use error::{Error, Result};
 pub use model::*;
+pub use search::match_query;
 pub use stats::{FeedStats, ReadingDay, Stats};
 pub use store::Store;

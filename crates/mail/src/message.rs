@@ -230,6 +230,37 @@ pub fn summarize(raw: &[u8]) -> Summary {
     }
 }
 
+/// 全文搜索最多收录正文的这么多字。
+const SEARCH_CHARS: usize = 50_000;
+
+/// 正文的纯文字，给全文搜索用。有纯文本部分就用它们，没有时从 HTML 部分里取字。
+pub fn plain_text(raw: &[u8]) -> String {
+    let raw = utf8_headers(raw);
+    let Some(msg) = parse(&raw) else {
+        return String::new();
+    };
+    let mut out = String::new();
+    let has_plain = msg
+        .text_bodies()
+        .any(|part| matches!(part.body, PartType::Text(_)));
+    if has_plain {
+        for part in msg.text_bodies() {
+            if let PartType::Text(text) = &part.body {
+                out.push_str(text);
+                out.push('\n');
+            }
+        }
+    } else {
+        for part in msg.html_bodies() {
+            if let PartType::Html(html) = &part.body {
+                out.push_str(&html_text(html));
+                out.push('\n');
+            }
+        }
+    }
+    truncate(&clean_text(&out), SEARCH_CHARS)
+}
+
 fn content_type(part: &mail_parser::MessagePart<'_>) -> String {
     match part.content_type() {
         Some(ct) => match &ct.c_subtype {

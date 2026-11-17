@@ -25,6 +25,9 @@ const SCHEMA_VERSION: i64 = 2;
 const DERIVED_TABLES: &[&str] = &["log_files", "lww", "feeds", "accounts", "item_content"];
 /// 只存在本机的表：抓取状态、全文缓存，以及从邮件服务器同步下来的邮件。重建索引时保留。
 const LOCAL_TABLES: &[&str] = &[
+    "search",
+    "search_docs",
+    "search_dirty",
     "feed_fetch",
     "item_fulltext",
     "mail_meta",
@@ -596,7 +599,21 @@ impl Store {
         );
         let mut stmt = guard.conn.prepare(&sql)?;
         let rows = stmt.query_map(params_from_iter(args), item_from_row)?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+        let mut items: Vec<ItemSummary> = rows.collect::<rusqlite::Result<_>>()?;
+        // 搜索时，标题里没有搜索词的，给出正文里命中的那一段
+        if let Some(query) = filter.query.as_deref().filter(|q| !q.trim().is_empty()) {
+            let mut body = guard
+                .conn
+                .prepare_cached("SELECT body FROM search_docs WHERE id = ?1")?;
+            for item in &mut items {
+                if crate::search::snippet(&item.title, query).is_some() {
+                    continue;
+                }
+                let text: Option<String> = body.query_row([&item.id], |r| r.get(0)).optional()?;
+                item.snippet = text.and_then(|t| crate::search::snippet(&t, query));
+            }
+        }
+        Ok(items)
     }
 
     pub fn item(&self, id: &str) -> Result<Option<ItemDetail>> {
@@ -810,6 +827,8 @@ fn init_schema(conn: &Connection, data_dir: &Path) -> Result<()> {
     }
     conn.execute_batch(SCHEMA)?;
     migrate(conn)?;
+    conn.execute_batch(crate::search::SCHEMA)?;
+    crate::search::init(conn)?;
     conn.execute(
         "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?1), ('data_dir', ?2)",
         params![version, dir],
@@ -1058,6 +1077,7 @@ fn article_image(a: &Article) -> Option<String> {
 fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
     let mut conds = match filter.view {
         View::Inbox => format!("i.archived = 0 AND {ALIVE}"),
+        View::All => format!("i.archived < 2 AND {ALIVE}"),
         View::Today => {
             args.push(SqlValue::Integer(filter.since.unwrap_or(0)));
             format!(
@@ -1087,6 +1107,20 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
     if let Some(label) = &filter.label {
         args.push(SqlValue::Text(label.clone()));
         conds.push_str(&format!(" AND l.label = ?{}", args.len()));
+    }
+    if let Some(query) = filter.query.as_deref().filter(|q| !q.trim().is_empty()) {
+        match crate::search::match_query(query) {
+            Some(expr) => {
+                args.push(SqlValue::Text(expr));
+                conds.push_str(&format!(
+                    " AND i.id IN (SELECT d.id FROM search_docs d WHERE d.docid IN \
+                       (SELECT rowid FROM search WHERE search MATCH ?{}))",
+                    args.len()
+                ));
+            }
+            // 只有标点之类搜不了的字
+            None => conds.push_str(" AND 0"),
+        }
     }
     conds
 }
@@ -1138,5 +1172,6 @@ pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         has_attachments: r.get(14)?,
         image: r.get(15)?,
         label: r.get(16)?,
+        snippet: None,
     })
 }

@@ -450,3 +450,58 @@ async fn changing_a_feed_address_keeps_its_history() {
     };
     assert_eq!(url_of(&id), format!("http://{addr}/new.xml"));
 }
+
+/// 全文搜索：items.list 带上 query，刚收进来的文章马上能搜到，标题没命中时给出正文片段。
+#[tokio::test(flavor = "multi_thread")]
+async fn search_finds_new_articles_right_away() {
+    let (_site, addr) = start_site().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    let data_dir = tmp.path().join("data");
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": data_dir.to_str().unwrap(), "device_name": "Test" }),
+    )
+    .await;
+    call(
+        &core,
+        "feeds.add",
+        json!({ "url": format!("http://{addr}/feed.xml") }),
+    )
+    .await;
+
+    let search = |q: &'static str, view: &'static str| {
+        let core = core.clone();
+        async move {
+            call(
+                &core,
+                "items.list",
+                json!({ "filter": { "view": view, "query": q } }),
+            )
+            .await["items"]
+                .as_array()
+                .unwrap()
+                .clone()
+        }
+    };
+    let hits = search("post 2", "all").await;
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0]["title"], "Post 2");
+    assert!(
+        hits[0].get("snippet").is_none(),
+        "the title already matches"
+    );
+
+    let hits = search("body", "inbox").await;
+    assert_eq!(hits.len(), 2);
+    assert!(
+        hits[0]["snippet"]
+            .as_str()
+            .unwrap()
+            .contains("Body of post")
+    );
+    // script 里的内容不算，标点搜不到东西
+    assert!(search("alert", "all").await.is_empty());
+    assert!(search("???", "all").await.is_empty());
+}

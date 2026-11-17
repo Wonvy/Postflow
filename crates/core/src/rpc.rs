@@ -464,6 +464,25 @@ impl Core {
             "items.list" => {
                 let p: ListItems = parse(params)?;
                 let limit = p.limit.unwrap_or(100).clamp(1, 500);
+                // 搜索前先把刚到的内容收进索引，免得刚收到的邮件搜不到
+                if p.filter
+                    .query
+                    .as_deref()
+                    .is_some_and(|q| !q.trim().is_empty())
+                {
+                    session
+                        .db(|s| {
+                            for _ in 0..20 {
+                                if s.index_search(crate::SEARCH_BATCH, &postflow_mail::plain_text)?
+                                    == 0
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(())
+                        })
+                        .await?;
+                }
                 let items = session
                     .db(move |s| s.items(&p.filter, p.before.as_ref(), limit))
                     .await?;

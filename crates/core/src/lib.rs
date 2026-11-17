@@ -113,6 +113,37 @@ struct Config {
     device_id: String,
 }
 
+/// 全文搜索每次收录多少条。一批在一个事务里，期间别的数据库操作要等，所以不要太大。
+pub(crate) const SEARCH_BATCH: usize = 50;
+
+/// 全文搜索的后台收录：新的条目、文章正文、全文、邮件原文都收进索引。
+/// 第一次打开（或者升级到有搜索的版本）时要把已有的全部收一遍，之后通常每次只有几条。
+async fn run_search_indexer(session: Arc<Session>) {
+    let mut total = 0usize;
+    loop {
+        match session
+            .db(|s| s.index_search(SEARCH_BATCH, &postflow_mail::plain_text))
+            .await
+        {
+            Ok(0) => {
+                if total > 0 {
+                    tracing::info!(items = total, "search index updated");
+                    total = 0;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+            Ok(n) => {
+                total += n;
+                tokio::task::yield_now().await;
+            }
+            Err(e) => {
+                tracing::warn!("search indexing failed: {}", e.message);
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            }
+        }
+    }
+}
+
 /// 一次打开的数据目录，连同围绕它跑的后台任务。
 pub(crate) struct Session {
     pub store: Arc<Store>,
@@ -352,6 +383,7 @@ impl Core {
                 let (core, session) = (self.clone(), session.clone());
                 async move { core.repair_mail_text(&session).await }
             }),
+            tokio::spawn(run_search_indexer(session.clone())),
         ];
         *session.tasks.lock().unwrap_or_else(|e| e.into_inner()) = tasks;
         *self.session.write().unwrap_or_else(|e| e.into_inner()) = Some(session.clone());

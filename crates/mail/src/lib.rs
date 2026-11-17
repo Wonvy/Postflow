@@ -13,7 +13,7 @@ pub use imap::{
 };
 pub use message::{
     AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, Summary, attachment, base64,
-    render, summarize,
+    plain_text, render, summarize,
 };
 pub use presets::{Preset, detect, guess, presets, provider_for_mx};
 
