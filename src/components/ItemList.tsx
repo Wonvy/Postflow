@@ -47,6 +47,7 @@ import type { Item, ItemKind } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
+import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
 import {
   isDefaultListStyle,
@@ -94,6 +95,8 @@ import {
 
 /** 展开的组的标题行。 */
 const HEADER_HEIGHT = 30;
+/** 按日期分段时每段的标题行。 */
+const SECTION_HEIGHT = 30;
 /** 每个列表上次滚到的位置，只在这次打开应用期间记着。 */
 const scrollPositions = new Map<string, number>();
 
@@ -104,30 +107,52 @@ const LOAD_AHEAD = 30;
  * 虚拟列表里的一行：展开的组的标题、一条（或折叠的一组），或者卡片视图里的一排卡片。
  */
 type Line =
+  | { kind: "section"; key: string; label: string; count: number }
   | { kind: "header"; group: Group }
   | { kind: "row"; row: Row }
   | { kind: "cards"; rows: Row[] };
 
-function linesOf(rows: Row[], view: ListView, columns: number): Line[] {
-  if (view !== "cards") {
-    return rows.map((row) =>
-      row.kind === "group" && row.expanded ? { kind: "header", group: row.group } : { kind: "row", row },
-    );
-  }
+/** 一行代表的条目的时间：组用最新的那一条。 */
+const rowTime = (row: Row) => (row.kind === "item" ? row.item : row.group.lead).published_at;
+
+/**
+ * 把列表的行排成虚拟列表的一行行。`section` 给出时按日期分段：每段前面一行标题。
+ * 展开的组里的条目跟着组头走，不会被拆到别的段里。
+ */
+function linesOf(
+  rows: Row[],
+  view: ListView,
+  columns: number,
+  section?: (ms: number) => { key: string; label: string },
+): Line[] {
   const lines: Line[] = [];
   let current: Row[] = [];
+  let heading: Extract<Line, { kind: "section" }> | null = null;
   const flush = () => {
     if (current.length > 0) lines.push({ kind: "cards", rows: current });
     current = [];
   };
   for (const row of rows) {
+    const child = row.kind === "item" && row.child;
+    if (section && !child) {
+      const next = section(rowTime(row));
+      if (next.key !== heading?.key) {
+        flush();
+        heading = { kind: "section", ...next, count: 0 };
+        lines.push(heading);
+      }
+      heading.count += 1;
+    }
+    if (view !== "cards") {
+      lines.push(row.kind === "group" && row.expanded ? { kind: "header", group: row.group } : { kind: "row", row });
+      continue;
+    }
     if (row.kind === "group" && row.expanded) {
       flush();
       lines.push({ kind: "header", group: row.group });
       continue;
     }
     // 展开的组里的卡片自成几排，不和组外的混在一排
-    const child = row.kind === "item" && row.child;
     const first = current[0];
     if (first && (first.kind === "item" && first.child) !== child) flush();
     current.push(row);
@@ -139,7 +164,7 @@ function linesOf(rows: Row[], view: ListView, columns: number): Line[] {
 
 /** 一行里能停留的位置。 */
 function lineIds(line: Line): string[] {
-  if (line.kind === "header") return [];
+  if (line.kind === "header" || line.kind === "section") return [];
   return (line.kind === "row" ? [line.row] : line.rows).map(rowId);
 }
 
@@ -179,7 +204,7 @@ function ViewControl() {
       />
     </StyleLine>
   );
-  const toggle = (key: "showSummary" | "showIcon" | "showImage", label: MessageKey) => (
+  const toggle = (key: "showSummary" | "showIcon" | "showImage" | "dateSections", label: MessageKey) => (
     <StyleLine label={t(label)}>
       <Switch label={t(label)} checked={style[key]} onChange={(on) => set({ [key]: on })} />
     </StyleLine>
@@ -242,6 +267,7 @@ function ViewControl() {
           {step("padding", "listStyle.padding")}
           {view === "summary" && style.showSummary && step("summaryLines", "listStyle.summaryLines")}
           <div className="my-0.5 h-px bg-line" />
+          {toggle("dateSections", "listStyle.dateSections")}
           {!oneLine && toggle("showSummary", "listStyle.showSummary")}
           {toggle("showIcon", "listStyle.showIcon")}
           {view !== "list" && toggle("showImage", "listStyle.showImage")}
@@ -458,11 +484,28 @@ export function ItemList({ width }: { width: number }) {
   const cardHeight = imageHeight + metrics.cardText;
   const rowHeight = view === "summary" ? metrics.summaryRow : density === "compact" ? metrics.compact : metrics.comfortable;
 
-  const lines = useMemo(() => linesOf(listRows, view, columns), [listRows, view, columns]);
+  // 按日期分段：分段的界线每分钟重算一次，过了午夜「今天」的就挪到「昨天」
+  const [minute, setMinute] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => {
+    if (!style.dateSections) return;
+    const timer = setInterval(() => setMinute(Math.floor(Date.now() / 60_000)), 60_000);
+    return () => clearInterval(timer);
+  }, [style.dateSections]);
+  const sectionOf = useMemo(() => {
+    if (!style.dateSections) return undefined;
+    const now = minute * 60_000;
+    return (ms: number) => {
+      const section = dateSection(ms, now);
+      return { key: section.key, label: sectionLabel(section, lang, now) };
+    };
+  }, [style.dateSections, minute, lang]);
+  const lines = useMemo(() => linesOf(listRows, view, columns, sectionOf), [listRows, view, columns, sectionOf]);
   const sizeOf = (line: Line | undefined) =>
     !line
       ? 0
-      : line.kind === "header"
+      : line.kind === "section"
+        ? SECTION_HEIGHT
+        : line.kind === "header"
         ? HEADER_HEIGHT
         : line.kind === "cards"
           ? cardHeight + cardGap
@@ -542,7 +585,7 @@ export function ItemList({ width }: { width: number }) {
   const visibleIds = virtualRows
     .flatMap((v) => {
       const line = lines[v.index];
-      if (!line || line.kind === "header") return [];
+      if (!line || line.kind === "header" || line.kind === "section") return [];
       return (line.kind === "row" ? [line.row] : line.rows).map((r) => (r.kind === "item" ? r.item.id : r.group.lead.id));
     })
     .join(",");
@@ -646,6 +689,23 @@ export function ItemList({ width }: { width: number }) {
               const line = lines[virtual.index];
               if (!line) return null;
               const position = { transform: `translateY(${virtual.start}px)` };
+
+              // 日期分段的标题
+              if (line.kind === "section") {
+                return (
+                  <div
+                    // 列表不按时间排时（比如星标），同一段可能出现不止一次
+                    key={`s:${line.key}:${virtual.index}`}
+                    role="presentation"
+                    className="absolute inset-x-0 top-0 flex items-end gap-2 pb-1.5 text-[12px] font-semibold text-fg-2"
+                    style={{ ...position, height: SECTION_HEIGHT, paddingLeft: metrics.padX, paddingRight: metrics.padX }}
+                  >
+                    <span className="min-w-0 truncate">{line.label}</span>
+                    <span className="tabular font-normal text-fg-4">{line.count}</span>
+                    <span aria-hidden className="mb-[5px] h-px flex-1 bg-line" />
+                  </div>
+                );
+              }
 
               // 展开的组：一行标题，点一下收起
               if (line.kind === "header") {

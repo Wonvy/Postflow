@@ -18,6 +18,8 @@ export interface ListStyle {
   showIcon: boolean;
   /** 摘要视图的缩略图和卡片的封面图。 */
   showImage: boolean;
+  /** 按日期分段：今天、昨天、本周、上周…… */
+  dateSections: boolean;
 }
 
 export const LIST_STYLE_DEFAULT: ListStyle = {
@@ -29,6 +31,7 @@ export const LIST_STYLE_DEFAULT: ListStyle = {
   showSummary: true,
   showIcon: true,
   showImage: true,
+  dateSections: false,
 };
 
 /** 每一项能调的范围。 */
@@ -54,7 +57,7 @@ export function normalizeListStyle(raw: unknown): ListStyle {
     const v = r[key];
     return typeof v === "number" && Number.isFinite(v) ? clampTo(key, v) : LIST_STYLE_DEFAULT[key];
   };
-  const bool = (key: "showSummary" | "showIcon" | "showImage") =>
+  const bool = (key: "showSummary" | "showIcon" | "showImage" | "dateSections") =>
     typeof r[key] === "boolean" ? (r[key] as boolean) : LIST_STYLE_DEFAULT[key];
   return {
     titleSize: num("titleSize"),
@@ -65,6 +68,7 @@ export function normalizeListStyle(raw: unknown): ListStyle {
     showSummary: bool("showSummary"),
     showIcon: bool("showIcon"),
     showImage: bool("showImage"),
+    dateSections: bool("dateSections"),
   };
 }
 
