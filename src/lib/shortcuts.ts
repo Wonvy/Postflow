@@ -34,6 +34,22 @@ export function useShortcuts() {
         useUi.getState().openSearch();
         return;
       }
+      // ⌘R 回复，⇧⌘R 全部回复，⇧⌘F 转发（Windows、Linux 上是 Ctrl）。和 Apple 邮件一样
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !isTyping(e.target) &&
+        useUi.getState().dialog === null &&
+        useUi.getState().openId !== null
+      ) {
+        const k = e.key.toLowerCase();
+        const mode = k === "r" ? (e.shiftKey ? "reply-all" : "reply") : k === "f" && e.shiftKey ? "forward" : null;
+        if (mode) {
+          e.preventDefault();
+          latest.current.compose(mode);
+          return;
+        }
+      }
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTyping(e.target) || useUi.getState().dialog !== null) return;
       // 菜单打开时按键属于菜单
@@ -105,6 +121,9 @@ export function useShortcuts() {
           break;
         case "/":
           ui.openSearch();
+          break;
+        case "c":
+          a.compose("new");
           break;
         case "x":
           // 勾选或取消勾选当前打开的那一行，配合 J / K 可以只用键盘多选

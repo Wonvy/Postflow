@@ -50,6 +50,11 @@ click **More info → Run anyway**.
   many inbox messages are unread (the tab title does in a browser). Both can be turned off in Settings → Appearance.
 - Newsletters and mailing lists get an Unsubscribe link in the message header. Lists that support one-click
   unsubscribe are unsubscribed right away; otherwise their unsubscribe page or an unsubscribe email opens.
+- Write, reply, reply all and forward, in plain text. Replies quote the original below your text and stay in the same
+  conversation in other mail apps. The To, Cc and Bcc fields suggest people who have written to you, and the
+  mailbox to send from can be picked when you have several. Mail goes from your device straight to your provider's
+  outgoing (SMTP) server, which is chosen for you from the provider; set it yourself in the mailbox's settings if
+  needed. A copy goes to the Sent folder on the server, unless the provider files one itself (Gmail, Outlook).
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
   [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365).
@@ -143,8 +148,9 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** writing and replying, OAuth sign-in for Gmail (use an app password), folders other than the
-inbox, spam and trash, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
+**Not yet available:** drafts, attachments in mail you write (forwarding doesn't carry the original's attachments
+yet), formatted (HTML) mail, OAuth sign-in for Gmail (use an app password), folders other than the inbox, spam and
+trash, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
 Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
@@ -166,6 +172,11 @@ download page instead.
 | `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |
 | `1` `2` `3` | Switch sidebar tab (in the tabs layout) |
+| `C` | Write a new message |
+| `⌘R` / `Ctrl+R` | Reply |
+| `⇧⌘R` / `Ctrl+Shift+R` | Reply all |
+| `⇧⌘F` / `Ctrl+Shift+F` | Forward |
+| `⌘↩` / `Ctrl+Enter` | Send (while writing) |
 | `R` | Refresh all feeds and mail |
 | `Esc` | Clear the selection, or close the reader |
 
@@ -187,13 +198,15 @@ the sign-in goes through your app and nobody else's. It's free and takes a few m
 3. Add a redirect URI with the platform **Public client/native (mobile & desktop)** and the URI `http://localhost`.
 4. Copy the **Application (client) ID** from the overview page. It isn't a secret.
 5. Optional, but work accounts often need it: under **API permissions**, add the delegated permissions
-   `IMAP.AccessAsUser.All` and `offline_access`.
+   `IMAP.AccessAsUser.All`, `SMTP.Send` and `offline_access`.
 
 Then add an Outlook or Microsoft 365 account in Postflow, paste the ID when it asks, and click **Sign in with
 Microsoft**. The ID is saved in your settings and syncs to your other devices; **Change application ID** under the
 sign-in button replaces it (mailboxes already signed in keep working). Developers can also set the
 `POSTFLOW_MICROSOFT_CLIENT_ID` environment variable. Work and school mailboxes need IMAP turned on, and your admin may
-have to approve the app.
+have to approve the app. To send mail, Microsoft 365 also needs SMTP sending (authenticated SMTP) allowed for the
+mailbox. Mailboxes signed in before Postflow could send keep receiving mail; sign in again from the mailbox's
+settings to allow sending.
 
 ## Your data
 
@@ -268,6 +281,8 @@ npm run demo
 
 Add a mail account with the address `work@example.com` or `me@example.org` and the password `demo`. In the server
 settings, use `127.0.0.1`, port `1143` or `1144`, and encryption **None**. The command prints the feed addresses.
+Sending works too: the demo's outgoing server on port `1025` is picked automatically. Mail to another demo address
+lands in its inbox, and a copy shows up in the sender's Sent folder on the fake server.
 To keep the demo password out of your keychain, use `npm run server:demo` instead of `npm run server`; it keeps
 passwords in memory only.
 

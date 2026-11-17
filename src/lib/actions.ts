@@ -4,7 +4,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { api, type Item, type ItemDetail, type ItemPatch } from "./api";
+import { api, type Item, type ItemDetail, type ItemPatch, type Nav } from "./api";
+import type { ComposeMode } from "./compose";
 import { useListModel } from "./listModel";
 import { openExternal } from "./platform";
 import { keys, useMarkAllRead, useSetItems } from "./queries";
@@ -158,6 +159,30 @@ export function useActions() {
 
   const refreshAll = useCallback(() => void api.refresh(), []);
 
+  /**
+   * 写信。回复、全部回复、转发作用于 `item`，不给就是阅读面板里打开的那封邮件；写新邮件时
+   * 默认从当前邮箱发。还没有邮箱时先去添加一个。
+   */
+  const compose = useCallback(
+    (mode: ComposeMode, item?: Item) => {
+      const ui = useUi.getState();
+      if (!qc.getQueryData<Nav>(keys.nav)?.accounts.length) {
+        ui.setDialog({ type: "add-account" });
+        return;
+      }
+      const target = item ?? (ui.openId ? resolve([ui.openId])[0] : undefined);
+      if (mode === "new") {
+        const accountId =
+          scope.kind === "account" ? scope.accountId : target?.kind === "mail" ? target.source_id : undefined;
+        ui.setDialog({ type: "compose", mode, accountId });
+        return;
+      }
+      if (target?.kind !== "mail") return;
+      ui.setDialog({ type: "compose", mode, itemId: target.id, accountId: target.source_id });
+    },
+    [qc, resolve, scope],
+  );
+
   /** 列表换成这一条所在的订阅源或邮箱，阅读面板里还开着它。 */
   const goToSource = useCallback((item: Pick<Item, "id" | "kind" | "source_id">) => {
     const ui = useUi.getState();
@@ -188,5 +213,6 @@ export function useActions() {
     goToSource,
     refresh,
     refreshAll,
+    compose,
   };
 }

@@ -5,7 +5,9 @@ import { AddFeedDialog, EditFeedDialog } from "./components/FeedDialogs";
 import { ItemList, MarkAllReadDialog } from "./components/ItemList";
 import { Onboarding } from "./components/Onboarding";
 import { Reader } from "./components/Reader";
+import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { Toaster } from "./components/Toast";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
@@ -136,6 +138,8 @@ function Shell() {
       <MarkAllReadDialog />
       <UpdateDialog />
       <SettingsDialog />
+      <ComposeDialog />
+      <Toaster />
     </div>
   );
 }

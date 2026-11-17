@@ -1,3 +1,4 @@
+import type { ReplyContext } from "./compose";
 import { rpc } from "./transport";
 
 /** junk 和 trash 是邮箱里的垃圾邮件和已删除邮件。 */
@@ -48,6 +49,12 @@ export interface Account {
   imap_port: number;
   imap_security: Security;
   username: string;
+  /** 自己填的发信服务器；为空表示自动。 */
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_security: Security | null;
+  /** 发信时收件人看到的名字。`name` 只是侧栏里的邮箱名。 */
+  sender_name: string;
   added_at: number;
   unread: number;
   last_sync_at: number | null;
@@ -173,6 +180,37 @@ export interface AccountChanges {
   imap_port?: number;
   imap_security?: Security;
   username?: string;
+  /** 空字符串表示改回自动。 */
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_security?: Security;
+  sender_name?: string;
+}
+
+/** 写好要发的一封信。 */
+export interface Outgoing {
+  account_id: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  text: string;
+  /** 回复的那封信的 ID，用来接上同一个讨论。 */
+  in_reply_to?: string;
+}
+
+export interface Contact {
+  name: string | null;
+  address: string;
+  count: number;
+}
+
+export interface SmtpSettings {
+  host: string;
+  port: number;
+  security: Security;
+  /** 自己填的，不是自动推断的。 */
+  custom: boolean;
 }
 
 export interface Cursor {
@@ -447,6 +485,13 @@ export const api = {
   trustSender: (address: string) => rpc<void>("mail.trust_sender", { address }),
   /** 一键退订（RFC 8058）。 */
   unsubscribe: (id: string) => rpc<void>("mail.unsubscribe", { id }),
+  /** 回复、转发一封信要用到的原信内容。 */
+  composeContext: (id: string) => rpc<ReplyContext>("mail.compose_context", { id }),
+  send: (mail: Outgoing) => rpc<{ message_id: string }>("mail.send", mail),
+  /** 给你来过信的人，写信时提示收件人。 */
+  contacts: () => rpc<{ contacts: Contact[] }>("mail.contacts"),
+  /** 账户现在用的发信服务器。 */
+  smtpSettings: (id: string) => rpc<SmtpSettings>("accounts.smtp", { id }),
   /** 能不能用微软账户登录（要有 Azure 应用 ID）。 */
   oauthConfig: () => rpc<{ microsoft: boolean }>("accounts.oauth_config"),
   /** 开始用微软账户登录，返回要在浏览器里打开的地址。 */

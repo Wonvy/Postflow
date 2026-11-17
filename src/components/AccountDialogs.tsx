@@ -15,7 +15,7 @@ import { keys, useNav, usePresets, useSettings } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
 import { ProviderIcon, providerName, providerOf } from "./ProviderIcon";
-import { Button, cx, Field, Modal, Select, Spinner, TextInput } from "./ui";
+import { Button, cx, Field, Modal, Select, Spinner, Switch, TextInput } from "./ui";
 
 /** 各服务商获取密码的说明。 */
 function hintFor(preset: Preset | null, recognized: boolean): MessageKey | null {
@@ -381,6 +381,96 @@ function ServerFields({
           <TextInput value={value.username} onChange={(e) => onChange({ ...value, username: e.target.value })} />
         </Field>
       </div>
+    </div>
+  );
+}
+
+interface Smtp {
+  custom: boolean;
+  host: string;
+  port: string;
+  security: Security;
+}
+
+const SECURITY_LABEL: Record<Security, MessageKey> = {
+  tls: "account.securityTls",
+  starttls: "account.securityStarttls",
+  none: "account.securityNone",
+};
+
+/** 发信服务器：默认自动（服务商预设或照收信服务器猜），也可以自己填。 */
+function SmtpFields({
+  accountId,
+  value,
+  onChange,
+}: {
+  accountId: string;
+  value: Smtp;
+  onChange: (next: Smtp) => void;
+}) {
+  const t = useT();
+  const current = useQuery({
+    queryKey: ["smtp", accountId],
+    queryFn: () => api.smtpSettings(accountId),
+  });
+  const auto = current.data && !current.data.custom ? current.data : null;
+  const toggle = (custom: boolean) => {
+    // 打开时先填上现在自动用的，在它的基础上改
+    if (custom && !value.host && current.data) {
+      onChange({
+        custom,
+        host: current.data.host,
+        port: String(current.data.port),
+        security: current.data.security,
+      });
+    } else {
+      onChange({ ...value, custom });
+    }
+  };
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-line p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium text-fg-2">{t("account.smtp")}</p>
+          {!value.custom && auto && (
+            <p className="mt-0.5 select-text truncate text-[12px] text-fg-3">
+              {t("account.smtpAuto", {
+                server: `${auto.host}:${auto.port} · ${t(SECURITY_LABEL[auto.security])}`,
+              })}
+            </p>
+          )}
+        </div>
+        <label className="flex shrink-0 items-center gap-2 text-[12px] text-fg-2">
+          {t("account.smtpCustom")}
+          <Switch checked={value.custom} onChange={toggle} label={t("account.smtpCustom")} />
+        </label>
+      </div>
+      {value.custom && (
+        <>
+          <div className="grid grid-cols-[1fr_88px] gap-3">
+            <Field label={t("account.smtpHost")}>
+              <TextInput value={value.host} onChange={(e) => onChange({ ...value, host: e.target.value })} />
+            </Field>
+            <Field label={t("account.port")}>
+              <TextInput
+                inputMode="numeric"
+                value={value.port}
+                onChange={(e) => onChange({ ...value, port: e.target.value.replace(/\D/g, "") })}
+              />
+            </Field>
+          </div>
+          <Field label={t("account.security")}>
+            <Select
+              value={value.security}
+              onChange={(e) => onChange({ ...value, security: e.target.value as Security })}
+            >
+              <option value="tls">{t("account.securityTls")}</option>
+              <option value="starttls">{t("account.securityStarttls")}</option>
+              <option value="none">{t("account.securityNone")}</option>
+            </Select>
+          </Field>
+        </>
+      )}
     </div>
   );
 }
@@ -799,6 +889,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
   const connectionTrouble = Boolean(account.error_code) && !needsPassword && account.error_code !== "mail_auth";
 
   const [name, setName] = useState(account.name);
+  const [senderName, setSenderName] = useState(account.sender_name);
   const [password, setPassword] = useState("");
   const initial: Server = {
     host: account.imap_host,
@@ -808,6 +899,12 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
   };
   const [server, setServer] = useState<Server>(initial);
   const [showServer, setShowServer] = useState(connectionTrouble);
+  const [smtp, setSmtp] = useState<Smtp>({
+    custom: Boolean(account.smtp_host),
+    host: account.smtp_host ?? "",
+    port: String(account.smtp_port ?? 465),
+    security: account.smtp_security ?? "tls",
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Failure | null>(null);
 
@@ -830,15 +927,31 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
     // 只提交改过的字段，免得覆盖另一台设备上刚做的修改
     const changes: AccountChanges = {};
     if (name.trim() !== account.name) changes.name = name.trim();
+    if (senderName.trim() !== account.sender_name) changes.sender_name = senderName.trim();
     if (password) changes.password = password;
     if (server.host.trim() !== account.imap_host) changes.imap_host = server.host.trim();
     if (Number(server.port) !== account.imap_port) changes.imap_port = Number(server.port);
     if (server.security !== account.imap_security) changes.imap_security = server.security;
     if (server.username.trim() !== account.username) changes.username = server.username.trim();
+    if (smtp.custom && smtp.host.trim()) {
+      if (
+        smtp.host.trim() !== account.smtp_host ||
+        Number(smtp.port) !== account.smtp_port ||
+        smtp.security !== account.smtp_security
+      ) {
+        changes.smtp_host = smtp.host.trim();
+        changes.smtp_port = Number(smtp.port) || 465;
+        changes.smtp_security = smtp.security;
+      }
+    } else if (account.smtp_host) {
+      // 改回自动
+      changes.smtp_host = "";
+    }
     try {
       if (Object.keys(changes).length > 0) {
         await api.updateAccount(account.id, changes);
         void qc.invalidateQueries({ queryKey: keys.nav });
+        void qc.invalidateQueries({ queryKey: ["smtp", account.id] });
       }
       onDone();
     } catch (err) {
@@ -879,6 +992,13 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
           placeholder={t("account.namePlaceholder")}
         />
       </Field>
+      <Field label={t("account.senderName")} hint={t("account.senderNameHint")}>
+        <TextInput
+          value={senderName}
+          onChange={(e) => setSenderName(e.target.value)}
+          placeholder={t("account.senderNamePlaceholder")}
+        />
+      </Field>
       {oauth ? (
         <MicrosoftSignIn email={account.email} again={!needsPassword} onSignedIn={signInAgain} />
       ) : (
@@ -895,7 +1015,12 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
       )}
       <div className="flex flex-col gap-2">
         <Disclosure open={showServer} onToggle={() => setShowServer((v) => !v)} label={t("account.server")} />
-        {showServer && <ServerFields value={server} onChange={setServer} />}
+        {showServer && (
+          <>
+            <ServerFields value={server} onChange={setServer} />
+            <SmtpFields accountId={account.id} value={smtp} onChange={setSmtp} />
+          </>
+        )}
       </div>
       {error && <ErrorLine error={error} />}
       <div className="flex items-center gap-2">

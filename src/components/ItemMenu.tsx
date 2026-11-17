@@ -7,9 +7,12 @@ import {
   AtSign,
   Copy,
   ExternalLink,
+  Forward,
   Link,
   Mail,
   MailOpen,
+  Reply,
+  ReplyAll,
   Star,
   Tag,
 } from "lucide-react";
@@ -65,7 +68,7 @@ function LabelSub({ items }: { items: Item[] }) {
  */
 export function ItemMenuItems({ items }: { items: Item[] }) {
   const t = useT();
-  const { toggle, goToSource } = useActions();
+  const { toggle, goToSource, compose } = useActions();
   const lead = items[0];
   if (!lead) return null;
   const all = (flag: "read" | "starred" | "archived") => items.every((i) => i[flag]);
@@ -75,6 +78,20 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
   return (
     <>
       {items.length > 1 && <MenuLabel>{t("menu.items", { n: items.length })}</MenuLabel>}
+      {items.length === 1 && lead.kind === "mail" && (
+        <>
+          <MenuItem icon={<Reply size={14} />} onSelect={() => compose("reply", lead)}>
+            {t("compose.reply")}
+          </MenuItem>
+          <MenuItem icon={<ReplyAll size={14} />} onSelect={() => compose("reply-all", lead)}>
+            {t("compose.replyAll")}
+          </MenuItem>
+          <MenuItem icon={<Forward size={14} />} onSelect={() => compose("forward", lead)}>
+            {t("compose.forward")}
+          </MenuItem>
+          <MenuSeparator />
+        </>
+      )}
       <MenuItem icon={all("read") ? <Mail size={14} /> : <MailOpen size={14} />} onSelect={() => toggle("read", items)}>
         {all("read") ? t("action.markUnread") : t("action.markRead")}
       </MenuItem>

@@ -19,6 +19,7 @@ import {
   Rss,
   Settings,
   ShieldAlert,
+  SquarePen,
   Star,
   Sun,
   Trash2,
@@ -266,6 +267,9 @@ function AccountRow({
 
   const items = (
     <>
+      <MenuItem icon={<SquarePen size={14} />} onSelect={() => setDialog({ type: "compose", mode: "new", accountId: account.id })}>
+        {t("compose.fromAccount")}
+      </MenuItem>
       <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "edit-account", accountId: account.id })}>
         {t("action.accountSettings")}
       </MenuItem>
@@ -436,7 +440,8 @@ export function Sidebar({ width }: { width: number }) {
   const shows = (section: SidebarSection) =>
     layout === "groups" || tab === "all" || (tab === "mail") === (section === "mail");
   const qc = useQueryClient();
-  const { applyTo } = useActions();
+  const { applyTo, compose } = useActions();
+  const hasAccounts = (nav.data?.accounts.length ?? 0) > 0;
   const folderActions = useFolderActions();
 
   const feeds = nav.data?.feeds;
@@ -670,6 +675,11 @@ export function Sidebar({ width }: { width: number }) {
         >
           {layout === "tabs" ? <ListTree {...ICON} /> : <PanelTop {...ICON} />}
         </IconButton>
+        {hasAccounts && (
+          <IconButton label={t("compose.new")} shortcut="C" onClick={() => compose("new")}>
+            <SquarePen {...ICON} />
+          </IconButton>
+        )}
         <IconButton label={t("action.refreshAll")} shortcut="R" onClick={() => void api.refresh()}>
           <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
         </IconButton>

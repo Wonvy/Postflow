@@ -8,7 +8,21 @@ that heading into the version number and date.
 
 ### English
 
+- Write, reply, reply all and forward mail (`C`, `⌘R`, `⇧⌘R`, `⇧⌘F`; `Ctrl` on Windows and Linux). Replies quote
+  the original and stay in the same conversation, recipients are suggested from people who have written to you, and
+  `⌘↩` sends. Mail goes straight from your device to your provider's outgoing server, which is set up for you; a copy
+  is saved to Sent on the server. Plain text only for now, and forwarding doesn't carry attachments yet.
+- A mailbox's settings show its outgoing (SMTP) server, which can be set by hand.
+- Outlook and Microsoft 365 now ask for permission to send mail when you sign in. Mailboxes signed in earlier keep
+  receiving mail; sign in again from the mailbox's settings to send from them.
+
 ### 中文
+
+- 可以写信、回复、全部回复和转发了（`C`、`⌘R`、`⇧⌘R`、`⇧⌘F`；Windows 和 Linux 上是 `Ctrl`）。回复时引用原信，
+  在别的邮件程序里也归在同一个对话里；收件人会从给你来过信的人里提示；`⌘↩` 发送。信从你的设备直接交给邮箱的
+  发信服务器，服务器自动选好；发出的信在服务器的「已发送」里存一份。目前只能写纯文本，转发暂时不带附件。
+- 邮箱设置里显示发信（SMTP）服务器，也可以自己填。
+- Outlook 和 Microsoft 365 登录时会多申请一项发信权限。以前登录的邮箱照常收信；要发信时在邮箱设置里重新登录一次。
 
 ## 0.1.10 — 2026-11-17
 

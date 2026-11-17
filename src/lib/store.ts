@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ItemFilter, ItemKind, View } from "./api";
+import type { ComposeMode } from "./compose";
 import type { GroupMode } from "./grouping";
 import { LIST_STYLE_DEFAULT, type ListStyle, normalizeListStyle } from "./listStyle";
 import { normalizeReaderStyle, READER_DEFAULT, type ReaderStyle } from "./readerStyle";
@@ -56,6 +57,8 @@ export type Dialog =
   | { type: "folder"; folder?: string }
   /** 确认把当前列表全部标为已读。 */
   | { type: "mark-all-read" }
+  /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
+  | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string }
   | null;
 
 interface UiState {

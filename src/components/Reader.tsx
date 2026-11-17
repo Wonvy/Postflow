@@ -7,6 +7,7 @@ import {
   Download,
   Copy,
   ExternalLink,
+  Forward,
   Globe,
   ImageOff,
   Link,
@@ -15,6 +16,8 @@ import {
   MailOpen,
   Newspaper,
   Paperclip,
+  Reply,
+  ReplyAll,
   Sparkles,
   Star,
   Tag,
@@ -26,7 +29,7 @@ import { type CSSProperties, type MouseEvent, type ReactNode, useEffect, useMemo
 import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { copyText, formatSize, openExternal, saveAttachment } from "../lib/platform";
+import { copyText, formatSize, isMac, openExternal, saveAttachment } from "../lib/platform";
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
@@ -62,6 +65,9 @@ import {
   Spinner,
   Tip,
 } from "./ui";
+
+/** 快捷键提示里的修饰键。 */
+const MOD = isMac ? "⌘" : "Ctrl+";
 
 export function Reader() {
   const openId = useUi((s) => s.openId);
@@ -176,7 +182,7 @@ function Article({ id }: { id: string }) {
   const qc = useQueryClient();
   const [allowRemote, setAllowRemote] = useState(false);
   const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote);
-  const { items, apply, toggle, openOriginal, openTargets } = useActions();
+  const { items, apply, toggle, openOriginal, openTargets, compose } = useActions();
   const autoRead = useRef<string | null>(null);
   const [mode, setMode] = useState<"feed" | "full">("feed");
   const [loadingFull, setLoadingFull] = useState(false);
@@ -316,6 +322,28 @@ function Article({ id }: { id: string }) {
       <Toolbar leading={summary && <SourceChip item={summary} />}>
         {summary && (
           <>
+            {isMail && (
+              <>
+                <IconButton label={t("compose.reply")} shortcut={MOD + "R"} onClick={() => compose("reply", summary)}>
+                  <Reply {...ICON} />
+                </IconButton>
+                <IconButton
+                  label={t("compose.replyAll")}
+                  shortcut={(isMac ? "⇧⌘" : "Ctrl+Shift+") + "R"}
+                  onClick={() => compose("reply-all", summary)}
+                >
+                  <ReplyAll {...ICON} />
+                </IconButton>
+                <IconButton
+                  label={t("compose.forward")}
+                  shortcut={(isMac ? "⇧⌘" : "Ctrl+Shift+") + "F"}
+                  onClick={() => compose("forward", summary)}
+                >
+                  <Forward {...ICON} />
+                </IconButton>
+                <span aria-hidden className="mx-1 h-4 w-px bg-line" />
+              </>
+            )}
             {!webShown && <ReaderStyleMenu />}
             {!isMail && summary.url && !webShown && (
               <IconButton
@@ -1045,6 +1073,8 @@ function Empty() {
     [["T"], t("reader.hintTranslate")],
     [["W"], t("reader.hintWeb")],
     [["/"], t("reader.hintSearch")],
+    [["C"], t("reader.hintCompose")],
+    [[MOD + "R"], t("reader.hintReply")],
     [["A"], t("reader.hintAi")],
     [["+", "−"], t("reader.hintSize")],
     [["→", "←"], t("reader.hintGroup")],
