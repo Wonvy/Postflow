@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use crate::mail::{Command, mail_error, parse_security, security_str, verify};
+use crate::mail::{Command, mail_error, parse_security, security_str, verify_login};
 use crate::rpc::{parse, reply};
 use crate::{Core, RpcError, Scope, Session};
 
@@ -159,7 +159,7 @@ impl Core {
         };
         cfg.validate().map_err(|e| mail_error(&e))?;
         // 先确认能登录，再保存，免得留下一个连不上的账户
-        verify(&cfg, &p.password).await?;
+        let cfg = verify_login(cfg, &email, &p.password).await?;
 
         let config = AccountConfig {
             email,
@@ -170,6 +170,7 @@ impl Core {
             username: cfg.username.clone(),
         };
         let account = session.db(move |s| s.put_account(config)).await?;
+        tracing::info!(account = %account.id, host = %account.imap_host, "mail account added");
         self.save_password(&account.id, p.password).await?;
         self.start_worker(session, &account.id);
         self.emit_changed(&[Scope::Feeds, Scope::Items], None);
@@ -189,7 +190,7 @@ impl Core {
             .ok_or_else(|| RpcError::new("not_found", "no such account"))?;
 
         let host = non_empty(p.imap_host);
-        let username = non_empty(p.username);
+        let mut username = non_empty(p.username);
         let password = p.password.filter(|pw| !pw.is_empty());
         let server_changed = host.as_ref().is_some_and(|h| *h != account.imap_host)
             || p.imap_port.is_some_and(|port| port != account.imap_port)
@@ -214,7 +215,11 @@ impl Core {
                     RpcError::new("mail_no_password", "enter the password for this account")
                 })?,
             };
-            verify(&cfg, &pw).await?;
+            let used = verify_login(cfg, &account.email, &pw).await?;
+            // iCloud 换了一种用户名写法才登录上的，记下能用的那个
+            if used.username != account.username {
+                username = Some(used.username);
+            }
         }
 
         let patch = AccountPatch {
@@ -244,6 +249,7 @@ impl Core {
         session: &Arc<Session>,
     ) -> Result<Value, RpcError> {
         let p: Id = parse(params)?;
+        tracing::info!(account = %p.id, "mail account removed by the user");
         self.stop_worker(session, &p.id);
         let id = p.id.clone();
         session.db(move |s| s.remove_account(&id)).await?;

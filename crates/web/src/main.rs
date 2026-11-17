@@ -20,12 +20,6 @@ const USAGE: &str = "\
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
     let mut local_dir: Option<PathBuf> = None;
     let mut static_dir: Option<PathBuf> = None;
     let mut port: u16 = 4319;
@@ -46,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let local_dir = match local_dir {
+    let local_dir: PathBuf = match local_dir {
         Some(dir) => dir,
         None => {
             let home = std::env::var_os("HOME")
@@ -55,6 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             PathBuf::from(home).join(".postflow")
         }
     };
+    postflow_core::logging::init(&local_dir, true);
     let static_dir = static_dir.or_else(|| {
         let dist = PathBuf::from("dist");
         dist.join("assets").is_dir().then_some(dist)

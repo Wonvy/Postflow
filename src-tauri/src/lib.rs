@@ -46,13 +46,6 @@ fn updater_supported() -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    if cfg!(debug_assertions) {
-        // 开发时默认打出自己代码的调试日志，依赖库只打 info。可以用 RUST_LOG 覆盖。
-        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "info,postflow_desktop_lib=debug,postflow_core=debug".into());
-        let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
-    }
-
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init());
@@ -66,6 +59,8 @@ pub fn run() {
         .setup(|app| {
             // 索引和本机配置放在系统给应用分配的私有目录里，不参与同步
             let local_dir = app.path().app_local_data_dir()?;
+            // 日志写到本机目录的 logs 下，设置里能查看；开发时同时打到终端
+            postflow_core::logging::init(&local_dir, cfg!(debug_assertions));
             let core = tauri::async_runtime::block_on(Core::open(local_dir))?;
             tracing::info!("core ready");
 

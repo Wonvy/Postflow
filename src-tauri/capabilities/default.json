@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口权限：窗口拖拽、目录选择、用系统浏览器打开链接、在线更新",
+  "description": "主窗口权限：窗口拖拽、目录选择、用系统浏览器打开链接、在文件管理器里显示日志目录、在线更新",
   "windows": [
     "main"
   ],
@@ -11,6 +11,7 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
     "updater:default",
     "process:allow-restart"
   ]

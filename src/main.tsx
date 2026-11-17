@@ -6,6 +6,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { TooltipProvider } from "./components/ui";
+import { captureErrors } from "./lib/errors";
+
+captureErrors();
 
 const queryClient = new QueryClient({
   defaultOptions: {

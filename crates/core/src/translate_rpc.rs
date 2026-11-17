@@ -155,6 +155,7 @@ impl Core {
 
 /// 在后台下载一个语言对，进度通过事件告诉界面。
 async fn download(core: Arc<Core>, pair: String) {
+    tracing::info!(%pair, "downloading translation model");
     let result = core
         .translator
         .download(&pair, |p| {
@@ -168,7 +169,10 @@ async fn download(core: Arc<Core>, pair: String) {
         })
         .await;
     let (state, error) = match result {
-        Ok(_) => (ModelState::Installed, None),
+        Ok(_) => {
+            tracing::info!(%pair, "translation model installed");
+            (ModelState::Installed, None)
+        }
         Err(e) => {
             tracing::warn!("translation model {pair}: {e}");
             (ModelState::Failed, Some(e.code().to_string()))

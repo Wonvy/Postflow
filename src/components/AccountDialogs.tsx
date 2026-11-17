@@ -10,6 +10,7 @@ import {
   type Security,
 } from "../lib/api";
 import { errorDetail, errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
+import { openExternal } from "../lib/platform";
 import { keys, useNav, usePresets } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { shortTime } from "../lib/time";
@@ -59,7 +60,21 @@ function passwordLabel(t: Translate, preset: Preset | null): string {
   return t(`account.${preset?.password_kind ?? "password"}` as MessageKey);
 }
 
-function Hint({ text, tone = "info" }: { text: string; tone?: "info" | "warning" }) {
+/** 生成专用密码、授权码的页面，提示里直接给链接。 */
+const HELP_URL: Record<string, string> = {
+  icloud: "https://account.apple.com/account/manage",
+  icloud_custom: "https://account.apple.com/account/manage",
+};
+
+function Hint({
+  text,
+  tone = "info",
+  link,
+}: {
+  text: string;
+  tone?: "info" | "warning";
+  link?: { label: string; url: string };
+}) {
   const Icon = tone === "warning" ? TriangleAlert : Info;
   return (
     <p className="flex items-start gap-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] leading-relaxed text-fg-2">
@@ -68,9 +83,27 @@ function Hint({ text, tone = "info" }: { text: string; tone?: "info" | "warning"
         strokeWidth={2}
         className={cx("mt-px shrink-0", tone === "warning" ? "text-warning" : "text-fg-3")}
       />
-      <span className="select-text">{text}</span>
+      <span className="select-text">
+        {text}
+        {link && (
+          <button
+            type="button"
+            onClick={() => void openExternal(link.url)}
+            className="ml-1 text-accent hover:underline"
+          >
+            {link.label}
+          </button>
+        )}
+      </span>
     </p>
   );
+}
+
+/** 选了服务商但只填了名字时，补上这个服务商的域名。 */
+function completeAddress(input: string, preset: Preset | null | undefined): string {
+  const s = input.trim();
+  if (!s || s.includes("@") || !preset?.domains[0]) return s;
+  return `${s}@${preset.domains[0]}`;
 }
 
 interface Failure {
@@ -299,9 +332,12 @@ export function AddAccountDialog() {
     touched.current = false;
   }, [open]);
 
+  // 第一步选的服务商。只填了名字时用它的域名补全地址
+  const chosen = presetId ? presets.data?.find((p) => p.id === presetId) : undefined;
+  const address = completeAddress(email, chosen);
+
   // 输入邮箱地址时推断服务器设置
   useEffect(() => {
-    const address = email.trim();
     if (!open || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) {
       setGuess(null);
       return;
@@ -334,7 +370,7 @@ export function AddAccountDialog() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [email, open]);
+  }, [address, open]);
 
   const preset = useMemo(() => {
     if (presetId) return presets.data?.find((p) => p.id === presetId) ?? null;
@@ -364,7 +400,7 @@ export function AddAccountDialog() {
         host: p.imap_host,
         port: String(p.imap_port),
         security: p.imap_security,
-        username: s.username || email.trim(),
+        username: s.username || address,
       }));
     } else {
       touched.current = false;
@@ -381,13 +417,13 @@ export function AddAccountDialog() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password || busy) return;
+    if (!address || !password || busy) return;
     setBusy(true);
     setError(null);
     try {
       const port = Number(server.port);
       const account = await api.addAccount({
-        email: email.trim(),
+        email: address,
         password,
         name: name.trim(),
         imap_host: server.host.trim() || undefined,
@@ -434,16 +470,22 @@ export function AddAccountDialog() {
           <span className="font-medium">{preset ? providerName(preset, lang) : t("account.other")}</span>
         </div>
         <Field label={t("account.email")}>
+          {/* 不用 type="email"：浏览器会拦下只填了名字的输入，而这里会自动补全 */}
           <TextInput
             autoFocus
-            type="email"
+            type="text"
             inputMode="email"
+            autoComplete="email"
+            spellCheck={false}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder={placeholder}
             disabled={busy}
           />
         </Field>
+        {address !== email.trim() && (
+          <p className="-mt-2 text-[12px] text-fg-3">{t("account.willUse", { address })}</p>
+        )}
         {preset && (
           <p className="-mt-2 text-[12px] text-fg-3">
             {t("account.detected", { name: providerName(preset, lang) })} · {preset.imap_host}
@@ -458,7 +500,13 @@ export function AddAccountDialog() {
             disabled={busy}
           />
         </Field>
-        {hint && <Hint text={t(hint)} tone={preset?.password_kind === "oauth" ? "warning" : "info"} />}
+        {hint && (
+          <Hint
+            text={t(hint)}
+            tone={preset?.password_kind === "oauth" ? "warning" : "info"}
+            link={preset && HELP_URL[preset.id] ? { label: t("account.makePassword"), url: HELP_URL[preset.id] ?? "" } : undefined}
+          />
+        )}
         <Field label={t("account.name")}>
           <TextInput
             value={name}
@@ -497,7 +545,7 @@ export function AddAccountDialog() {
           <Button variant="ghost" onClick={() => setDialog(null)}>
             {t("action.cancel")}
           </Button>
-          <Button variant="primary" type="submit" disabled={!email.trim() || !password || busy}>
+          <Button variant="primary" type="submit" disabled={!address || !password || busy}>
             {t("action.add")}
           </Button>
         </div>

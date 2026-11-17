@@ -106,6 +106,42 @@ pub(crate) fn server_config(account: &Account) -> Result<ServerConfig, RpcError>
     Ok(cfg)
 }
 
+/// 用户名有两种写法的服务商。iCloud 的说明里写着用户名「通常」是不带 @icloud.com 的名字，
+/// 有的客户端要用完整地址才行，所以登录被拒时换另一种写法再试一次。
+fn alternate_username(cfg: &ServerConfig, email: &str) -> Option<String> {
+    if !cfg.host.trim().eq_ignore_ascii_case("imap.mail.me.com") {
+        return None;
+    }
+    let email = email.trim();
+    match cfg.username.split_once('@') {
+        Some((local, _)) if !local.is_empty() => Some(local.to_string()),
+        _ => (email.contains('@') && email != cfg.username).then(|| email.to_string()),
+    }
+}
+
+/// 确认能登录。被拒时，对用户名有两种写法的服务商换一种再试，返回真正能用的设置。
+pub(crate) async fn verify_login(
+    cfg: ServerConfig,
+    email: &str,
+    password: &str,
+) -> Result<ServerConfig, RpcError> {
+    let first = match verify(&cfg, password).await {
+        Ok(()) => return Ok(cfg),
+        Err(e) => e,
+    };
+    tracing::warn!(host = %cfg.host, port = cfg.port, code = %first.code, "login check failed: {}", first.message);
+    if first.code == "mail_auth"
+        && let Some(username) = alternate_username(&cfg, email)
+    {
+        tracing::info!(host = %cfg.host, "login rejected, trying the other form of the user name");
+        let retry = ServerConfig { username, ..cfg };
+        if verify(&retry, password).await.is_ok() {
+            return Ok(retry);
+        }
+    }
+    Err(first)
+}
+
 /// 试着连上并打开收件箱，确认设置和密码都对。
 pub(crate) async fn verify(cfg: &ServerConfig, password: &str) -> Result<(), RpcError> {
     let mut conn = Connection::connect(cfg, password)
@@ -217,6 +253,7 @@ async fn run(
             .ok()
             .flatten();
         let Some(password) = password else {
+            tracing::warn!(account = %account_id, "no password on this device; waiting for the user");
             core.record_mail(
                 &session,
                 &account_id,
@@ -241,10 +278,20 @@ async fn run(
             }
         };
 
+        tracing::debug!(account = %account_id, host = %cfg.host, port = cfg.port, "connecting");
         let conn = match Connection::connect(&cfg, &password).await {
-            Ok(conn) => conn,
+            Ok(conn) => {
+                tracing::info!(account = %account_id, host = %cfg.host, idle = conn.supports_idle(), "mail connected");
+                conn
+            }
             Err(err) => {
-                tracing::debug!("mail {}: connect failed: {err}", account.email);
+                tracing::warn!(
+                    account = %account_id,
+                    host = %cfg.host,
+                    code = err.code(),
+                    retry_in = ?(!err.needs_user()).then_some(backoff),
+                    "mail connect failed: {err}"
+                );
                 core.record_mail(
                     &session,
                     &account_id,
@@ -273,7 +320,7 @@ async fn run(
         match serve(&core, &session, &account_id, conn, &mut rx, &mut pending).await {
             Ok(()) => return,
             Err(err) => {
-                tracing::debug!("mail {}: connection dropped: {err}", account.email);
+                tracing::warn!(account = %account_id, code = err.code(), "mail connection dropped: {err}");
                 core.record_mail(
                     &session,
                     &account_id,
@@ -369,6 +416,17 @@ async fn serve(
             announce = false;
         }
         let stats = result?;
+        if stats.changed() {
+            tracing::info!(
+                account = %account_id,
+                added = stats.added,
+                updated = stats.updated,
+                removed = stats.removed,
+                "inbox synced"
+            );
+        } else {
+            tracing::debug!(account = %account_id, "inbox synced, nothing new");
+        }
         if !healthy {
             healthy = true;
             core.record_mail(session, account_id, None).await;
@@ -646,4 +704,38 @@ async fn fetch_body(
     let (id, copy) = (r.id.clone(), raw.clone());
     let _ = session.db(move |s| s.set_mail_body(&id, &copy)).await;
     Ok(raw)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn icloud(username: &str) -> ServerConfig {
+        ServerConfig {
+            host: "imap.mail.me.com".into(),
+            port: 993,
+            security: postflow_mail::Security::Tls,
+            username: username.into(),
+        }
+    }
+
+    #[test]
+    fn icloud_tries_both_forms_of_the_user_name() {
+        assert_eq!(
+            alternate_username(&icloud("john@icloud.com"), "john@icloud.com").as_deref(),
+            Some("john")
+        );
+        assert_eq!(
+            alternate_username(&icloud("john"), "john@icloud.com").as_deref(),
+            Some("john@icloud.com")
+        );
+        assert_eq!(alternate_username(&icloud("john"), "john"), None);
+        let mut other = icloud("me@qq.com");
+        other.host = "imap.qq.com".into();
+        assert_eq!(
+            alternate_username(&other, "me@qq.com"),
+            None,
+            "only iCloud gets a second try"
+        );
+    }
 }

@@ -1,8 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { exportOpml, formatSize } from "../lib/platform";
+import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
@@ -11,7 +11,7 @@ import { languageName, useModelDownloads, useTranslateEngine, useTranslateLangua
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, useAiProviders } from "./AiSettings";
 import { Section, SettingRow } from "./SettingsParts";
-import { Button, Modal, Segmented, Select, TextInput } from "./ui";
+import { Button, Modal, Segmented, Select, Switch, TextInput } from "./ui";
 
 export function SettingsDialog() {
   const t = useT();
@@ -216,6 +216,10 @@ export function SettingsDialog() {
         </SettingRow>
       </Section>
 
+      <Section title={t("settings.diagnostics")}>
+        <Diagnostics open={open} />
+      </Section>
+
       <Section title={t("settings.about")}>
         <SettingRow label={t("settings.version")}>
           <span className="tabular text-[12px] text-fg-2">{status.data?.version}</span>
@@ -348,6 +352,94 @@ function TranslationSettings({ open }: { open: boolean }) {
         {error && <div className="mt-1 text-[12px] text-danger">{error}</div>}
       </div>
     </>
+  );
+}
+
+/** 日志：查看、复制、打开所在目录，以及详细日志开关。 */
+function Diagnostics({ open }: { open: boolean }) {
+  const t = useT();
+  const logs = useQuery({ queryKey: ["logs"], queryFn: () => api.logs(800), enabled: open });
+  const [viewing, setViewing] = useState(false);
+  const qc = useQueryClient();
+  const data = logs.data;
+
+  if (data && !data.available) {
+    return <p className="text-[12px] text-fg-3">{t("settings.logsUnavailable")}</p>;
+  }
+  return (
+    <>
+      <SettingRow label={t("settings.logs")} hint={t("settings.logsHint")}>
+        <Button
+          onClick={() => {
+            void qc.invalidateQueries({ queryKey: ["logs"] });
+            setViewing(true);
+          }}
+        >
+          {t("settings.viewLogs")}
+        </Button>
+        {isTauri && data?.dir && (
+          <Button onClick={() => void revealFolder(data.dir ?? "")}>{t("settings.openLogFolder")}</Button>
+        )}
+      </SettingRow>
+      <SettingRow label={t("settings.verboseLogs")} hint={t("settings.verboseLogsHint")}>
+        <Switch
+          label={t("settings.verboseLogs")}
+          checked={data?.verbose ?? false}
+          onChange={(v) => void api.setLogging(v).then(() => qc.invalidateQueries({ queryKey: ["logs"] }))}
+        />
+      </SettingRow>
+      <LogViewer open={viewing} onClose={() => setViewing(false)} />
+    </>
+  );
+}
+
+function LogViewer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const logs = useQuery({ queryKey: ["logs"], queryFn: () => api.logs(800), enabled: open });
+  const qc = useQueryClient();
+  const [copied, setCopied] = useState(false);
+  const pre = useRef<HTMLPreElement>(null);
+  const text = logs.data?.text ?? "";
+
+  // 打开时、刷新后滚到最新的一行
+  useEffect(() => {
+    if (open && pre.current) pre.current.scrollTop = pre.current.scrollHeight;
+  }, [open, text]);
+
+  return (
+    <Modal open={open} onClose={onClose} title={t("settings.logs")} width={760}>
+      <div className="flex flex-col gap-3 p-4">
+        <p className="text-[12px] leading-relaxed text-fg-3">{t("settings.logsPrivacy")}</p>
+        <pre
+          ref={pre}
+          className="h-[52vh] select-text overflow-auto whitespace-pre-wrap break-all rounded-md border border-line bg-hover p-3 font-mono text-[11px] leading-[1.55] text-fg-2"
+        >
+          {logs.isLoading ? "…" : text || t("settings.logsEmpty")}
+        </pre>
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-[12px] text-fg-3" title={logs.data?.dir ?? ""}>
+            {logs.data?.dir}
+          </span>
+          <div className="flex shrink-0 gap-2">
+            <Button busy={logs.isFetching} onClick={() => void qc.invalidateQueries({ queryKey: ["logs"] })}>
+              {t("settings.refreshLogs")}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!text}
+              onClick={() =>
+                void copyText(text).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                })
+              }
+            >
+              {copied ? t("settings.copied") : t("settings.copyLogs")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

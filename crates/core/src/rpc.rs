@@ -72,6 +72,25 @@ struct Setup {
 }
 
 #[derive(Deserialize)]
+struct LogsParams {
+    #[serde(default)]
+    lines: Option<usize>,
+}
+
+/// 界面里出的错，记进同一份日志。
+#[derive(Deserialize)]
+struct UiLog {
+    #[serde(default)]
+    level: String,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct LoggingParams {
+    verbose: bool,
+}
+
+#[derive(Deserialize)]
 struct NavGet {
     #[serde(default)]
     today_since: i64,
@@ -199,6 +218,33 @@ impl Core {
                 return reply(self.status().await);
             }
             m if m.starts_with("translate.") => return self.translate_rpc(m, params).await,
+            "app.logs" => {
+                let p: LogsParams = parse(params)?;
+                return reply(
+                    match crate::logging::tail(p.lines.unwrap_or(400).min(5000)) {
+                        Some((dir, verbose, text)) => {
+                            json!({ "available": true, "dir": dir, "verbose": verbose, "text": text })
+                        }
+                        None => {
+                            json!({ "available": false, "dir": null, "verbose": false, "text": "" })
+                        }
+                    },
+                );
+            }
+            "app.log" => {
+                let p: UiLog = parse(params)?;
+                let message: String = p.message.chars().take(4000).collect();
+                match p.level.as_str() {
+                    "error" => tracing::error!(target: "postflow_ui", "{message}"),
+                    "warn" => tracing::warn!(target: "postflow_ui", "{message}"),
+                    _ => tracing::info!(target: "postflow_ui", "{message}"),
+                }
+                return reply(json!({}));
+            }
+            "app.logging" => {
+                let p: LoggingParams = parse(params)?;
+                return reply(json!({ "ok": crate::logging::set_verbose(p.verbose) }));
+            }
             _ => {}
         }
 

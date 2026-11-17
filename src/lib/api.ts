@@ -376,6 +376,12 @@ export const api = {
 
   rebuildIndex: () => rpc<ImportStats>("index.rebuild"),
 
+  /** 最近的日志。`available` 为 false 时这个运行环境没有写日志。 */
+  logs: (lines = 600) =>
+    rpc<{ available: boolean; dir: string | null; verbose: boolean; text: string }>("app.logs", { lines }),
+  log: (level: "error" | "warn" | "info", message: string) => rpc<void>("app.log", { level, message }),
+  setLogging: (verbose: boolean) => rpc<{ ok: boolean }>("app.logging", { verbose }),
+
   aiPresets: () => rpc<{ presets: AiPreset[] }>("ai.presets"),
   aiProviders: () => rpc<AiProviders>("ai.providers"),
   saveAiProvider: (provider: Partial<AiProvider> & { base_url: string }, api_key?: string) =>

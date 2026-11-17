@@ -3948,6 +3948,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3965,7 +3966,6 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -4058,7 +4058,6 @@ dependencies = [
  "tokio-stream",
  "tower-http 0.7.1",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

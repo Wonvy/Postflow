@@ -19,6 +19,14 @@ export async function openExternal(url: string): Promise<void> {
   }
 }
 
+/** 在系统的文件管理器里显示这个目录。只有桌面应用能做到。 */
+export async function revealFolder(path: string): Promise<boolean> {
+  if (!isTauri) return false;
+  const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+  await revealItemInDir(path);
+  return true;
+}
+
 /** 让用户选一个目录。浏览器里拿不到真实路径，返回 null，由调用方让用户手动输入。 */
 export async function pickDirectory(defaultPath?: string): Promise<string | null> {
   if (!isTauri) return null;

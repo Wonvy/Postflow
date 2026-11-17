@@ -73,6 +73,7 @@ impl Core {
 
         let outcome = match result {
             Ok(FetchResult::NotModified) => {
+                tracing::debug!(feed = %target.feed_id, "not modified");
                 let next = now + interval * 60_000;
                 session
                     .db(move |s| {
@@ -87,6 +88,7 @@ impl Core {
                     .await
             }
             Ok(FetchResult::Fetched(fetched)) => {
+                tracing::debug!(feed = %target.feed_id, entries = fetched.feed.entries.len(), "fetched");
                 let next = now + interval * 60_000;
                 let url = target.url.clone();
                 session
@@ -107,7 +109,7 @@ impl Core {
                 let factor = 1i64 << target.error_count.clamp(0, 6);
                 let next = now + (interval * factor).min(MAX_BACKOFF_MIN) * 60_000;
                 let message = err.to_string();
-                tracing::debug!("fetch {} failed: {message}", target.url);
+                tracing::warn!(feed = %target.feed_id, failures = target.error_count + 1, "fetch {} failed: {message}", target.url);
                 session
                     .db(move |s| s.record_fetch_err(&feed_id, &message, now, next))
                     .await

@@ -798,6 +798,7 @@ impl Core {
         key: Option<String>,
         request: &Request,
     ) -> Result<String, RpcError> {
+        tracing::debug!(provider = %provider.preset, model = %provider.model, "ai request (streamed)");
         let answer = self
             .ai
             .client
@@ -811,7 +812,10 @@ impl Core {
                     message: None,
                 })
             })
-            .await?;
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(provider = %provider.preset, model = %provider.model, code = e.code(), "ai request failed: {e}")
+            })?;
         self.record_usage(session, provider, answer.usage).await;
         Ok(answer.text)
     }
@@ -823,7 +827,10 @@ impl Core {
         key: Option<&str>,
         request: &Request,
     ) -> Result<String, RpcError> {
-        let answer = self.ai.client.complete(provider, key, request).await?;
+        tracing::debug!(provider = %provider.preset, model = %provider.model, "ai request");
+        let answer = self.ai.client.complete(provider, key, request).await.inspect_err(|e| {
+            tracing::warn!(provider = %provider.preset, model = %provider.model, code = e.code(), "ai request failed: {e}")
+        })?;
         self.record_usage(session, provider, answer.usage).await;
         Ok(answer.text)
     }
