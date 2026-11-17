@@ -38,6 +38,14 @@ async fn rpc(
 
 /// 这个安装方式能不能在应用里直接更新。Linux 上只有 AppImage 可以原地替换自己；
 /// 用 deb、rpm 装的版本由系统的包管理器管，界面会改成引导去下载页。
+/// 把界面生成的文字存到用户在保存对话框里选的位置（导出语言文件）。
+/// 只有桌面应用的界面能调用；网页访问时界面改用浏览器下载。
+#[tauri::command]
+async fn save_text_file(path: String, contents: String) -> Result<(), String> {
+    // 文件很小，直接写
+    std::fs::write(&path, contents).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn updater_supported() -> bool {
     if cfg!(target_os = "linux") {
@@ -52,6 +60,7 @@ fn updater_supported() -> bool {
 fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
         rpc,
+        save_text_file,
         updater_supported,
         web_page::web_show,
         web_page::web_frame,
@@ -62,7 +71,7 @@ fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
 
 #[cfg(mobile)]
 fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
-    tauri::generate_handler![rpc, updater_supported]
+    tauri::generate_handler![rpc, save_text_file, updater_supported]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -5,7 +5,8 @@
 
 import { useEffect } from "react";
 import type { Nav } from "./api";
-import { resolveLang, translate } from "./i18n";
+import { activePack, resolveLang, translate } from "./i18n";
+import type { LangPack } from "./langPack";
 import { useUi } from "./store";
 import { isTauri } from "./transport";
 
@@ -16,8 +17,14 @@ export interface NewMailEvent {
 }
 
 /** 一条通知的标题和正文：一封时是发件人和主题，几封时是「N 封新邮件」和前几封的主题。 */
-export function notification(event: NewMailEvent, account: string, lang: "zh" | "en"): { title: string; body: string } {
-  const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) => translate(lang, key, vars);
+export function notification(
+  event: NewMailEvent,
+  account: string,
+  lang: "zh" | "en",
+  pack: LangPack | null = null,
+): { title: string; body: string } {
+  const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) =>
+    translate(lang, key, vars, pack);
   const [first] = event.mails;
   if (event.total === 1 && first) {
     return { title: first.from || account, body: first.subject || t("mail.noSubject") };
@@ -57,7 +64,7 @@ export function notifyNewMail(event: NewMailEvent, nav: Nav | undefined) {
   if (document.visibilityState === "visible" && document.hasFocus()) return;
   const account = nav?.accounts.find((a) => a.id === event.account_id);
   const name = account ? account.name || account.email : "";
-  const { title, body } = notification(event, name, resolveLang(ui.lang));
+  const { title, body } = notification(event, name, resolveLang(ui.lang), activePack(ui.lang));
   const first = event.mails[0]?.id;
   void show(title, body, () => {
     // 浏览器里点通知：打开那个邮箱，单封时直接打开那封

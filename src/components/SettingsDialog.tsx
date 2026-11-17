@@ -21,7 +21,7 @@ import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform"
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
-import { type Density, type LangPref, type SettingsPage, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
+import { type Density, type SettingsPage, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
@@ -29,6 +29,7 @@ import { SettingRow } from "./SettingsParts";
 import { NotesSection } from "./UpdateDialog";
 import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
 import { StorageSettings } from "./StorageSettings";
+import { LanguageSettings } from "./LanguageSettings";
 
 /** 设置的各页，按组排：常用的、AI、数据和应用本身。 */
 const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
@@ -60,8 +61,6 @@ export function SettingsDialog() {
   const senderLogos = useUi((s) => s.senderLogos);
   const setSenderLogos = useUi((s) => s.setSenderLogos);
   const setBadgeUnread = useUi((s) => s.setBadgeUnread);
-  const lang = useUi((s) => s.lang);
-  const setLang = useUi((s) => s.setLang);
   const sidebarLayout = useUi((s) => s.sidebarLayout);
   const setSidebarLayout = useUi((s) => s.setSidebarLayout);
 
@@ -185,17 +184,7 @@ export function SettingsDialog() {
         <SettingRow label={t("settings.badge")} hint={t("settings.badgeHint")}>
           <Switch label={t("settings.badge")} checked={badgeUnread} onChange={setBadgeUnread} />
         </SettingRow>
-        <SettingRow label={t("settings.language")}>
-          <Segmented<LangPref>
-            value={lang}
-            onChange={setLang}
-            options={[
-              { value: "system", label: t("settings.langSystem") },
-              { value: "zh", label: "中文" },
-              { value: "en", label: "English" },
-            ]}
-          />
-        </SettingRow>
+        <LanguageSettings />
       </>
     ),
     feeds: () => (

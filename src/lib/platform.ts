@@ -106,3 +106,26 @@ export function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
+
+/**
+ * 把一段文字存成文件。桌面应用弹保存对话框；浏览器里直接下载。
+ * 返回 false 表示用户取消了。
+ */
+export async function saveTextFile(filename: string, contents: string, filter: { name: string; extensions: string[] }): Promise<boolean> {
+  if (isTauri) {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({ defaultPath: filename, filters: [filter] });
+    if (!path) return false;
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("save_text_file", { path, contents });
+    return true;
+  }
+  const blob = new Blob([contents], { type: "application/json;charset=utf-8" });
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(href);
+  return true;
+}

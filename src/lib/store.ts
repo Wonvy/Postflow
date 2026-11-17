@@ -33,7 +33,8 @@ export const TAB_KIND: Record<SidebarTab, ItemKind | null> = { all: null, mail: 
 export const CARD_MIN = 160;
 export const CARD_MAX = 480;
 export type Density = "compact" | "comfortable";
-export type LangPref = "system" | "zh" | "en";
+/** 界面语言：跟随系统、内置的中英文，或者导入的语言（`pack:代码`，见 langPacks.ts）。 */
+export type LangPref = "system" | "zh" | "en" | `pack:${string}`;
 
 /** 设置面板的各页。 */
 export type SettingsPage =

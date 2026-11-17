@@ -1,5 +1,7 @@
 import { useCallback } from "react";
-import { useUi } from "./store";
+import { type LangPack, packCodeOf } from "./langPack";
+import { findPack, useLangPacks } from "./langPacks";
+import { type LangPref, useUi } from "./store";
 import type { Lang } from "./time";
 import { RpcError } from "./transport";
 
@@ -471,6 +473,25 @@ const zh = {
   "settings.noModels": "还没有下载。第一次翻译时会提示下载。",
   "settings.modelsOffline": "现在连不上模型目录，只能用已经下载的模型。",
 
+  "langFile.title": "语言文件",
+  "langFile.hint": "导出界面文字，翻译后再导入，就能用你自己的语言。格式见项目里的 docs/language-files.md。",
+  "langFile.export": "导出",
+  "langFile.exportFrom": "导出{name}",
+  "langFile.import": "导入…",
+  "langFile.exported": "语言文件已导出",
+  "langFile.newName": "新语言",
+  "langFile.imported": "已导入「{name}」：{used} / {total} 条，没翻译的用原文。",
+  "langFile.unknown": "跳过了 {n} 个界面里没有的条目（可能来自旧版本）。",
+  "langFile.badPlaceholders": "{n} 条的占位符和原文不一致，用了原文：{keys}。",
+  "langFile.coverage": "{percent}%（{used} / {total}）",
+  "langFile.remove": "删除「{name}」",
+  "langFile.error.json": "这不是有效的 JSON 文件。",
+  "langFile.error.format": "这不是 Postflow 的语言文件：缺少 postflow_language 或 messages。",
+  "langFile.error.version": "这个语言文件来自更新版本的 Postflow，请先更新应用。",
+  "langFile.error.code": "语言代码不对：要像 ja、fr、zh-TW 这样。",
+  "langFile.error.name": "缺少语言名称（name），或者超过 40 个字。",
+  "langFile.error.builtin": "zh 和 en 是内置语言，请把 code 改成别的代码。",
+  "langFile.error.empty": "文件里没有能用的翻译。",
   "storage.title": "存储空间",
   "storage.data": "数据目录",
   "storage.dataHint": "订阅、文章、已读状态和设置，在设备之间同步。这里只显示，不清理。",
@@ -1203,6 +1224,25 @@ const en: Record<MessageKey, string> = {
   "settings.noModels": "None yet. You'll be asked the first time you translate.",
   "settings.modelsOffline": "The model list can't be reached right now. Only downloaded models can be used.",
 
+  "langFile.title": "Language files",
+  "langFile.hint": "Export the interface text, translate it, and import it back to use Postflow in your own language. The format is described in docs/language-files.md in the project.",
+  "langFile.export": "Export",
+  "langFile.exportFrom": "Export {name}",
+  "langFile.import": "Import…",
+  "langFile.exported": "Language file exported",
+  "langFile.newName": "New language",
+  "langFile.imported": "Imported “{name}”: {used} of {total} texts. Anything not translated uses the original.",
+  "langFile.unknown": "Skipped {n} entries this version doesn't have (maybe from an older version).",
+  "langFile.badPlaceholders": "{n} entries had placeholders that don't match the original, so the original is used: {keys}.",
+  "langFile.coverage": "{percent}% ({used} / {total})",
+  "langFile.remove": "Remove “{name}”",
+  "langFile.error.json": "This isn't a valid JSON file.",
+  "langFile.error.format": "This isn't a Postflow language file: postflow_language or messages is missing.",
+  "langFile.error.version": "This language file is from a newer Postflow. Update the app first.",
+  "langFile.error.code": "The language code isn't valid. Use something like ja, fr or zh-TW.",
+  "langFile.error.name": "The language name (name) is missing or longer than 40 characters.",
+  "langFile.error.builtin": "zh and en are built in. Change code to another language code.",
+  "langFile.error.empty": "The file has no usable translations.",
   "storage.title": "Storage",
   "storage.data": "Data folder",
   "storage.dataHint": "Feeds, articles, read state and settings, synced between your devices. Shown here, not cleaned up.",
@@ -1466,8 +1506,24 @@ const en: Record<MessageKey, string> = {
 
 const messages: Record<Lang, Record<MessageKey, string>> = { zh, en };
 
-export function resolveLang(pref: "system" | Lang): Lang {
-  if (pref !== "system") return pref;
+/** 内置语言的全部文字，导出语言文件时用。 */
+export function builtinMessages(lang: Lang): Record<MessageKey, string> {
+  return messages[lang];
+}
+
+/** 正在用的导入语言；用内置语言时为 null。 */
+export function activePack(pref: LangPref): LangPack | null {
+  return findPack(packCodeOf(pref));
+}
+
+/**
+ * 日期、数字、排序这些按哪种内置语言来。导入的语言按它文件里写的 `base`；
+ * 导入的语言被删了的话退回跟随系统。
+ */
+export function resolveLang(pref: LangPref): Lang {
+  const code = packCodeOf(pref);
+  if (code) return findPack(code)?.base ?? resolveLang("system");
+  if (pref !== "system") return pref as Lang;
   return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
@@ -1475,8 +1531,9 @@ export function translate(
   lang: Lang,
   key: MessageKey,
   vars?: Record<string, string | number>,
+  pack?: LangPack | null,
 ): string {
-  let text: string = messages[lang][key];
+  let text: string = pack?.messages[key] ?? messages[lang][key];
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.replaceAll(`{${name}}`, String(value));
@@ -1488,12 +1545,19 @@ export function translate(
 export type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
 
 export function useLang(): Lang {
-  return resolveLang(useUi((s) => s.lang));
+  const pref = useUi((s) => s.lang);
+  // 导入的语言变了（重新导入、删除）也要重新算
+  useLangPacks((s) => s.packs);
+  return resolveLang(pref);
 }
 
 export function useT(): Translate {
-  const lang = useLang();
-  return useCallback((key, vars) => translate(lang, key, vars), [lang]);
+  const pref = useUi((s) => s.lang);
+  const packs = useLangPacks((s) => s.packs);
+  const lang = resolveLang(pref);
+  const code = packCodeOf(pref);
+  const pack = code ? (packs.find((p) => p.code === code) ?? null) : null;
+  return useCallback((key, vars) => translate(lang, key, vars, pack), [lang, pack]);
 }
 
 /** 邮件服务器自己给出的原因。通用提示之外再给用户看，常常直接说明了问题在哪。 */
