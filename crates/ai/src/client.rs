@@ -88,7 +88,8 @@ pub struct Request {
     /// 要求输出 JSON。不支持这个参数的服务会自动退回普通输出。
     pub json: bool,
     pub max_tokens: Option<u32>,
-    pub temperature: Option<f32>,
+    /// 用 f64：f32 的 0.3 转成 JSON 会变成 0.30000001192092896。
+    pub temperature: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -315,7 +316,8 @@ impl Client {
             body["max_tokens"] = json!(max);
         }
         if let Some(t) = request.temperature {
-            body["temperature"] = json!(t);
+            // 智谱等服务只接受最多两位小数，多一位就回 400
+            body["temperature"] = json!((t * 100.0).round() / 100.0);
         }
         if json_mode {
             body["response_format"] = json!({ "type": "json_object" });

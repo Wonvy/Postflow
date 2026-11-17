@@ -302,7 +302,8 @@ pub fn classify(items: &[(String, Doc<'_>)], categories: &[Category]) -> Request
             Message::user(body),
         ],
         json: true,
-        temperature: Some(0.0),
+        // 不用 0：智谱的接口只接受大于 0 的值，0 会回 400
+        temperature: Some(0.1),
         max_tokens: Some(40 * items.len() as u32 + 100),
     }
 }

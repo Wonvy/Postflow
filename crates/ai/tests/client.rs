@@ -54,6 +54,47 @@ async fn lists_models_and_completes() {
     assert_eq!(last["response_format"]["type"], "json_object");
 }
 
+/// 智谱等服务要求 temperature 最多两位小数、且大于 0。0.3 存成 f32 再转成 JSON 会变成
+/// 0.30000001192092896，被这些服务以 400 拒绝。
+#[tokio::test]
+async fn sends_temperature_with_at_most_two_decimals() {
+    let server = FakeAi::start(None).await;
+    let client = Client::new();
+    let p = provider(&server, "fake-large");
+    for request in [prompts::summary(DOC, "en"), prompts::keywords(DOC, "en")] {
+        client.complete(&p, None, &request).await.unwrap();
+    }
+    let sent: Vec<String> = server
+        .requests()
+        .iter()
+        .map(|r| r["temperature"].to_string())
+        .collect();
+    assert_eq!(sent, vec!["0.3", "0.2"]);
+}
+
+#[test]
+fn every_task_uses_a_temperature_all_services_accept() {
+    let items = vec![("a".to_string(), DOC)];
+    let categories = vec![prompts::Category {
+        name: "News".into(),
+        description: String::new(),
+    }];
+    let requests = [
+        prompts::summary(DOC, "en"),
+        prompts::summary_notes(DOC, "part", 1, 2, "en"),
+        prompts::keywords(DOC, "en"),
+        prompts::abstracts(&items, "en"),
+        prompts::chat(DOC, &[], "Why?", "en"),
+        prompts::translate(&["Hello".to_string()], "en", "zh"),
+        prompts::classify(&items, &categories),
+    ];
+    for r in requests {
+        let t = r.temperature.expect("every task sets a temperature");
+        assert!(t > 0.0 && t <= 1.0, "{t}");
+        assert_eq!((t * 100.0).round() / 100.0, t, "{t}");
+    }
+}
+
 #[tokio::test]
 async fn streams_in_pieces() {
     let server = FakeAi::start(None).await;
