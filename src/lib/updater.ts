@@ -7,7 +7,17 @@ import { create } from "zustand";
 import { isTauri } from "./transport";
 
 /** 启动后等一会儿再查，不和首屏加载抢网络。 */
-const FIRST_CHECK_DELAY = 8_000;
+const FIRST_CHECK_DELAY = 4_000;
+/** 用户已经看过提示的版本：同一个版本只弹一次提示，之后只在侧栏顶上留一个图标。 */
+const SEEN_KEY = "postflow.updateSeen";
+
+function readSeen(): string | null {
+  try {
+    return localStorage.getItem(SEEN_KEY);
+  } catch {
+    return null;
+  }
+}
 /** 应用一直开着时，隔多久再查一次。 */
 const CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 
@@ -34,6 +44,9 @@ interface UpdaterState {
   error: string | null;
   dialogOpen: boolean;
   setDialogOpen: (open: boolean) => void;
+  /** 已经提示过的版本。 */
+  seen: string | null;
+  markSeen: () => void;
 }
 
 export const useUpdater = create<UpdaterState>()((set) => ({
@@ -45,7 +58,21 @@ export const useUpdater = create<UpdaterState>()((set) => ({
   total: null,
   error: null,
   dialogOpen: false,
-  setDialogOpen: (dialogOpen) => set({ dialogOpen }),
+  setDialogOpen: (dialogOpen) => {
+    set({ dialogOpen });
+    if (dialogOpen) useUpdater.getState().markSeen();
+  },
+  seen: readSeen(),
+  markSeen: () => {
+    const { version } = useUpdater.getState();
+    if (!version) return;
+    try {
+      localStorage.setItem(SEEN_KEY, version);
+    } catch {
+      // 存不下就每次启动都提示一次，不影响别的
+    }
+    set({ seen: version });
+  },
 }));
 
 let pending: Update | null = null;

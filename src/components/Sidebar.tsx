@@ -36,7 +36,7 @@ import { moveTop, type TopEntry } from "../lib/feedTree";
 import { useFolderActions, useTopLevel } from "../lib/folders";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
-import { UpdatePill } from "./UpdateDialog";
+import { UpdateButton } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar } from "../lib/platform";
 import { keys, useNav, usePresets } from "../lib/queries";
@@ -765,6 +765,7 @@ export function Sidebar({ width }: { width: number }) {
           </div>
         )}
         <div className="flex-1" data-tauri-drag-region />
+        <UpdateButton />
         <IconButton
           label={layout === "tabs" ? t("layout.toGroups") : t("layout.toTabs")}
           onClick={() => setLayout(layout === "tabs" ? "groups" : "tabs")}
@@ -1078,7 +1079,6 @@ export function Sidebar({ width }: { width: number }) {
             <span className="truncate">{t("status.refreshing", { n: refreshing })}</span>
           </span>
         )}
-        <UpdatePill />
       </footer>
       <FolderDialog />
     </aside>

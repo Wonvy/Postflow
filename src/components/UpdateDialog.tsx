@@ -6,7 +6,7 @@ import { openExternal, formatSize } from "../lib/platform";
 import { useStatus } from "../lib/queries";
 import { installUpdate, RELEASES_URL, useUpdater } from "../lib/updater";
 import { Markdown } from "./Markdown";
-import { Button, cx, Modal, Tip } from "./ui";
+import { Button, cx, IconButton, Modal, Spinner } from "./ui";
 
 /** 一个版本的更新说明：版本号、日期，下面是列表。 */
 export function NotesSection({ entry }: { entry: ChangelogEntry }) {
@@ -44,28 +44,63 @@ function ReleaseNotes({ notes, current, next }: { notes: string | null; current:
   );
 }
 
-/** 侧边栏底部的「有新版本」提示，点开是更新对话框。 */
-export function UpdatePill() {
+/** 侧栏顶上的更新图标：有新版本时一直在，正在更新时转圈。点开是更新窗口。 */
+export function UpdateButton() {
   const t = useT();
   const phase = useUpdater((s) => s.phase);
   const version = useUpdater((s) => s.version);
   const setDialogOpen = useUpdater((s) => s.setDialogOpen);
   const busy = phase === "downloading" || phase === "installing";
-  if (!version || !(phase === "available" || busy || (phase === "error" && version))) return null;
+  if (!version || !(phase === "available" || busy || phase === "error")) return null;
 
   return (
-    <Tip label={t("update.available", { version })} side="top">
-      <button
-        type="button"
-        onClick={() => setDialogOpen(true)}
-        className={cx(
-          "ml-auto flex h-6 items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-[12px] font-medium text-accent transition-colors hover:bg-accent hover:text-white",
+    <IconButton
+      label={busy ? t("update.updating") : t("update.available", { version })}
+      onClick={() => setDialogOpen(true)}
+      className="relative text-accent hover:text-accent"
+    >
+      {busy ? <Spinner size={14} /> : <ArrowUpCircle size={16} strokeWidth={2} />}
+      {!busy && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-accent ring-2 ring-sidebar" />}
+    </IconButton>
+  );
+}
+
+/**
+ * 发现新版本时右下角弹出的提示。每个版本只弹一次：点「查看更新」或「稍后」后就不再弹，
+ * 侧栏顶上的更新图标会一直留着。
+ */
+export function UpdateNotice() {
+  const t = useT();
+  const status = useStatus();
+  const phase = useUpdater((s) => s.phase);
+  const version = useUpdater((s) => s.version);
+  const seen = useUpdater((s) => s.seen);
+  const dialogOpen = useUpdater((s) => s.dialogOpen);
+  const setDialogOpen = useUpdater((s) => s.setDialogOpen);
+  const markSeen = useUpdater((s) => s.markSeen);
+  if (phase !== "available" || !version || version === seen || dialogOpen) return null;
+
+  return (
+    <div
+      role="status"
+      className="anim-pop fixed bottom-5 right-5 z-40 flex w-[300px] gap-3 rounded-lg bg-surface p-3.5 shadow-pop"
+    >
+      <ArrowUpCircle size={18} strokeWidth={2} className="mt-px shrink-0 text-accent" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium text-fg">{t("update.available", { version })}</p>
+        {status.data?.version && (
+          <p className="mt-0.5 text-[12px] text-fg-3">{t("update.current", { version: status.data.version })}</p>
         )}
-      >
-        <ArrowUpCircle size={13} strokeWidth={2} />
-        {busy ? t("update.updating") : t("update.pill")}
-      </button>
-    </Tip>
+        <div className="mt-3 flex gap-2">
+          <Button variant="primary" onClick={() => setDialogOpen(true)}>
+            {t("update.view")}
+          </Button>
+          <Button variant="ghost" onClick={markSeen}>
+            {t("update.later")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

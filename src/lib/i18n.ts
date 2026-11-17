@@ -468,7 +468,7 @@ const zh = {
   "settings.modelsOffline": "现在连不上模型目录，只能用已经下载的模型。",
 
   "update.title": "软件更新",
-  "update.pill": "更新",
+  "update.view": "查看更新",
   "update.updating": "正在更新",
   "update.available": "Postflow {version} 已发布",
   "update.current": "当前版本 {version}",
@@ -1155,7 +1155,7 @@ const en: Record<MessageKey, string> = {
   "settings.modelsOffline": "The model list can't be reached right now. Only downloaded models can be used.",
 
   "update.title": "Software update",
-  "update.pill": "Update",
+  "update.view": "See what's new",
   "update.updating": "Updating",
   "update.available": "Postflow {version} is available",
   "update.current": "You have {version}",

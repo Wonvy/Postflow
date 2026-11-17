@@ -8,7 +8,7 @@ import { Reader } from "./components/Reader";
 import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
-import { UpdateDialog } from "./components/UpdateDialog";
+import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
 import { Button, Spinner } from "./components/ui";
@@ -137,6 +137,7 @@ function Shell() {
       <RemoveAccountDialog />
       <MarkAllReadDialog />
       <UpdateDialog />
+      <UpdateNotice />
       <SettingsDialog />
       <ComposeDialog />
       <Toaster />
