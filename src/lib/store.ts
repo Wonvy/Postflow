@@ -43,6 +43,7 @@ export type SettingsPage =
   | "ai"
   | "categories"
   | "data"
+  | "storage"
   | "diagnostics"
   | "about";
 

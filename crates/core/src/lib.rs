@@ -13,6 +13,7 @@ mod refresh;
 mod rpc;
 mod secrets;
 mod sender_icon;
+mod storage;
 mod translate_rpc;
 
 use std::collections::{HashMap, HashSet};

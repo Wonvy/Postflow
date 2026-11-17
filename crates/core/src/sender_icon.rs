@@ -61,6 +61,12 @@ impl SenderIcons {
         f(cache)
     }
 
+    /// 清空缓存，下次用到时重新找。
+    pub(crate) fn clear(&self) {
+        *self.cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(HashMap::new());
+        let _ = std::fs::remove_file(&self.path);
+    }
+
     fn cached(&self, domain: &str) -> Option<Entry> {
         let now = now();
         self.with_cache(|c| c.get(domain).filter(|e| e.fresh(now)).cloned())

@@ -541,6 +541,10 @@ export const api = {
     rpc<{ count: number }>("items.mark_all_read", { filter }),
   fullText: (id: string) => rpc<{ full_text: string }>("items.full_text", { id }),
   /** 原网页能不能嵌进 `origin` 这个页面（界面自己的地址）。 */
+  storageUsage: () => rpc<StorageUsage>("storage.usage"),
+  /** 清理本机缓存：抓取的全文、30 天前的邮件原文、发件人图标。清完会顺手压缩索引。 */
+  clearCache: (what: "fulltext" | "mail" | "icons") => rpc<{ count: number }>("storage.clear", { what }),
+  compactIndex: () => rpc<Record<string, never>>("storage.compact"),
   /** 发件人所在网站的图标地址，没有时为 null。核心会把结果存在本机。 */
   senderIcon: (domain: string) => rpc<{ url: string | null }>("mail.senderIcon", { domain }),
   webCheck: (url: string, origin: string) =>
@@ -669,3 +673,23 @@ export const api = {
   translateText: (from: string, to: string, segments: SourceSegment[]) =>
     rpc<{ segments: TranslatedSegment[] }>("translate.text", { from, to, segments }),
 };
+
+export interface StoragePart {
+  key: "articles" | "oplog" | "index" | "translation" | "logs" | "icons" | "other";
+  bytes: number;
+}
+
+export interface StorageUsage {
+  data_dir: string;
+  data: { total: number; parts: StoragePart[] };
+  local_dir: string;
+  local: { total: number; parts: StoragePart[] };
+  index: {
+    articles: number;
+    fulltext: number;
+    mail: number;
+    mail_clearable: number;
+    sources: { source_id: string; kind: ItemKind; items: number; bytes: number }[];
+  };
+  keep_mail_days: number;
+}

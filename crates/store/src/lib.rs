@@ -16,6 +16,7 @@ mod model;
 mod search;
 mod stats;
 mod store;
+mod usage;
 
 pub use ai::{AiMessage, AiResult, AiUsage, LabelCount, day_of};
 pub use error::{Error, Result};
@@ -23,3 +24,4 @@ pub use model::*;
 pub use search::match_query;
 pub use stats::{FeedStats, ReadingDay, Stats};
 pub use store::Store;
+pub use usage::{IndexUsage, SourceUsage};
