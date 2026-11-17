@@ -25,11 +25,7 @@ export type ThemePref = "system" | "dark" | "light";
 export type ListView = "list" | "summary" | "cards";
 
 /** 侧栏布局：邮箱和订阅上下排列（可折叠），或者分成选项卡。 */
-export type SidebarLayout = "groups" | "tabs";
-export type SidebarTab = "all" | "mail" | "feeds";
 export type SidebarSection = "mail" | "feeds" | "labels";
-/** 每个选项卡只看哪一类条目。 */
-export const TAB_KIND: Record<SidebarTab, ItemKind | null> = { all: null, mail: "mail", feeds: "article" };
 
 export const CARD_MIN = 160;
 export const CARD_MAX = 480;
@@ -115,12 +111,7 @@ interface UiState {
   groupModes: Record<string, GroupMode>;
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
-  sidebarLayout: SidebarLayout;
   collapsedSections: SidebarSection[];
-  /** 选项卡模式下当前的选项卡。 */
-  tab: SidebarTab;
-  /** 每个选项卡上次停在的列表，切回来时回到那里。 */
-  tabScopes: Partial<Record<SidebarTab, ListScope>>;
   /** 列表里显示译文。 */
   listTranslate: boolean;
   /** 阅读面板的翻译开关：开着时打开的每一条都自动翻译，直到关掉。 */
@@ -178,9 +169,7 @@ interface UiState {
   setTranslateTo: (code: string | null) => void;
   setListView: (scope: ListScope, view: ListView) => void;
   setCardSize: (size: number) => void;
-  setSidebarLayout: (layout: SidebarLayout) => void;
   toggleSection: (section: SidebarSection) => void;
-  setTab: (tab: SidebarTab) => void;
   toggleAiPanel: () => void;
   toggleListTranslate: () => void;
   setReaderTranslate: (on: boolean) => void;
@@ -246,10 +235,7 @@ export const useUi = create<UiState>()(
       listViews: {},
       groupModes: {},
       cardSize: 260,
-      sidebarLayout: "groups",
       collapsedSections: [],
-      tab: "all",
-      tabScopes: {},
       aiPanel: false,
       aiPanelFor: null,
       mainView: "list",
@@ -319,23 +305,6 @@ export const useUi = create<UiState>()(
       setTranslateTo: (translateTo) => set({ translateTo }),
       setListView: (scope, view) =>
         set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.kindFilter)]: view } })),
-      setSidebarLayout: (sidebarLayout) =>
-        set((s) => {
-          if (sidebarLayout === "groups") return { sidebarLayout };
-          // 进入选项卡模式：按当前选项卡筛选，停在不属于它的列表上就回到收件箱
-          const kind = TAB_KIND[s.tab];
-          const fits =
-            s.tab === "all" ||
-            (s.scope.kind === "view" && !(s.tab === "feeds" && isMailOnlyView(s.scope.view))) ||
-            (s.tab === "mail"
-              ? s.scope.kind === "account" || s.scope.kind === "mailbox"
-              : s.scope.kind !== "account" && s.scope.kind !== "mailbox");
-          return {
-            sidebarLayout,
-            kindFilter: kind,
-            ...(fits ? {} : { scope: { kind: "view", view: "inbox" } as ListScope, openId: null, selection: [] }),
-          };
-        }),
       toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
       setReaderTranslate: (readerTranslate) => set({ readerTranslate }),
       setReaderFullText: (readerFullText) => set({ readerFullText }),
@@ -375,20 +344,6 @@ export const useUi = create<UiState>()(
             ? s.collapsedSections.filter((x) => x !== section)
             : [...s.collapsedSections, section],
         })),
-      setTab: (tab) =>
-        set((s) => {
-          if (tab === s.tab) return {};
-          const tabScopes = { ...s.tabScopes, [s.tab]: s.scope };
-          return {
-            tab,
-            tabScopes,
-            scope: tabScopes[tab] ?? { kind: "view", view: "inbox" },
-            kindFilter: TAB_KIND[tab],
-            openId: null,
-            selection: [],
-            expandedGroups: [],
-          };
-        }),
       setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
       openSearch: () => set((s) => ({ searchOpen: true, searchFocus: s.searchFocus + 1, mainView: "list" })),
@@ -398,6 +353,13 @@ export const useUi = create<UiState>()(
     }),
     {
       name: "postflow.ui",
+      // 以前的「选项卡」侧栏模式已经去掉。用过它的人，选项卡留下的「只看邮件 / 只看订阅」筛选也一起清掉，
+      // 不然列表会莫名只显示一类
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<UiState> & { sidebarLayout?: string; tab?: string; tabScopes?: unknown };
+        const { sidebarLayout, tab: _tab, tabScopes: _tabScopes, ...rest } = saved;
+        return { ...current, ...rest, ...(sidebarLayout === "tabs" ? { kindFilter: null } : {}) };
+      },
       partialize: (s) => ({
         theme: s.theme,
         density: s.density,
@@ -412,9 +374,7 @@ export const useUi = create<UiState>()(
         listViews: s.listViews,
         groupModes: s.groupModes,
         cardSize: s.cardSize,
-        sidebarLayout: s.sidebarLayout,
         collapsedSections: s.collapsedSections,
-        tab: s.tab,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,

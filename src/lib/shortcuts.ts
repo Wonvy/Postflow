@@ -112,13 +112,6 @@ export function useShortcuts() {
           if (!ui.openId) return;
           ui.setReaderWeb(!ui.readerWeb);
           break;
-        case "1":
-        case "2":
-        case "3":
-          // 选项卡模式下切换选项卡
-          if (ui.sidebarLayout !== "tabs") return;
-          ui.setTab((["all", "mail", "feeds"] as const)[Number(key) - 1] ?? "all");
-          break;
         case "/":
           ui.openSearch();
           break;

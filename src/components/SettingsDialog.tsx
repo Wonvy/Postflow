@@ -23,7 +23,7 @@ import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform"
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
-import { type Density, type SettingsPage, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
+import { type Density, type SettingsPage, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
@@ -68,8 +68,6 @@ export function SettingsDialog() {
   const senderLogos = useUi((s) => s.senderLogos);
   const setSenderLogos = useUi((s) => s.setSenderLogos);
   const setBadgeUnread = useUi((s) => s.setBadgeUnread);
-  const sidebarLayout = useUi((s) => s.sidebarLayout);
-  const setSidebarLayout = useUi((s) => s.setSidebarLayout);
 
   const status = useStatus();
   const settings = useSettings();
@@ -169,16 +167,6 @@ export function SettingsDialog() {
             options={[
               { value: "compact", label: t("settings.compact") },
               { value: "comfortable", label: t("settings.comfortable") },
-            ]}
-          />
-        </SettingRow>
-        <SettingRow label={t("settings.sidebar")}>
-          <Segmented<SidebarLayout>
-            value={sidebarLayout}
-            onChange={setSidebarLayout}
-            options={[
-              { value: "groups", label: t("settings.sidebarGroups") },
-              { value: "tabs", label: t("settings.sidebarTabs") },
             ]}
           />
         </SettingRow>

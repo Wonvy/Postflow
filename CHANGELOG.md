@@ -23,6 +23,8 @@ that heading into the version number and date.
   servers and network gateways that close quiet connections (Sohu after a minute, 163 and 126, QQ and Gmail behind
   some networks) no longer drop it. If a server still hangs up, Postflow learns how long it allows and checks in
   sooner. These expected reconnects are no longer logged as warnings or shown as mailbox errors.
+- The sidebar's tabs layout (All / Mail / Feeds tabs, its toggle button, the setting, and keys 1–3) is gone; the
+  sidebar always shows every section. To see only mail or only feeds, use the filter at the top of the list.
 
 ### 中文
 - 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
@@ -36,6 +38,8 @@ that heading into the version number and date.
 - 邮件连接更稳：Postflow 每 2 分钟跟服务器说一句话，不再安静等 5 分钟，所以会清理安静连接的服务器和网关
   （搜狐一分钟左右，163、126，以及部分网络下的 QQ、Gmail）不会再把连接断掉。服务器还是会断的话，Postflow 会记住它能等多久，
   以后提前说话。这类正常的重连不再记成警告，也不会让邮箱显示出错。
+- 去掉了侧栏的「选项卡」模式（全部 / 邮件 / 订阅选项卡、切换按钮、设置项和 1–3 快捷键），侧栏总是显示所有分组。
+  只想看邮件或只看订阅，用列表顶部的筛选。
 
 ## 0.1.14 — 2026-11-17
 

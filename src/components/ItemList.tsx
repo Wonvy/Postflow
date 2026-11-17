@@ -528,7 +528,6 @@ export function ItemList({ width }: { width: number }) {
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   const view = useListView();
   const cardSize = useUi((s) => s.cardSize);
-  const layout = useUi((s) => s.sidebarLayout);
   const kindFilter = useUi((s) => s.kindFilter);
   const here = listKey(scope, kindFilter);
   const settings = useSettings();
@@ -821,7 +820,7 @@ export function ItemList({ width }: { width: number }) {
 
   /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。 */
   const tools = {
-    kindFilter: scope.kind === "view" && layout !== "tabs" ? <KindFilter /> : null,
+    kindFilter: scope.kind === "view" ? <KindFilter /> : null,
     search: (
       <IconButton
         label={t("search.label")}

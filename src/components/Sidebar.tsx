@@ -13,10 +13,8 @@ import {
   FolderPlus,
   Inbox,
   KeyRound,
-  ListTree,
   type LucideIcon,
   Mail,
-  PanelTop,
   Pencil,
   Plus,
   RefreshCw,
@@ -43,7 +41,7 @@ import { UpdateButton } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar } from "../lib/platform";
 import { keys, useNav, usePresets } from "../lib/queries";
-import { type ListScope, type SidebarSection, type SidebarTab, sameScope, useUi } from "../lib/store";
+import { type ListScope, type SidebarSection, sameScope, useUi } from "../lib/store";
 import {
   Avatar,
   Button,
@@ -583,16 +581,9 @@ export function Sidebar({ width }: { width: number }) {
   const refreshing = useUi((s) => s.refreshing);
   const collapsed = useUi((s) => s.collapsedFolders);
   const toggleFolder = useUi((s) => s.toggleFolder);
-  const layout = useUi((s) => s.sidebarLayout);
-  const setLayout = useUi((s) => s.setSidebarLayout);
-  const tab = useUi((s) => s.tab);
-  const setTab = useUi((s) => s.setTab);
   const collapsedSections = useUi((s) => s.collapsedSections);
   const toggleSection = useUi((s) => s.toggleSection);
   const isCollapsed = (section: SidebarSection) => collapsedSections.includes(section);
-  // 选项卡模式下只显示当前选项卡的那一组
-  const shows = (section: SidebarSection) =>
-    layout === "groups" || tab === "all" || (tab === "mail") === (section === "mail");
   const qc = useQueryClient();
   const { applyTo, compose, itemsOf, moveTo } = useActions();
   const hasAccounts = (nav.data?.accounts.length ?? 0) > 0;
@@ -796,19 +787,12 @@ export function Sidebar({ width }: { width: number }) {
     );
 
   const isActive = (target: ListScope) => sameScope(scope, target);
-  // 选项卡模式下视图的数字也只算这一类
-  const kind = layout === "tabs" ? tab : "all";
   const countFor = (view: View) => {
     if (!counts) return undefined;
-    if (view === "inbox") return kind === "mail" ? counts.unread_mail : kind === "feeds" ? counts.unread_article : counts.unread;
-    if (view === "today") return kind === "mail" ? counts.today_mail : kind === "feeds" ? counts.today_article : counts.today;
+    if (view === "inbox") return counts.unread;
+    if (view === "today") return counts.today;
     return undefined;
   };
-  const TABS: { value: SidebarTab; label: string; count: number }[] = [
-    { value: "all", label: t("tab.all"), count: counts?.unread ?? 0 },
-    { value: "mail", label: t("nav.mail"), count: counts?.unread_mail ?? 0 },
-    { value: "feeds", label: t("nav.feeds"), count: counts?.unread_article ?? 0 },
-  ];
 
   return (
     <aside className="flex h-full shrink-0 flex-col bg-sidebar" style={{ width }}>
@@ -824,12 +808,6 @@ export function Sidebar({ width }: { width: number }) {
         )}
         <div className="flex-1" data-tauri-drag-region />
         <UpdateButton />
-        <IconButton
-          label={layout === "tabs" ? t("layout.toGroups") : t("layout.toTabs")}
-          onClick={() => setLayout(layout === "tabs" ? "groups" : "tabs")}
-        >
-          {layout === "tabs" ? <ListTree {...ICON} /> : <PanelTop {...ICON} />}
-        </IconButton>
         {hasAccounts && (
           <IconButton label={t("compose.new")} shortcut="C" onClick={() => compose("new")}>
             <SquarePen {...ICON} />
@@ -862,28 +840,6 @@ export function Sidebar({ width }: { width: number }) {
         </Menu>
       </header>
 
-      {layout === "tabs" && (
-        <div role="tablist" aria-label={t("layout.tabs")} className="mx-2 mb-2 flex shrink-0 rounded-md bg-hover p-0.5">
-          {TABS.map((item, i) => (
-            <Tip key={item.value} label={item.label} shortcut={String(i + 1)}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === item.value}
-                onClick={() => setTab(item.value)}
-                className={cx(
-                  "flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded-[5px] px-1.5 text-[12px] transition-colors",
-                  tab === item.value ? "bg-surface font-medium text-fg shadow-sm" : "text-fg-3 hover:text-fg-2",
-                )}
-              >
-                <span className="truncate">{item.label}</span>
-                {item.count > 0 && <span className="tabular text-[11px] text-fg-3">{item.count > 999 ? "999+" : item.count}</span>}
-              </button>
-            </Tip>
-          ))}
-        </div>
-      )}
-
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <div className="flex flex-col gap-px">
           {VIEWS.map(({ view, icon: Icon, label }) => (
@@ -901,7 +857,7 @@ export function Sidebar({ width }: { width: number }) {
           ))}
         </div>
 
-        {shows("mail") && (
+        {(
           <>
             <SectionHeader
               label={t("nav.mail")}
@@ -1034,7 +990,7 @@ export function Sidebar({ width }: { width: number }) {
           </>
         )}
 
-        {shows("feeds") && (
+        {(
           <>
             <SectionHeader
               label={t("nav.feeds")}
