@@ -25,6 +25,8 @@ use crate::{Error, Result};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 /// 单个命令的超时。同步一批邮件正文可能比较慢，给得宽松一些。
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(90);
+/// 结束 IDLE 时等服务器回应多久。
+const DONE_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -505,7 +507,10 @@ impl Connection {
                 }
             }
         };
-        let session = timed(async { Ok(handle.done().await?) }).await?;
+        // 正常的服务器马上回应 DONE。连接在睡眠或断网时已经死了的，别等满 90 秒，早点重连
+        let session = tokio::time::timeout(DONE_TIMEOUT, handle.done())
+            .await
+            .map_err(|_| Error::Timeout)??;
         let mut conn = Connection {
             session,
             idle,

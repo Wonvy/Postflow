@@ -30,10 +30,15 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const MIN_BACKOFF: Duration = Duration::from_secs(15);
 const MAX_BACKOFF: Duration = Duration::from_secs(15 * 60);
+/// 服务器拒绝登录后，多久自己再试一次。有的拒绝是临时的（比如登录太频繁），密码真错了也只多试这一次。
+const AUTH_RETRY: Duration = Duration::from_secs(15 * 60);
 
 pub(crate) enum Command {
-    /// 马上同步一次，界面上显示正在刷新。
+    /// 马上同步一次，界面上显示正在刷新。用户点了刷新。
     Sync,
+    /// 应用自己发起的同步（窗口回到前台时）。和 `Sync` 一样，但不显示正在刷新，
+    /// 也不会叫醒因为登录被拒而停着的任务：免得用户一切换窗口就去试一次错的密码。
+    CatchUp,
     /// 把本机改过的状态写回服务器。
     Apply(Vec<MailRef>, ItemPatch),
     /// 取一封邮件的原文，同步时没取的大邮件打开时用。
@@ -196,10 +201,39 @@ impl Core {
             .is_some_and(|w| w.send(cmd))
     }
 
-    pub(crate) fn sync_all_mail(&self, session: &Session) {
-        for worker in session.workers().values() {
-            worker.send(Command::Sync);
+    /// 所有邮箱马上收一次信。没有后台任务的、任务已经结束的，重新启动。
+    pub(crate) async fn sync_all_mail(self: &Arc<Self>, session: &Arc<Session>, by_user: bool) {
+        self.reconcile_workers(session).await;
+        let ids: Vec<String> = session.workers().keys().cloned().collect();
+        for id in ids {
+            self.sync_account(session, &id, by_user);
         }
+    }
+
+    /// 让一个邮箱马上收一次信。`by_user` 为假时是应用自己发起的。任务已经结束了就重新启动。
+    /// 不是邮箱账户时返回 false。
+    pub(crate) fn sync_account(
+        self: &Arc<Self>,
+        session: &Arc<Session>,
+        account_id: &str,
+        by_user: bool,
+    ) -> bool {
+        if !session.workers().contains_key(account_id) {
+            return false;
+        }
+        let command = || {
+            if by_user {
+                Command::Sync
+            } else {
+                Command::CatchUp
+            }
+        };
+        if !self.send_mail(session, account_id, command()) {
+            tracing::warn!(account = %account_id, "mail task had stopped; starting it again");
+            self.start_worker(session, account_id);
+            self.send_mail(session, account_id, command());
+        }
+        true
     }
 
     /// 把本机改过状态的邮件按账户分组，交给各自的后台任务写回服务器。
@@ -261,8 +295,10 @@ async fn run(
                 Some(("mail_no_password", "no password on this device".into())),
             )
             .await;
-            // 等用户在这台设备上输入密码，那时会重新启动这个任务
-            park(&mut rx, &mut pending, "mail_no_password").await;
+            // 等用户在这台设备上输入密码（那时会重新启动这个任务），或者点刷新再读一次钥匙串
+            if park(&mut rx, &mut pending, "mail_no_password", None).await {
+                continue;
+            }
             return;
         };
         let cfg = match server_config(&account) {
@@ -274,7 +310,9 @@ async fn run(
                     Some((e.code.as_str(), e.message.clone())),
                 )
                 .await;
-                park(&mut rx, &mut pending, &e.code).await;
+                if park(&mut rx, &mut pending, &e.code, None).await {
+                    continue;
+                }
                 return;
             }
         };
@@ -301,7 +339,12 @@ async fn run(
                 .await;
                 fail_fetches(&mut pending, &err);
                 if err.needs_user() {
-                    park(&mut rx, &mut pending, err.code()).await;
+                    // 服务器拒绝登录：可能是密码错了，也可能只是暂时的（登录太频繁、系统忙）。
+                    // 用户点刷新就再试；不点也过一阵自己再试一次
+                    let retry = matches!(err, postflow_mail::Error::Auth(_)).then_some(AUTH_RETRY);
+                    if park(&mut rx, &mut pending, err.code(), retry).await {
+                        continue;
+                    }
                     return;
                 }
                 // 等一会儿再连；用户点刷新就立刻重试
@@ -329,22 +372,58 @@ async fn run(
                 )
                 .await;
                 fail_fetches(&mut pending, &err);
-                tokio::time::sleep(MIN_BACKOFF / 3).await;
+                // 用户正等着刷新就马上重连，否则稍等一下
+                if !pending.iter().any(|c| matches!(c, Command::Sync)) {
+                    tokio::time::sleep(MIN_BACKOFF / 3).await;
+                }
             }
         }
     }
 }
 
-/// 没法工作（没有密码、设置有误）时停在这里，对取正文的请求直接回错误，直到任务被替换。
-async fn park(rx: &mut mpsc::UnboundedReceiver<Command>, pending: &mut Vec<Command>, code: &str) {
-    let fail = |cmd: Command| {
-        if let Command::FetchBody(_, reply) = cmd {
-            let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+/// 没法工作（没有密码、设置有误、服务器拒绝登录）时停在这里：取正文的请求直接回错误，
+/// 要写回服务器的改动留着。用户点刷新、或者过了 `retry_after`，返回 true，调用方重新连；
+/// 任务被替换或停掉时返回 false。
+async fn park(
+    rx: &mut mpsc::UnboundedReceiver<Command>,
+    pending: &mut Vec<Command>,
+    code: &str,
+    retry_after: Option<Duration>,
+) -> bool {
+    let fail = |reply: oneshot::Sender<Result<Vec<u8>, RpcError>>| {
+        let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+    };
+    let mut keep = Vec::new();
+    for cmd in pending.drain(..) {
+        match cmd {
+            Command::FetchBody(_, reply) => fail(reply),
+            // 这次连接就是为它连的，已经失败了，不能拿它当再试的理由，否则会一直空转
+            Command::Sync | Command::CatchUp => {}
+            apply => keep.push(apply),
+        }
+    }
+    *pending = keep;
+    let timer = async {
+        match retry_after {
+            Some(after) => tokio::time::sleep(after).await,
+            None => std::future::pending().await,
         }
     };
-    pending.drain(..).for_each(fail);
-    while let Some(cmd) = rx.recv().await {
-        fail(cmd);
+    tokio::pin!(timer);
+    loop {
+        tokio::select! {
+            cmd = rx.recv() => match cmd {
+                None => return false,
+                Some(Command::Sync) => {
+                    pending.push(Command::Sync);
+                    return true;
+                }
+                Some(Command::CatchUp) => {}
+                Some(Command::FetchBody(_, reply)) => fail(reply),
+                Some(apply) => pending.push(apply),
+            },
+            _ = &mut timer => return true,
+        }
     }
 }
 
@@ -380,6 +459,7 @@ async fn serve(
         while let Some(cmd) = iter.next() {
             match cmd {
                 Command::Sync => announce = true,
+                Command::CatchUp => {}
                 Command::Apply(refs, patch) => {
                     if let Err(err) = apply(&mut conn, session, &refs, &patch).await {
                         if is_connection_error(&err) {

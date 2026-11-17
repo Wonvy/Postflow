@@ -399,7 +399,8 @@ export const api = {
     rpc<Account>("accounts.update", { id, ...changes }),
   removeAccount: (id: string) => rpc<void>("accounts.remove", { id }),
   reorderAccounts: (ids: string[]) => rpc<void>("accounts.reorder", { ids }),
-  syncAccount: (id?: string) => rpc<void>("accounts.sync", { id }),
+  /** 收信。`auto` 为真表示是应用自己发起的，不是用户点的刷新。 */
+  syncAccount: (id?: string, auto = false) => rpc<void>("accounts.sync", { id, auto }),
   attachment: (id: string, index: number, path?: string) =>
     rpc<{ name: string; mime?: string; data?: string; path?: string }>("mail.attachment", {
       id,

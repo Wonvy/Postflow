@@ -31,7 +31,7 @@ function useMailCatchUp() {
     const check = () => {
       if (document.visibilityState !== "visible" || Date.now() - last < MAIL_CATCH_UP_MS) return;
       last = Date.now();
-      void api.syncAccount().catch(() => {});
+      void api.syncAccount(undefined, true).catch(() => {});
     };
     document.addEventListener("visibilitychange", check);
     window.addEventListener("focus", check);

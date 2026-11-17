@@ -51,9 +51,12 @@ struct Id {
     id: String,
 }
 
+/// 收信。`auto` 为真时是应用自己发起的（窗口回到前台），不是用户点的刷新。
 #[derive(Deserialize)]
-struct OptionalId {
+struct SyncParams {
     id: Option<String>,
+    #[serde(default)]
+    auto: bool,
 }
 
 #[derive(Deserialize)]
@@ -102,13 +105,13 @@ impl Core {
                 },
                 Err(e) => Err(e),
             },
-            "accounts.sync" => match parse::<OptionalId>(params) {
-                Ok(OptionalId { id: Some(id) }) => {
-                    self.send_mail(session, &id, Command::Sync);
+            "accounts.sync" => match parse::<SyncParams>(params) {
+                Ok(SyncParams { id: Some(id), auto }) => {
+                    self.sync_account(session, &id, !auto);
                     reply(json!({}))
                 }
-                Ok(OptionalId { id: None }) => {
-                    self.sync_all_mail(session);
+                Ok(SyncParams { id: None, auto }) => {
+                    self.sync_all_mail(session, !auto).await;
                     reply(json!({}))
                 }
                 Err(e) => Err(e),

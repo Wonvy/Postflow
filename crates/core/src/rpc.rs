@@ -331,9 +331,9 @@ impl Core {
                 let p: OptionalId = parse(params)?;
                 // 刷新全部时邮箱也一起收；指定的是邮箱账户时只收那一个
                 match &p.id {
-                    None => self.sync_all_mail(&session),
+                    None => self.sync_all_mail(&session, true).await,
                     Some(id) => {
-                        if self.send_mail(&session, id, crate::mail::Command::Sync) {
+                        if self.sync_account(&session, id, true) {
                             return reply(json!({ "count": 1 }));
                         }
                     }

@@ -443,3 +443,62 @@ async fn renumbered_mailbox_is_resynced() {
     .await;
     core.shutdown();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refresh_reconnects_after_a_refused_login() {
+    // 有的邮箱会临时拒绝登录（比如 QQ 邮箱登录太频繁时）。之后点刷新要重新连，
+    // 不能一直停在那里，否则新邮件再也收不到
+    let server = FakeImap::start(USER, PASS).await;
+    server.deliver("INBOX", &mail("one@x", "a@x", "First", "1"), &[]);
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    wait_for("initial sync", || async {
+        find(&core, "inbox", "First").await.is_some()
+    })
+    .await;
+
+    server.refuse_logins(Some("Login frequency limited, please try again later"));
+    server.drop_connections();
+    wait_for("the refusal is reported on the account", || async {
+        call(&core, "nav.get", json!({})).await["accounts"][0]["error_code"] == "mail_auth"
+    })
+    .await;
+
+    // 应用自己发起的收信（窗口回到前台）不去重试登录，免得密码真错了时一直去试
+    let attempts = || {
+        server
+            .commands()
+            .iter()
+            .filter(|c| c.starts_with("LOGIN"))
+            .count()
+    };
+    let before = attempts();
+    call(&core, "accounts.sync", json!({ "auto": true })).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        attempts(),
+        before,
+        "an automatic check must not retry a refused login"
+    );
+
+    // 用户点刷新就重新连
+    server.refuse_logins(None);
+    server.deliver("INBOX", &mail("two@x", "a@x", "Second", "2"), &[]);
+    call(&core, "feeds.refresh", json!({})).await;
+    wait_for("new mail after refreshing", || async {
+        find(&core, "inbox", "Second").await.is_some()
+    })
+    .await;
+    let account = call(&core, "nav.get", json!({})).await["accounts"][0].clone();
+    assert!(account["error_code"].is_null(), "{account}");
+}

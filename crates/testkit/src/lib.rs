@@ -60,12 +60,16 @@ struct State {
     logins: usize,
     /// IDLE 期间不通知新邮件，只每隔这么久发一句「还在」。有的邮件服务器就是这样。
     quiet_idle: Option<Duration>,
+    /// 设了就拒绝登录，回这句话。有的服务器会临时拒绝，比如登录太频繁时。
+    refuse_login: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct FakeImap {
     state: Arc<Mutex<State>>,
     changes: watch::Sender<u64>,
+    /// 每改一次，所有连着的连接都被断开。
+    kick: watch::Sender<u64>,
     pub port: u16,
 }
 
@@ -87,8 +91,10 @@ impl FakeImap {
             commands: Vec::new(),
             logins: 0,
             quiet_idle: None,
+            refuse_login: None,
         }));
         let (changes, _) = watch::channel(0);
+        let (kick, _) = watch::channel(0);
         let listener = TcpListener::bind(("127.0.0.1", port))
             .await
             .expect("bind fake imap");
@@ -96,6 +102,7 @@ impl FakeImap {
         let server = FakeImap {
             state,
             changes,
+            kick,
             port,
         };
         let accept = server.clone();
@@ -116,6 +123,16 @@ impl FakeImap {
 
     fn changed(&self) {
         self.changes.send_modify(|v| *v += 1);
+    }
+
+    /// 之后的登录都被拒绝，回 `NO <reason>`；传 `None` 恢复正常。
+    pub fn refuse_logins(&self, reason: Option<&str>) {
+        self.lock().refuse_login = reason.map(str::to_string);
+    }
+
+    /// 断开所有连着的连接，像网络断了或者服务器重启了。
+    pub fn drop_connections(&self) {
+        self.kick.send_modify(|v| *v += 1);
     }
 
     /// 之后的 IDLE 不再通知新邮件，只每隔 `keepalive` 发一句 `* OK Still here`。
@@ -213,6 +230,7 @@ impl FakeImap {
         let (read, mut w) = stream.into_split();
         let mut reader = BufReader::new(read);
         let mut changes = self.changes.subscribe();
+        let mut kick = self.kick.subscribe();
         w.write_all(format!("* OK [CAPABILITY {CAPS}] Fake IMAP ready\r\n").as_bytes())
             .await?;
 
@@ -223,8 +241,13 @@ impl FakeImap {
 
         loop {
             line.clear();
-            if reader.read_line(&mut line).await? == 0 {
-                return Ok(());
+            tokio::select! {
+                read = reader.read_line(&mut line) => {
+                    if read? == 0 {
+                        return Ok(());
+                    }
+                }
+                _ = kick.changed() => return Ok(()),
             }
             let text = line.trim_end_matches(['\r', '\n']).to_string();
             let Some((tag, rest)) = text.split_once(' ') else {
@@ -249,7 +272,9 @@ impl FakeImap {
                 }
                 "LOGIN" => {
                     let mut s = self.lock();
-                    if args.len() == 2 && args[0] == s.user && args[1] == s.pass {
+                    if let Some(reason) = &s.refuse_login {
+                        out.push_str(&format!("{tag} NO {reason}\r\n"));
+                    } else if args.len() == 2 && args[0] == s.user && args[1] == s.pass {
                         s.logins += 1;
                         authed = true;
                         out.push_str(&format!("{tag} OK [CAPABILITY {CAPS}] Logged in\r\n"));
@@ -481,6 +506,7 @@ impl FakeImap {
                                     break;
                                 }
                             }
+                            _ = kick.changed() => return Ok(()),
                             _ = keepalive(quiet) => {
                                 w.write_all(b"* OK Still here\r\n").await?;
                             }
