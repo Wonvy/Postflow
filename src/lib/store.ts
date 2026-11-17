@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ItemFilter, ItemKind, View } from "./api";
 import type { GroupMode } from "./grouping";
+import { normalizeReaderStyle, READER_DEFAULT, type ReaderStyle } from "./readerStyle";
 import { startOfToday } from "./time";
 
 /** 列表当前显示的范围：一个内置视图、一个订阅源，或一个文件夹。 */
@@ -94,6 +96,8 @@ interface UiState {
   readerTranslate: boolean;
   /** 阅读面板的全文开关：开着时打开的每篇文章都自动抓取原网页全文，直到关掉。 */
   readerFullText: boolean;
+  /** 阅读区的字号、行距、字体和宽度。读的时候用 `useReaderStyle`，它会补齐旧版本缺的字段。 */
+  readerStyle: ReaderStyle;
   /** 阅读面板右侧的 AI 栏开着。 */
   aiPanel: boolean;
   /** 用户是在哪一条上打开 AI 栏的。只有这一条会自动开始总结。 */
@@ -123,6 +127,7 @@ interface UiState {
   toggleListTranslate: () => void;
   setReaderTranslate: (on: boolean) => void;
   setReaderFullText: (on: boolean) => void;
+  setReaderStyle: (patch: Partial<ReaderStyle>) => void;
   requestTranslate: () => void;
 }
 
@@ -166,6 +171,7 @@ export const useUi = create<UiState>()(
       listTranslate: false,
       readerTranslate: false,
       readerFullText: false,
+      readerStyle: READER_DEFAULT,
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -217,6 +223,8 @@ export const useUi = create<UiState>()(
       toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
       setReaderTranslate: (readerTranslate) => set({ readerTranslate }),
       setReaderFullText: (readerFullText) => set({ readerFullText }),
+      setReaderStyle: (patch) =>
+        set((s) => ({ readerStyle: normalizeReaderStyle({ ...normalizeReaderStyle(s.readerStyle), ...patch }) })),
       toggleAiPanel: () => set((s) => ({ aiPanel: !s.aiPanel, aiPanelFor: s.aiPanel ? null : s.openId })),
       toggleSection: (section) =>
         set((s) => ({
@@ -262,6 +270,7 @@ export const useUi = create<UiState>()(
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,
         readerFullText: s.readerFullText,
+        readerStyle: s.readerStyle,
       }),
     },
   ),
@@ -326,4 +335,10 @@ export function sameScope(a: ListScope, b: ListScope): boolean {
   if (a.kind === "folder" && b.kind === "folder") return a.folder === b.folder;
   if (a.kind === "label" && b.kind === "label") return a.label === b.label;
   return false;
+}
+
+/** 阅读区的排版设置，缺的字段补成默认值。 */
+export function useReaderStyle(): ReaderStyle {
+  const raw = useUi((s) => s.readerStyle);
+  return useMemo(() => normalizeReaderStyle(raw), [raw]);
 }

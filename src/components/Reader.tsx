@@ -17,13 +17,14 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
 import { formatSize, openExternal, saveAttachment } from "../lib/platform";
 import { keys, useItem } from "../lib/queries";
-import { useUi } from "../lib/store";
+import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
+import { useReaderStyle, useUi } from "../lib/store";
 import { fullTime } from "../lib/time";
 import {
   languageName,
@@ -33,6 +34,7 @@ import {
 } from "../lib/translate";
 import { isTauri } from "../lib/transport";
 import { AiPanel } from "./AiPanel";
+import { ReaderStyleMenu } from "./ReaderStyleMenu";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Kbd, Menu, MenuItem, MenuSeparator, Spinner } from "./ui";
 
@@ -188,6 +190,7 @@ function Article({ id }: { id: string }) {
       <Toolbar>
         {summary && (
           <>
+            <ReaderStyleMenu />
             {!isMail && summary.url && (
               <IconButton
                 label={readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
@@ -320,9 +323,16 @@ function ArticleView({
   const lang = useLang();
   const original = mode === "full" && item.full_text ? item.full_text : (item.content ?? "");
   const html = shown?.html ?? original;
+  const style = useReaderStyle();
   return (
-    <article className="mx-auto max-w-[720px] px-10 pb-24 pt-10">
-      <h1 className="cursor-auto select-text text-[26px] font-semibold leading-[1.25] tracking-[-0.02em]">
+    <article
+      className="mx-auto px-10 pb-24 pt-10"
+      style={{ maxWidth: readerWidth(style, "article"), ...readerVars(style) } as CSSProperties}
+    >
+      <h1
+        className="cursor-auto select-text font-semibold leading-[1.25] tracking-[-0.02em]"
+        style={{ fontSize: titleSize(style, "article") }}
+      >
         {shown?.title || item.title || t("reader.untitled")}
       </h1>
       <div className="mb-8 mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-3">
@@ -377,6 +387,7 @@ function MailView({
   const sender = mail.from.name || mail.from.address || item.author || "";
   const to = formatPeople(mail.to);
   const cc = formatPeople(mail.cc);
+  const style = useReaderStyle();
 
   const trust = async () => {
     if (!mail.from.address) return;
@@ -385,8 +396,14 @@ function MailView({
   };
 
   return (
-    <article className="mx-auto max-w-[760px] px-8 pb-24 pt-8">
-      <h1 className="cursor-auto select-text text-[22px] font-semibold leading-[1.3] tracking-[-0.015em]">
+    <article
+      className="mx-auto px-8 pb-24 pt-8"
+      style={{ maxWidth: readerWidth(style, "mail"), ...readerVars(style) } as CSSProperties}
+    >
+      <h1
+        className="cursor-auto select-text font-semibold leading-[1.3] tracking-[-0.015em]"
+        style={{ fontSize: titleSize(style, "mail") }}
+      >
         {shown?.title || item.title || t("mail.noSubject")}
       </h1>
 
@@ -441,7 +458,7 @@ function MailView({
       {bar}
 
       {mail.body_kind === "html" ? (
-        <MailFrame html={shown?.html ?? mail.body} />
+        <MailFrame html={shown?.html ?? mail.body} zoom={mailZoom(style)} />
       ) : (
         // 纯文本邮件在核心里已转义成安全的 HTML，见 postflow-mail 的 text_to_html
         <div
@@ -460,9 +477,16 @@ function MailView({
  * HTML 邮件放进沙箱 iframe：不允许脚本，只允许同源，好让外层量出内容高度、接管链接点击。
  * 文档自带内容安全策略，远程图片是否加载由核心决定。
  */
-function MailFrame({ html }: { html: string }) {
+function MailFrame({ html, zoom }: { html: string; zoom: number }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(240);
+  // HTML 邮件有自己的样式，阅读设置里的字号只能整体缩放它
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  useEffect(() => {
+    const root = ref.current?.contentDocument?.documentElement;
+    if (root) root.style.zoom = String(zoom);
+  }, [zoom]);
 
   useEffect(() => {
     const iframe = ref.current;
@@ -472,6 +496,7 @@ function MailFrame({ html }: { html: string }) {
     const onLoad = () => {
       const doc = iframe.contentDocument;
       if (!doc) return;
+      doc.documentElement.style.zoom = String(zoomRef.current);
       const measure = () => {
         const h = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight ?? 0);
         setHeight(Math.max(80, Math.ceil(h)));
@@ -718,6 +743,7 @@ function Empty() {
     [["X"], t("reader.hintSelect")],
     [["T"], t("reader.hintTranslate")],
     [["A"], t("reader.hintAi")],
+    [["+", "−"], t("reader.hintSize")],
     [["→", "←"], t("reader.hintGroup")],
   ];
   return (

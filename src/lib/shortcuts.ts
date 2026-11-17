@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useActions } from "./actions";
+import { normalizeReaderStyle, READER_DEFAULT } from "./readerStyle";
 import { useUi } from "./store";
 
 function isTyping(target: EventTarget | null): boolean {
@@ -29,6 +30,14 @@ export function useShortcuts() {
       const a = latest.current;
       const ui = useUi.getState();
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+      // 阅读区字号：+ 放大，- 缩小，0 恢复。+ 在多数键盘上要按 Shift，所以放在 Shift 判断前面
+      if (ui.openId && (key === "+" || key === "=" || key === "-" || key === "0")) {
+        e.preventDefault();
+        const size = normalizeReaderStyle(ui.readerStyle).size;
+        ui.setReaderStyle({ size: key === "0" ? READER_DEFAULT.size : size + (key === "-" ? -1 : 1) });
+        return;
+      }
 
       if (e.shiftKey) {
         if (key === "a") {

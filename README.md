@@ -55,6 +55,8 @@ click **More info → Run anyway**.
   mailbox, feed or folder for its menu.
 - Load the full article from the original page for feeds that only publish a summary. The full-text button in the
   reader is a switch: while it is on, every article you open loads in full.
+- Reading settings (the Aa button in the reader): text size, line spacing, a sans or serif font and column width,
+  kept on this device. HTML mail keeps its own layout and only scales with the text size.
 
 **One inbox**
 
@@ -112,6 +114,7 @@ download page instead.
 | `→` / `←` | Expand / collapse a group |
 | `Shift` + `A` | Mark everything in the list as read |
 | `T` | Auto-translate on / off |
+| `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |
 | `1` `2` `3` | Switch sidebar tab (in the tabs layout) |
 | `R` | Refresh all feeds and mail |

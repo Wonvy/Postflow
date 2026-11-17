@@ -154,13 +154,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 文章正文的排版。内容来自外部，只在这里统一样式。 */
+/* 文章正文的排版。内容来自外部，只在这里统一样式。字号、行距和字体可以在阅读设置里改，见 readerStyle.ts。 */
 .article {
   user-select: text;
   -webkit-user-select: text;
   cursor: auto;
-  font-size: 15px;
-  line-height: 1.72;
+  font-family: var(--reader-font, var(--font-sans));
+  font-size: var(--reader-size, 15px);
+  line-height: var(--reader-leading, 1.72);
   letter-spacing: 0;
   color: var(--fg);
   overflow-wrap: break-word;
@@ -288,11 +289,11 @@
   background: var(--hover);
 }
 
-/* 纯文本邮件：保留原有的换行，引用的部分淡一些 */
+/* 纯文本邮件：保留原有的换行，引用的部分淡一些。比文章小一号，跟着阅读设置变。 */
 .mail-text {
   white-space: pre-wrap;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 0.94em;
+  line-height: calc(var(--reader-leading, 1.72) - 0.07);
 }
 .mail-quote {
   color: var(--fg-3);
