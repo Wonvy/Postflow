@@ -108,6 +108,8 @@ pub enum SpecialMailbox {
     Trash,
     /// 已发送的邮件。
     Sent,
+    /// 草稿。
+    Drafts,
 }
 
 /// LIST 列出的一个邮箱。
@@ -123,6 +125,7 @@ struct MailboxEntry {
     junk: bool,
     trash: bool,
     sent: bool,
+    drafts: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -499,6 +502,7 @@ impl Connection {
                         junk: attrs.contains(&NameAttribute::Junk),
                         trash: attrs.contains(&NameAttribute::Trash),
                         sent: attrs.contains(&NameAttribute::Sent),
+                        drafts: attrs.contains(&NameAttribute::Drafts),
                     }
                 })
                 .collect();
@@ -569,11 +573,13 @@ impl Connection {
                 "已发送邮件",
                 "已发邮件",
             ],
+            SpecialMailbox::Drafts => &["drafts", "draft", "草稿", "草稿箱", "草稿夹"],
         };
         let marked = |m: &MailboxEntry| match kind {
             SpecialMailbox::Junk => m.junk,
             SpecialMailbox::Trash => m.trash,
             SpecialMailbox::Sent => m.sent,
+            SpecialMailbox::Drafts => m.drafts,
         };
         Ok(list
             .iter()
@@ -589,12 +595,22 @@ impl Connection {
 
     /// 找到存放已发送邮件的邮箱。找不到就建一个叫 Sent 的。
     pub async fn sent_mailbox(&mut self) -> Result<String> {
-        if let Some(name) = self.special_mailbox(SpecialMailbox::Sent).await? {
-            return Ok(name);
+        self.special_or_create(SpecialMailbox::Sent, "Sent").await
+    }
+
+    /// 找到草稿所在的邮箱。找不到就建一个叫 Drafts 的。
+    pub async fn drafts_mailbox(&mut self) -> Result<String> {
+        self.special_or_create(SpecialMailbox::Drafts, "Drafts")
+            .await
+    }
+
+    async fn special_or_create(&mut self, kind: SpecialMailbox, name: &str) -> Result<String> {
+        if let Some(found) = self.special_mailbox(kind).await? {
+            return Ok(found);
         }
-        timed(async { Ok(self.session.create("Sent").await?) }).await?;
+        timed(async { Ok(self.session.create(name).await?) }).await?;
         self.mailboxes = None;
-        Ok("Sent".to_string())
+        Ok(name.to_string())
     }
 
     /// 在当前选中的邮箱里按 Message-ID 找邮件。
@@ -612,15 +628,50 @@ impl Connection {
 
     /// 把一封邮件的原文存进 `mailbox`，标成已读。发出去的信存到「已发送」用。
     pub async fn append(&mut self, mailbox: &str, raw: &[u8]) -> Result<()> {
+        self.append_flagged(mailbox, raw, "(\\Seen)").await
+    }
+
+    /// 存一封草稿：标成已读的草稿，别的邮件程序也认得出来。
+    pub async fn append_draft(&mut self, mailbox: &str, raw: &[u8]) -> Result<()> {
+        self.append_flagged(mailbox, raw, "(\\Seen \\Draft)").await
+    }
+
+    async fn append_flagged(&mut self, mailbox: &str, raw: &[u8], flags: &str) -> Result<()> {
         timed(async {
-            self.session
-                .append(mailbox, Some("(\\Seen)"), None, raw)
-                .await?;
+            self.session.append(mailbox, Some(flags), None, raw).await?;
             Ok(())
         })
         .await?;
         self.drain_unsolicited();
         Ok(())
+    }
+
+    /// 从 `mailbox` 里彻底删掉这个 Message-ID 的邮件（替换、丢弃草稿时用）。返回删了几封。
+    /// 之后选中的是 `mailbox`。
+    pub async fn delete_by_message_id(&mut self, mailbox: &str, message_id: &str) -> Result<usize> {
+        self.select(mailbox).await?;
+        let uids = self.find_by_message_id(message_id).await?;
+        if uids.is_empty() {
+            return Ok(0);
+        }
+        let set = uid_set(&uids);
+        timed(async {
+            let _: Vec<Fetch> = self
+                .session
+                .uid_store(&set, "+FLAGS.SILENT (\\Deleted)")
+                .await?
+                .try_collect()
+                .await?;
+            if self.uidplus {
+                let _: Vec<u32> = self.session.uid_expunge(&set).await?.try_collect().await?;
+            } else {
+                let _: Vec<u32> = self.session.expunge().await?.try_collect().await?;
+            }
+            Ok(())
+        })
+        .await?;
+        self.drain_unsolicited();
+        Ok(uids.len())
     }
 
     /// 在 `mailbox` 里按 Message-ID 找邮件，找完回到原来选中的邮箱。

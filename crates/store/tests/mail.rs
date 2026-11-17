@@ -161,6 +161,57 @@ fn contacts_are_people_who_wrote_to_you() {
 }
 
 #[test]
+fn drafts_have_their_own_view_and_cannot_be_archived() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");
+    let acc = store.put_account(account("me@example.com")).unwrap().id;
+    let mut draft = mail(&acc, 7, 1_000);
+    draft.read = true;
+    draft.from_address = Some("me@example.com".into());
+    store
+        .apply_folder_sync(
+            &acc,
+            MailFolder::Drafts,
+            "Drafts",
+            MailSync {
+                new: vec![draft],
+                ..sync(9, 1_000)
+            },
+        )
+        .unwrap();
+
+    let view = |view: View| ItemFilter {
+        view,
+        ..ItemFilter::default()
+    };
+    assert!(
+        store
+            .items(&view(View::Inbox), None, 50)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(store.items(&view(View::All), None, 50).unwrap().is_empty());
+    let drafts = store.items(&view(View::Drafts), None, 50).unwrap();
+    assert_eq!(drafts.len(), 1);
+    assert!(drafts[0].draft && drafts[0].archived);
+
+    // 归档、移回收件箱对草稿不起作用，也不写回服务器
+    let refs = store
+        .set_item_state(
+            &[drafts[0].id.clone()],
+            &ItemPatch {
+                archived: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert!(refs.is_empty());
+    assert_eq!(store.items(&view(View::Drafts), None, 50).unwrap().len(), 1);
+    // 自己的草稿不会出现在联系人里
+    assert!(store.mail_contacts(10).unwrap().is_empty());
+}
+
+#[test]
 fn sync_adds_updates_and_removes_mail() {
     let tmp = tempfile::tempdir().unwrap();
     let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");

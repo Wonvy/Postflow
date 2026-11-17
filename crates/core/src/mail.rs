@@ -49,6 +49,14 @@ pub(crate) enum Command {
     Apply(Vec<MailRef>, ItemPatch),
     /// 取一封邮件的原文，同步时没取的大邮件打开时用。
     FetchBody(MailRef, oneshot::Sender<Result<Vec<u8>, RpcError>>),
+    /// 把一封草稿存进服务器的「草稿」，再删掉它替换的旧版本（`replace` 是旧版本的 Message-ID）。
+    SaveDraft {
+        raw: Vec<u8>,
+        replace: Option<String>,
+        reply: oneshot::Sender<Result<(), RpcError>>,
+    },
+    /// 删掉一封草稿：发出去了，或者用户不要了。
+    DeleteDraft { message_id: String },
 }
 
 pub(crate) struct Worker {
@@ -504,10 +512,14 @@ async fn park(
     let fail = |reply: oneshot::Sender<Result<Vec<u8>, RpcError>>| {
         let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
     };
+    let fail_draft = |reply: oneshot::Sender<Result<(), RpcError>>| {
+        let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+    };
     let mut keep = Vec::new();
     for cmd in pending.drain(..) {
         match cmd {
             Command::FetchBody(_, reply) => fail(reply),
+            Command::SaveDraft { reply, .. } => fail_draft(reply),
             // 这次连接就是为它连的，已经失败了，不能拿它当再试的理由，否则会一直空转
             Command::Sync | Command::CatchUp => {}
             apply => keep.push(apply),
@@ -531,6 +543,7 @@ async fn park(
                 }
                 Some(Command::CatchUp) => {}
                 Some(Command::FetchBody(_, reply)) => fail(reply),
+                Some(Command::SaveDraft { reply, .. }) => fail_draft(reply),
                 Some(apply) => pending.push(apply),
             },
             _ = &mut timer => return true,
@@ -543,6 +556,9 @@ fn fail_fetches(pending: &mut Vec<Command>, err: &postflow_mail::Error) {
     for cmd in pending.drain(..) {
         match cmd {
             Command::FetchBody(_, reply) => {
+                let _ = reply.send(Err(mail_error(err)));
+            }
+            Command::SaveDraft { reply, .. } => {
                 let _ = reply.send(Err(mail_error(err)));
             }
             other => keep.push(other),
@@ -597,6 +613,30 @@ async fn serve(
                         }
                     }
                 },
+                Command::SaveDraft {
+                    raw,
+                    replace,
+                    reply,
+                } => {
+                    let result = save_draft(&mut conn, &raw, replace.as_deref()).await;
+                    let failed = result.as_ref().err().is_some_and(is_connection_error);
+                    let _ = reply.send(result.as_ref().map_err(mail_error).map(|_| ()));
+                    if let (true, Err(err)) = (failed, result) {
+                        pending.extend(iter);
+                        return Err(err);
+                    }
+                }
+                Command::DeleteDraft { message_id } => {
+                    if let Err(err) = delete_draft(&mut conn, &message_id).await {
+                        if is_connection_error(&err) {
+                            // 连接断了，重连后再删
+                            pending.push(Command::DeleteDraft { message_id });
+                            pending.extend(iter);
+                            return Err(err);
+                        }
+                        tracing::warn!(account = %account_id, "mail: could not delete a draft: {err}");
+                    }
+                }
             }
         }
 
@@ -672,7 +712,7 @@ async fn serve(
     }
 }
 
-/// 同步收件箱，再同步垃圾邮件和已删除，最后回到收件箱，好接着用 IDLE 等新邮件。
+/// 同步收件箱，再同步垃圾邮件、已删除和草稿，最后回到收件箱，好接着用 IDLE 等新邮件。
 /// 后两个文件夹服务器不让打开时跳过，不影响收件箱。
 async fn sync_all_folders(
     conn: &mut Connection,
@@ -683,6 +723,7 @@ async fn sync_all_folders(
     for (folder, kind) in [
         (MailFolder::Junk, SpecialMailbox::Junk),
         (MailFolder::Trash, SpecialMailbox::Trash),
+        (MailFolder::Drafts, SpecialMailbox::Drafts),
     ] {
         let result = match conn.special_mailbox(kind).await {
             Ok(Some(mailbox)) => sync_folder(conn, session, account_id, folder, &mailbox).await,
@@ -838,6 +879,7 @@ fn new_mail(
         MailFolder::Inbox => key,
         MailFolder::Junk => format!("junk:{key}"),
         MailFolder::Trash => format!("trash:{key}"),
+        MailFolder::Drafts => format!("draft:{key}"),
     };
     let mut id = ids::mail_id(account_id, &key);
     if taken.get(&id).is_some_and(|uid| *uid != l.uid) {
@@ -850,13 +892,24 @@ fn new_mail(
         .or(l.internal_date)
         .unwrap_or(now)
         .min(now);
+    // 草稿在列表里显示写给谁；发件人是自己，也不该进联系人
+    let (from_name, from_address) = if folder == MailFolder::Drafts {
+        let to: Vec<String> = summary
+            .to
+            .iter()
+            .filter_map(|m| m.name.clone().or_else(|| m.address.clone()))
+            .collect();
+        ((!to.is_empty()).then(|| to.join(", ")), None)
+    } else {
+        (summary.from.name, summary.from.address)
+    };
     NewMail {
         id,
         uid: l.uid,
         message_id: summary.message_id,
         subject: summary.subject,
-        from_name: summary.from.name,
-        from_address: summary.from.address,
+        from_name,
+        from_address,
         snippet: summary.snippet,
         date,
         read: l.seen,
@@ -929,6 +982,29 @@ async fn apply(
                 let _ = session.db(move |s| s.mail_moved(&id, &target, None)).await;
             }
         }
+    }
+    conn.select(INBOX).await?;
+    Ok(())
+}
+
+/// 存草稿：先存新的，再删旧的，中间出错也不会两份都没了。
+async fn save_draft(
+    conn: &mut Connection,
+    raw: &[u8],
+    replace: Option<&str>,
+) -> Result<(), postflow_mail::Error> {
+    let mailbox = conn.drafts_mailbox().await?;
+    conn.append_draft(&mailbox, raw).await?;
+    if let Some(old) = replace {
+        conn.delete_by_message_id(&mailbox, old).await?;
+    }
+    conn.select(INBOX).await?;
+    Ok(())
+}
+
+async fn delete_draft(conn: &mut Connection, message_id: &str) -> Result<(), postflow_mail::Error> {
+    if let Some(mailbox) = conn.special_mailbox(SpecialMailbox::Drafts).await? {
+        conn.delete_by_message_id(&mailbox, message_id).await?;
     }
     conn.select(INBOX).await?;
     Ok(())

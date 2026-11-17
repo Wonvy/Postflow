@@ -537,6 +537,41 @@ impl FakeImap {
                     };
                     out.push_str(&format!("* SEARCH{list}\r\n{tag} OK done\r\n"));
                 }
+                // 删掉标了 \Deleted 的邮件；UID EXPUNGE 只删给出的那些
+                "EXPUNGE" | "UID EXPUNGE" => {
+                    let Some(mb) = selected.clone() else {
+                        out.push_str(&format!("{tag} BAD nothing selected\r\n"));
+                        w.write_all(out.as_bytes()).await?;
+                        continue;
+                    };
+                    let only = (cmd == "UID EXPUNGE")
+                        .then(|| args.first().cloned())
+                        .flatten();
+                    {
+                        let mut s = self.lock();
+                        let mbox = s.mailboxes.get_mut(&mb).expect("selected mailbox exists");
+                        let max = mbox.msgs.last().map_or(0, |m| m.uid);
+                        let mut i = 0;
+                        let mut gone = Vec::new();
+                        while i < mbox.msgs.len() {
+                            let m = &mbox.msgs[i];
+                            let hit = m.flags.contains("\\Deleted")
+                                && only.as_deref().is_none_or(|set| in_set(set, m.uid, max));
+                            if hit {
+                                gone.push(i as u32 + 1);
+                                mbox.msgs.remove(i);
+                            } else {
+                                i += 1;
+                            }
+                        }
+                        for seq in gone.iter().rev() {
+                            out.push_str(&format!("* {seq} EXPUNGE\r\n"));
+                        }
+                        reported = mbox.msgs.len();
+                    }
+                    self.changed();
+                    out.push_str(&format!("{tag} OK done\r\n"));
+                }
                 // APPEND 邮箱 [(标记)] [时间] {字节数}：先等服务器说可以，再发原文
                 "APPEND" => {
                     let name = args.first().cloned().unwrap_or_default();

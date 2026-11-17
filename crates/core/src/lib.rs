@@ -213,6 +213,8 @@ pub struct Core {
     pub(crate) translator: Arc<Translator>,
     /// 正在进行的 AI 请求。
     pub(crate) ai: ai_rpc::AiRuntime,
+    /// 写信时加的附件，发出去或者窗口关了就放掉。
+    pub(crate) uploads: Mutex<compose::Uploads>,
 }
 
 impl Core {
@@ -240,6 +242,7 @@ impl Core {
             events,
             refreshing: AtomicUsize::new(0),
             secrets,
+            uploads: Mutex::new(Default::default()),
         });
         if let Some(config) = core.read_config()
             && let Err(e) = core.start_session(&config).await

@@ -1,6 +1,7 @@
 //! 把写好的一封信变成可以发出去的邮件原文。
 //!
-//! 只写纯文本：回复时引用原信用「>」，和大多数邮件程序的纯文本模式一样。
+//! 只写纯文本：回复时引用原信用「>」，和大多数邮件程序的纯文本模式一样。附件放在后面，
+//! 整封信是 multipart/mixed。草稿也用这里生成，只是多保留了密送一栏。
 
 use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
@@ -13,6 +14,27 @@ use crate::{Error, Result};
 const MAX_RECIPIENTS: usize = 100;
 /// References 里最多保留多少个 Message-ID。很长的讨论只留最早的一个和最近的几个。
 const MAX_REFERENCES: usize = 20;
+/// 附件加起来最多这么大。多数邮箱的上限是 25 MB 左右，发信服务器会按自己的上限再检查一次。
+pub const MAX_ATTACHMENTS: usize = 50 * 1024 * 1024;
+
+/// 信里带的一个附件。
+#[derive(Clone, Default)]
+pub struct Attachment {
+    pub name: String,
+    pub mime: String,
+    pub data: Vec<u8>,
+}
+
+impl std::fmt::Debug for Attachment {
+    // 内容可能很大，也可能是私人文件，不打出来
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Attachment")
+            .field("name", &self.name)
+            .field("mime", &self.mime)
+            .field("size", &self.data.len())
+            .finish()
+    }
+}
 
 /// 写好的一封信。
 #[derive(Debug, Clone, Default)]
@@ -27,6 +49,7 @@ pub struct Outgoing {
     /// 回复的那封信的 Message-ID，不带尖括号。
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
+    pub attachments: Vec<Attachment>,
 }
 
 /// 生成好的邮件。
@@ -99,8 +122,34 @@ pub fn thread_headers(
     (Some(id.to_string()), refs)
 }
 
-/// 生成邮件原文。`now` 是 Unix 秒，写进 Date。
+/// 生成要发出去的邮件原文。`now` 是 Unix 秒，写进 Date。
 pub fn build(out: &Outgoing, now: i64) -> Result<Built> {
+    build_with(out, now, false)
+}
+
+/// 生成存进「草稿」的邮件原文。和要发的信一样，只是密送也写进信头（下次接着写时要用），
+/// 也可以还没有收件人。写得不像地址的收件人不存。
+pub fn build_draft(out: &Outgoing, now: i64) -> Result<Built> {
+    let keep = |list: &[Mailbox]| -> Vec<Mailbox> {
+        list.iter()
+            .filter(|m| {
+                m.address
+                    .as_deref()
+                    .is_some_and(|a| valid_address(a.trim()))
+            })
+            .cloned()
+            .collect()
+    };
+    let out = Outgoing {
+        to: keep(&out.to),
+        cc: keep(&out.cc),
+        bcc: keep(&out.bcc),
+        ..out.clone()
+    };
+    build_with(&out, now, true)
+}
+
+fn build_with(out: &Outgoing, now: i64, draft: bool) -> Result<Built> {
     let sender = out
         .from
         .address
@@ -120,13 +169,18 @@ pub fn build(out: &Outgoing, now: i64) -> Result<Built> {
             recipients.push(address.to_string());
         }
     }
-    if recipients.is_empty() {
+    if recipients.is_empty() && !draft {
         return Err(Error::Config("no recipients".into()));
     }
     if recipients.len() > MAX_RECIPIENTS {
         return Err(Error::Config(format!(
             "too many recipients (at most {MAX_RECIPIENTS})"
         )));
+    }
+
+    let total: usize = out.attachments.iter().map(|a| a.data.len()).sum();
+    if total > MAX_ATTACHMENTS {
+        return Err(Error::TooLarge(MAX_ATTACHMENTS));
     }
 
     let domain = sender.rsplit_once('@').map_or("localhost", |(_, d)| d);
@@ -145,19 +199,23 @@ pub fn build(out: &Outgoing, now: i64) -> Result<Built> {
     if !out.cc.is_empty() {
         builder = builder.cc(list(&out.cc));
     }
-    // 只有密送时，信头里也要有收件人一栏，写成匿名的空组
-    if out.to.is_empty() && out.cc.is_empty() {
+    if draft {
+        if !out.bcc.is_empty() {
+            builder = builder.bcc(list(&out.bcc));
+        }
+    } else if out.to.is_empty() && out.cc.is_empty() {
+        // 只有密送时，信头里也要有收件人一栏，写成匿名的空组
         builder = builder.header("To", Raw::new("undisclosed-recipients:;"));
     }
-    if let Some(id) = out
-        .in_reply_to
-        .as_deref()
-        .filter(|id| !id.trim().is_empty())
-    {
-        builder = builder.in_reply_to(id.trim().to_string());
+    if let Some(id) = out.in_reply_to.as_deref().and_then(clean_id) {
+        builder = builder.in_reply_to(id);
     }
-    if !out.references.is_empty() {
-        builder = builder.references(out.references.clone());
+    let references: Vec<String> = out.references.iter().filter_map(|r| clean_id(r)).collect();
+    if !references.is_empty() {
+        builder = builder.references(references);
+    }
+    for a in &out.attachments {
+        builder = builder.attachment(mime_type(&a.mime), file_name(&a.name), a.data.as_slice());
     }
     let raw = builder
         .write_to_vec()
@@ -195,6 +253,46 @@ fn crlf(text: &str) -> String {
         out.push_str("\r\n");
     }
     out
+}
+
+/// 信头里的 Message-ID：去掉尖括号，有空白、换行或尖括号的不要，免得写坏信头。
+fn clean_id(id: &str) -> Option<String> {
+    let id = id.trim().trim_start_matches('<').trim_end_matches('>');
+    let ok = !id.is_empty()
+        && id.len() <= 250
+        && !id
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '<' || c == '>');
+    ok.then(|| id.to_string())
+}
+
+/// 附件的类型。看不懂的一律当成二进制文件。
+fn mime_type(mime: &str) -> String {
+    let mime = mime.trim().to_ascii_lowercase();
+    let token = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "!#$&^_.+-".contains(c))
+    };
+    match mime.split_once('/') {
+        Some((a, b)) if token(a) && token(b) => mime,
+        _ => "application/octet-stream".to_string(),
+    }
+}
+
+/// 附件的文件名：只留最后一段，去掉控制字符和引号。
+fn file_name(name: &str) -> String {
+    let name = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let name: String = name
+        .chars()
+        .filter(|c| !c.is_control() && *c != '"')
+        .collect();
+    let name = name.trim();
+    if name.is_empty() {
+        "attachment".to_string()
+    } else {
+        name.chars().take(200).collect()
+    }
 }
 
 fn random_id() -> String {
@@ -272,6 +370,7 @@ mod tests {
             text: "第一行\n\n> quoted\n.leading dot".into(),
             in_reply_to: Some("orig@example.org".into()),
             references: vec!["first@example.org".into(), "orig@example.org".into()],
+            attachments: vec![],
         };
         let built = build(&out, 1_700_000_000).unwrap();
         assert!(built.message_id.ends_with("@example.com"));
@@ -355,5 +454,104 @@ mod tests {
             ..base
         };
         assert!(matches!(build(&bad_to, 0), Err(Error::Config(_))));
+    }
+
+    #[test]
+    fn attachments_go_along_and_parse_back() {
+        use mail_parser::MimeHeaders;
+        let out = Outgoing {
+            from: mb(None, "me@example.com"),
+            to: vec![mb(None, "ada@example.com")],
+            subject: "Files".into(),
+            text: "See attached.".into(),
+            attachments: vec![
+                Attachment {
+                    name: "报告 2026.pdf".into(),
+                    mime: "application/pdf".into(),
+                    data: vec![0, 1, 2, 255, 13, 10, 46],
+                },
+                Attachment {
+                    name: "../../etc/notes.txt".into(),
+                    mime: "text/plain\r\nX-Evil: 1".into(),
+                    data: b"plain notes".to_vec(),
+                },
+            ],
+            ..Outgoing::default()
+        };
+        let built = build(&out, 0).unwrap();
+        let text = String::from_utf8_lossy(&built.raw);
+        assert!(!text.contains("X-Evil"), "{text}");
+        let parsed = mail_parser::MessageParser::default()
+            .parse(&built.raw)
+            .unwrap();
+        assert_eq!(
+            parsed.body_text(0).as_deref().map(str::trim_end),
+            Some("See attached.")
+        );
+        let files: Vec<(Option<&str>, Vec<u8>)> = parsed
+            .attachments()
+            .map(|a| (a.attachment_name(), a.contents().to_vec()))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                (Some("报告 2026.pdf"), vec![0, 1, 2, 255, 13, 10, 46]),
+                (Some("notes.txt"), b"plain notes".to_vec()),
+            ]
+        );
+        assert_eq!(
+            parsed
+                .attachment(1)
+                .and_then(|a| a.content_type())
+                .map(|c| c.ctype()),
+            Some("application")
+        );
+    }
+
+    #[test]
+    fn too_much_attached_is_refused() {
+        let out = Outgoing {
+            from: mb(None, "me@example.com"),
+            to: vec![mb(None, "ada@example.com")],
+            attachments: vec![Attachment {
+                name: "big.bin".into(),
+                mime: "application/octet-stream".into(),
+                data: vec![0; MAX_ATTACHMENTS + 1],
+            }],
+            ..Outgoing::default()
+        };
+        assert!(matches!(build(&out, 0), Err(Error::TooLarge(_))));
+    }
+
+    #[test]
+    fn drafts_keep_bcc_and_may_have_no_recipients() {
+        let out = Outgoing {
+            from: mb(None, "me@example.com"),
+            bcc: vec![mb(None, "hidden@example.com"), mb(None, "half typed")],
+            subject: "Unfinished".into(),
+            text: "Dear".into(),
+            in_reply_to: Some("<orig@example.org>".into()),
+            references: vec!["bad id with spaces".into(), "orig@example.org".into()],
+            ..Outgoing::default()
+        };
+        // 发信时写错的地址要挡住，存草稿时只是不存它
+        assert!(build(&out, 0).is_err());
+        let draft = build_draft(&out, 0).unwrap();
+        let back = crate::draft_contents(&draft.raw).unwrap();
+        assert_eq!(back.message_id.as_deref(), Some(draft.message_id.as_str()));
+        assert_eq!(back.bcc, [mb(None, "hidden@example.com")]);
+        assert!(back.to.is_empty());
+        assert_eq!(back.subject, "Unfinished");
+        assert_eq!(back.text, "Dear");
+        assert_eq!(back.in_reply_to.as_deref(), Some("orig@example.org"));
+        assert_eq!(back.references, ["orig@example.org"]);
+
+        let empty = Outgoing {
+            from: mb(None, "me@example.com"),
+            text: "just started".into(),
+            ..Outgoing::default()
+        };
+        assert!(build(&empty, 0).is_err());
+        assert!(build_draft(&empty, 0).is_ok());
     }
 }

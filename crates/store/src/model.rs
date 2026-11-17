@@ -122,6 +122,8 @@ pub enum View {
     Junk,
     /// 邮箱里已删除的邮件。
     Trash,
+    /// 邮箱里的草稿。
+    Drafts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -180,6 +182,8 @@ pub struct ItemSummary {
     pub read: bool,
     pub starred: bool,
     pub archived: bool,
+    /// 邮箱「草稿」里的一封草稿：打开时接着写，不能归档。
+    pub draft: bool,
     /// 邮件发件人的地址，界面用来生成头像颜色。
     pub sender_address: Option<String>,
     pub has_attachments: bool,
@@ -369,6 +373,7 @@ pub enum MailFolder {
     Inbox,
     Junk,
     Trash,
+    Drafts,
 }
 
 impl MailFolder {
@@ -378,6 +383,7 @@ impl MailFolder {
             MailFolder::Inbox => 0,
             MailFolder::Junk => 2,
             MailFolder::Trash => 3,
+            MailFolder::Drafts => 4,
         }
     }
 }

@@ -698,7 +698,8 @@ async fn replies_are_sent_threaded_and_saved_to_sent() {
             "cc": ["bob@example.com", "carol@example.com"],
             "subject": "Re: Lunch?",
             "text": "Sounds good.\n\n> Noon at the usual place?",
-            "in_reply_to": original["id"],
+            "in_reply_to": ctx["thread"]["in_reply_to"],
+            "references": ctx["thread"]["references"],
         }),
     )
     .await;
@@ -727,5 +728,191 @@ async fn replies_are_sent_threaded_and_saved_to_sent() {
     })
     .await;
     assert_eq!(server.count("Sent"), 1);
+    core.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn drafts_attachments_and_forwards() {
+    let server = FakeImap::start(USER, PASS).await;
+    server.add_mailbox("Drafts", Some("\\Drafts"));
+    let smtp = FakeSmtp::start(USER, PASS).await;
+    server.deliver("INBOX", ATTACHMENT_MAIL, &[]);
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    let account = call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    let id = account["id"].clone();
+    call(
+        &core,
+        "accounts.update",
+        json!({ "id": id, "smtp_host": "127.0.0.1", "smtp_port": smtp.port, "smtp_security": "none" }),
+    )
+    .await;
+    wait_for("initial sync", || async {
+        mail_items(&core, "inbox").await.len() == 1
+    })
+    .await;
+
+    // 加一个附件，存成草稿
+    let file = call(
+        &core,
+        "mail.attach",
+        json!({ "name": "notes.txt", "mime": "text/plain", "data": "aGVsbG8gZmlsZQ==" }),
+    )
+    .await;
+    assert_eq!(file["size"], 10);
+    let letter = |text: &str, draft: Value| {
+        json!({
+            "account_id": id,
+            "to": ["Ada <ada@example.com>", "half typed"],
+            "bcc": ["hidden@example.com"],
+            "subject": "Plans",
+            "text": text,
+            "attachments": [file["token"]],
+            "draft": draft,
+        })
+    };
+    let first = call(
+        &core,
+        "mail.save_draft",
+        letter("First version", Value::Null),
+    )
+    .await;
+    let first_id = first["message_id"].as_str().unwrap().to_string();
+    wait_for("draft listed", || async {
+        mail_items(&core, "drafts").await.len() == 1
+    })
+    .await;
+    assert!(server.contains("Drafts", &first_id));
+    assert_eq!(
+        server.flags("Drafts", &first_id).unwrap(),
+        ["\\Draft", "\\Seen"]
+    );
+    // 草稿不在收件箱里
+    assert_eq!(mail_items(&core, "inbox").await.len(), 1);
+
+    // 再存一次替换掉上一版
+    let second = call(
+        &core,
+        "mail.save_draft",
+        letter("Second version", json!(first_id)),
+    )
+    .await;
+    let second_id = second["message_id"].as_str().unwrap().to_string();
+    wait_for("old draft replaced", || async {
+        server.count("Drafts") == 1 && server.contains("Drafts", &second_id)
+    })
+    .await;
+    wait_for("draft list follows", || async {
+        mail_items(&core, "drafts")
+            .await
+            .first()
+            .is_some_and(|d| d["id"] == second["item_id"])
+    })
+    .await;
+    let listed = &mail_items(&core, "drafts").await[0];
+    assert_eq!(listed["draft"], true);
+    assert_eq!(listed["author"], "Ada");
+
+    // 接着写：内容、密送和附件都还在
+    let opened = call(&core, "mail.draft", json!({ "id": listed["id"] })).await;
+    assert_eq!(opened["account_id"], id);
+    assert_eq!(opened["message_id"], second_id.as_str());
+    assert_eq!(opened["to"], json!(["Ada <ada@example.com>"]));
+    assert_eq!(opened["bcc"], json!(["hidden@example.com"]));
+    assert_eq!(opened["text"], "Second version");
+    assert_eq!(opened["attachments"][0]["name"], "notes.txt");
+    let draft_file = opened["attachments"][0]["token"].clone();
+
+    // 转发带着原信的附件
+    let report = find(&core, "inbox", "The report").await.unwrap();
+    let ctx = call(
+        &core,
+        "mail.compose_context",
+        json!({ "id": report["id"], "forward": true }),
+    )
+    .await;
+    assert_eq!(ctx["attachments"][0]["name"], "numbers.csv");
+    let forwarded = ctx["attachments"][0]["token"].clone();
+
+    // 编号不认识的附件：让用户重新添加
+    let err = core
+        .rpc(
+            "mail.send",
+            json!({ "account_id": id, "to": ["ada@example.com"], "attachments": ["nope"] }),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "attachment_gone");
+
+    call(
+        &core,
+        "mail.send",
+        json!({
+            "account_id": id,
+            "to": ["ada@example.com"],
+            "subject": "Plans",
+            "text": "Final",
+            "attachments": [draft_file, forwarded],
+            "draft": second_id,
+        }),
+    )
+    .await;
+    let raw = String::from_utf8_lossy(&smtp.delivered()[0].raw).to_string();
+    assert!(
+        raw.contains("notes.txt") && raw.contains("numbers.csv"),
+        "{raw}"
+    );
+    // 发出去以后草稿删掉
+    wait_for("draft deleted after sending", || async {
+        server.count("Drafts") == 0
+    })
+    .await;
+    wait_for("draft list empty", || async {
+        mail_items(&core, "drafts").await.is_empty()
+    })
+    .await;
+
+    // 丢弃草稿
+    let third = call(&core, "mail.save_draft", letter("Third", Value::Null)).await;
+    wait_for("third draft saved", || async {
+        server.count("Drafts") == 1
+    })
+    .await;
+    call(
+        &core,
+        "mail.delete_draft",
+        json!({ "account_id": id, "message_id": third["message_id"] }),
+    )
+    .await;
+    wait_for("discarded draft deleted", || async {
+        server.count("Drafts") == 0
+    })
+    .await;
+    // 列表里的草稿按 ID 删
+    let fourth = call(&core, "mail.save_draft", letter("Fourth", Value::Null)).await;
+    wait_for("fourth draft listed", || async {
+        mail_items(&core, "drafts").await.len() == 1
+    })
+    .await;
+    call(
+        &core,
+        "mail.delete_draft",
+        json!({ "id": fourth["item_id"] }),
+    )
+    .await;
+    wait_for("listed draft deleted", || async {
+        server.count("Drafts") == 0
+    })
+    .await;
     core.shutdown();
 }

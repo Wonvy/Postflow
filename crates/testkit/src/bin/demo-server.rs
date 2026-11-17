@@ -782,8 +782,11 @@ async fn main() {
     }
     seed_mail(&work, &personal);
     work.add_mailbox("Sent", Some("\\Sent"));
+    work.add_mailbox("Drafts", Some("\\Drafts"));
     personal.add_mailbox("[Gmail]/Sent Mail", Some("\\Sent"));
+    personal.add_mailbox("[Gmail]/Drafts", Some("\\Drafts"));
     outlook.add_mailbox("Sent Items", Some("\\Sent"));
+    outlook.add_mailbox("Drafts", Some("\\Drafts"));
 
     // 发给演示邮箱的信投进它的收件箱，发给别人的只打印出来
     let smtp = FakeSmtp::start_on(SMTP_PORT).await;

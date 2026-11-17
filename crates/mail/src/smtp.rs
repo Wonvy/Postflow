@@ -325,10 +325,7 @@ pub async fn send(
     if let Some(limit) = ext.size
         && raw.len() > limit
     {
-        return Err(Error::Server(format!(
-            "the message is too large for this server (limit {} KB)",
-            limit / 1024
-        )));
+        return Err(Error::TooLarge(limit));
     }
     let utf8 = !sender.is_ascii() || recipients.iter().any(|r| !r.is_ascii());
     let mut mail_from = format!("MAIL FROM:<{sender}>");

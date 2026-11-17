@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{Request, State};
+use axum::extract::{DefaultBodyLimit, Request, State};
 use axum::http::{StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
@@ -36,9 +36,16 @@ struct RpcRequest {
     client: Option<String>,
 }
 
+/// 一次请求最多这么大：50 MB 的附件转成 Base64 以后，再留些余量。
+const RPC_BODY_LIMIT: usize = 72 * 1024 * 1024;
+
 pub fn router(core: Arc<Core>, static_dir: Option<PathBuf>) -> Router {
     let api = Router::new()
-        .route("/api/rpc", post(rpc))
+        // 写信时附件随请求一起传，默认的 2 MB 不够。只接受本机的连接
+        .route(
+            "/api/rpc",
+            post(rpc).layer(DefaultBodyLimit::max(RPC_BODY_LIMIT)),
+        )
         .route("/api/events", get(events))
         .with_state(core);
     let app = match static_dir {

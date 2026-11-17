@@ -470,10 +470,16 @@ impl Store {
     /// 改条目状态。文章的状态写进日志同步给其他设备；邮件的状态先在本机生效，
     /// 返回这些邮件在服务器上的位置，由调用方写回邮件服务器。
     pub fn set_item_state(&self, ids: &[String], patch: &ItemPatch) -> Result<Vec<MailRef>> {
-        let mail: HashSet<String> = self.mail_ids_among(ids)?;
+        let mut mail: HashSet<String> = self.mail_ids_among(ids)?;
+        // 草稿只在「草稿」里，不能归档或移回收件箱
+        if patch.archived.is_some() {
+            let drafts = self.draft_ids_among(&mail)?;
+            mail.retain(|id| !drafts.contains(id));
+        }
+        let all_mail = self.mail_ids_among(ids)?;
         let articles: Vec<String> = ids
             .iter()
-            .filter(|id| !mail.contains(*id))
+            .filter(|id| !all_mail.contains(*id))
             .cloned()
             .collect();
         let mail: Vec<String> = ids
@@ -1101,6 +1107,7 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         View::Archived => format!("i.archived = 1 AND {ALIVE}"),
         View::Junk => format!("i.archived = 2 AND {ALIVE}"),
         View::Trash => format!("i.archived = 3 AND {ALIVE}"),
+        View::Drafts => format!("i.archived = 4 AND {ALIVE}"),
     };
     if let Some(source_id) = &filter.source_id {
         args.push(SqlValue::Text(source_id.clone()));
@@ -1177,7 +1184,9 @@ pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         published_at: r.get(9)?,
         read: r.get(10)?,
         starred: r.get(11)?,
-        archived: r.get(12)?,
+        // 0 收件箱，1 归档，2 垃圾邮件，3 已删除，4 草稿
+        archived: r.get::<_, i64>(12)? != 0,
+        draft: r.get::<_, i64>(12)? == 4,
         sender_address: r.get(13)?,
         has_attachments: r.get(14)?,
         image: r.get(15)?,

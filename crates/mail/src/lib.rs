@@ -9,15 +9,17 @@ pub mod oauth;
 mod presets;
 pub mod smtp;
 
-pub use compose::{Built, Outgoing, build, parse_address, thread_headers};
+pub use compose::{
+    Attachment, Built, MAX_ATTACHMENTS, Outgoing, build, build_draft, parse_address, thread_headers,
+};
 pub use imap::{
     Auth, Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig,
     SpecialMailbox,
 };
 pub use message::{
-    AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, ReplyContext, Summary, Unsubscribe,
-    attachment, base64, plain_text, render, reply_context, summarize, unsubscribe,
-    unsubscribe_one_click,
+    AttachmentInfo, BodyKind, DraftContents, Mailbox, RenderOptions, Rendered, ReplyContext,
+    Summary, Unsubscribe, attachment, base64, base64_decode, draft_contents, plain_text, render,
+    reply_context, summarize, unsubscribe, unsubscribe_one_click,
 };
 pub use presets::{Preset, detect, guess, presets, provider_for_mx, smtp_for};
 
@@ -37,6 +39,9 @@ pub enum Error {
     Io(String),
     #[error("{0}")]
     Config(String),
+    /// 信太大，服务器（或者我们自己）不收。带着上限，字节数。
+    #[error("the message is too large (limit {0} bytes)")]
+    TooLarge(usize),
 }
 
 impl Error {
@@ -50,6 +55,7 @@ impl Error {
             Error::Server(_) => "mail_server",
             Error::Io(_) => "mail_connect",
             Error::Config(_) => "bad_params",
+            Error::TooLarge(_) => "mail_too_large",
         }
     }
 
@@ -62,7 +68,7 @@ impl Error {
             | Error::Server(s)
             | Error::Io(s)
             | Error::Config(s) => s,
-            Error::Timeout => "",
+            Error::Timeout | Error::TooLarge(_) => "",
         }
     }
 

@@ -532,6 +532,20 @@ impl Store {
         Ok(out)
     }
 
+    pub(crate) fn draft_ids_among(&self, ids: &HashSet<String>) -> Result<HashSet<String>> {
+        let guard = self.lock();
+        let mut stmt = guard.conn.prepare_cached(
+            "SELECT 1 FROM items WHERE id = ?1 AND kind = 'mail' AND archived = 4",
+        )?;
+        let mut out = HashSet::new();
+        for id in ids {
+            if stmt.exists([id])? {
+                out.insert(id.clone());
+            }
+        }
+        Ok(out)
+    }
+
     /// 在本机改邮件的状态，返回它们在服务器上的位置。
     pub(crate) fn set_mail_state_local(
         &self,
@@ -584,6 +598,7 @@ impl Store {
             "SELECT MAX(from_name), MIN(from_address), COUNT(*) AS n FROM mail_meta \
              WHERE from_address IS NOT NULL AND from_address LIKE '%_@_%' \
                AND list_unsubscribe IS NULL \
+               AND id IN (SELECT id FROM items WHERE kind = 'mail' AND archived < 2) \
                AND account_id IN (SELECT id FROM accounts WHERE deleted = 0) \
              GROUP BY lower(from_address) \
              ORDER BY n DESC, lower(MIN(from_address)) \

@@ -30,6 +30,8 @@ pub struct Summary {
     pub message_id: Option<String>,
     pub subject: String,
     pub from: Mailbox,
+    /// 收件人。草稿在列表里显示写给谁。
+    pub to: Vec<Mailbox>,
     /// 信头里的发信时间，Unix 毫秒。
     pub date: Option<i64>,
     pub snippet: String,
@@ -223,6 +225,7 @@ pub fn summarize(raw: &[u8]) -> Summary {
             .filter(|id| !id.is_empty()),
         subject: msg.subject().map(clean_text).unwrap_or_default(),
         from: mailboxes(msg.from()).into_iter().next().unwrap_or_default(),
+        to: mailboxes(msg.to()),
         date: msg.date().map(|d| d.to_timestamp() * 1000),
         snippet,
         has_attachments: msg.attachment_count() > 0,
@@ -324,25 +327,103 @@ pub struct ReplyContext {
     pub cc: Vec<Mailbox>,
     /// 正文的纯文字，保留分行，引用时用。
     pub text: String,
+    /// 转发时一起带上的附件。正文里引用的内嵌图片不算。
+    pub attachments: Vec<AttachmentInfo>,
+}
+
+/// In-Reply-To、References 这类信头里的一串 Message-ID，去掉尖括号。
+fn message_ids(v: &mail_parser::HeaderValue<'_>) -> Vec<String> {
+    match v {
+        mail_parser::HeaderValue::Text(t) => vec![t.to_string()],
+        mail_parser::HeaderValue::TextList(list) => list.iter().map(|t| t.to_string()).collect(),
+        _ => Vec::new(),
+    }
+    .into_iter()
+    .map(|id| id.trim().trim_matches(['<', '>']).to_string())
+    .filter(|id| !id.is_empty())
+    .collect()
+}
+
+/// 真正的附件：正文里用 cid: 引用的内嵌图片不算。
+fn real_attachments(msg: &Message<'_>) -> Vec<AttachmentInfo> {
+    let html: String = msg
+        .html_bodies()
+        .filter_map(|p| match &p.body {
+            PartType::Html(h) => Some(h.to_ascii_lowercase()),
+            _ => None,
+        })
+        .collect();
+    msg.attachments()
+        .enumerate()
+        .filter(|(_, part)| {
+            part.content_id().is_none_or(|cid| {
+                let cid = cid.trim_matches(['<', '>']).to_ascii_lowercase();
+                !html.contains(&format!("cid:{cid}"))
+            })
+        })
+        .map(|(index, part)| AttachmentInfo {
+            index: index as u32,
+            name: attachment_name(part, index as u32),
+            mime: content_type(part),
+            size: match &part.body {
+                PartType::Message(inner) => inner.raw_message().len(),
+                _ => part.contents().len(),
+            },
+        })
+        .collect()
+}
+
+/// 一封草稿里写了什么，接着写时用。
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct DraftContents {
+    pub message_id: Option<String>,
+    pub to: Vec<Mailbox>,
+    pub cc: Vec<Mailbox>,
+    pub bcc: Vec<Mailbox>,
+    pub subject: String,
+    /// 正文原样，只把换行统一成 \n。
+    pub text: String,
+    pub in_reply_to: Option<String>,
+    pub references: Vec<String>,
+    pub attachments: Vec<AttachmentInfo>,
+}
+
+/// 读出一封草稿的内容。
+pub fn draft_contents(raw: &[u8]) -> Option<DraftContents> {
+    let raw = utf8_headers(raw);
+    let msg = parse(&raw)?;
+    let mut text = msg
+        .body_text(0)
+        .map(|t| t.replace("\r\n", "\n"))
+        .unwrap_or_default();
+    // 生成时在末尾补过一个换行
+    if text.ends_with('\n') {
+        text.pop();
+    }
+    Some(DraftContents {
+        message_id: msg
+            .message_id()
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty()),
+        to: mailboxes(msg.to()),
+        cc: mailboxes(msg.cc()),
+        bcc: mailboxes(msg.bcc()),
+        subject: msg
+            .subject()
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default(),
+        text,
+        in_reply_to: message_ids(msg.in_reply_to()).into_iter().next(),
+        references: message_ids(msg.references()),
+        attachments: real_attachments(&msg),
+    })
 }
 
 /// 读出回复、转发一封信时要用的东西。
 pub fn reply_context(raw: &[u8]) -> Option<ReplyContext> {
     let raw = utf8_headers(raw);
     let msg = parse(&raw)?;
-    let ids = |v: &mail_parser::HeaderValue<'_>| -> Vec<String> {
-        match v {
-            mail_parser::HeaderValue::Text(t) => vec![t.to_string()],
-            mail_parser::HeaderValue::TextList(list) => {
-                list.iter().map(|t| t.to_string()).collect()
-            }
-            _ => Vec::new(),
-        }
-        .into_iter()
-        .map(|id| id.trim().trim_matches(['<', '>']).to_string())
-        .filter(|id| !id.is_empty())
-        .collect()
-    };
+    let ids = message_ids;
     let has_plain = msg
         .text_bodies()
         .any(|part| matches!(part.body, PartType::Text(_)));
@@ -378,6 +459,7 @@ pub fn reply_context(raw: &[u8]) -> Option<ReplyContext> {
         to: mailboxes(msg.to()),
         cc: mailboxes(msg.cc()),
         text: tidy_lines(&text, QUOTE_CHARS),
+        attachments: real_attachments(&msg),
     })
 }
 
@@ -462,6 +544,32 @@ fn attachment_name(part: &mail_parser::MessagePart<'_>, index: u32) -> String {
         return format!("message-{}.eml", index + 1);
     }
     format!("attachment-{}", index + 1)
+}
+
+/// 解码标准 Base64（也认 base64url），忽略空白和末尾的「=」。有不认识的字符就返回 `None`。
+pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(text.len() / 4 * 3);
+    let mut acc: u32 = 0;
+    let mut bits = 0;
+    for c in text.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            b'=' | b' ' | b'\r' | b'\n' | b'\t' => continue,
+            _ => return None,
+        };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
 }
 
 /// 标准 Base64 编码，内嵌图片和附件下载都用它。
@@ -1116,5 +1224,41 @@ mod reply_tests {
         assert_eq!(ctx.text, "Hello there\n\nFish & chips\n\na\nb");
         assert!(ctx.message_id.is_none());
         assert!(ctx.references.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod forward_tests {
+    use super::*;
+
+    #[test]
+    fn inline_images_are_not_forwarded_as_attachments() {
+        let raw = b"From: a@example.com\r\nSubject: hi\r\nContent-Type: multipart/mixed; boundary=\"M\"\r\n\r\n\
+--M\r\nContent-Type: multipart/related; boundary=\"R\"\r\n\r\n\
+--R\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>Logo <img src=\"cid:logo@x\"></p>\r\n\
+--R\r\nContent-Type: image/png\r\nContent-ID: <logo@x>\r\nContent-Disposition: inline; filename=\"logo.png\"\r\nContent-Transfer-Encoding: base64\r\n\r\niVBORw0KGgo=\r\n\
+--R--\r\n\
+--M\r\nContent-Type: text/csv; name=\"data.csv\"\r\nContent-Disposition: attachment; filename=\"data.csv\"\r\n\r\na,b\r\n\
+--M--\r\n";
+        let ctx = reply_context(raw).unwrap();
+        let names: Vec<&str> = ctx.attachments.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, ["data.csv"]);
+        let (name, _, data) = attachment(raw, ctx.attachments[0].index).unwrap();
+        assert_eq!(
+            (name.as_str(), data.as_slice()),
+            ("data.csv", b"a,b".as_slice())
+        );
+    }
+
+    #[test]
+    fn base64_round_trips() {
+        for data in [&b""[..], b"a", b"ab", b"abc", &[0, 255, 254, 13, 10]] {
+            assert_eq!(base64_decode(&base64(data)).as_deref(), Some(data));
+        }
+        assert_eq!(
+            base64_decode("aGVs\r\nbG8=").as_deref(),
+            Some(&b"hello"[..])
+        );
+        assert_eq!(base64_decode("not*base64"), None);
     }
 }
