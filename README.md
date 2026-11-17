@@ -49,9 +49,10 @@ click **More info → Run anyway**.
 **Feeds**
 
 - Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported.
-- Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them, drop them on a folder to
-  move them in, or on the Feeds heading to move them out. Mailboxes and folders can be dragged into order too, and
-  the order syncs to your other devices.
+- Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them: drop one on the middle of a
+  folder to move it in, or above or below a folder to keep it outside; feeds outside folders and folders can be mixed
+  in any order. Mailboxes can be dragged into order too, and the order syncs to your other devices. Right-click a
+  mailbox, feed or folder for its menu.
 - Load the full article from the original page for feeds that only publish a summary. The full-text button in the
   reader is a switch: while it is on, every article you open loads in full.
 

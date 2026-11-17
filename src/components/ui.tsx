@@ -1,5 +1,6 @@
 // 界面的基础零件。所有组件共用这里的尺寸和颜色，保持整体一致。
 
+import * as Context from "@radix-ui/react-context-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -9,6 +10,8 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
+  createContext,
+  useContext,
   useEffect,
   useState,
 } from "react";
@@ -289,6 +292,35 @@ export function Modal({
   );
 }
 
+/** 菜单项放在哪种菜单里：点按钮弹出的，还是右键弹出的。两种菜单的条目组件不能混用。 */
+const MenuKind = createContext<"dropdown" | "context">("dropdown");
+
+const MENU_CONTENT = "anim-pop z-50 min-w-[180px] rounded-lg bg-surface p-1 shadow-pop outline-none";
+
+// 菜单关闭时默认会把焦点还给触发它的元素。如果菜单项刚打开了一个对话框，
+// 这会把焦点从对话框的输入框里抢走，所以这种情况下不还。
+function keepDialogFocus(e: Event) {
+  if (document.querySelector("[role=dialog]")) e.preventDefault();
+}
+
+/** 右键菜单：在 `children` 上点右键（触屏上长按）弹出 `items`。`items` 用 MenuItem 和 MenuSeparator。 */
+export function ContextMenu({ items, children }: { items: ReactNode; children: ReactNode }) {
+  return (
+    <Context.Root>
+      <Context.Trigger asChild>
+        <div className="rounded-md data-[state=open]:outline data-[state=open]:outline-1 data-[state=open]:-outline-offset-1 data-[state=open]:outline-accent/60">
+          {children}
+        </div>
+      </Context.Trigger>
+      <Context.Portal>
+        <Context.Content onCloseAutoFocus={keepDialogFocus} className={MENU_CONTENT}>
+          <MenuKind.Provider value="context">{items}</MenuKind.Provider>
+        </Context.Content>
+      </Context.Portal>
+    </Context.Root>
+  );
+}
+
 export function Menu({
   trigger,
   align = "start",
@@ -305,14 +337,10 @@ export function Menu({
         <Dropdown.Content
           align={align}
           sideOffset={4}
-          // 菜单关闭时默认会把焦点还给触发按钮。如果菜单项刚打开了一个对话框，
-          // 这会把焦点从对话框的输入框里抢走，所以这种情况下不还。
-          onCloseAutoFocus={(e) => {
-            if (document.querySelector("[role=dialog]")) e.preventDefault();
-          }}
-          className="anim-pop z-50 min-w-[180px] rounded-lg bg-surface p-1 shadow-pop outline-none"
+          onCloseAutoFocus={keepDialogFocus}
+          className={MENU_CONTENT}
         >
-          {children}
+          <MenuKind.Provider value="dropdown">{children}</MenuKind.Provider>
         </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>
@@ -330,8 +358,9 @@ export function MenuItem({
   onSelect: () => void;
   children: ReactNode;
 }) {
+  const Item = useContext(MenuKind) === "context" ? Context.Item : Dropdown.Item;
   return (
-    <Dropdown.Item
+    <Item
       onSelect={onSelect}
       className={cx(
         "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-active",
@@ -340,12 +369,13 @@ export function MenuItem({
     >
       <span className={cx("flex size-4 items-center justify-center", !danger && "text-fg-3")}>{icon}</span>
       {children}
-    </Dropdown.Item>
+    </Item>
   );
 }
 
 export function MenuSeparator() {
-  return <Dropdown.Separator className="mx-1 my-1 h-px bg-line" />;
+  const Separator = useContext(MenuKind) === "context" ? Context.Separator : Dropdown.Separator;
+  return <Separator className="mx-1 my-1 h-px bg-line" />;
 }
 
 /** 订阅源的图标。加载不出来时退回到通用的订阅图标。 */

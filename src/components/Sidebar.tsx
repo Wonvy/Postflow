@@ -26,7 +26,8 @@ import { type DragEvent, type FormEvent, type ReactNode, useEffect, useMemo, use
 import { useActions } from "../lib/actions";
 import { type Account, api, type Feed, type ItemPatch, type Nav, type View } from "../lib/api";
 import { type DragPayload, type DropPosition, dropPosition, endDrag, isOurs, moveInList, startDrag, useDrag } from "../lib/dnd";
-import { useFolderActions } from "../lib/folders";
+import { moveTop, type TopEntry } from "../lib/feedTree";
+import { useFolderActions, useTopLevel } from "../lib/folders";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
 import { UpdatePill } from "./UpdateDialog";
@@ -37,6 +38,7 @@ import { type ListScope, type SidebarSection, type SidebarTab, sameScope, useUi 
 import {
   Avatar,
   Button,
+  ContextMenu,
   cx,
   Favicon,
   Field,
@@ -162,59 +164,67 @@ function FeedRow({
     void qc.invalidateQueries({ queryKey: ["items"] });
   };
 
+  const items = (
+    <>
+      <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "edit-feed", feedId: feed.id })}>
+        {t("action.edit")}
+      </MenuItem>
+      <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.refresh(feed.id)}>
+        {t("action.refresh")}
+      </MenuItem>
+      <MenuItem icon={<Copy size={14} />} onSelect={() => void copyText(feed.url)}>
+        {t("action.copyUrl")}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem danger icon={<Trash2 size={14} />} onSelect={() => void unsubscribe()}>
+        {t("action.unsubscribe")}
+      </MenuItem>
+    </>
+  );
+
   return (
-    <Row
-      active={active}
-      indent={indent}
-      onClick={() => setScope({ kind: "feed", feedId: feed.id })}
-      drag={drag}
-      drop={drop}
-      leading={<Favicon src={feed.icon_url} />}
-      label={feed.title || feed.url}
-      trailing={
-        <>
-          {feed.error ? (
-            <Tip label={`${t("edit.lastError")}: ${feed.error}`} side="right">
-              <span className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden">
-                <TriangleAlert size={13} strokeWidth={2} />
+    <ContextMenu items={items}>
+      <Row
+        active={active}
+        indent={indent}
+        onClick={() => setScope({ kind: "feed", feedId: feed.id })}
+        drag={drag}
+        drop={drop}
+        leading={<Favicon src={feed.icon_url} />}
+        label={feed.title || feed.url}
+        trailing={
+          <>
+            {feed.error ? (
+              <Tip label={`${t("edit.lastError")}: ${feed.error}`} side="right">
+                <span className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden">
+                  <TriangleAlert size={13} strokeWidth={2} />
+                </span>
+              </Tip>
+            ) : (
+              <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
+                <Count n={feed.unread} />
               </span>
-            </Tip>
-          ) : (
-            <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
-              <Count n={feed.unread} />
-            </span>
-          )}
-          <Menu
-            align="start"
-            trigger={
-              <button
-                type="button"
-                aria-label={t("action.more")}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="hidden size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg group-hover:flex data-[state=open]:flex"
-              >
-                <Ellipsis size={14} strokeWidth={2} />
-              </button>
-            }
-          >
-            <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "edit-feed", feedId: feed.id })}>
-              {t("action.edit")}
-            </MenuItem>
-            <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.refresh(feed.id)}>
-              {t("action.refresh")}
-            </MenuItem>
-            <MenuItem icon={<Copy size={14} />} onSelect={() => void copyText(feed.url)}>
-              {t("action.copyUrl")}
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem danger icon={<Trash2 size={14} />} onSelect={() => void unsubscribe()}>
-              {t("action.unsubscribe")}
-            </MenuItem>
-          </Menu>
-        </>
-      }
-    />
+            )}
+            <Menu
+              align="start"
+              trigger={
+                <button
+                  type="button"
+                  aria-label={t("action.more")}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="hidden size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg group-hover:flex data-[state=open]:flex"
+                >
+                  <Ellipsis size={14} strokeWidth={2} />
+                </button>
+              }
+            >
+              {items}
+            </Menu>
+          </>
+        }
+      />
+    </ContextMenu>
   );
 }
 
@@ -237,82 +247,87 @@ function AccountRow({
   const needsPassword = account.error_code === "mail_no_password";
   const provider = providerOf(account, presets.data);
 
+  const items = (
+    <>
+      <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "edit-account", accountId: account.id })}>
+        {t("action.accountSettings")}
+      </MenuItem>
+      <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.syncAccount(account.id)}>
+        {t("action.syncNow")}
+      </MenuItem>
+      <MenuItem icon={<Copy size={14} />} onSelect={() => void copyText(account.email)}>
+        {account.email}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        danger
+        icon={<Trash2 size={14} />}
+        onSelect={() => setDialog({ type: "remove-account", accountId: account.id })}
+      >
+        {t("action.removeAccount")}
+      </MenuItem>
+    </>
+  );
+
   return (
-    <Row
-      active={active}
-      onClick={() => setScope({ kind: "account", accountId: account.id })}
-      drag={drag}
-      drop={drop}
-      leading={
-        hasProviderIcon(provider) ? (
-          <ProviderIcon id={provider} size={16} />
-        ) : (
-          <Avatar name={label} seed={account.email} />
-        )
-      }
-      label={label}
-      trailing={
-        <>
-          {account.error_code ? (
-            <Tip
-              label={needsPassword ? t("account.needsPassword") : errorText(t, { code: account.error_code })}
-              side="right"
-            >
-              <button
-                type="button"
-                aria-label={t("action.accountSettings")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDialog({ type: "edit-account", accountId: account.id });
-                }}
-                className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden"
-              >
-                {needsPassword ? <KeyRound size={13} strokeWidth={2} /> : <TriangleAlert size={13} strokeWidth={2} />}
-              </button>
-            </Tip>
+    <ContextMenu items={items}>
+      <Row
+        active={active}
+        onClick={() => setScope({ kind: "account", accountId: account.id })}
+        drag={drag}
+        drop={drop}
+        leading={
+          hasProviderIcon(provider) ? (
+            <ProviderIcon id={provider} size={16} />
           ) : (
-            <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
-              <Count n={account.unread} />
-            </span>
-          )}
-          <Menu
-            align="start"
-            trigger={
-              <button
-                type="button"
-                aria-label={t("action.more")}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="hidden size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg group-hover:flex data-[state=open]:flex"
+            <Avatar name={label} seed={account.email} />
+          )
+        }
+        label={label}
+        trailing={
+          <>
+            {account.error_code ? (
+              <Tip
+                label={needsPassword ? t("account.needsPassword") : errorText(t, { code: account.error_code })}
+                side="right"
               >
-                <Ellipsis size={14} strokeWidth={2} />
-              </button>
-            }
-          >
-            <MenuItem
-              icon={<Pencil size={14} />}
-              onSelect={() => setDialog({ type: "edit-account", accountId: account.id })}
+                <button
+                  type="button"
+                  aria-label={t("action.accountSettings")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDialog({ type: "edit-account", accountId: account.id });
+                  }}
+                  className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden"
+                >
+                  {needsPassword ? <KeyRound size={13} strokeWidth={2} /> : <TriangleAlert size={13} strokeWidth={2} />}
+                </button>
+              </Tip>
+            ) : (
+              <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
+                <Count n={account.unread} />
+              </span>
+            )}
+            <Menu
+              align="start"
+              trigger={
+                <button
+                  type="button"
+                  aria-label={t("action.more")}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="hidden size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg group-hover:flex data-[state=open]:flex"
+                >
+                  <Ellipsis size={14} strokeWidth={2} />
+                </button>
+              }
             >
-              {t("action.accountSettings")}
-            </MenuItem>
-            <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.syncAccount(account.id)}>
-              {t("action.syncNow")}
-            </MenuItem>
-            <MenuItem icon={<Copy size={14} />} onSelect={() => void copyText(account.email)}>
-              {account.email}
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem
-              danger
-              icon={<Trash2 size={14} />}
-              onSelect={() => setDialog({ type: "remove-account", accountId: account.id })}
-            >
-              {t("action.removeAccount")}
-            </MenuItem>
-          </Menu>
-        </>
-      }
-    />
+              {items}
+            </Menu>
+          </>
+        }
+      />
+    </ContextMenu>
   );
 }
 
@@ -410,20 +425,20 @@ export function Sidebar({ width }: { width: number }) {
     ...labelCounts.map((l) => l.label).filter((l) => !(categories ?? []).some((c) => c.name === l)),
   ];
 
-  const { folders, loose } = useMemo(() => {
-    const byFolder = new Map<string, Feed[]>(folderActions.folders.map((name) => [name, []]));
-    const loose: Feed[] = [];
+  // 顶层：文件夹和文件夹外的源交错排列
+  const top = useTopLevel();
+  const { byFolder, feedById } = useMemo(() => {
+    const byFolder = new Map<string, Feed[]>();
+    const feedById = new Map<string, Feed>();
     for (const feed of feeds ?? []) {
-      if (!feed.folder) {
-        loose.push(feed);
-        continue;
-      }
+      feedById.set(feed.id, feed);
+      if (!feed.folder) continue;
       const list = byFolder.get(feed.folder);
       if (list) list.push(feed);
       else byFolder.set(feed.folder, [feed]);
     }
-    return { folders: [...byFolder.entries()], loose };
-  }, [feeds, folderActions.folders]);
+    return { byFolder, feedById };
+  }, [feeds]);
 
   // ---- 拖放 ----
   const [drop, setDrop] = useState<{ key: string; position: DropPosition } | null>(null);
@@ -470,7 +485,7 @@ export function Sidebar({ width }: { width: number }) {
     onDragEnd: endDrag,
   });
 
-  /** 把订阅源放到某个源的前后，或者放进文件夹的末尾。 */
+  /** 把订阅源放到文件夹里某个源的前后，或者放进文件夹的末尾。 */
   const moveFeed = (id: string, folder: string, anchor: string | null, position: DropPosition) => {
     const inside = folderActions.feedsIn(folder);
     const order =
@@ -480,6 +495,17 @@ export function Sidebar({ width }: { width: number }) {
     folderActions.place(folder, order);
   };
 
+  /** 拖的东西在顶层的样子：文件夹，或者文件夹外的源。 */
+  const entryOf = (p: DragPayload): TopEntry | null =>
+    p.kind === "folder" ? { kind: "folder", name: p.name } : p.kind === "feed" ? { kind: "feed", id: p.id } : null;
+
+  /** 放到顶层某一项的前后；`anchor` 为空时放到最前（before）或最后（after）。 */
+  const placeTop = (p: DragPayload, anchor: TopEntry | null, position: "before" | "after") => {
+    const moved = entryOf(p);
+    if (moved) folderActions.arrangeTop(moveTop(folderActions.currentTop(), moved, anchor, position));
+  };
+
+  // 文件夹里的源：只接订阅源，在这个文件夹里排前后
   const feedTarget = (feed: Feed) =>
     target(
       `feed:${feed.id}`,
@@ -487,30 +513,50 @@ export function Sidebar({ width }: { width: number }) {
       (p, position) => p.kind === "feed" && moveFeed(p.id, feed.folder, feed.id, position),
     );
 
-  const folderTarget = (name: string) =>
+  // 文件夹外的源：订阅源和文件夹都能排在它前后
+  const looseTarget = (feed: Feed) =>
+    target(
+      `feed:${feed.id}`,
+      (p, e) => ((p.kind === "feed" && p.id !== feed.id) || p.kind === "folder" ? dropPosition(e) : null),
+      (p, position) => position !== "inside" && placeTop(p, { kind: "feed", id: feed.id }, position),
+    );
+
+  // 文件夹：订阅源拖到上沿排在文件夹前面，拖到中间放进去；拖到下沿时，文件夹展开着就放进去
+  // 排第一，收起着就排在文件夹后面。文件夹拖到文件夹上只排前后。
+  const folderTarget = (name: string, open: boolean, list: Feed[]) =>
     target(
       `folder:${name}`,
-      (p, e) =>
-        p.kind === "feed"
-          ? p.folder === name
-            ? null
-            : "inside"
-          : p.kind === "folder" && p.name !== name
-            ? dropPosition(e)
-            : null,
+      (p, e) => {
+        if (p.kind === "feed") {
+          const position = dropPosition(e, true);
+          return position === "inside" && p.folder === name ? null : position;
+        }
+        return p.kind === "folder" && p.name !== name ? dropPosition(e) : null;
+      },
       (p, position) => {
-        if (p.kind === "feed") moveFeed(p.id, name, null, "inside");
-        else if (p.kind === "folder" && position !== "inside") {
-          folderActions.orderFolders(moveInList(folderActions.folders, p.name, name, position));
+        const self: TopEntry = { kind: "folder", name };
+        if (position === "inside") {
+          if (p.kind === "feed") moveFeed(p.id, name, null, "inside");
+        } else if (p.kind === "feed" && position === "after" && open && list[0]) {
+          if (list[0].id !== p.id) moveFeed(p.id, name, list[0].id, "before");
+        } else {
+          placeTop(p, self, position);
         }
       },
     );
 
-  // 拖到「订阅」标题上：移出文件夹
+  // 拖到「订阅」标题上：排到最前面，从文件夹里拖出来的源就移出了文件夹
   const feedsSectionTarget = target(
     "section:feeds",
-    (p) => (p.kind === "feed" && p.folder !== "" ? "inside" : null),
-    (p) => p.kind === "feed" && moveFeed(p.id, "", null, "inside"),
+    (p) => (p.kind === "feed" || p.kind === "folder" ? "inside" : null),
+    (p) => placeTop(p, null, "before"),
+  );
+
+  // 拖到订阅列表下面的空白处：排到最后
+  const feedsEndTarget = target(
+    "end:feeds",
+    (p) => (p.kind === "feed" || p.kind === "folder" ? "before" : null),
+    (p) => placeTop(p, null, "after"),
   );
 
   const accountTarget = (account: Account) =>
@@ -757,36 +803,54 @@ export function Sidebar({ width }: { width: number }) {
 
             {!isCollapsed("feeds") && (
               <div className="flex flex-col gap-px">
-                {folders.map(([folder, list]) => {
+                {top.map((entry) => {
+                  if (entry.kind === "feed") {
+                    const feed = feedById.get(entry.id);
+                    if (!feed) return null;
+                    return (
+                      <FeedRow
+                        key={feed.id}
+                        feed={feed}
+                        indent={false}
+                        active={isActive({ kind: "feed", feedId: feed.id })}
+                        drag={{ ...source({ kind: "feed", id: feed.id, folder: "" }, feed.title), ...looseTarget(feed) }}
+                        drop={dropAt(`feed:${feed.id}`)}
+                      />
+                    );
+                  }
+                  const folder = entry.name;
+                  const list = byFolder.get(folder) ?? [];
                   const open = !collapsed.includes(folder);
                   return (
-                    <div key={folder} className="flex flex-col gap-px">
-                      <Row
-                        active={isActive({ kind: "folder", folder })}
-                        onClick={() => setScope({ kind: "folder", folder })}
-                        drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder) }}
-                        drop={dropAt(`folder:${folder}`)}
-                        leading={
-                          <button
-                            type="button"
-                            aria-expanded={open}
-                            aria-label={folder}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFolder(folder);
-                            }}
-                            className="flex size-5 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg"
-                          >
-                            <ChevronRight
-                              size={14}
-                              strokeWidth={2}
-                              className={cx("transition-transform", open && "rotate-90")}
-                            />
-                          </button>
-                        }
-                        label={folder}
-                        trailing={<FolderTrailing folder={folder} unread={list.reduce((sum, f) => sum + f.unread, 0)} />}
-                      />
+                    <div key={`folder:${folder}`} className="flex flex-col gap-px">
+                      <ContextMenu items={<FolderMenuItems folder={folder} />}>
+                        <Row
+                          active={isActive({ kind: "folder", folder })}
+                          onClick={() => setScope({ kind: "folder", folder })}
+                          drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder, open, list) }}
+                          drop={dropAt(`folder:${folder}`)}
+                          leading={
+                            <button
+                              type="button"
+                              aria-expanded={open}
+                              aria-label={folder}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFolder(folder);
+                              }}
+                              className="flex size-5 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg"
+                            >
+                              <ChevronRight
+                                size={14}
+                                strokeWidth={2}
+                                className={cx("transition-transform", open && "rotate-90")}
+                              />
+                            </button>
+                          }
+                          label={folder}
+                          trailing={<FolderTrailing folder={folder} unread={list.reduce((sum, f) => sum + f.unread, 0)} />}
+                        />
+                      </ContextMenu>
                       {open &&
                         list.map((feed) => (
                           <FeedRow
@@ -801,16 +865,13 @@ export function Sidebar({ width }: { width: number }) {
                     </div>
                   );
                 })}
-                {loose.map((feed) => (
-                  <FeedRow
-                    key={feed.id}
-                    feed={feed}
-                    indent={false}
-                    active={isActive({ kind: "feed", feedId: feed.id })}
-                    drag={{ ...source({ kind: "feed", id: feed.id, folder: "" }, feed.title), ...feedTarget(feed) }}
-                    drop={dropAt(`feed:${feed.id}`)}
-                  />
-                ))}
+                {(dragging?.kind === "feed" || dragging?.kind === "folder") && (
+                  <div {...feedsEndTarget} className="relative h-7">
+                    {dropAt("end:feeds") && (
+                      <span aria-hidden className="pointer-events-none absolute left-2 right-1 top-0 h-0.5 rounded-full bg-accent" />
+                    )}
+                  </div>
+                )}
                 {feeds && feeds.length === 0 && (
                   <button
                     type="button"
@@ -844,11 +905,27 @@ export function Sidebar({ width }: { width: number }) {
   );
 }
 
-/** 文件夹行右边：未读数，悬停时换成菜单（改名、删除）。 */
-function FolderTrailing({ folder, unread }: { folder: string; unread: number }) {
+/** 文件夹的菜单项：改名、删除。悬停时的「更多」按钮和右键菜单共用。 */
+function FolderMenuItems({ folder }: { folder: string }) {
   const t = useT();
   const setDialog = useUi((s) => s.setDialog);
   const { remove } = useFolderActions();
+  return (
+    <>
+      <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "folder", folder })}>
+        {t("folder.rename")}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem danger icon={<Trash2 size={14} />} onSelect={() => remove(folder)}>
+        {t("folder.delete")}
+      </MenuItem>
+    </>
+  );
+}
+
+/** 文件夹行右边：未读数，悬停时换成菜单（改名、删除）。 */
+function FolderTrailing({ folder, unread }: { folder: string; unread: number }) {
+  const t = useT();
   return (
     <>
       <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
@@ -868,13 +945,7 @@ function FolderTrailing({ folder, unread }: { folder: string; unread: number }) 
           </button>
         }
       >
-        <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "folder", folder })}>
-          {t("folder.rename")}
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem danger icon={<Trash2 size={14} />} onSelect={() => remove(folder)}>
-          {t("folder.delete")}
-        </MenuItem>
+        <FolderMenuItems folder={folder} />
       </Menu>
     </>
   );
