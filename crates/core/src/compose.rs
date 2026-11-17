@@ -99,6 +99,9 @@ struct Letter {
     subject: String,
     #[serde(default)]
     text: String,
+    /// 带格式的正文。`text` 是它的纯文本版。
+    #[serde(default)]
+    html: Option<String>,
     /// 回复的那封信的 Message-ID 和讨论里之前的那些，接上同一个讨论。
     #[serde(default)]
     in_reply_to: Option<String>,
@@ -378,6 +381,7 @@ impl Core {
             "bcc": list(&draft.bcc),
             "subject": draft.subject,
             "text": draft.text,
+            "html": draft.html,
             "thread": { "in_reply_to": draft.in_reply_to, "references": draft.references },
             "attachments": attachments,
         }))
@@ -555,6 +559,7 @@ fn letter(
         bcc,
         subject: p.subject.clone(),
         text: p.text.clone(),
+        html: p.html.clone(),
         in_reply_to: p.in_reply_to.clone(),
         references: p.references.clone(),
         attachments,

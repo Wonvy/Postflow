@@ -11,6 +11,8 @@ that heading into the version number and date.
 - Signatures: each mailbox can have one (in its settings). It's added below new messages and above the quote in
   replies, and switches when you change the mailbox you send from.
 - Move mail into a folder: "Move to folder" in the right-click menu, or drag it onto the folder in the sidebar.
+- Formatted mail: bold, italic, underline, strikethrough, links (`⌘K`), lists and quotes. The "T" button switches
+  between formatted and plain text. Formatted mail includes a plain-text copy for other mail apps.
 - Older mail: at the end of a mailbox, folder, Sent, Drafts, Spam or Trash list, load the next 100 older messages
   from the server.
 
@@ -18,6 +20,8 @@ that heading into the version number and date.
 
 - 签名：每个邮箱可以设一个（在邮箱设置里）。写新邮件时加在正文后面，回复时在引文上面；换发信的邮箱时签名跟着换。
 - 把邮件移进文件夹：右键菜单里的「移到文件夹」，或者直接拖到侧栏的文件夹上。
+- 带格式的邮件：粗体、斜体、下划线、删除线、链接（`⌘K`）、列表和引用。「T」按钮在带格式和纯文本之间切换。
+  带格式的信会附一份纯文本，给只看纯文本的邮件程序。
 - 更早的邮件：邮箱、文件夹、已发送、草稿、垃圾邮件和已删除的列表拉到底，可以从服务器再取 100 封更早的。
 
 ## 0.1.11 — 2026-11-17

@@ -244,7 +244,10 @@ export interface Outgoing {
   cc: string[];
   bcc: string[];
   subject: string;
+  /** 纯文本正文；带格式时是 `html` 的纯文本版。 */
   text: string;
+  /** 带格式的正文，纯文本时为空。 */
+  html?: string | null;
   in_reply_to?: string | null;
   references?: string[];
   /** 附件的 token。 */
@@ -262,6 +265,8 @@ export interface DraftContents {
   bcc: string[];
   subject: string;
   text: string;
+  /** 带格式的草稿，已经清理过。 */
+  html: string | null;
   thread: Thread;
   attachments: AttachedFile[];
 }

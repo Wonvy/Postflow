@@ -299,6 +299,32 @@
   color: var(--fg-3);
 }
 
+/* 写信窗口里带格式的正文 */
+.rich-editor blockquote {
+  margin: 0.25em 0;
+  border-left: 2px solid var(--color-line-strong);
+  padding-left: 0.8em;
+  color: var(--color-fg-2);
+}
+.rich-editor ul,
+.rich-editor ol {
+  margin: 0.25em 0;
+  padding-left: 1.6em;
+}
+.rich-editor ul {
+  list-style: disc;
+}
+.rich-editor ol {
+  list-style: decimal;
+}
+.rich-editor a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.rich-editor [data-signature] {
+  color: var(--color-fg-2);
+}
+
 @keyframes pop-in {
   from {
     opacity: 0;

@@ -245,3 +245,43 @@ export function swapSignature(text: string, from: string, to: string, tail: stri
   if (at < 0) return text;
   return text.slice(0, at) + next + text.slice(at + old.length);
 }
+
+// ---------------------------------------------------------------- 带格式的正文
+
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** 纯文本变成编辑器里的一行行：每行一个 div，空行是一个只有换行的 div。 */
+export function textToHtml(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => `<div>${line ? escapeHtml(line) : "<br>"}</div>`)
+    .join("");
+}
+
+/** 签名放在一个做了记号的块里，换发信的邮箱时整块换掉。 */
+export function signatureHtml(signature: string): string {
+  const sig = signature.replace(/\s+$/, "");
+  if (!sig) return "";
+  return `<div data-signature="">-- <br>${sig.split("\n").map(escapeHtml).join("<br>")}</div>`;
+}
+
+/**
+ * 带格式时预先填好的正文：最前面留两行给你写，然后是签名，回复时下面是引用的原信，
+ * 转发时是原信的信息和正文。
+ */
+export function richPrefill(
+  mode: ComposeMode,
+  ctx: ReplyContext | null,
+  signature: string,
+  lang: "zh" | "en",
+): string {
+  const start = `<div><br></div><div><br></div>${signatureHtml(signature)}`;
+  if (mode === "new" || mode === "draft" || !ctx) return start;
+  if (mode === "forward") {
+    return `${start}<div><br></div>${textToHtml(forwardHeader(ctx, lang))}<div><br></div>${textToHtml(ctx.text)}`;
+  }
+  const quoted = ctx.text ? `<blockquote>${textToHtml(ctx.text)}</blockquote>` : "";
+  return `${start}<div><br></div><div>${escapeHtml(attribution(ctx, lang))}</div>${quoted}`;
+}

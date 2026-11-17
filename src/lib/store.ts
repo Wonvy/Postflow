@@ -96,6 +96,9 @@ interface UiState {
   collapsedFolders: string[];
   /** 侧栏里展开了文件夹的邮箱。 */
   expandedAccounts: string[];
+  /** 写信默认带格式。 */
+  composeRich: boolean;
+  setComposeRich: (on: boolean) => void;
   /** 翻译成哪种语言，模型目录里的语言代码。为空时跟界面语言一致。 */
   translateTo: string | null;
   /** 每个列表各自的显示方式，键见 `listKey`。没选过的是列表。改一个列表不影响别的。 */
@@ -214,6 +217,8 @@ export const useUi = create<UiState>()(
       listWidth: 380,
       collapsedFolders: [],
       expandedAccounts: [],
+      composeRich: true,
+      setComposeRich: (composeRich) => set({ composeRich }),
       translateTo: null,
       listViews: {},
       groupModes: {},
@@ -359,6 +364,7 @@ export const useUi = create<UiState>()(
         listWidth: s.listWidth,
         collapsedFolders: s.collapsedFolders,
         expandedAccounts: s.expandedAccounts,
+        composeRich: s.composeRich,
         kindFilter: s.kindFilter,
         translateTo: s.translateTo,
         listViews: s.listViews,

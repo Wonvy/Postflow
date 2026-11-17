@@ -375,6 +375,46 @@ fn real_attachments(msg: &Message<'_>) -> Vec<AttachmentInfo> {
         .collect()
 }
 
+/// 写信时允许的格式：字体样式、链接、列表、引用和标题。样式、脚本、图片和表格都去掉。
+const COMPOSE_TAGS: &[&str] = &[
+    "a",
+    "b",
+    "strong",
+    "i",
+    "em",
+    "u",
+    "s",
+    "strike",
+    "del",
+    "p",
+    "div",
+    "br",
+    "span",
+    "ul",
+    "ol",
+    "li",
+    "blockquote",
+    "pre",
+    "code",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "hr",
+];
+
+/// 写信窗口交来的 HTML 只留 `COMPOSE_TAGS`。从网页粘贴来的样式、脚本、追踪图片都去掉。
+pub fn clean_compose_html(html: &str) -> String {
+    let mut builder = Builder::empty();
+    builder
+        .add_tags(COMPOSE_TAGS)
+        .add_tag_attributes("a", ["href"])
+        .url_schemes(HashSet::from(["http", "https", "mailto"]))
+        .link_rel(Some("noopener noreferrer"))
+        .url_relative(UrlRelative::Deny);
+    builder.clean(html).to_string()
+}
+
 /// 一封草稿里写了什么，接着写时用。
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct DraftContents {
@@ -385,6 +425,8 @@ pub struct DraftContents {
     pub subject: String,
     /// 正文原样，只把换行统一成 \n。
     pub text: String,
+    /// 带格式的草稿的 HTML，已经按写信允许的格式清理过。纯文本草稿为空。
+    pub html: Option<String>,
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
     pub attachments: Vec<AttachmentInfo>,
@@ -402,7 +444,12 @@ pub fn draft_contents(raw: &[u8]) -> Option<DraftContents> {
     if text.ends_with('\n') {
         text.pop();
     }
+    let html = msg.html_bodies().find_map(|part| match &part.body {
+        PartType::Html(h) => Some(clean_compose_html(h)),
+        _ => None,
+    });
     Some(DraftContents {
+        html,
         message_id: msg
             .message_id()
             .map(|id| id.trim().to_string())

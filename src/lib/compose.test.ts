@@ -14,7 +14,11 @@ import {
   replyRecipients,
   replySubject,
   addSignature,
+  escapeHtml,
+  richPrefill,
   signatureBlock,
+  signatureHtml,
+  textToHtml,
   splitAddresses,
   swapSignature,
   type ReplyContext,
@@ -150,4 +154,17 @@ test("signatures go after new text and above quotes, and follow the sending mail
   assert.equal(swapSignature("Hi", "", "Sam", ""), "Hi\n\n-- \nSam");
   // 用户改过签名：不碰
   assert.equal(swapSignature("Hi\n\n-- \nSam (edited)", "Sam!", "Samuel", ""), "Hi\n\n-- \nSam (edited)");
+});
+
+test("formatted replies quote the original in a blockquote under the signature", () => {
+  assert.equal(escapeHtml(`<a href="x">&</a>`), "&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;");
+  assert.equal(textToHtml("a\n\n<b>"), "<div>a</div><div><br></div><div>&lt;b&gt;</div>");
+  assert.equal(signatureHtml(" \n"), "");
+  assert.equal(signatureHtml("Sam\n<Co>"), `<div data-signature="">-- <br>Sam<br>&lt;Co&gt;</div>`);
+  const reply = richPrefill("reply", CTX, "Sam", "en");
+  assert.ok(reply.startsWith(`<div><br></div><div><br></div><div data-signature="">-- <br>Sam</div>`), reply);
+  assert.ok(reply.includes("Ada wrote:</div><blockquote><div>Noon?</div><div><br></div><div>&gt; earlier</div>"), reply);
+  const fwd = richPrefill("forward", CTX, "", "en");
+  assert.ok(fwd.includes("<div>From: Ada &lt;ada@example.com&gt;</div>"), fwd);
+  assert.equal(richPrefill("new", null, "", "en"), "<div><br></div><div><br></div>");
 });

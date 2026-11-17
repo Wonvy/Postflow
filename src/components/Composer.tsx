@@ -6,7 +6,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Paperclip, Send, TriangleAlert, X } from "lucide-react";
+import { FileText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -26,13 +26,17 @@ import {
   type ComposeMode,
   isValidAddress,
   prefill,
+  richPrefill,
+  signatureHtml,
   splitAddresses,
   swapSignature,
+  textToHtml,
 } from "../lib/compose";
 import { errorDetail, errorText, useLang, useT } from "../lib/i18n";
 import { formatSize, isMac } from "../lib/platform";
 import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
+import { RichEditor, type RichEditorHandle } from "./RichEditor";
 import { toast } from "./Toast";
 import { Button, cx, IconButton, ICON, Select, Spinner, Tip } from "./ui";
 
@@ -163,6 +167,13 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [text, setText] = useState("");
+  // 带格式时：编辑器一开始的内容（换一次就重新挂一个编辑器），以及现在的 HTML 和它的纯文本版
+  const composeRich = useUi((s) => s.composeRich);
+  const setComposeRich = useUi((s) => s.setComposeRich);
+  const [rich, setRich] = useState<{ initial: string; html: string; text: string; generation: number } | null>(
+    null,
+  );
+  const editor = useRef<RichEditorHandle>(null);
   const [thread, setThread] = useState<Thread>(NO_THREAD);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -201,6 +212,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
       setShowBcc(d.bcc.length > 0);
       setSubject(d.subject);
       setText(d.text);
+      if (d.html) setRich({ initial: d.html, html: d.html, text: d.text, generation: 0 });
       setThread(d.thread);
       setFiles(d.attachments.map((a) => ({ ...a, key: nextKey.current++, failed: false })));
       if (d.message_id) draft.current = { account: d.account_id, id: d.message_id };
@@ -217,21 +229,42 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
       signature.current = sig;
       quoteTail.current = p.text;
       setText(addSignature(p.text, sig, p.text));
+      if (composeRich) {
+        const html = richPrefill(mode, ctx, sig, lang);
+        setRich({ initial: html, html, text: "", generation: 0 });
+      }
       if (ctx && mode !== "forward") setThread(ctx.thread);
       if (ctx && mode === "forward") {
         setFiles(ctx.attachments.map((a) => ({ ...a, key: nextKey.current++, failed: false })));
       }
     }
     requestAnimationFrame(() => {
-      if ((mode === "reply" || mode === "reply-all" || mode === "draft") && body.current) {
-        body.current.focus();
-        body.current.setSelectionRange(0, 0);
-        body.current.scrollTop = 0;
+      if (mode === "reply" || mode === "reply-all" || mode === "draft") {
+        if (editor.current) editor.current.focusStart();
+        else if (body.current) {
+          body.current.focus();
+          body.current.setSelectionRange(0, 0);
+          body.current.scrollTop = 0;
+        }
       } else {
         toField.current?.focus();
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, context.data, saved.data, lang, mode, ready, defaultAccount]);
+
+  /** 纯文本和带格式之间切换。带格式改成纯文本时格式丢掉，只留文字。 */
+  const toggleRich = () => {
+    if (rich) {
+      setText(rich.text);
+      setRich(null);
+      setComposeRich(false);
+    } else {
+      const html = textToHtml(text);
+      setRich({ initial: html, html, text, generation: Date.now() });
+      setComposeRich(true);
+    }
+  };
 
   /** 换发信的邮箱：签名跟着换。 */
   const changeFrom = (id: string) => {
@@ -240,7 +273,8 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     const previous = signature.current;
     const tail = quoteTail.current;
     signature.current = next;
-    setText((current) => swapSignature(current, previous, next, tail));
+    if (rich) editor.current?.setSignature(signatureHtml(next));
+    else setText((current) => swapSignature(current, previous, next, tail));
     setFrom(id);
   };
 
@@ -252,7 +286,8 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     cc: everyone(cc),
     bcc: everyone(bcc),
     subject: subject.trim(),
-    text,
+    text: rich ? rich.text : text,
+    html: rich ? rich.html : null,
     in_reply_to: thread.in_reply_to,
     references: thread.references,
     attachments: tokens,
@@ -439,7 +474,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     void addFiles(Array.from(e.dataTransfer.files));
   };
   // 在正文里粘贴图片之类的文件：添加为附件
-  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+  const onPaste = (e: ClipboardEvent<HTMLElement>) => {
     const pasted = Array.from(e.clipboardData.files);
     if (pasted.length === 0) return;
     e.preventDefault();
@@ -595,15 +630,28 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
                 </Row>
               </div>
               <div className="relative flex min-h-0 flex-1 flex-col">
-                <textarea
-                  ref={body}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onPaste={onPaste}
-                  aria-label={t("compose.body")}
-                  placeholder={mode === "new" ? t("compose.bodyPlaceholder") : undefined}
-                  className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-3"
-                />
+                {rich ? (
+                  <RichEditor
+                    key={rich.generation}
+                    editorRef={editor}
+                    initialHtml={rich.initial}
+                    label={t("compose.body")}
+                    onPaste={onPaste}
+                    onChange={(html, plain) =>
+                      setRich((r) => (r ? { ...r, html, text: plain } : r))
+                    }
+                  />
+                ) : (
+                  <textarea
+                    ref={body}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onPaste={onPaste}
+                    aria-label={t("compose.body")}
+                    placeholder={mode === "new" ? t("compose.bodyPlaceholder") : undefined}
+                    className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-3"
+                  />
+                )}
                 {dragging && (
                   <div className="pointer-events-none absolute inset-2 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-accent-soft text-[13px] font-medium text-accent">
                     {t("compose.dropHere")}
@@ -694,6 +742,14 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
               <>
                 <IconButton label={t("compose.attach")} disabled={!ready} onClick={() => picker.current?.click()}>
                   <Paperclip {...ICON} />
+                </IconButton>
+                <IconButton
+                  label={rich ? t("format.toPlain") : t("format.toRich")}
+                  active={rich !== null}
+                  disabled={!ready}
+                  onClick={toggleRich}
+                >
+                  <Type {...ICON} />
                 </IconButton>
                 <input
                   ref={picker}

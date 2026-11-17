@@ -45,7 +45,10 @@ pub struct Outgoing {
     /// 密送：只写进信封，不写进信头，其他收件人看不到。
     pub bcc: Vec<Mailbox>,
     pub subject: String,
+    /// 纯文本正文。带格式时是同一段内容的纯文本版，给不看 HTML 的邮件程序。
     pub text: String,
+    /// 带格式的正文。发出去之前按 `clean_compose_html` 清理。
+    pub html: Option<String>,
     /// 回复的那封信的 Message-ID，不带尖括号。
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
@@ -193,6 +196,9 @@ fn build_with(out: &Outgoing, now: i64, draft: bool) -> Result<Built> {
         .message_id(message_id.clone())
         .header("User-Agent", Raw::new("Postflow"))
         .text_body(crlf(&out.text));
+    if let Some(html) = out.html.as_deref().filter(|h| !h.trim().is_empty()) {
+        builder = builder.html_body(html_document(html));
+    }
     if !out.to.is_empty() {
         builder = builder.to(list(&out.to));
     }
@@ -253,6 +259,19 @@ fn crlf(text: &str) -> String {
         out.push_str("\r\n");
     }
     out
+}
+
+/// 写信窗口里的 HTML 清理以后包成一份完整的文档：常见邮件程序的字体和字号，引用加上左边的竖线。
+fn html_document(html: &str) -> String {
+    let body = crate::message::clean_compose_html(html).replace(
+        "<blockquote>",
+        "<blockquote style=\"margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex\">",
+    );
+    format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>\
+         <div style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;\
+         font-size:14px;line-height:1.5\">{body}</div></body></html>"
+    )
 }
 
 /// 信头里的 Message-ID：去掉尖括号，有空白、换行或尖括号的不要，免得写坏信头。
@@ -371,6 +390,7 @@ mod tests {
             in_reply_to: Some("orig@example.org".into()),
             references: vec!["first@example.org".into(), "orig@example.org".into()],
             attachments: vec![],
+            html: None,
         };
         let built = build(&out, 1_700_000_000).unwrap();
         assert!(built.message_id.ends_with("@example.com"));
@@ -553,5 +573,56 @@ mod tests {
         };
         assert!(build(&empty, 0).is_err());
         assert!(build_draft(&empty, 0).is_ok());
+    }
+
+    #[test]
+    fn formatted_mail_is_cleaned_and_has_a_text_part() {
+        let out = Outgoing {
+            from: mb(None, "me@example.com"),
+            to: vec![mb(None, "ada@example.com")],
+            subject: "Formatted".into(),
+            text: "Hello bold\nquoted".into(),
+            html: Some(
+                "<div>Hello <b style=\"color:red\">bold</b><script>alert(1)</script></div>\
+                 <img src=\"https://tracker.example/p.gif\"><a href=\"javascript:alert(1)\">x</a>\
+                 <a href=\"https://example.com/\">link</a><blockquote>quoted</blockquote>"
+                    .into(),
+            ),
+            ..Outgoing::default()
+        };
+        let built = build(&out, 0).unwrap();
+        let parsed = mail_parser::MessageParser::default()
+            .parse(&built.raw)
+            .unwrap();
+        let html = parsed.body_html(0).unwrap().to_string();
+        assert!(html.contains("<b>bold</b>"), "{html}");
+        assert!(html.contains("href=\"https://example.com/\""), "{html}");
+        assert!(html.contains("<blockquote style="), "{html}");
+        for gone in [
+            "script",
+            "alert",
+            "<img",
+            "tracker",
+            "color:red",
+            "javascript",
+        ] {
+            assert!(!html.contains(gone), "{gone} left in {html}");
+        }
+        assert_eq!(
+            parsed
+                .body_text(0)
+                .map(|t| t.trim_end().replace("\r\n", "\n")),
+            Some("Hello bold\nquoted".to_string())
+        );
+
+        // 草稿接着写时拿回清理过的 HTML
+        let draft = build_draft(&out, 0).unwrap();
+        let back = crate::draft_contents(&draft.raw).unwrap();
+        let html = back.html.unwrap();
+        assert!(
+            html.contains("<b>bold</b>") && !html.contains("<script"),
+            "{html}"
+        );
+        assert!(!html.contains("<body"), "{html}");
     }
 }

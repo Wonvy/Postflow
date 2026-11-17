@@ -50,7 +50,9 @@ click **More info → Run anyway**.
   many inbox messages are unread (the tab title does in a browser). Both can be turned off in Settings → Appearance.
 - Newsletters and mailing lists get an Unsubscribe link in the message header. Lists that support one-click
   unsubscribe are unsubscribed right away; otherwise their unsubscribe page or an unsubscribe email opens.
-- Write, reply, reply all and forward, in plain text. Replies quote the original below your text and stay in the same
+- Write, reply, reply all and forward, formatted (bold, italic, underline, strikethrough, links, lists, quotes) or
+  in plain text; the "T" button switches, and the choice is remembered. Formatted mail also carries a plain-text
+  copy, and its HTML is cleaned before sending. Replies quote the original below your text and stay in the same
   conversation in other mail apps. The To, Cc and Bcc fields suggest people who have written to you, and the
   mailbox to send from can be picked when you have several. Mail goes from your device straight to your provider's
   outgoing (SMTP) server, which is chosen for you from the provider; set it yourself in the mailbox's settings if
@@ -163,9 +165,8 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** formatted (HTML) mail,
-OAuth sign-in for Gmail (use an app password), a command palette, snoozing, rules, a tray icon, mobile apps, and
-installers signed by Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
+**Not yet available:** OAuth sign-in for Gmail (use an app password), a command palette, snoozing, rules, a tray
+icon, mobile apps, and installers signed by Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
 ## Keyboard shortcuts
