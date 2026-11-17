@@ -20,6 +20,9 @@ that heading into the version number and date.
 - Drafts save themselves to your mailbox's Drafts folder while you write, so other devices and webmail see them,
   and closing the window keeps the draft. A new Drafts view under your mailboxes opens them to keep writing;
   sending or deleting a draft removes it from the server.
+- Sent: everything you've sent, from Postflow or elsewhere, in a view under your mailboxes. People you write to are
+  suggested first as recipients.
+- Your own folders: the arrow next to a mailbox lists its other folders, nested; open one to sync and read it.
 
 ### 中文
 
@@ -31,6 +34,8 @@ that heading into the version number and date.
 - 附件：点回形针、把文件拖进写信窗口或者粘贴图片都能添加。转发时会带上原信的附件。
 - 写信时自动存草稿，存进邮箱的「草稿」文件夹，其他设备和网页邮箱里也看得到；关掉窗口草稿还在。
   邮箱列表下面新增「草稿」，打开就能接着写；发出去或者删掉时，服务器上的草稿也一起删掉。
+- 「已发送」：在 Postflow 里或别处发出的信都在这里，在邮箱列表下面。填收件人时，你写过信的人排在前面。
+- 自己建的文件夹：点邮箱右边的小箭头，按层级列出它的其他文件夹，打开一个就同步并显示里面的邮件。
 
 ## 0.1.10 — 2026-11-17
 

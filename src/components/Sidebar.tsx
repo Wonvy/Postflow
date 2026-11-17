@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   ChartColumn,
@@ -7,6 +7,7 @@ import {
   Copy,
   Ellipsis,
   FilePen,
+  Folder,
   FolderPlus,
   Inbox,
   KeyRound,
@@ -18,6 +19,7 @@ import {
   Plus,
   RefreshCw,
   Rss,
+  Send,
   Settings,
   ShieldAlert,
   SquarePen,
@@ -69,6 +71,7 @@ const VIEWS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
 /** 邮箱里另外同步的几个文件夹，放在邮箱列表下面。 */
 const MAIL_FOLDERS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
   { view: "drafts", icon: FilePen, label: "nav.drafts" },
+  { view: "sent", icon: Send, label: "nav.sent" },
   { view: "junk", icon: ShieldAlert, label: "nav.junk" },
   { view: "trash", icon: Trash2, label: "nav.trash" },
 ];
@@ -87,6 +90,7 @@ function Row({
   active,
   onClick,
   indent = false,
+  depth,
   leading,
   label,
   trailing,
@@ -97,6 +101,8 @@ function Row({
   active: boolean;
   onClick: () => void;
   indent?: boolean;
+  /** 邮箱里的文件夹按层级往里缩：第 1 层和订阅源一样缩一格。 */
+  depth?: number;
   leading: ReactNode;
   label: string;
   trailing?: ReactNode;
@@ -119,6 +125,7 @@ function Row({
         }
       }}
       {...drag}
+      style={depth ? { paddingLeft: 26 + (depth - 1) * 14 } : undefined}
       className={cx(
         "group relative flex h-7 items-center gap-2 rounded-md pr-1.5 outline-offset-[-2px] transition-colors",
         indent ? "pl-[26px]" : "pl-2",
@@ -262,6 +269,8 @@ function AccountRow({
   const t = useT();
   const setScope = useUi((s) => s.setScope);
   const setDialog = useUi((s) => s.setDialog);
+  const expanded = useUi((s) => s.expandedAccounts.includes(account.id));
+  const toggleFolders = useUi((s) => s.toggleAccountFolders);
   const presets = usePresets();
   const label = account.name || account.email;
   const needsPassword = account.error_code === "mail_no_password";
@@ -269,6 +278,9 @@ function AccountRow({
 
   const items = (
     <>
+      <MenuItem icon={<Folder size={14} />} onSelect={() => toggleFolders(account.id)}>
+        {expanded ? t("folders.hide") : t("folders.show")}
+      </MenuItem>
       <MenuItem icon={<SquarePen size={14} />} onSelect={() => setDialog({ type: "compose", mode: "new", accountId: account.id })}>
         {t("compose.fromAccount")}
       </MenuItem>
@@ -293,71 +305,141 @@ function AccountRow({
   );
 
   return (
-    <ContextMenu items={items}>
-      <Row
-        active={active}
-        onClick={() => setScope({ kind: "account", accountId: account.id })}
-        drag={drag}
-        drop={drop}
-        leading={
-          hasProviderIcon(provider) ? (
-            <ProviderIcon id={provider} size={16} />
-          ) : (
-            <Avatar name={label} seed={account.email} />
-          )
-        }
-        label={label}
-        trailing={
-          <>
-            {account.error_code ? (
-              <Tip
-                label={
-                  needsPassword
-                    ? // Outlook、Microsoft 365 不用密码，要用微软账户登录
-                      presets.data?.find((p) => p.id === provider)?.password_kind === "oauth"
-                      ? t("oauth.needsSignIn")
-                      : t("account.needsPassword")
-                    : errorText(t, { code: account.error_code })
-                }
-                side="right"
-              >
-                <button
-                  type="button"
-                  aria-label={t("action.accountSettings")}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDialog({ type: "edit-account", accountId: account.id });
-                  }}
-                  className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden"
-                >
-                  {needsPassword ? <KeyRound size={13} strokeWidth={2} /> : <TriangleAlert size={13} strokeWidth={2} />}
-                </button>
-              </Tip>
+    <>
+      <ContextMenu items={items}>
+        <Row
+          active={active}
+          onClick={() => setScope({ kind: "account", accountId: account.id })}
+          drag={drag}
+          drop={drop}
+          leading={
+            hasProviderIcon(provider) ? (
+              <ProviderIcon id={provider} size={16} />
             ) : (
-              <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
-                <Count n={account.unread} />
-              </span>
-            )}
-            <Menu
-              align="start"
-              trigger={
-                <button
-                  type="button"
-                  aria-label={t("action.more")}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="hidden size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg group-hover:flex data-[state=open]:flex"
+              <Avatar name={label} seed={account.email} />
+            )
+          }
+          label={label}
+          trailing={
+            <>
+              <button
+                type="button"
+                aria-label={expanded ? t("folders.hide") : t("folders.show")}
+                aria-expanded={expanded}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFolders(account.id);
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+                className={cx(
+                  "size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg",
+                  expanded ? "flex" : "hidden group-hover:flex",
+                )}
+              >
+                <ChevronRight size={13} strokeWidth={2} className={cx("transition-transform", expanded && "rotate-90")} />
+              </button>
+              {account.error_code ? (
+                <Tip
+                  label={
+                    needsPassword
+                      ? // Outlook、Microsoft 365 不用密码，要用微软账户登录
+                        presets.data?.find((p) => p.id === provider)?.password_kind === "oauth"
+                        ? t("oauth.needsSignIn")
+                        : t("account.needsPassword")
+                      : errorText(t, { code: account.error_code })
+                  }
+                  side="right"
                 >
-                  <Ellipsis size={14} strokeWidth={2} />
-                </button>
-              }
-            >
-              {items}
-            </Menu>
-          </>
-        }
-      />
-    </ContextMenu>
+                  <button
+                    type="button"
+                    aria-label={t("action.accountSettings")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDialog({ type: "edit-account", accountId: account.id });
+                    }}
+                    className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden"
+                  >
+                    {needsPassword ? <KeyRound size={13} strokeWidth={2} /> : <TriangleAlert size={13} strokeWidth={2} />}
+                  </button>
+                </Tip>
+              ) : (
+                <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
+                  <Count n={account.unread} />
+                </span>
+              )}
+              <Menu
+                align="start"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={t("action.more")}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="hidden size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg group-hover:flex data-[state=open]:flex"
+                  >
+                    <Ellipsis size={14} strokeWidth={2} />
+                  </button>
+                }
+              >
+                {items}
+              </Menu>
+            </>
+          }
+        />
+      </ContextMenu>
+      {expanded && <AccountFolders account={account} />}
+    </>
+  );
+}
+
+/** 一个邮箱里的普通文件夹，按层级缩进。点开时马上同步那个文件夹。 */
+function AccountFolders({ account }: { account: Account }) {
+  const t = useT();
+  const scope = useUi((s) => s.scope);
+  const setScope = useUi((s) => s.setScope);
+  const folders = useQuery({
+    queryKey: ["folders", account.id],
+    queryFn: () => api.folders(account.id).then((r) => r.folders),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const note = (text: ReactNode) => (
+    <div className="flex h-7 items-center gap-2 pl-[26px] pr-2 text-[12px] text-fg-3">{text}</div>
+  );
+  if (folders.isPending) return note(t("folders.loading"));
+  if (folders.isError) {
+    return note(
+      <>
+        {t("folders.failed")}
+        <button type="button" onClick={() => void folders.refetch()} className="text-accent hover:underline">
+          {t("folders.retry")}
+        </button>
+      </>,
+    );
+  }
+  if (folders.data.length === 0) return note(t("folders.none"));
+  return (
+    <>
+      {folders.data.map((f) => {
+        const parts = f.delimiter ? f.path.split(f.delimiter).filter(Boolean) : [f.path];
+        const label = parts[parts.length - 1] ?? f.path;
+        const active = scope.kind === "mailbox" && scope.accountId === account.id && scope.mailbox === f.name;
+        return (
+          <Row
+            key={f.name}
+            depth={Math.max(1, parts.length)}
+            active={active}
+            onClick={() => {
+              if (!f.selectable) return;
+              setScope({ kind: "mailbox", accountId: account.id, mailbox: f.name, label });
+              void api.openFolder(account.id, f.name).catch(() => {});
+            }}
+            leading={<Folder {...ICON} />}
+            label={label}
+          />
+        );
+      })}
+    </>
   );
 }
 

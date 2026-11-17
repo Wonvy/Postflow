@@ -417,7 +417,7 @@ function Article({ id }: { id: string }) {
             >
               <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
             </IconButton>
-            {!summary.draft && (
+            {!summary.draft && !summary.sent && (
               <IconButton
                 label={all("archived") ? t("action.unarchive") : t("action.archive")}
                 shortcut="E"

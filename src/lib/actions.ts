@@ -88,8 +88,8 @@ export function useActions() {
   /** 全都已经是这个状态就取消，否则全部设上。 */
   const toggle = useCallback(
     (flag: Flag, list = targets()) => {
-      // 草稿只在「草稿」里，不能归档
-      const usable = flag === "archived" ? list.filter((i) => !i.draft) : list;
+      // 草稿和已发送的信只在各自的文件夹里，不能归档
+      const usable = flag === "archived" ? list.filter((i) => !i.draft && !i.sent) : list;
       if (usable.length === 0) return;
       apply(usable, { [flag]: !usable.every((i) => i[flag]) });
     },
@@ -156,7 +156,12 @@ export function useActions() {
   const confirmMarkAllRead = useCallback(() => useUi.getState().setDialog({ type: "mark-all-read" }), []);
 
   const refresh = useCallback(() => {
-    const id = scope.kind === "feed" ? scope.feedId : scope.kind === "account" ? scope.accountId : undefined;
+    const id =
+      scope.kind === "feed"
+        ? scope.feedId
+        : scope.kind === "account" || scope.kind === "mailbox"
+          ? scope.accountId
+          : undefined;
     void api.refresh(id);
   }, [scope]);
 

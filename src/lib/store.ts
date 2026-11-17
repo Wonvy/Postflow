@@ -14,6 +14,8 @@ export type ListScope =
   | { kind: "view"; view: View }
   | { kind: "feed"; feedId: string }
   | { kind: "account"; accountId: string }
+  /** 邮箱里的一个普通文件夹。`label` 是侧栏里显示的名字。 */
+  | { kind: "mailbox"; accountId: string; mailbox: string; label: string }
   | { kind: "folder"; folder: string }
   | { kind: "label"; label: string };
 
@@ -92,6 +94,8 @@ interface UiState {
   sidebarWidth: number;
   listWidth: number;
   collapsedFolders: string[];
+  /** 侧栏里展开了文件夹的邮箱。 */
+  expandedAccounts: string[];
   /** 翻译成哪种语言，模型目录里的语言代码。为空时跟界面语言一致。 */
   translateTo: string | null;
   /** 每个列表各自的显示方式，键见 `listKey`。没选过的是列表。改一个列表不影响别的。 */
@@ -149,6 +153,7 @@ interface UiState {
   setSidebarWidth: (w: number) => void;
   setListWidth: (w: number) => void;
   toggleFolder: (folder: string) => void;
+  toggleAccountFolders: (accountId: string) => void;
   setTranslateTo: (code: string | null) => void;
   setListView: (scope: ListScope, view: ListView) => void;
   setCardSize: (size: number) => void;
@@ -208,6 +213,7 @@ export const useUi = create<UiState>()(
       sidebarWidth: 244,
       listWidth: 380,
       collapsedFolders: [],
+      expandedAccounts: [],
       translateTo: null,
       listViews: {},
       groupModes: {},
@@ -265,6 +271,12 @@ export const useUi = create<UiState>()(
       setLang: (lang) => set({ lang }),
       setSidebarWidth: (w) => set({ sidebarWidth: clamp(w, SIDEBAR_MIN, SIDEBAR_MAX) }),
       setListWidth: (w) => set({ listWidth: clamp(w, LIST_MIN, LIST_MAX) }),
+      toggleAccountFolders: (accountId) =>
+        set((s) => ({
+          expandedAccounts: s.expandedAccounts.includes(accountId)
+            ? s.expandedAccounts.filter((a) => a !== accountId)
+            : [...s.expandedAccounts, accountId],
+        })),
       toggleFolder: (folder) =>
         set((s) => ({
           collapsedFolders: s.collapsedFolders.includes(folder)
@@ -282,7 +294,9 @@ export const useUi = create<UiState>()(
           const fits =
             s.tab === "all" ||
             (s.scope.kind === "view" && !(s.tab === "feeds" && isMailOnlyView(s.scope.view))) ||
-            (s.tab === "mail" ? s.scope.kind === "account" : s.scope.kind !== "account");
+            (s.tab === "mail"
+              ? s.scope.kind === "account" || s.scope.kind === "mailbox"
+              : s.scope.kind !== "account" && s.scope.kind !== "mailbox");
           return {
             sidebarLayout,
             kindFilter: kind,
@@ -344,6 +358,7 @@ export const useUi = create<UiState>()(
         sidebarWidth: s.sidebarWidth,
         listWidth: s.listWidth,
         collapsedFolders: s.collapsedFolders,
+        expandedAccounts: s.expandedAccounts,
         kindFilter: s.kindFilter,
         translateTo: s.translateTo,
         listViews: s.listViews,
@@ -373,12 +388,12 @@ export const useUi = create<UiState>()(
 /** 列表范围的标识，用来分别记住每个列表的显示方式。 */
 /** 这些视图里的条目都不在收件箱，取消归档（移回收件箱）会让它们离开列表。 */
 export function isArchiveLike(view: View | "all" | undefined): boolean {
-  return view === "archived" || view === "junk" || view === "trash";
+  return view === "archived" || view === "junk" || view === "trash" || view === "folder";
 }
 
-/** 只有邮件才有的视图：垃圾邮件、已删除和草稿。 */
+/** 只有邮件才有的视图：草稿、已发送、垃圾邮件和已删除。 */
 export function isMailOnlyView(view: View): boolean {
-  return view === "junk" || view === "trash" || view === "drafts";
+  return view === "junk" || view === "trash" || view === "drafts" || view === "sent";
 }
 
 export function scopeKey(scope: ListScope): string {
@@ -389,6 +404,8 @@ export function scopeKey(scope: ListScope): string {
       return `feed:${scope.feedId}`;
     case "account":
       return `account:${scope.accountId}`;
+    case "mailbox":
+      return `mailbox:${scope.accountId}:${scope.mailbox}`;
     case "folder":
       return `folder:${scope.folder}`;
     case "label":
@@ -428,6 +445,8 @@ export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFi
       return { view: "inbox", source_id: scope.feedId };
     case "account":
       return { view: "inbox", source_id: scope.accountId };
+    case "mailbox":
+      return { view: "folder", source_id: scope.accountId, mailbox: scope.mailbox };
     case "folder":
       return { view: "inbox", folder: scope.folder };
     case "label":
@@ -445,6 +464,7 @@ export function sameScope(a: ListScope, b: ListScope): boolean {
   if (a.kind === "view" && b.kind === "view") return a.view === b.view;
   if (a.kind === "feed" && b.kind === "feed") return a.feedId === b.feedId;
   if (a.kind === "account" && b.kind === "account") return a.accountId === b.accountId;
+  if (a.kind === "mailbox" && b.kind === "mailbox") return a.accountId === b.accountId && a.mailbox === b.mailbox;
   if (a.kind === "folder" && b.kind === "folder") return a.folder === b.folder;
   if (a.kind === "label" && b.kind === "label") return a.label === b.label;
   return false;

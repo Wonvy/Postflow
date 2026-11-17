@@ -60,6 +60,11 @@ click **More info → Run anyway**.
 - Drafts save themselves to the mailbox's Drafts folder a few seconds after you stop typing, so your phone and
   webmail see them too, and closing the window keeps the draft. Drafts appear under your mailboxes; open one to
   keep writing. Sending or deleting it removes it from the server.
+- Sent shows what you've sent from every mailbox, including mail sent from your phone or webmail, and the people
+  you write to come first when you fill in recipients.
+- Your own folders: click the arrow next to a mailbox (or choose "Show folders" in its menu) to list its other
+  folders, nested as on the server. A folder syncs once you open it and keeps up while Postflow runs; only recent
+  mail in it is fetched. Gmail labels show up as folders too.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
   [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365).
@@ -153,9 +158,9 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** formatted (HTML) mail, signatures, a Sent folder in Postflow, OAuth sign-in for Gmail (use an app password), folders other than the inbox, spam and
-trash, a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by
-Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
+**Not yet available:** formatted (HTML) mail, signatures, moving mail into folders, older mail in folders you open,
+OAuth sign-in for Gmail (use an app password), a command palette, snoozing, rules, a tray icon, mobile apps, and
+installers signed by Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.
 
 ## Keyboard shortcuts

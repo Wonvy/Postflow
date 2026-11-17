@@ -351,6 +351,8 @@ function scopeTitle(scope: ListScope, t: Translate, sourceTitle: (id: string) =>
       return sourceTitle(scope.feedId) ?? "";
     case "account":
       return sourceTitle(scope.accountId) ?? "";
+    case "mailbox":
+      return scope.label;
     case "label":
       return scope.label;
   }
@@ -705,11 +707,13 @@ export function ItemList({ width }: { width: number }) {
             noSources={feeds !== undefined && feeds.length === 0 && accounts !== undefined && accounts.length === 0}
             caughtUp={scope.kind === "view" && (scope.view === "inbox" || scope.view === "unread")}
             folderHint={
-              scope.kind !== "view" || !isMailOnlyView(scope.view)
-                ? null
-                : scope.view === "drafts"
-                  ? "list.draftsHint"
-                  : "list.folderHint"
+              scope.kind === "mailbox"
+                ? "list.mailboxHint"
+                : scope.kind !== "view" || !isMailOnlyView(scope.view)
+                  ? null
+                  : scope.view === "drafts"
+                    ? "list.draftsHint"
+                    : "list.folderHint"
             }
             onAddAccount={() => setDialog({ type: "add-account" })}
             onAddFeed={() => setDialog({ type: "add-feed" })}
@@ -1499,7 +1503,7 @@ function EmptyList({
   caughtUp: boolean;
   /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
   /** 邮箱文件夹空着时的说明。 */
-  folderHint: "list.folderHint" | "list.draftsHint" | null;
+  folderHint: "list.folderHint" | "list.draftsHint" | "list.mailboxHint" | null;
   onAddAccount: () => void;
   onAddFeed: () => void;
 }) {

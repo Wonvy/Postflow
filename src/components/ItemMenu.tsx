@@ -116,7 +116,7 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
       >
         {all("starred") ? t("action.unstar") : t("action.star")}
       </MenuItem>
-      {!lead.draft && (
+      {!lead.draft && !lead.sent && (
         <MenuItem
           icon={all("archived") ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           onSelect={() => toggle("archived", items)}

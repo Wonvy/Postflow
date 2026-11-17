@@ -2,7 +2,18 @@ import type { ReplyContext } from "./compose";
 import { rpc } from "./transport";
 
 /** junk 和 trash 是邮箱里的垃圾邮件和已删除邮件。 */
-export type View = "inbox" | "today" | "unread" | "starred" | "archived" | "junk" | "trash" | "drafts";
+export type View =
+  | "inbox"
+  | "today"
+  | "unread"
+  | "starred"
+  | "archived"
+  | "junk"
+  | "trash"
+  | "drafts"
+  | "sent"
+  /** 邮箱里的某个其他文件夹，和 `source_id`、`mailbox` 一起用。 */
+  | "folder";
 
 export interface Status {
   configured: boolean;
@@ -95,6 +106,8 @@ export interface Item {
   archived: boolean;
   /** 邮箱「草稿」里的一封草稿：打开时接着写。 */
   draft?: boolean;
+  /** 「已发送」里自己发出去的信。 */
+  sent?: boolean;
   sender_address: string | null;
   has_attachments: boolean;
   /** 卡片视图用的封面图，只有文章有。 */
@@ -203,6 +216,17 @@ export interface AttachedFile {
   size: number;
 }
 
+/** 邮箱里的一个普通文件夹。 */
+export interface FolderInfo {
+  /** 服务器上的原名，打开时用。 */
+  name: string;
+  /** 给人看的完整名字，按 `delimiter` 分层。 */
+  path: string;
+  delimiter: string | null;
+  /** 只是用来装子文件夹、自己打不开的。 */
+  selectable: boolean;
+}
+
 /** 写信窗口里的一封信。发送和存草稿用同一个样子。 */
 export interface Outgoing {
   account_id: string;
@@ -257,6 +281,8 @@ export interface ItemFilter {
   source_id?: string;
   kind?: ItemKind;
   folder?: string;
+  /** 邮箱里的哪个文件夹（服务器上的名字），和 view: "folder" 一起用。 */
+  mailbox?: string;
   since?: number;
   label?: string;
   /** 全文搜索：标题、发件人、作者和正文里都要有这些词。 */
@@ -536,6 +562,11 @@ export const api = {
   attachDrop: (tokens: string[]) => rpc<void>("mail.attach_drop", { tokens }),
   /** 给你来过信的人，写信时提示收件人。 */
   contacts: () => rpc<{ contacts: Contact[] }>("mail.contacts"),
+  /** 邮箱里的普通文件夹。 */
+  folders: (accountId: string) => rpc<{ folders: FolderInfo[] }>("mail.folders", { account_id: accountId }),
+  /** 打开一个普通文件夹：马上同步它，之后每次收信也带上它。 */
+  openFolder: (accountId: string, mailbox: string) =>
+    rpc<void>("mail.open_folder", { account_id: accountId, mailbox }),
   /** 账户现在用的发信服务器。 */
   smtpSettings: (id: string) => rpc<SmtpSettings>("accounts.smtp", { id }),
   /** 能不能用微软账户登录（要有 Azure 应用 ID）。 */
