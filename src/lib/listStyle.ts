@@ -16,6 +16,8 @@ export interface ListStyle {
   summaryLines: number;
   showSummary: boolean;
   showIcon: boolean;
+  /** 来源的名字：文章是订阅源名，邮件是发件人。 */
+  showSource: boolean;
   /** 摘要视图的缩略图和卡片的封面图。 */
   showImage: boolean;
   /** 按日期分段：今天、昨天、本周、上周…… */
@@ -30,6 +32,7 @@ export const LIST_STYLE_DEFAULT: ListStyle = {
   summaryLines: 2,
   showSummary: true,
   showIcon: true,
+  showSource: true,
   showImage: true,
   dateSections: false,
 };
@@ -57,7 +60,7 @@ export function normalizeListStyle(raw: unknown): ListStyle {
     const v = r[key];
     return typeof v === "number" && Number.isFinite(v) ? clampTo(key, v) : LIST_STYLE_DEFAULT[key];
   };
-  const bool = (key: "showSummary" | "showIcon" | "showImage" | "dateSections") =>
+  const bool = (key: "showSummary" | "showIcon" | "showSource" | "showImage" | "dateSections") =>
     typeof r[key] === "boolean" ? (r[key] as boolean) : LIST_STYLE_DEFAULT[key];
   return {
     titleSize: num("titleSize"),
@@ -67,6 +70,7 @@ export function normalizeListStyle(raw: unknown): ListStyle {
     summaryLines: num("summaryLines"),
     showSummary: bool("showSummary"),
     showIcon: bool("showIcon"),
+    showSource: bool("showSource"),
     showImage: bool("showImage"),
     dateSections: bool("dateSections"),
   };

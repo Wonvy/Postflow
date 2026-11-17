@@ -10,12 +10,14 @@ import {
   type CSSProperties,
   type InputHTMLAttributes,
   type MouseEvent,
+  type PointerEvent,
   type ReactElement,
   type ReactNode,
   type SelectHTMLAttributes,
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { useT } from "../lib/i18n";
@@ -385,24 +387,56 @@ export function ContextMenu({
   );
 }
 
+/**
+ * 鼠标移上去就打开、移开一会儿后关上的弹出层（工具栏上的「列表样式」「折叠」）。
+ * 只认鼠标：触屏和笔还是点一下打开。从按钮移到弹出层中间的空隙不会关掉。
+ */
+export function useHoverOpen(closeDelay = 180) {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const hover = {
+    onPointerEnter: (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      clearTimeout(timer.current);
+      setOpen(true);
+    },
+    onPointerLeave: (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setOpen(false), closeDelay);
+    },
+  };
+  return { open, setOpen, hover };
+}
+
 export function Menu({
   trigger,
   align = "start",
+  hover = false,
   children,
 }: {
   trigger: ReactNode;
   align?: "start" | "end";
+  /** 鼠标移上去就打开。 */
+  hover?: boolean;
   children: ReactNode;
 }) {
+  const hovering = useHoverOpen();
+  const control = hover ? { open: hovering.open, onOpenChange: hovering.setOpen, modal: false } : {};
+  const hoverProps = hover ? hovering.hover : {};
   return (
-    <Dropdown.Root>
-      <Dropdown.Trigger asChild>{trigger}</Dropdown.Trigger>
+    <Dropdown.Root {...control}>
+      <Dropdown.Trigger asChild {...hoverProps}>
+        {trigger}
+      </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
           align={align}
           sideOffset={4}
           onCloseAutoFocus={keepDialogFocus}
           className={MENU_CONTENT}
+          {...hoverProps}
         >
           <MenuKind.Provider value="dropdown">{children}</MenuKind.Provider>
         </Dropdown.Content>

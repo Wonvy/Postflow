@@ -96,6 +96,7 @@ import {
   Spinner,
   Switch,
   Tip,
+  useHoverOpen,
 } from "./ui";
 
 /** 展开的组的标题行。 */
@@ -209,16 +210,19 @@ function ViewControl() {
       />
     </StyleLine>
   );
-  const toggle = (key: "showSummary" | "showIcon" | "showImage" | "dateSections", label: MessageKey) => (
+  const toggle = (key: "showSummary" | "showIcon" | "showSource" | "showImage" | "dateSections", label: MessageKey) => (
     <StyleLine label={t(label)}>
       <Switch label={t(label)} checked={style[key]} onChange={(on) => set({ [key]: on })} />
     </StyleLine>
   );
 
+  // 鼠标移上去就打开，不用点
+  const { open, setOpen, hover } = useHoverOpen();
+
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("listStyle.title")}>
-        <Popover.Trigger asChild>
+        <Popover.Trigger asChild {...hover}>
           <button
             type="button"
             aria-label={t("listStyle.title")}
@@ -234,6 +238,7 @@ function ViewControl() {
           sideOffset={4}
           collisionPadding={8}
           aria-label={t("listStyle.title")}
+          {...hover}
           className="anim-pop z-50 flex max-h-[var(--radix-popover-content-available-height)] w-[296px] flex-col gap-2.5 overflow-y-auto rounded-lg bg-surface p-3 shadow-pop outline-none"
         >
           <StyleLine label={t("listStyle.view")}>
@@ -275,6 +280,7 @@ function ViewControl() {
           {toggle("dateSections", "listStyle.dateSections")}
           {!oneLine && toggle("showSummary", "listStyle.showSummary")}
           {toggle("showIcon", "listStyle.showIcon")}
+          {toggle("showSource", "listStyle.showSource")}
           {view !== "list" && toggle("showImage", "listStyle.showImage")}
           <div className="flex justify-end border-t border-line pt-2">
             <button
@@ -454,6 +460,7 @@ function GroupControl() {
   return (
     <Menu
       align="end"
+      hover
       trigger={
         <button
           type="button"
@@ -1385,12 +1392,14 @@ function ComfortableRow(props: RowProps) {
       <div className="flex items-center gap-2 pl-4 text-fg-3" style={text(look.m.summary)}>
         <Sender item={item} look={look} size={14} />
         <span className="min-w-0 truncate">
-          <span className="text-fg-2">
-            <Hl text={source} terms={look.terms} />
-          </span>
+          {look.style.showSource && (
+            <span className="text-fg-2">
+              <Hl text={source} terms={look.terms} />
+            </span>
+          )}
           {(look.style.showSummary || look.terms.length > 0) && item.summary && (
             <span>
-              {" · "}
+              {look.style.showSource && " · "}
               <Hl text={item.summary} terms={look.terms} />
             </span>
           )}
@@ -1408,7 +1417,7 @@ function SourceLine(props: RowProps & { size?: number }) {
     <div className="flex min-w-0 items-center gap-1.5 text-fg-3" style={text(look.m.summary)}>
       <Sender item={item} look={look} size={size} />
       <span className="min-w-0 flex-1 truncate">
-        <Hl text={source} terms={look.terms} />
+        {look.style.showSource && <Hl text={source} terms={look.terms} />}
       </span>
       <Trailing {...props} />
     </div>
