@@ -505,3 +505,95 @@ async fn search_finds_new_articles_right_away() {
     assert!(search("alert", "all").await.is_empty());
     assert!(search("???", "all").await.is_empty());
 }
+
+/// 源永久搬家（301 / 308）时订阅地址跟着换；临时跳转（302）不换。
+#[tokio::test(flavor = "multi_thread")]
+async fn permanent_redirects_update_the_feed_address() {
+    use axum::response::Redirect;
+    use std::sync::atomic::AtomicBool;
+
+    let site = Site::default();
+    site.posts.store(2, Ordering::SeqCst);
+    let moving = Arc::new(AtomicBool::new(false));
+    let flag = moving.clone();
+    let app = Router::new()
+        .route("/final.xml", get(feed))
+        .route("/new-home.xml", get(feed))
+        .route("/temp-target.xml", get(feed))
+        .route(
+            "/moved.xml",
+            get(|| async { Redirect::permanent("/final.xml") }),
+        )
+        .route(
+            "/temp.xml",
+            get(|| async { Redirect::temporary("/temp-target.xml") }),
+        )
+        .route(
+            "/moving.xml",
+            get(move |state: State<Site>, headers: HeaderMap| {
+                let flag = flag.clone();
+                async move {
+                    if flag.load(Ordering::SeqCst) {
+                        Redirect::permanent("/new-home.xml").into_response()
+                    } else {
+                        feed(state, headers).await.into_response()
+                    }
+                }
+            }),
+        )
+        .with_state(site.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    let data_dir = tmp.path().join("data");
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": data_dir.to_str().unwrap(), "device_name": "Test" }),
+    )
+    .await;
+    let url_of = |feed: &Value| feed["url"].as_str().unwrap().to_string();
+
+    // 订阅时就已经搬了家：直接存新地址
+    let moved = call(
+        &core,
+        "feeds.add",
+        json!({ "url": format!("http://{addr}/moved.xml") }),
+    )
+    .await;
+    assert_eq!(url_of(&moved), format!("http://{addr}/final.xml"));
+    // 临时跳转：还用原地址
+    let temp = call(
+        &core,
+        "feeds.add",
+        json!({ "url": format!("http://{addr}/temp.xml") }),
+    )
+    .await;
+    assert_eq!(url_of(&temp), format!("http://{addr}/temp.xml"));
+
+    // 订阅之后才搬家：下次刷新时换成新地址
+    let later = call(
+        &core,
+        "feeds.add",
+        json!({ "url": format!("http://{addr}/moving.xml") }),
+    )
+    .await;
+    let id = later["id"].as_str().unwrap().to_string();
+    moving.store(true, Ordering::SeqCst);
+    let mut events = core.subscribe();
+    call(&core, "feeds.refresh", json!({ "id": id })).await;
+    wait_for_refresh(&mut events).await;
+    let nav = call(&core, "nav.get", json!({})).await;
+    let now = nav["feeds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["id"] == id.as_str())
+        .unwrap()
+        .clone();
+    assert_eq!(url_of(&now), format!("http://{addr}/new-home.xml"));
+    assert!(now["error"].is_null());
+}

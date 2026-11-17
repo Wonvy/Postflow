@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 
 use futures::StreamExt;
 use postflow_feed::{Conditional, FetchResult, ParsedEntry, ParsedFeed, favicon_url};
-use postflow_store::{Article, FetchTarget, Store, hlc, ids};
+use postflow_store::{Article, FeedPatch, FetchTarget, Store, hlc, ids};
 use serde_json::{Map, Value, json};
 
 use crate::{Core, DEFAULT_INTERVAL_MIN, Event, Scope, Session};
@@ -90,9 +90,24 @@ impl Core {
             Ok(FetchResult::Fetched(fetched)) => {
                 tracing::debug!(feed = %target.feed_id, entries = fetched.feed.entries.len(), "fetched");
                 let next = now + interval * 60_000;
-                let url = target.url.clone();
+                let old = target.url.clone();
                 session
                     .db(move |s| {
+                        // 源永久搬了家：以后直接用新地址。别的订阅源已经在用那个地址时不动
+                        let mut url = old.clone();
+                        if let Some(moved) = fetched.moved_to.clone()
+                            && !s.feeds()?.iter().any(|f| f.id != feed_id && f.url == moved)
+                        {
+                            tracing::info!(feed = %feed_id, from = %old, to = %moved, "feed moved permanently");
+                            s.update_feed(
+                                &feed_id,
+                                FeedPatch {
+                                    url: Some(moved.clone()),
+                                    ..Default::default()
+                                },
+                            )?;
+                            url = moved;
+                        }
                         ingest(s, &feed_id, &url, fetched.feed, now)?;
                         s.record_fetch_ok(
                             &feed_id,

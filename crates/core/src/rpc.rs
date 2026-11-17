@@ -675,7 +675,8 @@ impl Core {
     async fn resolve_feed(&self, input: &str) -> Result<(String, Fetched), RpcError> {
         let requested = normalize_url(input)?.to_string();
         match self.fetch_new(&requested).await {
-            Ok(fetched) => Ok((requested, fetched)),
+            // 地址已经永久跳到别处的，直接订阅新地址
+            Ok(fetched) => Ok((fetched.moved_to.clone().unwrap_or(requested), fetched)),
             Err(postflow_feed::Error::NotAFeed(_)) => {
                 let mut candidates = self.client.discover(&requested).await?;
                 if candidates.len() != 1 {
@@ -683,7 +684,7 @@ impl Core {
                 }
                 let url = candidates.remove(0).url;
                 let fetched = self.fetch_new(&url).await?;
-                Ok((url, fetched))
+                Ok((fetched.moved_to.clone().unwrap_or(url), fetched))
             }
             Err(e) => Err(e.into()),
         }

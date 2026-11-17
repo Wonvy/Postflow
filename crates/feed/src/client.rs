@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use reqwest::header::{
-    CONTENT_TYPE, COOKIE, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED,
+    CONTENT_TYPE, COOKIE, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED, LOCATION,
 };
 
 use crate::parse::{ParsedFeed, parse_feed};
@@ -10,10 +10,14 @@ use crate::{Error, Result};
 const USER_AGENT: &str = concat!("Postflow/", env!("CARGO_PKG_VERSION"));
 /// 单个响应的大小上限，防止异常的源把内存吃光。
 const MAX_BODY_MB: usize = 16;
+/// 最多跟几次跳转。
+const MAX_REDIRECTS: usize = 8;
 
 #[derive(Clone)]
 pub struct Client {
     pub(crate) http: reqwest::Client,
+    /// 不自动跟跳转的客户端：抓订阅源时自己跟，好知道源是不是永久搬了家。
+    manual: reqwest::Client,
 }
 
 /// 上次抓取时服务器给的校验值，用来做条件请求。
@@ -35,6 +39,8 @@ pub struct Fetched {
     pub feed: ParsedFeed,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
+    /// 源永久搬了家（一路都是 301 / 308 跳转）时的新地址，以后应当直接用它。
+    pub moved_to: Option<String>,
 }
 
 pub(crate) struct Page {
@@ -47,27 +53,63 @@ pub(crate) struct Page {
 
 impl Client {
     pub fn new() -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::limited(8))
-            .build()
-            .map_err(|e| Error::Http(e.to_string()))?;
-        Ok(Client { http })
+        let build = |redirect| {
+            reqwest::Client::builder()
+                .user_agent(USER_AGENT)
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .redirect(redirect)
+                .build()
+                .map_err(|e| Error::Http(e.to_string()))
+        };
+        Ok(Client {
+            http: build(reqwest::redirect::Policy::limited(MAX_REDIRECTS))?,
+            manual: build(reqwest::redirect::Policy::none())?,
+        })
     }
 
     /// 抓取并解析一个订阅源。带上校验值时，内容没变只花一个 304 的流量。
+    /// 跳转由这里自己跟：一路都是永久跳转时，在 `moved_to` 里告诉调用方新地址。
     pub async fn fetch_feed(&self, url: &str, cond: &Conditional) -> Result<FetchResult> {
-        let Some(page) = self.get(url, Some(cond), None).await? else {
-            return Ok(FetchResult::NotModified);
-        };
-        let feed = parse_feed(&page.body, page.final_url.as_str())?;
-        Ok(FetchResult::Fetched(Fetched {
-            feed,
-            etag: page.etag,
-            last_modified: page.last_modified,
-        }))
+        let start = url::Url::parse(url).map_err(|_| Error::InvalidUrl(url.to_string()))?;
+        let mut current = start.clone();
+        let mut permanent = true;
+        // 校验值属于原地址；永久搬家后新地址的内容要完整取一次，这样也才会知道搬了家
+        let mut cond = Some(cond);
+        for _ in 0..=MAX_REDIRECTS {
+            let resp = conditional(self.manual.get(current.as_str()), cond)
+                .send()
+                .await
+                .map_err(describe)?;
+            let status = resp.status();
+            if status.is_redirection() && status != reqwest::StatusCode::NOT_MODIFIED {
+                let next = resp
+                    .headers()
+                    .get(LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|loc| current.join(loc.trim()).ok())
+                    .filter(|u| matches!(u.scheme(), "http" | "https"))
+                    .ok_or(Error::Status(status.as_u16()))?;
+                permanent &= matches!(status.as_u16(), 301 | 308);
+                if permanent {
+                    cond = None;
+                }
+                current = next;
+                continue;
+            }
+            let Some(page) = read_page(resp).await? else {
+                return Ok(FetchResult::NotModified);
+            };
+            let feed = parse_feed(&page.body, page.final_url.as_str())?;
+            let moved_to = (permanent && current != start).then(|| current.to_string());
+            return Ok(FetchResult::Fetched(Fetched {
+                feed,
+                etag: page.etag,
+                last_modified: page.last_modified,
+                moved_to,
+            }));
+        }
+        Err(Error::Http("too many redirects".into()))
     }
 
     /// 发起 GET。返回 `None` 表示 304。
@@ -88,58 +130,70 @@ impl Client {
         timeout: Option<Duration>,
         cookie: Option<&str>,
     ) -> Result<Option<Page>> {
-        let mut req = self.http.get(url);
+        let mut req = conditional(self.http.get(url), cond);
         if let Some(cookie) = cookie {
             req = req.header(COOKIE, cookie);
-        }
-        if let Some(cond) = cond {
-            if let Some(etag) = &cond.etag {
-                req = req.header(IF_NONE_MATCH, etag);
-            }
-            if let Some(last_modified) = &cond.last_modified {
-                req = req.header(IF_MODIFIED_SINCE, last_modified);
-            }
         }
         if let Some(timeout) = timeout {
             req = req.timeout(timeout);
         }
-
-        let mut resp = req.send().await.map_err(describe)?;
-        let status = resp.status();
-        if status == reqwest::StatusCode::NOT_MODIFIED {
-            return Ok(None);
-        }
-        if !status.is_success() {
-            return Err(Error::Status(status.as_u16()));
-        }
-
-        let header = |name| {
-            resp.headers()
-                .get(name)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string)
-        };
-        let content_type = header(CONTENT_TYPE);
-        let etag = header(ETAG);
-        let last_modified = header(LAST_MODIFIED);
-        let final_url = resp.url().clone();
-
-        let limit = MAX_BODY_MB * 1024 * 1024;
-        let mut body = Vec::new();
-        while let Some(chunk) = resp.chunk().await.map_err(describe)? {
-            if body.len() + chunk.len() > limit {
-                return Err(Error::TooLarge(MAX_BODY_MB));
-            }
-            body.extend_from_slice(&chunk);
-        }
-        Ok(Some(Page {
-            final_url,
-            content_type,
-            etag,
-            last_modified,
-            body,
-        }))
+        let resp = req.send().await.map_err(describe)?;
+        read_page(resp).await
     }
+}
+
+/// 带上条件请求的校验值。
+fn conditional(
+    mut req: reqwest::RequestBuilder,
+    cond: Option<&Conditional>,
+) -> reqwest::RequestBuilder {
+    if let Some(cond) = cond {
+        if let Some(etag) = &cond.etag {
+            req = req.header(IF_NONE_MATCH, etag);
+        }
+        if let Some(last_modified) = &cond.last_modified {
+            req = req.header(IF_MODIFIED_SINCE, last_modified);
+        }
+    }
+    req
+}
+
+/// 读完响应：304 返回 `None`，别的不成功的状态码报错，正文有大小上限。
+async fn read_page(mut resp: reqwest::Response) -> Result<Option<Page>> {
+    let status = resp.status();
+    if status == reqwest::StatusCode::NOT_MODIFIED {
+        return Ok(None);
+    }
+    if !status.is_success() {
+        return Err(Error::Status(status.as_u16()));
+    }
+
+    let header = |name| {
+        resp.headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string)
+    };
+    let content_type = header(CONTENT_TYPE);
+    let etag = header(ETAG);
+    let last_modified = header(LAST_MODIFIED);
+    let final_url = resp.url().clone();
+
+    let limit = MAX_BODY_MB * 1024 * 1024;
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(describe)? {
+        if body.len() + chunk.len() > limit {
+            return Err(Error::TooLarge(MAX_BODY_MB));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(Some(Page {
+        final_url,
+        content_type,
+        etag,
+        last_modified,
+        body,
+    }))
 }
 
 /// 把 reqwest 的错误压成一句人能看懂的话，带上最底层的原因。
