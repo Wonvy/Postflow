@@ -728,6 +728,24 @@ impl Store {
         Ok(out)
     }
 
+    /// 邮件要移到别的文件夹：先从本机拿掉。移成以后，目标文件夹同步时会以那边的身份带回来；
+    /// 没移成的，下次同步原来的文件夹时也会回来。返回它们在服务器上的位置。
+    pub fn take_mail_for_move(&self, ids: &[String]) -> Result<Vec<MailRef>> {
+        let guard = self.lock();
+        let mut refs = Vec::new();
+        for id in ids {
+            if let Some(r) = guard
+                .conn
+                .query_row(REF_SQL, [id], ref_from_row)
+                .optional()?
+            {
+                refs.push(r);
+                delete_mail(&guard.conn, id)?;
+            }
+        }
+        Ok(refs)
+    }
+
     pub fn mail_ref(&self, id: &str) -> Result<Option<MailRef>> {
         Ok(self
             .lock()

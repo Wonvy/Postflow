@@ -193,12 +193,10 @@ export function useActions() {
     [qc, resolve, scope],
   );
 
-  /** 删掉列表里的草稿：先从列表里拿掉，再让后台去邮箱里删。 */
-  const deleteDrafts = useCallback(
-    (list: Item[]) => {
-      const drafts = list.filter((i) => i.draft);
-      if (drafts.length === 0) return;
-      const gone = new Set(drafts.map((i) => i.id));
+  /** 这些条目马上从所有列表里拿掉，阅读区开着其中一条时关上。 */
+  const dropFromLists = useCallback(
+    (ids: string[]) => {
+      const gone = new Set(ids);
       const ui = useUi.getState();
       if (ui.openId && gone.has(ui.openId)) ui.open(null);
       ui.setSelection(ui.selection.filter((id) => !gone.has(id)));
@@ -207,9 +205,36 @@ export function useActions() {
           ? { ...old, pages: old.pages.map((p) => ({ ...p, items: p.items.filter((i) => !gone.has(i.id)) })) }
           : old,
       );
-      for (const d of drafts) void api.deleteDraftItem(d.id).catch(() => void qc.invalidateQueries({ queryKey: ["items"] }));
     },
     [qc],
+  );
+
+  /** 删掉列表里的草稿：先从列表里拿掉，再让后台去邮箱里删。 */
+  const deleteDrafts = useCallback(
+    (list: Item[]) => {
+      const drafts = list.filter((i) => i.draft);
+      if (drafts.length === 0) return;
+      dropFromLists(drafts.map((d) => d.id));
+      for (const d of drafts) void api.deleteDraftItem(d.id).catch(() => void qc.invalidateQueries({ queryKey: ["items"] }));
+    },
+    [dropFromLists, qc],
+  );
+
+  /** 把邮件移到同一个邮箱的另一个文件夹。先从列表里拿掉，移成以后在那个文件夹里出现。 */
+  const moveTo = useCallback(
+    (list: Item[], mailbox: string) => {
+      const mail = list.filter((i) => i.kind === "mail" && !i.draft);
+      if (mail.length === 0) return;
+      dropFromLists(mail.map((i) => i.id));
+      void api
+        .moveMail(
+          mail.map((i) => i.id),
+          mailbox,
+        )
+        .then(() => qc.invalidateQueries({ queryKey: keys.nav }))
+        .catch(() => void qc.invalidateQueries({ queryKey: ["items"] }));
+    },
+    [dropFromLists, qc],
   );
 
   /** 列表换成这一条所在的订阅源或邮箱，阅读面板里还开着它。 */
@@ -244,5 +269,6 @@ export function useActions() {
     refreshAll,
     compose,
     deleteDrafts,
+    moveTo,
   };
 }

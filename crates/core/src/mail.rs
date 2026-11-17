@@ -61,6 +61,8 @@ pub(crate) enum Command {
     ListFolders(oneshot::Sender<Result<Vec<FolderInfo>, RpcError>>),
     /// 用户打开了一个普通文件夹：马上同步它，这次连接期间每次同步都带上它。
     WatchFolder(String),
+    /// 把邮件移到另一个文件夹（服务器上的名字）。本机已经先删掉了，移成以后由目标文件夹的同步带回来。
+    MoveTo(Vec<MailRef>, String),
 }
 
 /// 同时跟着同步的普通文件夹最多这么多个，多了先不管最早打开的。
@@ -656,6 +658,17 @@ async fn serve(
                         return Err(err);
                     }
                 }
+                Command::MoveTo(refs, target) => {
+                    if let Err(err) = move_mail(&mut conn, &refs, &target).await {
+                        if is_connection_error(&err) {
+                            pending.push(Command::MoveTo(refs, target));
+                            pending.extend(iter);
+                            return Err(err);
+                        }
+                        // 没移成（目标文件夹没了之类）：下次同步原来的文件夹时它会回到列表里
+                        tracing::warn!(account = %account_id, "mail: could not move mail: {err}");
+                    }
+                }
                 Command::WatchFolder(name) => {
                     watched.retain(|w| *w != name);
                     watched.push(name);
@@ -1053,6 +1066,25 @@ async fn apply(
                 let _ = session.db(move |s| s.mail_moved(&id, &target, None)).await;
             }
         }
+    }
+    conn.select(INBOX).await?;
+    Ok(())
+}
+
+/// 把邮件移到 `target`，按原来所在的文件夹分批。
+async fn move_mail(
+    conn: &mut Connection,
+    refs: &[MailRef],
+    target: &str,
+) -> Result<(), postflow_mail::Error> {
+    let mut by_mailbox: BTreeMap<&str, Vec<&MailRef>> = BTreeMap::new();
+    for r in refs.iter().filter(|r| r.mailbox != target) {
+        by_mailbox.entry(r.mailbox.as_str()).or_default().push(r);
+    }
+    for (mailbox, refs) in by_mailbox {
+        let found = resolve(conn, mailbox, &refs).await?;
+        let uids: Vec<u32> = found.iter().map(|(_, uid)| *uid).collect();
+        conn.move_to(&uids, target).await?;
     }
     conn.select(INBOX).await?;
     Ok(())

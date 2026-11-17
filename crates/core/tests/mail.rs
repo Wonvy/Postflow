@@ -1053,3 +1053,104 @@ async fn sent_mail_and_other_folders() {
     assert!(server.contains("Sent", "sent-1@example.com"));
     core.shutdown();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mail_moves_between_folders() {
+    let server = FakeImap::start(USER, PASS).await;
+    server.add_mailbox("Receipts", None);
+    server.deliver(
+        "INBOX",
+        &mail(
+            "bill-1@shop.example",
+            "billing@shop.example",
+            "Your bill",
+            "Total: 3",
+        ),
+        &[],
+    );
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    let account = call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    let id = account["id"].clone();
+    wait_for("initial sync", || async {
+        find(&core, "inbox", "Your bill").await.is_some()
+    })
+    .await;
+    let bill = find(&core, "inbox", "Your bill").await.unwrap();
+
+    // 移进 Receipts：收件箱里马上没了，服务器上移过去
+    let moved = call(
+        &core,
+        "mail.move",
+        json!({ "ids": [bill["id"]], "mailbox": "Receipts" }),
+    )
+    .await;
+    assert_eq!(moved["moved"], 1);
+    assert!(find(&core, "inbox", "Your bill").await.is_none());
+    wait_for("moved on the server", || async {
+        server.contains("Receipts", "bill-1@shop.example")
+            && !server.contains("INBOX", "bill-1@shop.example")
+    })
+    .await;
+
+    // 打开 Receipts 能看到它，再移回收件箱
+    call(
+        &core,
+        "mail.open_folder",
+        json!({ "account_id": id, "mailbox": "Receipts" }),
+    )
+    .await;
+    let in_receipts = || async {
+        call(
+            &core,
+            "items.list",
+            json!({ "filter": { "view": "folder", "source_id": id, "mailbox": "Receipts" } }),
+        )
+        .await["items"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    wait_for("listed in the folder", || async {
+        in_receipts().await.len() == 1
+    })
+    .await;
+    let again = in_receipts().await[0].clone();
+    call(
+        &core,
+        "mail.move",
+        json!({ "ids": [again["id"]], "mailbox": "INBOX" }),
+    )
+    .await;
+    wait_for("back in the inbox", || async {
+        find(&core, "inbox", "Your bill").await.is_some()
+            && server.contains("INBOX", "bill-1@shop.example")
+    })
+    .await;
+    assert!(in_receipts().await.is_empty());
+
+    // 目标文件夹不存在：服务器不动，下次同步原处又出现
+    let bill = find(&core, "inbox", "Your bill").await.unwrap();
+    call(
+        &core,
+        "mail.move",
+        json!({ "ids": [bill["id"]], "mailbox": "Nowhere" }),
+    )
+    .await;
+    call(&core, "accounts.sync", json!({ "id": id })).await;
+    wait_for("comes back after a failed move", || async {
+        find(&core, "inbox", "Your bill").await.is_some()
+    })
+    .await;
+    assert!(server.contains("INBOX", "bill-1@shop.example"));
+    core.shutdown();
+}

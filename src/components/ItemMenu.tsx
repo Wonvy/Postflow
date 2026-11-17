@@ -1,6 +1,6 @@
 // 条目的右键菜单。列表里的行和阅读面板共用，操作和工具栏按钮、快捷键走同一套逻辑（lib/actions）。
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   ArchiveRestore,
@@ -8,7 +8,10 @@ import {
   Copy,
   ExternalLink,
   FilePen,
+  Folder,
+  FolderInput,
   Forward,
+  Inbox,
   Link,
   Mail,
   MailOpen,
@@ -24,6 +27,7 @@ import { useT } from "../lib/i18n";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { copyText, openExternal } from "../lib/platform";
 import { keys } from "../lib/queries";
+import { useUi } from "../lib/store";
 import { SourceIcon } from "./SourceIcon";
 import { MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./ui";
 
@@ -61,6 +65,57 @@ function LabelSub({ items }: { items: Item[] }) {
       <MenuSeparator />
       <MenuItem onSelect={() => setLabel(ids, null)}>{t("label.none")}</MenuItem>
     </MenuSub>
+  );
+}
+
+/** 「移到文件夹」：同一个邮箱里的邮件才能一起移，草稿不移。 */
+function MoveSub({ items }: { items: Item[] }) {
+  const t = useT();
+  const lead = items[0];
+  if (!lead || items.some((i) => i.kind !== "mail" || i.draft || i.source_id !== lead.source_id)) return null;
+  return (
+    <MenuSub icon={<FolderInput size={14} />} label={t("move.to")}>
+      <MoveTargets items={items} accountId={lead.source_id} />
+    </MenuSub>
+  );
+}
+
+/** 子菜单打开时才去列文件夹。 */
+function MoveTargets({ items, accountId }: { items: Item[]; accountId: string }) {
+  const t = useT();
+  const { moveTo } = useActions();
+  const scope = useUi((s) => s.scope);
+  const current = scope.kind === "mailbox" && scope.accountId === accountId ? scope.mailbox : null;
+  const folders = useQuery({
+    queryKey: ["folders", accountId],
+    queryFn: () => api.folders(accountId).then((r) => r.folders),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const inInbox = items.every((i) => !i.archived);
+  return (
+    <>
+      {!inInbox && (
+        <MenuItem icon={<Inbox size={14} />} onSelect={() => moveTo(items, "INBOX")}>
+          {t("nav.inbox")}
+        </MenuItem>
+      )}
+      {folders.isPending && <MenuLabel>{t("folders.loading")}</MenuLabel>}
+      {folders.isError && <MenuLabel>{t("folders.failed")}</MenuLabel>}
+      {folders.data?.length === 0 && <MenuLabel>{t("folders.none")}</MenuLabel>}
+      {folders.data
+        ?.filter((f) => f.selectable && f.name !== current)
+        .map((f) => {
+          const parts = f.delimiter ? f.path.split(f.delimiter).filter(Boolean) : [f.path];
+          return (
+            <MenuItem key={f.name} icon={<Folder size={14} />} onSelect={() => moveTo(items, f.name)}>
+              <span className="max-w-[240px] truncate" style={{ paddingLeft: (parts.length - 1) * 12 }}>
+                {parts[parts.length - 1] ?? f.path}
+              </span>
+            </MenuItem>
+          );
+        })}
+    </>
   );
 }
 
@@ -125,6 +180,7 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
         </MenuItem>
       )}
       <LabelSub items={items} />
+      <MoveSub items={items} />
       <MenuSeparator />
       {lead.url && (
         <>

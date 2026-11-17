@@ -565,6 +565,8 @@ export const api = {
   attachDrop: (tokens: string[]) => rpc<void>("mail.attach_drop", { tokens }),
   /** 给你来过信的人，写信时提示收件人。 */
   contacts: () => rpc<{ contacts: Contact[] }>("mail.contacts"),
+  /** 把邮件移到同一个邮箱的另一个文件夹（服务器上的名字，收件箱是 INBOX）。 */
+  moveMail: (ids: string[], mailbox: string) => rpc<{ moved: number }>("mail.move", { ids, mailbox }),
   /** 邮箱里的普通文件夹。 */
   folders: (accountId: string) => rpc<{ folders: FolderInfo[] }>("mail.folders", { account_id: accountId }),
   /** 打开一个普通文件夹：马上同步它，之后每次收信也带上它。 */

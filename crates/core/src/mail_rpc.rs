@@ -73,6 +73,13 @@ struct AccountId {
 }
 
 #[derive(Deserialize)]
+struct MoveMail {
+    ids: Vec<String>,
+    /// 目标文件夹在服务器上的名字，收件箱是 INBOX。
+    mailbox: String,
+}
+
+#[derive(Deserialize)]
 struct OpenFolder {
     account_id: String,
     /// 服务器上的文件夹名。
@@ -149,6 +156,7 @@ impl Core {
             },
             "mail.attachment" => self.attachment(params, session).await,
             "mail.folders" => self.folders(params, session).await,
+            "mail.move" => self.move_mail(params, session).await,
             "mail.open_folder" => match parse::<OpenFolder>(params) {
                 Ok(p) => {
                     let name = p.mailbox.trim().to_string();
@@ -430,6 +438,48 @@ impl Core {
             .await
             .map_err(|e| RpcError::new("internal", e.to_string()))?
             .map_err(|e| RpcError::new("keychain", e))
+    }
+
+    /// 把邮件移到同一个邮箱的另一个文件夹。本机先拿掉，后台任务去服务器上移。
+    async fn move_mail(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
+        let p: MoveMail = parse(params)?;
+        let target = p.mailbox.trim().to_string();
+        if target.is_empty() {
+            return Err(RpcError::new("bad_params", "which folder?"));
+        }
+        let ids = p.ids.clone();
+        let refs = session
+            .db(move |s| {
+                let refs: Vec<_> = ids
+                    .iter()
+                    .filter_map(|id| s.mail_ref(id).transpose())
+                    .collect::<Result<_, _>>()?;
+                Ok(refs)
+            })
+            .await?;
+        let account = match refs.first() {
+            Some(r) => r.account_id.clone(),
+            None => return reply(json!({ "moved": 0 })),
+        };
+        if refs.iter().any(|r| r.account_id != account) {
+            return Err(RpcError::new(
+                "bad_params",
+                "mail from different mailboxes can't go to one folder",
+            ));
+        }
+        let ids: Vec<String> = refs
+            .iter()
+            .filter(|r| r.mailbox != target)
+            .map(|r| r.id.clone())
+            .collect();
+        let refs = session.db(move |s| s.take_mail_for_move(&ids)).await?;
+        let moved = refs.len();
+        if moved > 0 {
+            tracing::info!(account = %account, moved, "moving mail to another folder");
+            self.send_mail(session, &account, Command::MoveTo(refs, target));
+            self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+        }
+        reply(json!({ "moved": moved }))
     }
 
     /// 邮箱里的普通文件夹，侧栏里列出来。交给后台任务用已有的连接去列。

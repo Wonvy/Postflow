@@ -236,8 +236,11 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   /** 换发信的邮箱：签名跟着换。 */
   const changeFrom = (id: string) => {
     const next = accounts.find((a) => a.id === id)?.signature ?? "";
-    setText((current) => swapSignature(current, signature.current, next, quoteTail.current));
+    // 先记下旧的：更新函数可能晚一点才执行，那时 ref 已经换成新的了
+    const previous = signature.current;
+    const tail = quoteTail.current;
     signature.current = next;
+    setText((current) => swapSignature(current, previous, next, tail));
     setFrom(id);
   };
 

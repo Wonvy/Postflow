@@ -260,11 +260,14 @@ function AccountRow({
   active,
   drag,
   drop,
+  folderDrop,
 }: {
   account: Account;
   active: boolean;
   drag: DragHandlers;
   drop: DropPosition | null;
+  /** 把邮件拖到这个邮箱的某个文件夹上：移过去。 */
+  folderDrop: (mailbox: string) => { drag: DragHandlers; drop: DropPosition | null };
 }) {
   const t = useT();
   const setScope = useUi((s) => s.setScope);
@@ -387,13 +390,19 @@ function AccountRow({
           }
         />
       </ContextMenu>
-      {expanded && <AccountFolders account={account} />}
+      {expanded && <AccountFolders account={account} folderDrop={folderDrop} />}
     </>
   );
 }
 
-/** 一个邮箱里的普通文件夹，按层级缩进。点开时马上同步那个文件夹。 */
-function AccountFolders({ account }: { account: Account }) {
+/** 一个邮箱里的普通文件夹，按层级缩进。点开时马上同步那个文件夹；把邮件拖上来就移进去。 */
+function AccountFolders({
+  account,
+  folderDrop,
+}: {
+  account: Account;
+  folderDrop: (mailbox: string) => { drag: DragHandlers; drop: DropPosition | null };
+}) {
   const t = useT();
   const scope = useUi((s) => s.scope);
   const setScope = useUi((s) => s.setScope);
@@ -424,11 +433,14 @@ function AccountFolders({ account }: { account: Account }) {
         const parts = f.delimiter ? f.path.split(f.delimiter).filter(Boolean) : [f.path];
         const label = parts[parts.length - 1] ?? f.path;
         const active = scope.kind === "mailbox" && scope.accountId === account.id && scope.mailbox === f.name;
+        const dnd = f.selectable ? folderDrop(f.name) : null;
         return (
           <Row
             key={f.name}
             depth={Math.max(1, parts.length)}
             active={active}
+            drag={dnd?.drag}
+            drop={dnd?.drop}
             onClick={() => {
               if (!f.selectable) return;
               setScope({ kind: "mailbox", accountId: account.id, mailbox: f.name, label });
@@ -524,7 +536,7 @@ export function Sidebar({ width }: { width: number }) {
   const shows = (section: SidebarSection) =>
     layout === "groups" || tab === "all" || (tab === "mail") === (section === "mail");
   const qc = useQueryClient();
-  const { applyTo, compose } = useActions();
+  const { applyTo, compose, itemsOf, moveTo } = useActions();
   const hasAccounts = (nav.data?.accounts.length ?? 0) > 0;
   const folderActions = useFolderActions();
 
@@ -848,6 +860,25 @@ export function Sidebar({ width }: { width: number }) {
                     active={isActive({ kind: "account", accountId: account.id })}
                     drag={{ ...source({ kind: "account", id: account.id }, account.name || account.email), ...accountTarget(account) }}
                     drop={dropAt(`account:${account.id}`)}
+                    folderDrop={(mailbox) => {
+                      const key = `mailbox:${account.id}:${mailbox}`;
+                      // 只收这个邮箱里的邮件，草稿不收
+                      const fits = (ids: string[]) => {
+                        const items = itemsOf(ids);
+                        return (
+                          items.length > 0 &&
+                          items.every((i) => i.kind === "mail" && !i.draft && i.source_id === account.id)
+                        );
+                      };
+                      return {
+                        drag: target(
+                          key,
+                          (p) => (p.kind === "items" && fits(p.ids) ? "inside" : null),
+                          (p) => p.kind === "items" && moveTo(itemsOf(p.ids), mailbox),
+                        ),
+                        drop: dropAt(key),
+                      };
+                    }}
                   />
                 ))}
                 {accounts &&
