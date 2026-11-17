@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.14 — 2026-11-17
+
+### English
+
 - Toolbars you can arrange: right-click the list or reader toolbar and choose "Customize toolbar…" to reorder
   buttons and put each one in the top toolbar, in the new status bar, or hide it. Keyboard shortcuts keep working.
 - Status bars under the list (number of items, unread, selected, refreshing) and the reader (date, word count,
