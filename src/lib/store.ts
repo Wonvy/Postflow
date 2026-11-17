@@ -50,8 +50,6 @@ interface UiState {
   refreshing: number;
   /** 内置视图里只看邮件或只看文章。 */
   kindFilter: ItemKind | null;
-  /** 折叠相同邮件的方式。 */
-  groupMode: GroupMode;
   /** 当前列表里展开着的组。换列表时清空。 */
   expandedGroups: string[];
   /** 按 T 键时加一，阅读面板据此切换译文。 */
@@ -66,10 +64,10 @@ interface UiState {
   collapsedFolders: string[];
   /** 翻译成哪种语言，模型目录里的语言代码。为空时跟界面语言一致。 */
   translateTo: string | null;
-  /** 每个列表各自记住的显示方式，键见 `scopeKey`。没选过的用 `defaultListView`。 */
+  /** 每个列表各自的显示方式，键见 `listKey`。没选过的是列表。改一个列表不影响别的。 */
   listViews: Record<string, ListView>;
-  /** 最近一次选的显示方式，新打开的列表沿用它。 */
-  defaultListView: ListView;
+  /** 每个列表各自的折叠方式，键同上。没选过的不折叠。 */
+  groupModes: Record<string, GroupMode>;
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
   sidebarLayout: SidebarLayout;
@@ -125,7 +123,6 @@ export const useUi = create<UiState>()(
       dialog: null,
       refreshing: 0,
       kindFilter: null,
-      groupMode: "none",
       expandedGroups: [],
       translateRequest: 0,
 
@@ -137,7 +134,7 @@ export const useUi = create<UiState>()(
       collapsedFolders: [],
       translateTo: null,
       listViews: {},
-      defaultListView: "list",
+      groupModes: {},
       cardSize: 260,
       sidebarLayout: "groups",
       collapsedSections: [],
@@ -152,7 +149,12 @@ export const useUi = create<UiState>()(
       setDialog: (dialog) => set({ dialog }),
       setRefreshing: (refreshing) => set({ refreshing }),
       setKindFilter: (kindFilter) => set({ kindFilter, openId: null, selection: [], expandedGroups: [] }),
-      setGroupMode: (groupMode) => set({ groupMode, selection: [], expandedGroups: [] }),
+      setGroupMode: (mode) =>
+        set((s) => ({
+          groupModes: { ...s.groupModes, [listKey(s.scope, s.kindFilter)]: mode },
+          selection: [],
+          expandedGroups: [],
+        })),
       setGroupExpanded: (key, expanded) =>
         set((s) => ({
           expandedGroups: expanded
@@ -172,7 +174,7 @@ export const useUi = create<UiState>()(
         })),
       setTranslateTo: (translateTo) => set({ translateTo }),
       setListView: (scope, view) =>
-        set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.kindFilter)]: view }, defaultListView: view })),
+        set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.kindFilter)]: view } })),
       setSidebarLayout: (sidebarLayout) =>
         set((s) => {
           if (sidebarLayout === "groups") return { sidebarLayout };
@@ -222,10 +224,9 @@ export const useUi = create<UiState>()(
         listWidth: s.listWidth,
         collapsedFolders: s.collapsedFolders,
         kindFilter: s.kindFilter,
-        groupMode: s.groupMode,
         translateTo: s.translateTo,
         listViews: s.listViews,
-        defaultListView: s.defaultListView,
+        groupModes: s.groupModes,
         cardSize: s.cardSize,
         sidebarLayout: s.sidebarLayout,
         collapsedSections: s.collapsedSections,
@@ -260,7 +261,12 @@ export function listKey(scope: ListScope, kind: ItemKind | null): string {
 
 /** 当前列表的显示方式。 */
 export function useListView(): ListView {
-  return useUi((s) => s.listViews[listKey(s.scope, s.kindFilter)] ?? s.defaultListView);
+  return useUi((s) => s.listViews[listKey(s.scope, s.kindFilter)] ?? "list");
+}
+
+/** 当前列表的折叠方式。 */
+export function useGroupMode(): GroupMode {
+  return useUi((s) => s.groupModes[listKey(s.scope, s.kindFilter)] ?? "none");
 }
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */

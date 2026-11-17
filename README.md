@@ -60,6 +60,7 @@ click **More info → Run anyway**.
   or look at a single account or feed.
 - Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
   source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
+  Every feed, mailbox, folder and view keeps its own display mode and grouping; changing one leaves the others alone.
 - Inbox, Today, Unread, Starred and Archive views. Drag items from the list onto Starred or Archive to star or
   archive them.
 - Three ways to show a list: compact rows, a summary with an excerpt and thumbnail, or a grid of cards with cover

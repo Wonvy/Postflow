@@ -4,12 +4,12 @@
 import { useMemo } from "react";
 import { groupItems, rowsOf, type Stop, stopOf } from "./grouping";
 import { useItems } from "./queries";
-import { filterOf, useUi } from "./store";
+import { filterOf, useGroupMode, useUi } from "./store";
 
 export function useListModel() {
   const scope = useUi((s) => s.scope);
   const kindFilter = useUi((s) => s.kindFilter);
-  const groupMode = useUi((s) => s.groupMode);
+  const groupMode = useGroupMode();
   const expandedGroups = useUi((s) => s.expandedGroups);
 
   const filter = useMemo(() => filterOf(scope, kindFilter), [scope, kindFilter]);

@@ -34,7 +34,16 @@ import { type Translate, useLang, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
 import { isMac } from "../lib/platform";
 import { useNav, useSettings } from "../lib/queries";
-import { CARD_MAX, CARD_MIN, type ListScope, type ListView, listKey, useListView, useUi } from "../lib/store";
+import {
+  CARD_MAX,
+  CARD_MIN,
+  type ListScope,
+  type ListView,
+  listKey,
+  useGroupMode,
+  useListView,
+  useUi,
+} from "../lib/store";
 import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
 import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
@@ -220,7 +229,7 @@ const GROUP_OPTIONS: { value: GroupMode; label: "group.none" | "group.thread" | 
 /** 工具栏里的「折叠相同邮件」：不折叠、按会话、按发件人。 */
 function GroupControl() {
   const t = useT();
-  const mode = useUi((s) => s.groupMode);
+  const mode = useGroupMode();
   const setMode = useUi((s) => s.setGroupMode);
   return (
     <Menu

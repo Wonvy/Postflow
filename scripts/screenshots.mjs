@@ -111,7 +111,7 @@ async function shot(browser, lang, name, prefs, act) {
     listWidth: 400,
     collapsedFolders: [],
     kindFilter: null,
-    groupMode: prefs.groupMode ?? "none",
+    groupModes: { "view:inbox": prefs.groupMode ?? "none" },
   };
   await context.addInitScript((s) => {
     localStorage.setItem("postflow.ui", JSON.stringify({ state: s, version: 0 }));
