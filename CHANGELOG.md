@@ -24,6 +24,9 @@ that heading into the version number and date.
   buttons (which you can place like any other button), right-click menu items and styles, react to new mail, and
   read and change items. The developer guide is docs/plugins.md, and examples/plugins/copy-code is a complete
   example. Plugins only load after you turn them on, on each device.
+- Two more example plugins: important-senders (stars new mail from senders you mark as important) and
+  daily-digest (copies today's unread items, or the open one, as Markdown). The plugin developer guide is now
+  also available in Chinese (docs/plugins.zh-CN.md), and Settings → Plugins opens the one for your language.
 
 ### 中文
 
@@ -37,6 +40,8 @@ that heading into the version number and date.
   自动分类、标为已读、加星标或归档。自带一条「验证码邮件」规则；「试一下」能看到会命中哪些；也可以应用到已有的条目。规则会同步到其他设备。
 - 插件（设置 → 插件）：把插件文件夹放进插件目录并启用。插件可以加工具栏按钮（和其他按钮一样可以排）、右键菜单项和样式，
   响应新邮件，读取和修改条目。开发文档见 docs/plugins.md，完整的例子在 examples/plugins/copy-code。插件要在每台设备上手动启用才会加载。
+- 新增两个插件例子：important-senders（给标记为重要的发件人的新邮件自动加星标）和 daily-digest（把今天的未读条目或打开的条目复制成 Markdown）。
+  插件开发文档有了完整的中文版（docs/plugins.zh-CN.md），「设置 → 插件」里的开发文档按钮会按界面语言打开对应的版本。
 
 ## 0.1.13 — 2026-11-17
 

@@ -1,0 +1,10 @@
+{
+  "id": "important-senders",
+  "name": "Important senders",
+  "version": "1.0.0",
+  "description": "Stars new mail from the senders you mark as important.",
+  "author": "Postflow",
+  "url": "https://github.com/Wonvy/Postflow/tree/main/examples/plugins/important-senders",
+  "main": "main.js",
+  "minApiVersion": 1
+}

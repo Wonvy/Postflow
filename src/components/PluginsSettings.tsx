@@ -2,17 +2,21 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, FolderOpen, Puzzle, RefreshCw, TriangleAlert } from "lucide-react";
-import { errorText, useT } from "../lib/i18n";
+import { errorText, useLang, useT } from "../lib/i18n";
 import { API_VERSION, listPlugins, type PluginManifest, reloadPlugin, usePlugins } from "../lib/plugins";
 import { openExternal, revealFolder } from "../lib/platform";
 import { useUi } from "../lib/store";
 import { isTauri } from "../lib/transport";
 import { Button, Spinner, Switch } from "./ui";
 
-const DOCS_URL = "https://github.com/Wonvy/Postflow/blob/main/docs/plugins.md";
+const DOCS_URL = {
+  en: "https://github.com/Wonvy/Postflow/blob/main/docs/plugins.md",
+  zh: "https://github.com/Wonvy/Postflow/blob/main/docs/plugins.zh-CN.md",
+} as const;
 
 export function PluginsSettings({ open }: { open: boolean }) {
   const t = useT();
+  const lang = useLang();
   const enabled = useUi((s) => s.enabledPlugins);
   const setEnabled = useUi((s) => s.setPluginEnabled);
   const reloadAll = useUi((s) => s.reloadPlugins);
@@ -101,7 +105,7 @@ export function PluginsSettings({ open }: { open: boolean }) {
           <RefreshCw size={14} />
           {t("plugins.rescan")}
         </Button>
-        <Button variant="ghost" onClick={() => void openExternal(DOCS_URL)}>
+        <Button variant="ghost" onClick={() => void openExternal(DOCS_URL[lang])}>
           <BookOpen size={14} />
           {t("plugins.docs")}
         </Button>

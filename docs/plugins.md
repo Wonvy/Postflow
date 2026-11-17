@@ -1,10 +1,12 @@
 # Writing Postflow plugins
 
+[中文版](plugins.zh-CN.md)
+
 Plugins add buttons, menu items and behavior to Postflow. A plugin is a folder with a `manifest.json` and a
 JavaScript module. It runs inside Postflow's interface and talks to the app through an `api` object.
-[中文说明](#中文说明) is at the end.
 
 - [Quick start](#quick-start)
+- [Examples](#examples)
 - [Folder layout and manifest](#folder-layout-and-manifest)
 - [Lifecycle](#lifecycle)
 - [API reference](#api-reference)
@@ -51,9 +53,16 @@ JavaScript module. It runs inside Postflow's interface and talks to the app thro
 3. Back in **Settings → Plugins**, choose **Rescan**, then turn the plugin on.
    A puzzle-piece button appears in the reader toolbar.
 
-A complete example lives in [`examples/plugins/copy-code`](../examples/plugins/copy-code): it adds a
-"Copy code" button that copies the verification code from the open message, a "Copy title and link" item
-to the list's right-click menu, and reacts to new mail.
+## Examples
+
+Three complete plugins live in [`examples/plugins`](../examples/plugins). To try one, copy its folder into
+your plugins folder, choose **Rescan** and turn it on.
+
+| Plugin | What it does | What it shows |
+| --- | --- | --- |
+| [`copy-code`](../examples/plugins/copy-code) | Copies the verification code from the open message; "Copy title and link" in the list's right-click menu; a notice when new mail carries a code. | A reader toolbar button with an SVG icon, `api.items.get`, a right-click item with `when`, the `"new-mail"` event. |
+| [`important-senders`](../examples/plugins/important-senders) | Right-click mail to mark its sender as important; new unread mail from those senders is starred automatically. | Per-plugin storage, `"items-changed"` with a debounce, `api.items.list` with a filter, `api.items.set`, `api.onUnload`. |
+| [`daily-digest`](../examples/plugins/daily-digest) | Copies today's unread items as Markdown, grouped by feed or mailbox; copies the open item as a Markdown note. | Buttons in both toolbars, `api.items.list` with `view: "today"`, the `"item-open"` event, storage that resets daily. |
 
 ## Folder layout and manifest
 
@@ -249,32 +258,3 @@ change them, and make network requests. That's why nothing loads until the user 
 and events can be added within a version. Set `minApiVersion` to the version you need; Postflow refuses to
 load a plugin that needs a newer API and says so in Settings.
 
----
-
-## 中文说明
-
-插件可以给 Postflow 加按钮、菜单和功能。一个插件就是一个文件夹，里面有 `manifest.json` 和一个 JS 模块。
-插件在 Postflow 的界面里运行，通过 `api` 对象和应用打交道。
-
-**开始：**
-
-1. 打开「设置 → 插件 → 打开插件目录」。
-2. 新建一个以插件 ID 命名的文件夹（如 `hello`），放进 `manifest.json` 和 `main.js`（见上面 Quick start 的例子）。
-3. 回到「设置 → 插件」，点「重新扫描」，再启用它。
-
-完整的例子在 [`examples/plugins/copy-code`](../examples/plugins/copy-code)：在阅读区加一个「复制验证码」按钮，
-在列表右键菜单里加「复制标题和链接」，并在收到含验证码的新邮件时提示。
-
-**要点：**
-
-- `manifest.json` 的 `id` 只能用小写字母、数字和 `-`，并且和文件夹同名；`name` 必填；`main` 默认是 `main.js`。
-- `main.js` 是 ES 模块，`export default` 一个带 `onload(api)` 的对象，或者一个函数（可以返回清理函数）。
-  不能 `import` 插件文件夹里的其他文件，用打包工具打成一个文件即可。
-- 通过 `api` 登记的东西（按钮、菜单项、样式、事件监听）在插件停用或重新加载时自动撤掉；别的清理放在 `onunload` 里。
-- `api.ui.addToolbarButton` 加的按钮默认在顶部工具栏最后，用户可以在「自定义工具栏」里挪到状态栏或隐藏。
-- `api.items` 读写条目（已读、星标、归档、分类，邮件会同步回服务器）；`api.events.on("new-mail" | "items-changed" | "item-open")` 监听事件；
-  `api.storage` 是插件自己的本机存储；`api.rpc` 可以直接调用核心的方法（常用的见上表）。
-- 插件和 Postflow 本身一样能读你的邮件、能联网，所以只有用户在每台设备上手动启用后才会加载。
-  不要在用户不知情的情况下把邮件内容发出去。
-- 调试：用 `npm run app` 从源码运行，按住 Shift 右键打开开发者工具；改完 `main.js` 后点设置里插件旁边的 ↻ 重新加载。
-- 插件接口版本是 `api.apiVersion`（现在是 1），只有不兼容的改动才会加一。`minApiVersion` 写插件需要的最低版本。
