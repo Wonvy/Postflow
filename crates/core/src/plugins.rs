@@ -74,6 +74,12 @@ fn read_manifest(dir: &Path) -> Result<Manifest, String> {
         std::fs::read_to_string(dir.join(MANIFEST)).map_err(|e| format!("{MANIFEST}: {e}"))?;
     let manifest: Manifest = serde_json::from_str(&text).map_err(|e| format!("{MANIFEST}: {e}"))?;
     let folder = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    check(&manifest, folder)?;
+    Ok(manifest)
+}
+
+/// manifest 本身对不对：ID 合法、和文件夹名一致、有名字、入口文件在插件文件夹里。
+fn check(manifest: &Manifest, folder: &str) -> Result<(), String> {
     if !valid_id(&manifest.id) {
         return Err(format!(
             "invalid id {:?}: use lowercase letters, digits and -",
@@ -100,7 +106,37 @@ fn read_manifest(dir: &Path) -> Result<Manifest, String> {
             manifest.main
         ));
     }
-    Ok(manifest)
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct InstallParams {
+    /// manifest.json 的原文，原样写进插件文件夹。
+    manifest: String,
+    /// 入口文件的内容。
+    source: String,
+}
+
+/// 把一个插件（manifest 和入口文件）写进插件目录。已经有同名插件时覆盖这两个文件，用来更新示例插件。
+fn install(root: &Path, p: &InstallParams) -> Result<String, RpcError> {
+    let manifest: Manifest = serde_json::from_str(&p.manifest)
+        .map_err(|e| RpcError::new("plugin_invalid", format!("{MANIFEST}: {e}")))?;
+    check(&manifest, &manifest.id).map_err(|e| RpcError::new("plugin_invalid", e))?;
+    if p.source.len() as u64 > MAX_SOURCE {
+        return Err(RpcError::new(
+            "plugin_invalid",
+            format!("{} is larger than 4 MB", manifest.main),
+        ));
+    }
+    let dir = root.join(&manifest.id);
+    let main = dir.join(&manifest.main);
+    let write = || -> std::io::Result<()> {
+        std::fs::create_dir_all(main.parent().unwrap_or(&dir))?;
+        std::fs::write(&main, &p.source)?;
+        std::fs::write(dir.join(MANIFEST), &p.manifest)
+    };
+    write().map_err(|e| RpcError::new("io", format!("{}: {e}", dir.display())))?;
+    Ok(manifest.id)
 }
 
 fn list(root: &Path) -> Vec<Listed> {
@@ -174,6 +210,13 @@ impl Core {
                     .map_err(|e| RpcError::new("internal", e.to_string()))??;
                 reply(json!({ "source": code }))
             }
+            "plugins.install" => {
+                let p: InstallParams = parse(params)?;
+                let id = tokio::task::spawn_blocking(move || install(&root, &p))
+                    .await
+                    .map_err(|e| RpcError::new("internal", e.to_string()))??;
+                reply(json!({ "id": id }))
+            }
             _ => Err(RpcError::new("unknown_method", method.to_string())),
         }
     }
@@ -229,6 +272,44 @@ mod tests {
         assert_eq!(source(root, "hello").unwrap(), "export default {}");
         assert!(source(root, "../hello").is_err());
         assert!(source(root, "escape").is_err());
+    }
+
+    #[test]
+    fn installs_and_updates_a_plugin() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let params = |manifest: &str, source: &str| InstallParams {
+            manifest: manifest.into(),
+            source: source.into(),
+        };
+        let id = install(
+            root,
+            &params(r#"{"id":"hello","name":"Hello"}"#, "export default {}"),
+        )
+        .unwrap();
+        assert_eq!(id, "hello");
+        assert_eq!(source(root, "hello").unwrap(), "export default {}");
+        // 再装一次就是更新
+        install(
+            root,
+            &params(
+                r#"{"id":"hello","name":"Hello"}"#,
+                "export default { a: 1 }",
+            ),
+        )
+        .unwrap();
+        assert_eq!(source(root, "hello").unwrap(), "export default { a: 1 }");
+
+        assert!(install(root, &params(r#"{"id":"../x","name":"X"}"#, "")).is_err());
+        assert!(
+            install(
+                root,
+                &params(r#"{"id":"x","name":"X","main":"../x.js"}"#, "")
+            )
+            .is_err()
+        );
+        assert!(install(root, &params("{nope", "")).is_err());
+        assert!(!root.join("x").exists());
     }
 
     #[test]

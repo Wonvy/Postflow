@@ -7,8 +7,27 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Sidebar: Categories now sit above Mail. Mail and Feeds can be shown as two tabs side by side, one at a time:
+  right-click the Mail or Feeds heading and choose Show Mail and Feeds as tabs; right-click the tabs to switch back.
+  Section headings are closer together.
+- Plugins: the four example plugins ship with Postflow. The first time Postflow starts on a device (including after
+  this update), it puts them in the plugins folder, turned off; turn them on in Settings → Plugins. Plugins and
+  which ones are on are still per device and don't sync. If you delete an example, Settings → Plugins offers to
+  install it again. The developer guide opens inside Postflow, so it
+  works on networks where GitHub doesn't load.
+- Adding an RSSHub feed: the instance settings box is gone from the form. The instance address now sits in the
+  dialog's bottom bar (in the warning colour for the public rsshub.app); click it to change the address or key,
+  test the connection or read the setup guide.
 
 ### 中文
+- 侧栏：「分类」移到了「邮箱」上面。「邮箱」和「订阅」可以做成左右两个选项卡，一次显示一个：在这两组的标题上点右键，
+  选「邮箱和订阅用选项卡切换」；在选项卡上点右键可以改回上下排列。分组之间的间距也缩小了。
+- 插件：四个示例插件随 Postflow 一起打包。每台设备第一次启动 Postflow 时（包括这次更新后）会把它们放进插件目录，
+  默认不启用，在「设置 → 插件」里打开即可。插件和启用哪些仍然只对这台设备有效，不会同步。删掉的示例可以在
+  「设置 → 插件」里重新安装。
+  开发文档在应用里直接打开，打不开 GitHub 的网络也能看。
+- 添加 RSSHub 订阅：表单里不再放实例设置框，实例地址显示在对话框底栏（公共实例 rsshub.app 显示为警告色），
+  点它可以改地址和密钥、测试连接、看部署指南。
 
 ## 0.1.16 — 2026-11-17
 

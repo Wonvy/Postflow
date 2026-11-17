@@ -16,6 +16,7 @@ import { RpcError } from "../lib/transport";
 import { FolderPicker } from "./FolderPicker";
 import { QuickForm, QuickGrid } from "./QuickSources";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
+import { RsshubStatus } from "./RsshubServer";
 import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, TextInput } from "./ui";
 
 /** 可选的刷新间隔，单位分钟。 */
@@ -553,11 +554,18 @@ export function AddFeedDialog() {
             </div>
           </div>
           <div className="flex items-center justify-end gap-2">
-            {busy && (
+            {busy ? (
               <span className="mr-auto flex items-center gap-2 text-[12px] text-fg-3">
                 <Spinner size={12} />
                 {phase === "searching" ? t("add.searching") : t("add.adding")}
               </span>
+            ) : (
+              // RSSHub 订阅用的实例，点开可以改
+              mode === "rsshub" && (
+                <span className="-ml-1.5 mr-auto min-w-0">
+                  <RsshubStatus />
+                </span>
+              )
             )}
             <Button variant="ghost" onClick={() => setDialog(null)}>
               {t("action.cancel")}

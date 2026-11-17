@@ -55,8 +55,10 @@ JavaScript module. It runs inside Postflow's interface and talks to the app thro
 
 ## Examples
 
-Four complete plugins live in [`examples/plugins`](../examples/plugins). To try one, copy its folder into
-your plugins folder, choose **Rescan** and turn it on.
+Four complete plugins live in [`examples/plugins`](../examples/plugins). They also ship with Postflow: the first time
+Postflow starts on a device, it puts them in the plugins folder, turned off. Turn one on in **Settings → Plugins**.
+If you delete one, reinstall it from **Example plugins** on the same page. You can also copy a
+plugin's folder into your plugins folder, choose **Rescan** and turn it on.
 
 | Plugin | What it does | What it shows |
 | --- | --- | --- |

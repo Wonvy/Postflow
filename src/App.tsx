@@ -11,6 +11,7 @@ import { Toaster } from "./components/Toast";
 import { ToolbarsDialog } from "./components/Toolbars";
 import { SourceDialog } from "./components/SourceDialog";
 import { watchFullscreen } from "./lib/fullscreen";
+import { useSeedExamplePlugins } from "./lib/pluginExamples";
 import { usePluginLoader } from "./lib/plugins";
 import { WindowControls } from "./components/WindowControls";
 import { useFirstRunWelcome, WelcomeGuide } from "./components/WelcomeGuide";
@@ -109,6 +110,7 @@ function Shell() {
   useEffect(() => startUpdateChecks(), []);
   useEffect(() => watchFullscreen(), []);
   usePluginLoader();
+  useSeedExamplePlugins();
   useFirstRunWelcome();
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);

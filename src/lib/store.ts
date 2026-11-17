@@ -114,6 +114,10 @@ interface UiState {
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
   collapsedSections: SidebarSection[];
+  /** 侧栏的「邮箱」和「订阅」做成左右两个选项卡，一次只显示一个。在这两组的右键菜单里切换。 */
+  sidebarTabs: boolean;
+  /** 选项卡模式下显示的是哪一个。 */
+  sidebarTab: "mail" | "feeds";
   /** 列表里显示译文。 */
   listTranslate: boolean;
   /** 阅读面板的翻译开关：开着时打开的每一条都自动翻译，直到关掉。 */
@@ -149,6 +153,9 @@ interface UiState {
   welcomeStep: number | null;
   /** 这台设备上看完或跳过了新手引导，以后不再自动弹出（关于页里可以再打开）。 */
   welcomeDone: boolean;
+  /** 这台设备已经放过示例插件（第一次启动时放一次，不启用）。之后删掉的不会再放回来。 */
+  examplePluginsSeeded: boolean;
+  setExamplePluginsSeeded: () => void;
   /** 变一下就重新扫描插件目录、重新加载插件。不保存。 */
   pluginReload: number;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
@@ -178,6 +185,8 @@ interface UiState {
   setListView: (scope: ListScope, view: ListView) => void;
   setCardSize: (size: number) => void;
   toggleSection: (section: SidebarSection) => void;
+  setSidebarTabs: (on: boolean) => void;
+  setSidebarTab: (tab: "mail" | "feeds") => void;
   toggleAiPanel: () => void;
   toggleListTranslate: () => void;
   setReaderTranslate: (on: boolean) => void;
@@ -249,6 +258,8 @@ export const useUi = create<UiState>()(
       groupModes: {},
       cardSize: 260,
       collapsedSections: [],
+      sidebarTabs: false,
+      sidebarTab: "mail",
       aiPanel: false,
       aiPanelFor: null,
       mainView: "list",
@@ -271,6 +282,8 @@ export const useUi = create<UiState>()(
       pluginReload: 0,
       welcomeStep: null,
       welcomeDone: false,
+      examplePluginsSeeded: false,
+      setExamplePluginsSeeded: () => set({ examplePluginsSeeded: true }),
       setWelcomeStep: (welcomeStep) => set({ welcomeStep }),
       finishWelcome: () => set({ welcomeStep: null, welcomeDone: true }),
 
@@ -363,6 +376,8 @@ export const useUi = create<UiState>()(
             ? s.collapsedSections.filter((x) => x !== section)
             : [...s.collapsedSections, section],
         })),
+      setSidebarTabs: (sidebarTabs) => set({ sidebarTabs }),
+      setSidebarTab: (sidebarTab) => set({ sidebarTab }),
       setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
       openSearch: () => set((s) => ({ searchOpen: true, searchFocus: s.searchFocus + 1, mainView: "list" })),
@@ -394,6 +409,8 @@ export const useUi = create<UiState>()(
         groupModes: s.groupModes,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
+        sidebarTabs: s.sidebarTabs,
+        sidebarTab: s.sidebarTab,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,
@@ -412,6 +429,7 @@ export const useUi = create<UiState>()(
         listPaging: s.listPaging,
         enabledPlugins: s.enabledPlugins,
         welcomeDone: s.welcomeDone,
+        examplePluginsSeeded: s.examplePluginsSeeded,
       }),
     },
   ),

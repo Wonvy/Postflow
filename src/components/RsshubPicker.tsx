@@ -16,7 +16,7 @@ import {
   type RsshubRoute,
 } from "../lib/rsshub";
 import { useModelDownloads, useTranslateTarget } from "../lib/translate";
-import { RsshubServer, useRsshubSettings } from "./RsshubServer";
+import { useRsshubSettings } from "./RsshubServer";
 import { Button, cx, Favicon, Field, Select, Spinner, TextInput } from "./ui";
 
 function siteIcon(route: RsshubRoute): string | null {
@@ -287,12 +287,6 @@ export function RsshubForm({
           onChange={(v) => set(p.name, v)}
         />
       ))}
-
-      <RsshubServer compact>
-        <p className="mt-1 break-all font-mono text-[11px] text-fg-2">
-          {url ? url.replace(/\?key=.*$/, key ? "?key=…" : "") : t("rsshub.fillRequired")}
-        </p>
-      </RsshubServer>
     </div>
   );
 }

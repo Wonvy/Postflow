@@ -1,15 +1,15 @@
-// RSSHub 实例的设置：地址、访问密钥、测试连接、部署指南。设置的「订阅」页和添加订阅的 RSSHub 表单都用它。
+// RSSHub 实例的设置：地址、访问密钥、测试连接、部署指南。设置的「订阅」页直接放；添加订阅时
+// 只在底部显示一行当前实例（RsshubStatus），点开再改。
 // 地址和密钥存在同步的设置里，改一次所有设备都用新的。
 
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CircleCheck, CircleX, ExternalLink, PlugZap } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { BookOpen, CircleCheck, CircleX, PlugZap, Server, TriangleAlert } from "lucide-react";
+import { useState } from "react";
 // 部署指南随应用打包：在应用里直接看，打不开 GitHub 的网络也能用
 import GUIDE_EN from "../../docs/rsshub.md?raw";
 import GUIDE_ZH from "../../docs/rsshub.zh-CN.md?raw";
 import { api } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { openExternal } from "../lib/platform";
 import { keys, useSettings } from "../lib/queries";
 import {
   DEFAULT_INSTANCE,
@@ -19,7 +19,7 @@ import {
   normalizeInstance,
   SETTING_KEY,
 } from "../lib/rsshub";
-import { Markdown } from "./Markdown";
+import { GuideModal } from "./GuideModal";
 import { Button, cx, Modal } from "./ui";
 
 /** 设置里的 RSSHub 实例地址和访问密钥。 */
@@ -65,13 +65,12 @@ function checkText(t: ReturnType<typeof useT>, check: InstanceCheck, instance: s
   }
 }
 
-export function RsshubServer({ compact = false, children }: { compact?: boolean; children?: ReactNode }) {
+export function RsshubServer() {
   const t = useT();
   const [guide, setGuide] = useState(false);
   const { instance, key, save } = useRsshubSettings();
   const [instanceDraft, setInstanceDraft] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState<string | null>(null);
-  const [showKey, setShowKey] = useState(false);
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -111,7 +110,7 @@ export function RsshubServer({ compact = false, children }: { compact?: boolean;
     "min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 font-mono text-[12px] text-fg-2 outline-none hover:bg-hover focus:bg-hover";
 
   return (
-    <div className={cx("rounded-md border border-line px-3 py-2", !compact && "flex flex-col gap-1")}>
+    <div className="flex flex-col gap-1 rounded-md border border-line px-3 py-2">
       <div className="flex items-center gap-2 text-[12px] text-fg-3">
         <span className="w-[84px] shrink-0 whitespace-nowrap">{t("rsshub.instance")}</span>
         <input
@@ -124,24 +123,21 @@ export function RsshubServer({ compact = false, children }: { compact?: boolean;
           className={field}
         />
       </div>
-      {(showKey || key || !compact) && (
-        <div className="flex items-center gap-2 text-[12px] text-fg-3">
-          <span className="w-[84px] shrink-0 whitespace-nowrap">{t("rsshubServer.key")}</span>
-          <input
-            aria-label={t("rsshubServer.key")}
-            type="password"
-            autoComplete="off"
-            value={keyDraft ?? key}
-            onChange={(e) => setKeyDraft(e.target.value)}
-            onBlur={() => void commitKey()}
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
-            placeholder={t("rsshubServer.keyPlaceholder")}
-            spellCheck={false}
-            className={field}
-          />
-        </div>
-      )}
-      {children}
+      <div className="flex items-center gap-2 text-[12px] text-fg-3">
+        <span className="w-[84px] shrink-0 whitespace-nowrap">{t("rsshubServer.key")}</span>
+        <input
+          aria-label={t("rsshubServer.key")}
+          type="password"
+          autoComplete="off"
+          value={keyDraft ?? key}
+          onChange={(e) => setKeyDraft(e.target.value)}
+          onBlur={() => void commitKey()}
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
+          placeholder={t("rsshubServer.keyPlaceholder")}
+          spellCheck={false}
+          className={field}
+        />
+      </div>
       {instance === DEFAULT_INSTANCE && (
         <p className="mt-1 text-[11px] leading-relaxed text-fg-3">{t("rsshub.publicHint")}</p>
       )}
@@ -159,11 +155,6 @@ export function RsshubServer({ compact = false, children }: { compact?: boolean;
           {!checking && <PlugZap size={13} />}
           {t("rsshubServer.test")}
         </Button>
-        {compact && !showKey && !key && (
-          <button type="button" onClick={() => setShowKey(true)} className="text-[12px] text-fg-3 hover:text-fg-2">
-            {t("rsshubServer.addKey")}
-          </button>
-        )}
         <span className="flex-1" />
         <button
           type="button"
@@ -180,29 +171,48 @@ export function RsshubServer({ compact = false, children }: { compact?: boolean;
 }
 
 /**
- * 部署指南（docs/rsshub*.md）。去掉只在网页上有用的语言切换和目录，
- * 底部可以去 GitHub 看最新版。
+ * 添加订阅底部的一行：现在用的是哪个 RSSHub 实例。公共实例 rsshub.app 对阅读器有限制，标成警告色。
+ * 点开是完整的实例设置。
  */
+export function RsshubStatus() {
+  const t = useT();
+  const { instance } = useRsshubSettings();
+  const [open, setOpen] = useState(false);
+  const isPublic = instance === DEFAULT_INSTANCE;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={isPublic ? t("rsshub.publicHint") : t("rsshub.changeInstance")}
+        className={cx(
+          "flex min-w-0 items-center gap-1.5 rounded px-1.5 py-1 text-[12px] hover:bg-hover",
+          isPublic ? "text-warning" : "text-fg-3 hover:text-fg-2",
+        )}
+      >
+        {isPublic ? <TriangleAlert size={12} className="shrink-0" /> : <Server size={12} className="shrink-0" />}
+        <span className="truncate font-mono">{hostOf(instance)}</span>
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title={t("rsshub.instance")} width={520}>
+        <div className="p-4">
+          <RsshubServer />
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+/** 部署指南（docs/rsshub*.md）。 */
 function RsshubGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
   const lang = useLang();
-  const text = (lang === "zh" ? GUIDE_ZH : GUIDE_EN)
-    .split("\n")
-    .filter((line) => !/^\[(English|中文版)\]\(/.test(line.trim()) && !/^- \[[^\]]+\]\(#/.test(line.trim()))
-    .join("\n");
   return (
-    <Modal open={open} onClose={onClose} title={t("rsshubServer.guide")} width={680}>
-      <div className="px-5 py-4">
-        <Markdown text={text} wrapped className="select-text text-[13px] leading-relaxed text-fg-2" />
-        <button
-          type="button"
-          onClick={() => void openExternal(guideUrl(lang))}
-          className="mt-4 flex items-center gap-1 text-[12px] text-fg-3 hover:text-fg-2"
-        >
-          <ExternalLink size={12} />
-          {t("rsshubServer.guideOnline")}
-        </button>
-      </div>
-    </Modal>
+    <GuideModal
+      open={open}
+      onClose={onClose}
+      title={t("rsshubServer.guide")}
+      text={lang === "zh" ? GUIDE_ZH : GUIDE_EN}
+      onlineUrl={guideUrl(lang)}
+    />
   );
 }
