@@ -32,18 +32,14 @@ pub struct ParsedEntry {
 
 /// 解析 RSS、Atom 或 JSON Feed。`base_url` 用来把相对链接补全。
 pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
-    let parser = feed_rs::parser::Builder::new()
-        .base_uri(Some(base_url))
-        .sanitize_content(false)
-        // 源没给 guid 时用链接当标识。连链接都没有就留空，后面用内容算一个。
-        // 不能用库默认的随机值，否则每次抓取都会被当成新文章。
-        .id_generator(|links, _title, _uri| {
-            links.first().map(|l| l.href.clone()).unwrap_or_default()
-        })
-        .build();
-    let feed = parser
-        .parse(bytes)
-        .map_err(|e| Error::NotAFeed(e.to_string()))?;
+    let feed = match parse_raw(bytes, base_url) {
+        Ok(feed) => feed,
+        // 解析不了时，去掉 feed-rs 不认的空元素再试一次；还不行就报第一次的错
+        Err(first) => match drop_empty_media_text(bytes) {
+            Some(fixed) => parse_raw(&fixed, base_url).map_err(|_| first)?,
+            None => return Err(first),
+        },
+    };
 
     let site_url = pick_link(&feed.links).filter(|u| u != base_url);
     let mut entries: Vec<ParsedEntry> = feed.entries.into_iter().map(convert_entry).collect();
@@ -67,6 +63,66 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
             .filter(|u| !u.is_empty()),
         entries,
     })
+}
+
+fn parse_raw(bytes: &[u8], base_url: &str) -> Result<feed_rs::model::Feed> {
+    let parser = feed_rs::parser::Builder::new()
+        .base_uri(Some(base_url))
+        .sanitize_content(false)
+        // 源没给 guid 时用链接当标识。连链接都没有就留空，后面用内容算一个。
+        // 不能用库默认的随机值，否则每次抓取都会被当成新文章。
+        .id_generator(|links, _title, _uri| {
+            links.first().map(|l| l.href.clone()).unwrap_or_default()
+        })
+        .build();
+    parser
+        .parse(bytes)
+        .map_err(|e| Error::NotAFeed(e.to_string()))
+}
+
+/// feed-rs 遇到空的 `<media:title>` 或 `<media:description>` 会让整个源解析失败，
+/// 比如 YouTube 频道里只要有一个视频没写简介，整个频道就订阅不了。把这些空元素去掉。
+/// 没有可去的就返回 `None`。
+fn drop_empty_media_text(bytes: &[u8]) -> Option<Vec<u8>> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    let mut changed = false;
+    while let Some(at) = rest.find("<media:") {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at..];
+        if let Some(len) = empty_media_text(tail) {
+            changed = true;
+            rest = &tail[len..];
+        } else {
+            out.push('<');
+            rest = &tail[1..];
+        }
+    }
+    out.push_str(rest);
+    changed.then(|| out.into_bytes())
+}
+
+/// `tail` 以一个空的 `media:title` 或 `media:description` 开头时，返回这个元素的长度。
+fn empty_media_text(tail: &str) -> Option<usize> {
+    let name_end = tail[1..].find(|c: char| c.is_whitespace() || c == '>' || c == '/')? + 1;
+    let name = &tail[1..name_end];
+    if name != "media:title" && name != "media:description" {
+        return None;
+    }
+    let open_end = tail.find('>')? + 1;
+    if tail[..open_end].ends_with("/>") {
+        return Some(open_end);
+    }
+    let close = format!("</{name}>");
+    let inner_len = tail[open_end..].find(&close)?;
+    let inner = tail[open_end..open_end + inner_len].trim();
+    let empty = inner.is_empty()
+        || inner
+            .strip_prefix("<![CDATA[")
+            .and_then(|s| s.strip_suffix("]]>"))
+            .is_some_and(|s| s.trim().is_empty());
+    empty.then_some(open_end + inner_len + close.len())
 }
 
 fn convert_entry(entry: Entry) -> ParsedEntry {
@@ -403,6 +459,61 @@ mod tests {
                 None
             ]
         );
+    }
+
+    #[test]
+    fn video_without_a_description_does_not_break_the_feed() {
+        // YouTube 频道源的样子：第一个视频没写简介，第二个的标题也是空的
+        let atom = r#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>A Channel</title>
+ <link rel="alternate" href="https://www.youtube.com/channel/UCxyz"/>
+ <entry>
+  <id>yt:video:aaa</id>
+  <title>First video</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=aaa"/>
+  <published>2026-11-15T10:00:00+00:00</published>
+  <media:group>
+   <media:title>First video</media:title>
+   <media:content url="https://www.youtube.com/v/aaa?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i1.ytimg.com/vi/aaa/hqdefault.jpg" width="480" height="360"/>
+   <media:description></media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:bbb</id>
+  <title>Second video</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=bbb"/>
+  <published>2026-11-14T10:00:00+00:00</published>
+  <media:group>
+   <media:title/>
+   <media:content url="https://www.youtube.com/v/bbb?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i1.ytimg.com/vi/bbb/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Has a description</media:description>
+  </media:group>
+ </entry>
+</feed>"#;
+        let feed = parse_feed(atom.as_bytes(), "https://www.youtube.com/feeds/videos.xml").unwrap();
+        assert_eq!(feed.title, "A Channel");
+        let titles: Vec<&str> = feed.entries.iter().map(|e| e.title.as_str()).collect();
+        assert_eq!(titles, vec!["First video", "Second video"]);
+        assert_eq!(
+            feed.entries[0].image.as_deref(),
+            Some("https://i1.ytimg.com/vi/aaa/hqdefault.jpg")
+        );
+        assert!(feed.entries[1].content.contains("Has a description"));
+    }
+
+    #[test]
+    fn only_empty_media_text_is_dropped() {
+        let xml = "<a><media:description> </media:description><media:title><![CDATA[]]></media:title>\
+<media:descriptions>x</media:descriptions><media:description>keep</media:description><media:title/></a>";
+        let fixed = String::from_utf8(drop_empty_media_text(xml.as_bytes()).unwrap()).unwrap();
+        assert_eq!(
+            fixed,
+            "<a><media:descriptions>x</media:descriptions><media:description>keep</media:description></a>"
+        );
+        assert!(drop_empty_media_text(b"<a><media:title>x</media:title></a>").is_none());
     }
 
     #[test]
