@@ -84,8 +84,9 @@ export function IconButton({
         aria-pressed={active}
         className={cx(
           "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
-          "hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-40",
-          active ? "text-fg" : "text-fg-2",
+          "disabled:pointer-events-none disabled:opacity-40",
+          // 开着的开关（自动翻译、全文模式、AI 面板）一眼能看出来：强调色底和图标
+          active ? "bg-accent-soft text-accent" : "text-fg-2 hover:bg-hover hover:text-fg",
           className,
         )}
         {...rest}

@@ -231,7 +231,8 @@ function Article({ id }: { id: string }) {
             <IconButton
               label={all("starred") ? t("action.unstar") : t("action.star")}
               shortcut="S"
-              active={all("starred")}
+              // 星标自己有黄色的实心样式，不再加强调色底
+              aria-pressed={all("starred")}
               onClick={() => toggle("starred", group.length > 0 ? group : [summary])}
             >
               <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
