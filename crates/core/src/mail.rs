@@ -63,6 +63,8 @@ pub(crate) enum Command {
     WatchFolder(String),
     /// 把邮件移到另一个文件夹（服务器上的名字）。本机已经先删掉了，移成以后由目标文件夹的同步带回来。
     MoveTo(Vec<MailRef>, String),
+    /// 从服务器取更早的邮件：新加了几封、更早的还有没有。
+    LoadOlder(OlderFrom, oneshot::Sender<Result<(usize, bool), RpcError>>),
 }
 
 /// 同时跟着同步的普通文件夹最多这么多个，多了先不管最早打开的。
@@ -535,6 +537,9 @@ async fn park(
             Command::ListFolders(reply) => {
                 let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
             }
+            Command::LoadOlder(_, reply) => {
+                let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+            }
             // 这次连接就是为它连的，已经失败了，不能拿它当再试的理由，否则会一直空转
             Command::Sync | Command::CatchUp => {}
             apply => keep.push(apply),
@@ -562,6 +567,9 @@ async fn park(
                 Some(Command::ListFolders(reply)) => {
                     let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
                 }
+                Some(Command::LoadOlder(_, reply)) => {
+                    let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+                }
                 Some(apply) => pending.push(apply),
             },
             _ = &mut timer => return true,
@@ -580,6 +588,9 @@ fn fail_fetches(pending: &mut Vec<Command>, err: &postflow_mail::Error) {
                 let _ = reply.send(Err(mail_error(err)));
             }
             Command::ListFolders(reply) => {
+                let _ = reply.send(Err(mail_error(err)));
+            }
+            Command::LoadOlder(_, reply) => {
                 let _ = reply.send(Err(mail_error(err)));
             }
             other => keep.push(other),
@@ -667,6 +678,18 @@ async fn serve(
                         }
                         // 没移成（目标文件夹没了之类）：下次同步原来的文件夹时它会回到列表里
                         tracing::warn!(account = %account_id, "mail: could not move mail: {err}");
+                    }
+                }
+                Command::LoadOlder(from, reply) => {
+                    let result = load_older(&mut conn, session, account_id, from).await;
+                    let failed = result.as_ref().err().is_some_and(is_connection_error);
+                    let _ = reply.send(result.as_ref().map(|r| *r).map_err(mail_error));
+                    if result.as_ref().is_ok_and(|(added, _)| *added > 0) {
+                        core.emit_changed(&[Scope::Feeds, Scope::Items], None);
+                    }
+                    if let (true, Err(err)) = (failed, result) {
+                        pending.extend(iter);
+                        return Err(err);
                     }
                 }
                 Command::WatchFolder(name) => {
@@ -879,38 +902,13 @@ async fn sync_folder(
         .filter(|uid| !listed.contains(uid))
         .collect();
 
-    // 同一个 Message-ID 在收件箱里出现两次时，给后来的那封换个 ID，免得互相覆盖
-    let mut taken: HashMap<String, u32> = known.iter().map(|k| (k.id.clone(), k.uid)).collect();
-    let mut mails = Vec::with_capacity(new.len());
-    let (small, large): (Vec<&Listing>, Vec<&Listing>) =
-        new.iter().partition(|l| l.size <= EAGER_BODY_LIMIT);
-    for (group, header_only) in [(small, false), (large, true)] {
-        for chunk in group.chunks(FETCH_BATCH) {
-            let uids: Vec<u32> = chunk.iter().map(|l| l.uid).collect();
-            let fetched: HashMap<u32, Vec<u8>> = conn
-                .fetch_raw(&uids, header_only)
-                .await?
-                .into_iter()
-                .collect();
-            for l in chunk {
-                let Some(raw) = fetched.get(&l.uid) else {
-                    continue;
-                };
-                let mail = new_mail(
-                    account_id,
-                    folder,
-                    mailbox,
-                    info.uidvalidity,
-                    l,
-                    raw,
-                    !header_only,
-                    started_at,
-                    &mut taken,
-                );
-                mails.push(mail);
-            }
-        }
-    }
+    let place = Place {
+        account_id,
+        folder,
+        mailbox,
+        uidvalidity: info.uidvalidity,
+    };
+    let mails = fetch_mails(conn, &place, &new, &known, started_at).await?;
 
     let sync = MailSync {
         uidvalidity: info.uidvalidity,
@@ -924,6 +922,128 @@ async fn sync_folder(
         .db(move |s| s.apply_folder_sync(&id, folder, &name, sync))
         .await
         .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))
+}
+
+/// 一个文件夹：哪个账户、什么用途、服务器上叫什么、这次的 UIDVALIDITY。
+struct Place<'a> {
+    account_id: &'a str,
+    folder: MailFolder,
+    mailbox: &'a str,
+    uidvalidity: u32,
+}
+
+/// 取回这些邮件的原文（大邮件只取信头），整理成要存的样子。
+async fn fetch_mails(
+    conn: &mut Connection,
+    place: &Place<'_>,
+    listing: &[&Listing],
+    known: &[postflow_store::KnownMail],
+    now: i64,
+) -> Result<Vec<NewMail>, postflow_mail::Error> {
+    // 同一个 Message-ID 在收件箱里出现两次时，给后来的那封换个 ID，免得互相覆盖
+    let mut taken: HashMap<String, u32> = known.iter().map(|k| (k.id.clone(), k.uid)).collect();
+    let mut mails = Vec::with_capacity(listing.len());
+    let (small, large): (Vec<&Listing>, Vec<&Listing>) =
+        listing.iter().partition(|l| l.size <= EAGER_BODY_LIMIT);
+    for (group, header_only) in [(small, false), (large, true)] {
+        for chunk in group.chunks(FETCH_BATCH) {
+            let uids: Vec<u32> = chunk.iter().map(|l| l.uid).collect();
+            let fetched: HashMap<u32, Vec<u8>> = conn
+                .fetch_raw(&uids, header_only)
+                .await?
+                .into_iter()
+                .collect();
+            for l in chunk {
+                let Some(raw) = fetched.get(&l.uid) else {
+                    continue;
+                };
+                mails.push(new_mail(
+                    place.account_id,
+                    place.folder,
+                    place.mailbox,
+                    place.uidvalidity,
+                    l,
+                    raw,
+                    !header_only,
+                    now,
+                    &mut taken,
+                ));
+            }
+        }
+    }
+    Ok(mails)
+}
+
+/// 「加载更早的邮件」从哪个文件夹取。
+#[derive(Debug, Clone)]
+pub(crate) enum OlderFrom {
+    Inbox,
+    Special(SpecialMailbox),
+    Folder(String),
+}
+
+/// 每次「加载更早的邮件」取这么多封。
+const OLDER_BATCH: usize = 100;
+
+/// 取本机已有的最早一封之前的 `OLDER_BATCH` 封。返回新加了几封、更早的还有没有。
+async fn load_older(
+    conn: &mut Connection,
+    session: &Arc<Session>,
+    account_id: &str,
+    from: OlderFrom,
+) -> Result<(usize, bool), postflow_mail::Error> {
+    let (folder, mailbox) = match from {
+        OlderFrom::Inbox => (MailFolder::Inbox, INBOX.to_string()),
+        OlderFrom::Folder(name) => (MailFolder::Other, name),
+        OlderFrom::Special(kind) => {
+            let folder = match kind {
+                SpecialMailbox::Junk => MailFolder::Junk,
+                SpecialMailbox::Trash => MailFolder::Trash,
+                SpecialMailbox::Sent => MailFolder::Sent,
+                SpecialMailbox::Drafts => MailFolder::Drafts,
+            };
+            match conn.special_mailbox(kind).await? {
+                Some(name) => (folder, name),
+                None => return Ok((0, false)),
+            }
+        }
+    };
+    let info = conn.select(&mailbox).await?;
+    let (id, name) = (account_id.to_string(), mailbox.clone());
+    let known = session
+        .db(move |s| s.known_mail(&id, &name))
+        .await
+        .unwrap_or_default();
+    // 还没同步过的文件夹交给平常的同步
+    let Some(oldest) = known.iter().map(|k| k.uid).min() else {
+        conn.select(INBOX).await?;
+        return Ok((0, false));
+    };
+    let started_at = crate::refresh::now();
+    let (listing, more) = conn.list_before(oldest, OLDER_BATCH).await?;
+    let place = Place {
+        account_id,
+        folder,
+        mailbox: &mailbox,
+        uidvalidity: info.uidvalidity,
+    };
+    let refs: Vec<&Listing> = listing.iter().collect();
+    let mails = fetch_mails(conn, &place, &refs, &known, started_at).await?;
+    let added = mails.len();
+    let sync = MailSync {
+        uidvalidity: info.uidvalidity,
+        started_at,
+        new: mails,
+        flags: Vec::new(),
+        vanished: Vec::new(),
+    };
+    let (id, name) = (account_id.to_string(), mailbox.clone());
+    session
+        .db(move |s| s.apply_folder_sync(&id, folder, &name, sync))
+        .await
+        .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
+    conn.select(INBOX).await?;
+    Ok((added, more))
 }
 
 #[allow(clippy::too_many_arguments)]

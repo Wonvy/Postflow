@@ -388,6 +388,38 @@ impl Connection {
         .await
     }
 
+    /// 当前选中邮箱里 UID 小于 `before` 的邮件里最新的 `count` 封的基本信息，以及更早的还有没有。
+    pub async fn list_before(&mut self, before: u32, count: usize) -> Result<(Vec<Listing>, bool)> {
+        if before <= 1 || count == 0 {
+            return Ok((Vec::new(), false));
+        }
+        let found = timed(async {
+            Ok(self
+                .session
+                .uid_search(format!("UID 1:{}", before - 1))
+                .await?)
+        })
+        .await?;
+        let mut uids: Vec<u32> = found.into_iter().filter(|u| *u < before).collect();
+        uids.sort_unstable();
+        let chosen = uids.split_off(uids.len().saturating_sub(count));
+        let more = !uids.is_empty();
+        if chosen.is_empty() {
+            return Ok((Vec::new(), false));
+        }
+        let listing = timed(async {
+            let fetches: Vec<Fetch> = self
+                .session
+                .uid_fetch(uid_set(&chosen), "(UID FLAGS RFC822.SIZE INTERNALDATE)")
+                .await?
+                .try_collect()
+                .await?;
+            Ok(fetches.iter().filter_map(listing).collect())
+        })
+        .await?;
+        Ok((listing, more))
+    }
+
     /// UID 不小于 `from` 的所有邮件的基本信息。
     pub async fn list_from(&mut self, from: u32) -> Result<Vec<Listing>> {
         let from = from.max(1);

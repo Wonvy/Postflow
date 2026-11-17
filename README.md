@@ -63,8 +63,10 @@ click **More info → Run anyway**.
 - Sent shows what you've sent from every mailbox, including mail sent from your phone or webmail, and the people
   you write to come first when you fill in recipients.
 - Your own folders: click the arrow next to a mailbox (or choose "Show folders" in its menu) to list its other
-  folders, nested as on the server. A folder syncs once you open it and keeps up while Postflow runs; only recent
-  mail in it is fetched. Gmail labels show up as folders too.
+  folders, nested as on the server. A folder syncs once you open it and keeps up while Postflow runs. Gmail
+  labels show up as folders too.
+- Postflow fetches the most recent mail of each folder first. At the end of a mailbox or folder list, "Load older
+  mail from the server" fetches the next 100.
 - Move mail into a folder with "Move to folder" in its right-click menu, or drag it onto the folder in the
   sidebar.
 - Each mailbox can have a signature (in its settings), added below what you write and above the quote in replies.
@@ -161,7 +163,7 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** formatted (HTML) mail, older mail in folders you open,
+**Not yet available:** formatted (HTML) mail,
 OAuth sign-in for Gmail (use an app password), a command palette, snoozing, rules, a tray icon, mobile apps, and
 installers signed by Apple and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
 download page instead.

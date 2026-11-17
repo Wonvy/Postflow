@@ -1,4 +1,5 @@
 import * as Popover from "@radix-ui/react-popover";
+import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Archive,
@@ -44,7 +45,7 @@ import { api } from "../lib/api";
 import { formatSize } from "../lib/platform";
 import { requestListTranslations, useListTranslations } from "../lib/listTranslate";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateTarget } from "../lib/translate";
-import type { Item, ItemKind } from "../lib/api";
+import type { Item, ItemKind, OlderTarget } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
@@ -69,6 +70,7 @@ import {
   type ListScope,
   type ListView,
   listKey,
+  scopeKey,
   useGroupMode,
   useListStyle,
   useListView,
@@ -337,6 +339,50 @@ function Stepper({
       >
         <Plus size={13} strokeWidth={2} />
       </button>
+    </div>
+  );
+}
+
+/** 邮件列表到底了，能从服务器取更早邮件的地方：一个邮箱、它的文件夹，以及已发送、草稿、垃圾邮件、已删除。 */
+function olderTarget(scope: ListScope): OlderTarget | null {
+  if (scope.kind === "account") return { account_id: scope.accountId, folder: "inbox" };
+  if (scope.kind === "mailbox") return { account_id: scope.accountId, folder: "folder", mailbox: scope.mailbox };
+  if (scope.kind === "view" && (scope.view === "sent" || scope.view === "drafts" || scope.view === "junk" || scope.view === "trash")) {
+    return { folder: scope.view };
+  }
+  return null;
+}
+
+/** 列表最后的「加载更早的邮件」。 */
+function LoadOlder({ target }: { target: OlderTarget }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [state, setState] = useState<"idle" | "busy" | "done" | "failed">("idle");
+  const load = async () => {
+    setState("busy");
+    try {
+      const r = await api.loadOlder(target);
+      await qc.invalidateQueries({ queryKey: ["items"] });
+      setState(r.more ? "idle" : "done");
+    } catch {
+      setState("failed");
+    }
+  };
+  return (
+    <div className="flex h-12 items-center justify-center text-[12px] text-fg-3">
+      {state === "done" ? (
+        t("list.noOlder")
+      ) : (
+        <button
+          type="button"
+          disabled={state === "busy"}
+          onClick={() => void load()}
+          className="flex h-7 items-center gap-2 rounded-md px-2.5 text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-60"
+        >
+          {state === "busy" && <Spinner size={12} />}
+          {state === "failed" ? t("list.olderFailed") : t("list.loadOlder")}
+        </button>
+      )}
     </div>
   );
 }
@@ -886,6 +932,9 @@ export function ItemList({ width }: { width: number }) {
           <div className="flex h-9 items-center justify-center text-fg-3">
             <Spinner />
           </div>
+        )}
+        {!isLoading && !hasNextPage && olderTarget(scope) && (
+          <LoadOlder key={scopeKey(scope)} target={olderTarget(scope)!} />
         )}
         {/* 给底部的操作条留出位置，最后几行不被它挡住 */}
         {selection.length > 0 && <div className="h-14" />}

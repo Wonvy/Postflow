@@ -219,6 +219,13 @@ export interface AttachedFile {
   size: number;
 }
 
+/** 「加载更早的邮件」从哪里取。 */
+export interface OlderTarget {
+  account_id?: string;
+  folder: "inbox" | "sent" | "drafts" | "junk" | "trash" | "folder";
+  mailbox?: string;
+}
+
 /** 邮箱里的一个普通文件夹。 */
 export interface FolderInfo {
   /** 服务器上的原名，打开时用。 */
@@ -565,6 +572,8 @@ export const api = {
   attachDrop: (tokens: string[]) => rpc<void>("mail.attach_drop", { tokens }),
   /** 给你来过信的人，写信时提示收件人。 */
   contacts: () => rpc<{ contacts: Contact[] }>("mail.contacts"),
+  /** 从服务器取更早的邮件。不给邮箱就是全部邮箱。 */
+  loadOlder: (target: OlderTarget) => rpc<{ added: number; more: boolean }>("mail.load_older", target),
   /** 把邮件移到同一个邮箱的另一个文件夹（服务器上的名字，收件箱是 INBOX）。 */
   moveMail: (ids: string[], mailbox: string) => rpc<{ moved: number }>("mail.move", { ids, mailbox }),
   /** 邮箱里的普通文件夹。 */

@@ -72,6 +72,20 @@ struct AccountId {
     account_id: String,
 }
 
+/// 「加载更早的邮件」：哪个邮箱（不给就是全部邮箱）、哪个文件夹。
+#[derive(Deserialize)]
+struct LoadOlder {
+    #[serde(default)]
+    account_id: Option<String>,
+    /// inbox、sent、drafts、junk、trash，或者 folder（这时要给 `mailbox`）。
+    folder: String,
+    #[serde(default)]
+    mailbox: Option<String>,
+}
+
+/// 取更早的邮件最多等这么久。
+const OLDER_TIMEOUT: Duration = Duration::from_secs(120);
+
 #[derive(Deserialize)]
 struct MoveMail {
     ids: Vec<String>,
@@ -157,6 +171,7 @@ impl Core {
             "mail.attachment" => self.attachment(params, session).await,
             "mail.folders" => self.folders(params, session).await,
             "mail.move" => self.move_mail(params, session).await,
+            "mail.load_older" => self.load_older(params, session).await,
             "mail.open_folder" => match parse::<OpenFolder>(params) {
                 Ok(p) => {
                     let name = p.mailbox.trim().to_string();
@@ -438,6 +453,75 @@ impl Core {
             .await
             .map_err(|e| RpcError::new("internal", e.to_string()))?
             .map_err(|e| RpcError::new("keychain", e))
+    }
+
+    /// 从服务器取更早的邮件。每个邮箱交给自己的后台任务，等它们都取完。
+    async fn load_older(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
+        use crate::mail::OlderFrom;
+        use postflow_mail::SpecialMailbox;
+        let p: LoadOlder = parse(params)?;
+        let from = match p.folder.as_str() {
+            "inbox" => OlderFrom::Inbox,
+            "sent" => OlderFrom::Special(SpecialMailbox::Sent),
+            "drafts" => OlderFrom::Special(SpecialMailbox::Drafts),
+            "junk" => OlderFrom::Special(SpecialMailbox::Junk),
+            "trash" => OlderFrom::Special(SpecialMailbox::Trash),
+            "folder" => match p
+                .mailbox
+                .as_deref()
+                .map(str::trim)
+                .filter(|m| !m.is_empty())
+            {
+                Some(name) => OlderFrom::Folder(name.to_string()),
+                None => return Err(RpcError::new("bad_params", "which folder?")),
+            },
+            other => {
+                return Err(RpcError::new(
+                    "bad_params",
+                    format!("unknown folder: {other}"),
+                ));
+            }
+        };
+        let accounts: Vec<String> = match p.account_id {
+            Some(id) => vec![id],
+            None => session.workers().keys().cloned().collect(),
+        };
+        let mut waiting = Vec::new();
+        for account in accounts {
+            let (tx, rx) = oneshot::channel();
+            if self.send_mail(session, &account, Command::LoadOlder(from.clone(), tx)) {
+                waiting.push(rx);
+            }
+        }
+        if waiting.is_empty() {
+            return Err(RpcError::new(
+                "mail_unavailable",
+                "this account is not connected",
+            ));
+        }
+        let (mut added, mut more) = (0, false);
+        let mut failure = None;
+        for rx in waiting {
+            match tokio::time::timeout(OLDER_TIMEOUT, rx).await {
+                Ok(Ok(Ok((n, m)))) => {
+                    added += n;
+                    more |= m;
+                }
+                Ok(Ok(Err(e))) => failure = Some(e),
+                Ok(Err(_)) => {
+                    failure = Some(RpcError::new(
+                        "mail_unavailable",
+                        "this account is not connected",
+                    ))
+                }
+                Err(_) => failure = Some(RpcError::new("mail_timeout", "timed out")),
+            }
+        }
+        // 都失败了才报错；有的邮箱取到了就算成功
+        match failure {
+            Some(e) if added == 0 && !more => Err(e),
+            _ => reply(json!({ "added": added, "more": more })),
+        }
     }
 
     /// 把邮件移到同一个邮箱的另一个文件夹。本机先拿掉，后台任务去服务器上移。

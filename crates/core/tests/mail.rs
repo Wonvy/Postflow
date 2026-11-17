@@ -1154,3 +1154,69 @@ async fn mail_moves_between_folders() {
     assert!(server.contains("INBOX", "bill-1@shop.example"));
     core.shutdown();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn older_mail_is_loaded_on_request() {
+    let server = FakeImap::start(USER, PASS).await;
+    for n in 1..=250 {
+        server.deliver(
+            "INBOX",
+            &mail(
+                &format!("old-{n}@example.com"),
+                "ada@example.com",
+                &format!("Message {n}"),
+                "x",
+            ),
+            &["\\Seen"],
+        );
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    let account = call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    let id = account["id"].clone();
+    let count = || async {
+        call(
+            &core,
+            "items.list",
+            json!({ "filter": { "view": "inbox", "source_id": id }, "limit": 500 }),
+        )
+        .await["items"]
+            .as_array()
+            .unwrap()
+            .len()
+    };
+    // 第一次同步只取最新的 200 封
+    wait_for("initial sync", || async { count().await == 200 }).await;
+    assert!(find(&core, "inbox", "Message 1").await.is_none());
+
+    let older = call(
+        &core,
+        "mail.load_older",
+        json!({ "account_id": id, "folder": "inbox" }),
+    )
+    .await;
+    assert_eq!(older, json!({ "added": 50, "more": false }));
+    assert_eq!(count().await, 250);
+    // 之后的同步不会把它们当成消失了
+    call(&core, "accounts.sync", json!({ "id": id })).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(count().await, 250);
+
+    let none = call(
+        &core,
+        "mail.load_older",
+        json!({ "account_id": id, "folder": "inbox" }),
+    )
+    .await;
+    assert_eq!(none, json!({ "added": 0, "more": false }));
+    core.shutdown();
+}
