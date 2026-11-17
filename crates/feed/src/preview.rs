@@ -51,12 +51,12 @@ pub struct Preview {
 
 /// 网页自己声明的图标和介绍，源里没有时用它们。
 #[derive(Debug, Default)]
-struct PageMeta {
-    icon: Option<String>,
+pub(crate) struct PageMeta {
+    pub(crate) icon: Option<String>,
     description: Option<String>,
 }
 
-fn page_meta(html: &str, base: &Url) -> PageMeta {
+pub(crate) fn page_meta(html: &str, base: &Url) -> PageMeta {
     let doc = Html::parse_document(html);
     let icons = Selector::parse("link[rel][href]").expect("valid selector");
     // 大图标优先：apple-touch-icon 一般是 180px，普通 icon 常常只有 16px

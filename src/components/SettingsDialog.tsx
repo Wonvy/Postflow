@@ -54,6 +54,8 @@ export function SettingsDialog() {
   const notifyMail = useUi((s) => s.notifyMail);
   const setNotifyMail = useUi((s) => s.setNotifyMail);
   const badgeUnread = useUi((s) => s.badgeUnread);
+  const senderLogos = useUi((s) => s.senderLogos);
+  const setSenderLogos = useUi((s) => s.setSenderLogos);
   const setBadgeUnread = useUi((s) => s.setBadgeUnread);
   const lang = useUi((s) => s.lang);
   const setLang = useUi((s) => s.setLang);
@@ -170,6 +172,9 @@ export function SettingsDialog() {
               { value: "tabs", label: t("settings.sidebarTabs") },
             ]}
           />
+        </SettingRow>
+        <SettingRow label={t("settings.senderLogos")} hint={t("settings.senderLogosHint")}>
+          <Switch label={t("settings.senderLogos")} checked={senderLogos} onChange={setSenderLogos} />
         </SettingRow>
         <SettingRow label={t("settings.notifyMail")} hint={t("settings.notifyMailHint")}>
           <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />

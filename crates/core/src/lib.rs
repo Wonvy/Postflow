@@ -12,6 +12,7 @@ mod oauth;
 mod refresh;
 mod rpc;
 mod secrets;
+mod sender_icon;
 mod translate_rpc;
 
 use std::collections::{HashMap, HashSet};
@@ -215,6 +216,8 @@ pub struct Core {
     pub(crate) ai: ai_rpc::AiRuntime,
     /// 写信时加的附件，发出去或者窗口关了就放掉。
     pub(crate) uploads: Mutex<compose::Uploads>,
+    /// 发件人头像用的网站图标，见 sender_icon.rs。
+    pub(crate) sender_icons: sender_icon::SenderIcons,
 }
 
 impl Core {
@@ -233,6 +236,7 @@ impl Core {
         let (events, _) = broadcast::channel(256);
         let translator = Arc::new(Translator::new(local_dir.join("translation"))?);
         let core = Arc::new(Core {
+            sender_icons: sender_icon::SenderIcons::new(&local_dir),
             ai: Default::default(),
             translator,
             local_dir,

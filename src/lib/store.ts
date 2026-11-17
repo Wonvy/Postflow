@@ -134,6 +134,8 @@ interface UiState {
   notifyMail: boolean;
   /** 图标上显示收件箱的未读邮件数。 */
   badgeUnread: boolean;
+  /** 发件人头像用发件人所在网站的图标，没有时显示首字母。 */
+  senderLogos: boolean;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
   mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
@@ -175,6 +177,7 @@ interface UiState {
   rememberFolder: (folder: string) => void;
   setNotifyMail: (on: boolean) => void;
   setBadgeUnread: (on: boolean) => void;
+  setSenderLogos: (on: boolean) => void;
   requestTranslate: () => void;
   openSearch: () => void;
   closeSearch: () => void;
@@ -241,6 +244,7 @@ export const useUi = create<UiState>()(
       recentFolders: [],
       notifyMail: true,
       badgeUnread: true,
+      senderLogos: true,
 
       // 换列表时收起搜索
       setScope: (scope) =>
@@ -320,6 +324,7 @@ export const useUi = create<UiState>()(
       setWebLandscape: (webLandscape) => set({ webLandscape }),
       setNotifyMail: (notifyMail) => set({ notifyMail }),
       setBadgeUnread: (badgeUnread) => set({ badgeUnread }),
+      setSenderLogos: (senderLogos) => set({ senderLogos }),
       rememberFolder: (folder) =>
         set((s) => {
           const name = folder.trim();
@@ -386,6 +391,7 @@ export const useUi = create<UiState>()(
         searchAll: s.searchAll,
         notifyMail: s.notifyMail,
         badgeUnread: s.badgeUnread,
+        senderLogos: s.senderLogos,
       }),
     },
   ),

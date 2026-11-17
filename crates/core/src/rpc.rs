@@ -212,6 +212,11 @@ struct SetSetting {
 }
 
 #[derive(Deserialize)]
+struct DomainParam {
+    domain: String,
+}
+
+#[derive(Deserialize)]
 struct WebCheck {
     url: String,
     /// 要把网页嵌进去的那个页面的地址，也就是界面自己的地址。
@@ -280,6 +285,11 @@ impl Core {
             "app.logging" => {
                 let p: LoggingParams = parse(params)?;
                 return reply(json!({ "ok": crate::logging::set_verbose(p.verbose) }));
+            }
+            // 发件人头像：发件人所在网站的图标
+            "mail.senderIcon" => {
+                let p: DomainParam = parse(params)?;
+                return reply(json!({ "url": self.sender_icon(&p.domain).await }));
             }
             // 阅读区的原网页模式：这个网页肯不肯被嵌进界面里
             "web.check" => {

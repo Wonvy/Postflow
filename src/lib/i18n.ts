@@ -682,6 +682,8 @@ const zh = {
   "settings.notifyMail": "新邮件通知",
   "settings.notifyMailHint": "应用不在前台时，收到新邮件弹出系统通知。",
   "settings.badge": "图标上显示未读数",
+  "settings.senderLogos": "发件人显示网站图标",
+  "settings.senderLogosHint": "用发件人邮箱所在网站的图标当头像，个人邮箱（Gmail、QQ 邮箱等）仍显示首字母。会访问发件人的网站首页，结果存在这台设备上。",
   "settings.badgeHint": "程序坞或任务栏图标上显示收件箱里的未读邮件数；浏览器里显示在标签页标题上。",
 } as const;
 
@@ -1367,6 +1369,8 @@ const en: Record<MessageKey, string> = {
   "settings.notifyMail": "New mail notifications",
   "settings.notifyMailHint": "Show a system notification for new mail while Postflow isn't in front.",
   "settings.badge": "Unread count on the icon",
+  "settings.senderLogos": "Sender logos",
+  "settings.senderLogosHint": "Uses the logo of the sender's website as the avatar. Personal addresses (Gmail, Outlook and the like) keep the initial. Visits the sender's home page; results are kept on this device.",
   "settings.badgeHint": "Shows unread inbox mail on the Dock or taskbar icon; in a browser, in the tab title.",
 };
 

@@ -541,6 +541,8 @@ export const api = {
     rpc<{ count: number }>("items.mark_all_read", { filter }),
   fullText: (id: string) => rpc<{ full_text: string }>("items.full_text", { id }),
   /** 原网页能不能嵌进 `origin` 这个页面（界面自己的地址）。 */
+  /** 发件人所在网站的图标地址，没有时为 null。核心会把结果存在本机。 */
+  senderIcon: (domain: string) => rpc<{ url: string | null }>("mail.senderIcon", { domain }),
   webCheck: (url: string, origin: string) =>
     rpc<{ embeddable: boolean; reason: string | null; final_url: string }>("web.check", { url, origin }),
 

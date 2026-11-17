@@ -10,6 +10,7 @@ pub mod opml;
 mod parse;
 mod preview;
 mod sanitize;
+mod site_icon;
 mod youtube;
 
 pub use client::{Client, Conditional, FetchResult, Fetched};
@@ -18,6 +19,7 @@ pub use frame::FramePolicy;
 pub use parse::{ParsedEntry, ParsedFeed, parse_feed};
 pub use preview::{FeedPreview, Preview, PreviewEntry};
 pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html};
+pub use site_icon::valid_domain;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

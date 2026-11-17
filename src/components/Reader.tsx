@@ -48,11 +48,10 @@ import { isWebUrl } from "../lib/webDevice";
 import { AiPanel } from "./AiPanel";
 import { ItemMenuItems, useSetLabel } from "./ItemMenu";
 import { ReaderStyleMenu } from "./ReaderStyleMenu";
-import { AccountIcon, SourceIcon } from "./SourceIcon";
+import { AccountIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { WebPage } from "./WebPage";
 import {
-  Avatar,
   Button,
   ContextMenu,
   cx,
@@ -650,7 +649,7 @@ function MailView({
       </h1>
 
       <div className="mb-6 mt-5 flex items-start gap-3">
-        <Avatar name={sender || "?"} seed={mail.from.address} size={32} />
+        <SenderAvatar name={sender || "?"} address={mail.from.address} size={32} />
         <div className="min-w-0 flex-1 select-text">
           <div className="flex min-w-0 items-baseline gap-2">
             <span className="truncate font-medium text-fg">{sender}</span>
