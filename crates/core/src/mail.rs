@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use postflow_mail::{Connection, FlagChange, Listing, Security, ServerConfig, SpecialMailbox};
+use postflow_mail::{
+    Auth, Connection, FlagChange, Listing, Security, ServerConfig, SpecialMailbox,
+};
 use postflow_store::{
     Account, ItemPatch, MailFolder, MailRef, MailSync, MailSyncStats, NewMail, ids,
 };
@@ -135,7 +137,8 @@ pub(crate) async fn verify_login(
     email: &str,
     password: &str,
 ) -> Result<ServerConfig, RpcError> {
-    let first = match verify(&cfg, password).await {
+    let password = Auth::Password(password.to_string());
+    let first = match verify(&cfg, &password).await {
         Ok(()) => return Ok(cfg),
         Err(e) => e,
     };
@@ -145,16 +148,16 @@ pub(crate) async fn verify_login(
     {
         tracing::info!(host = %cfg.host, "login rejected, trying the other form of the user name");
         let retry = ServerConfig { username, ..cfg };
-        if verify(&retry, password).await.is_ok() {
+        if verify(&retry, &password).await.is_ok() {
             return Ok(retry);
         }
     }
     Err(first)
 }
 
-/// 试着连上并打开收件箱，确认设置和密码都对。
-pub(crate) async fn verify(cfg: &ServerConfig, password: &str) -> Result<(), RpcError> {
-    let mut conn = Connection::connect(cfg, password)
+/// 试着连上并打开收件箱，确认设置和密码（或令牌）都对。
+pub(crate) async fn verify(cfg: &ServerConfig, auth: &Auth) -> Result<(), RpcError> {
+    let mut conn = Connection::connect(cfg, auth)
         .await
         .map_err(|e| mail_error(&e))?;
     let result = conn.select(INBOX).await.map_err(|e| mail_error(&e));
@@ -305,13 +308,34 @@ async fn run(
         let Ok(Some(account)) = session.db(move |s| s.account(&id)).await else {
             return;
         };
-        let secrets = core.secrets.clone();
-        let id = account_id.clone();
-        let password = tokio::task::spawn_blocking(move || secrets.get(&id))
-            .await
-            .ok()
-            .flatten();
-        let Some(password) = password else {
+        let auth = match core.mail_auth(&account_id).await {
+            Ok(auth) => auth,
+            // 换 OAuth 令牌失败：登录过期了就等用户重新登录，网络问题等一会儿再试
+            Err(e) => {
+                core.record_mail(
+                    &session,
+                    &account_id,
+                    Some((e.code.as_str(), e.message.clone())),
+                )
+                .await;
+                if crate::oauth::needs_sign_in(&e.code) {
+                    if park(&mut rx, &mut pending, &e.code, None).await {
+                        continue;
+                    }
+                    return;
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(backoff) => {}
+                    cmd = rx.recv() => match cmd {
+                        Some(cmd) => pending.push(cmd),
+                        None => return,
+                    }
+                }
+                backoff = (backoff * 2).min(MAX_BACKOFF);
+                continue;
+            }
+        };
+        let Some(auth) = auth else {
             tracing::warn!(account = %account_id, "no password on this device; waiting for the user");
             core.record_mail(
                 &session,
@@ -342,7 +366,7 @@ async fn run(
         };
 
         tracing::debug!(account = %account_id, host = %cfg.host, port = cfg.port, "connecting");
-        let conn = match Connection::connect(&cfg, &password).await {
+        let conn = match Connection::connect(&cfg, &auth).await {
             Ok(conn) => {
                 tracing::info!(account = %account_id, host = %cfg.host, idle = conn.supports_idle(), "mail connected");
                 conn
@@ -362,6 +386,10 @@ async fn run(
                 )
                 .await;
                 fail_fetches(&mut pending, &err);
+                // 令牌被拒（刚好过期、被吊销）：丢掉缓存的，下次重新换
+                if matches!(auth, Auth::OAuth2(_)) && matches!(err, postflow_mail::Error::Auth(_)) {
+                    core.drop_access_token(&account_id);
+                }
                 if err.needs_user() {
                     // 服务器拒绝登录：可能是密码错了，也可能只是暂时的（登录太频繁、系统忙）。
                     // 用户点刷新就再试；不点也过一阵自己再试一次

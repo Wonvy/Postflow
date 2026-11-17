@@ -3,13 +3,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use postflow_mail::{RenderOptions, ServerConfig};
+use postflow_mail::{Auth, RenderOptions, ServerConfig};
 use postflow_store::{AccountConfig, AccountPatch, ItemSummary};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use crate::mail::{Command, mail_error, parse_security, security_str, verify_login};
+use crate::mail::{Command, mail_error, parse_security, security_str, verify, verify_login};
+use crate::oauth::MICROSOFT_IMAP;
 use crate::rpc::{parse, reply};
 use crate::{Core, RpcError, Scope, Session};
 
@@ -26,7 +27,12 @@ struct Email {
 #[derive(Deserialize)]
 struct AddAccount {
     email: String,
+    /// 用 OAuth 登录（Outlook、Microsoft 365）时为空，改给 `oauth`。
+    #[serde(default)]
     password: String,
+    /// `accounts.oauth_start` 开始、`accounts.oauth_wait` 等完的那次登录。
+    #[serde(default)]
+    oauth: Option<String>,
     #[serde(default)]
     name: String,
     imap_host: Option<String>,
@@ -40,6 +46,9 @@ struct UpdateAccount {
     id: String,
     name: Option<String>,
     password: Option<String>,
+    /// 重新用 OAuth 登录。
+    #[serde(default)]
+    oauth: Option<String>,
     imap_host: Option<String>,
     imap_port: Option<u16>,
     imap_security: Option<String>,
@@ -118,7 +127,7 @@ impl Core {
             },
             "mail.attachment" => self.attachment(params, session).await,
             "mail.trust_sender" => self.trust_sender(params, session).await,
-            _ => return None,
+            _ => return self.oauth_rpc(method, params, session).await,
         };
         Some(result)
     }
@@ -145,6 +154,9 @@ impl Core {
     ) -> Result<Value, RpcError> {
         let p: AddAccount = parse(params)?;
         let email = p.email.trim().to_string();
+        if let Some(flow) = p.oauth.clone() {
+            return self.add_oauth_account(p, &email, &flow, session).await;
+        }
         let (guess, _) = postflow_mail::detect(&email)
             .await
             .ok_or_else(|| RpcError::new("invalid_email", "email address is invalid"))?;
@@ -191,6 +203,30 @@ impl Core {
             .db(move |s| s.account(&id))
             .await?
             .ok_or_else(|| RpcError::new("not_found", "no such account"))?;
+
+        // 重新用微软账户登录：用新令牌试一次，成功就换掉原来的密码或令牌
+        if let Some(flow) = &p.oauth {
+            let (tokens, client_id) = self.take_oauth_tokens(flow)?;
+            let cfg = crate::mail::server_config(&account)?;
+            verify(&cfg, &Auth::OAuth2(tokens.access_token.clone())).await?;
+            self.save_oauth(&account.id, &client_id, &tokens).await?;
+            if let Some(name) = p.name.filter(|n| *n != account.name) {
+                let id = account.id.clone();
+                let patch = AccountPatch {
+                    name: Some(name),
+                    imap_host: None,
+                    imap_port: None,
+                    imap_security: None,
+                    username: None,
+                };
+                session.db(move |s| s.update_account(&id, patch)).await?;
+            }
+            tracing::info!(account = %account.id, "mail account signed in again");
+            self.start_worker(session, &account.id);
+            self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+            let id = account.id.clone();
+            return reply(session.db(move |s| s.account(&id)).await?);
+        }
 
         let host = non_empty(p.imap_host);
         let mut username = non_empty(p.username);
@@ -256,10 +292,51 @@ impl Core {
         self.stop_worker(session, &p.id);
         let id = p.id.clone();
         session.db(move |s| s.remove_account(&id)).await?;
+        self.forget_oauth(&p.id).await;
         let secrets = self.secrets.clone();
         let _ = tokio::task::spawn_blocking(move || secrets.delete(&p.id)).await;
         self.emit_changed(&[Scope::Feeds, Scope::Items], None);
         reply(json!({}))
+    }
+
+    /// 用微软账户登录的邮箱：服务器默认是 Outlook 的，用户名就是邮箱地址。
+    async fn add_oauth_account(
+        self: &Arc<Self>,
+        p: AddAccount,
+        email: &str,
+        flow: &str,
+        session: &Arc<Session>,
+    ) -> Result<Value, RpcError> {
+        if !email.contains('@') {
+            return Err(RpcError::new("invalid_email", "email address is invalid"));
+        }
+        let (tokens, client_id) = self.take_oauth_tokens(flow)?;
+        let cfg = ServerConfig {
+            host: non_empty(p.imap_host).unwrap_or_else(|| MICROSOFT_IMAP.0.to_string()),
+            port: p.imap_port.unwrap_or(MICROSOFT_IMAP.1),
+            security: match p.imap_security {
+                Some(s) => parse_security(&s)?,
+                None => postflow_mail::Security::Tls,
+            },
+            username: non_empty(p.username).unwrap_or_else(|| email.to_string()),
+        };
+        cfg.validate().map_err(|e| mail_error(&e))?;
+        verify(&cfg, &Auth::OAuth2(tokens.access_token.clone())).await?;
+
+        let config = AccountConfig {
+            email: email.to_string(),
+            name: p.name.trim().to_string(),
+            imap_host: cfg.host.clone(),
+            imap_port: cfg.port,
+            imap_security: security_str(cfg.security).to_string(),
+            username: cfg.username.clone(),
+        };
+        let account = session.db(move |s| s.put_account(config)).await?;
+        tracing::info!(account = %account.id, host = %account.imap_host, "mail account added with microsoft sign-in");
+        self.save_oauth(&account.id, &client_id, &tokens).await?;
+        self.start_worker(session, &account.id);
+        self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+        reply(account)
     }
 
     async fn save_password(&self, account_id: &str, password: String) -> Result<(), RpcError> {

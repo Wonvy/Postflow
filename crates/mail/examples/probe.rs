@@ -4,7 +4,7 @@
 
 use std::time::Instant;
 
-use postflow_mail::{Connection, Security, ServerConfig};
+use postflow_mail::{Auth, Connection, Security, ServerConfig};
 
 #[tokio::main]
 async fn main() {
@@ -25,7 +25,7 @@ async fn main() {
         username: username.clone(),
     };
     let start = Instant::now();
-    match Connection::connect(&cfg, password).await {
+    match Connection::connect(&cfg, &Auth::Password(password.to_string())).await {
         Ok(mut conn) => {
             println!("{host}: logged in after {:?}", start.elapsed());
             match conn.select("INBOX").await {

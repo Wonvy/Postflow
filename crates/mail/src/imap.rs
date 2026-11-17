@@ -217,6 +217,36 @@ async fn timed<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
         .map_err(|_| Error::Timeout)?
 }
 
+/// 登录方式：密码，或者 OAuth 换来的访问令牌（XOAUTH2，Outlook 和 Microsoft 365 只认这个）。
+#[derive(Clone)]
+pub enum Auth {
+    Password(String),
+    OAuth2(String),
+}
+
+impl std::fmt::Debug for Auth {
+    // 不把密码和令牌打进日志
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Auth::Password(_) => "Auth::Password(***)",
+            Auth::OAuth2(_) => "Auth::OAuth2(***)",
+        })
+    }
+}
+
+/// SASL XOAUTH2：第一次回应带上用户名和令牌；登录失败时服务器会再发一段说明，回一个空行收尾。
+struct XOAuth2 {
+    first: Option<Vec<u8>>,
+}
+
+impl async_imap::Authenticator for XOAuth2 {
+    type Response = Vec<u8>;
+
+    fn process(&mut self, _challenge: &[u8]) -> Vec<u8> {
+        self.first.take().unwrap_or_default()
+    }
+}
+
 pub struct Connection {
     session: Session<Stream>,
     idle: bool,
@@ -229,7 +259,7 @@ pub struct Connection {
 
 impl Connection {
     /// 连上服务器并登录。
-    pub async fn connect(cfg: &ServerConfig, password: &str) -> Result<Connection> {
+    pub async fn connect(cfg: &ServerConfig, auth: &Auth) -> Result<Connection> {
         cfg.validate()?;
         let host = cfg.host.trim();
         let session = tokio::time::timeout(CONNECT_TIMEOUT, async {
@@ -256,15 +286,22 @@ impl Connection {
             if cfg.security != Security::Starttls {
                 read_greeting(&mut client).await?;
             }
-            client
-                .login(cfg.username.trim(), password)
-                .await
-                .map_err(|(err, _)| match err {
-                    async_imap::error::Error::No(msg) | async_imap::error::Error::Bad(msg) => {
-                        Error::Auth(crate::server_text(&msg))
-                    }
-                    other => other.into(),
-                })
+            let user = cfg.username.trim();
+            let result = match auth {
+                Auth::Password(password) => client.login(user, password).await,
+                Auth::OAuth2(token) => {
+                    let first = format!("user={user}\x01auth=Bearer {token}\x01\x01").into_bytes();
+                    client
+                        .authenticate("XOAUTH2", XOAuth2 { first: Some(first) })
+                        .await
+                }
+            };
+            result.map_err(|(err, _)| match err {
+                async_imap::error::Error::No(msg) | async_imap::error::Error::Bad(msg) => {
+                    Error::Auth(crate::server_text(&msg))
+                }
+                other => other.into(),
+            })
         })
         .await
         .map_err(|_| Error::Timeout)??;

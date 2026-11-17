@@ -19,6 +19,9 @@ use tokio::net::TcpListener;
 
 const FEED_PORT: u16 = 1145;
 const AI_PORT: u16 = 1146;
+/// 用微软账户登录的演示邮箱（假的登录服务在 FEED_PORT 上）。
+const OUTLOOK_PORT: u16 = 1147;
+const OUTLOOK_USER: &str = "outlook-demo@example.com";
 const MINUTE: i64 = 60;
 const HOUR: i64 = 60 * MINUTE;
 const DAY: i64 = 24 * HOUR;
@@ -542,24 +545,186 @@ fn route(path: &str) -> Option<(&'static str, String)> {
     })
 }
 
+/// 读完整个请求：先读到空行，再按 Content-Length 把正文读全。
+async fn read_request(stream: &mut tokio::net::TcpStream) -> Option<String> {
+    let mut buf = Vec::new();
+    let mut chunk = vec![0u8; 8192];
+    loop {
+        let n = stream.read(&mut chunk).await.ok()?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        let text = String::from_utf8_lossy(&buf);
+        if let Some(end) = text.find("\r\n\r\n") {
+            let length = text[..end]
+                .lines()
+                .find_map(|l| {
+                    let (k, v) = l.split_once(':')?;
+                    k.eq_ignore_ascii_case("content-length")
+                        .then(|| v.trim().parse::<usize>().ok())?
+                })
+                .unwrap_or(0);
+            if buf.len() >= end + 4 + length {
+                break;
+            }
+        }
+        if buf.len() > 1 << 20 {
+            break;
+        }
+    }
+    Some(String::from_utf8_lossy(&buf).to_string())
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < bytes.len() => match u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                Ok(b) => {
+                    out.push(b);
+                    i += 2;
+                }
+                Err(_) => out.push(b'%'),
+            },
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+fn form(s: &str) -> Vec<(String, String)> {
+    s.split('&')
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let (k, v) = p.split_once('=').unwrap_or((p, ""));
+            (percent_decode(k), percent_decode(v))
+        })
+        .collect()
+}
+
+fn get<'a>(params: &'a [(String, String)], key: &str) -> &'a str {
+    params
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("")
+}
+
+fn base64url(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::new();
+    for chunk in data.chunks(3) {
+        let n = (u32::from(chunk[0]) << 16)
+            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*chunk.get(2).unwrap_or(&0));
+        for i in 0..=chunk.len() {
+            out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+/// 假的微软登录服务：登录页上点「允许」或「拒绝」，换令牌时检查 PKCE。
+/// 发出的访问令牌就是演示邮箱的密码 `demo`，假 IMAP 服务器认它。
+fn fake_microsoft(
+    method: &str,
+    path: &str,
+    query: &str,
+    body: &str,
+) -> Option<(&'static str, &'static str, String)> {
+    let json = "application/json";
+    match (method, path) {
+        ("GET", "/common/oauth2/v2.0/authorize") => {
+            let q = form(query);
+            let back = get(&q, "redirect_uri");
+            let state = get(&q, "state");
+            if !back.starts_with("http://localhost:") || get(&q, "code_challenge_method") != "S256"
+            {
+                return Some((
+                    "400 Bad Request",
+                    "text/plain",
+                    "bad sign-in request".into(),
+                ));
+            }
+            let allow = format!(
+                "{back}?code=demo.{}&state={state}",
+                get(&q, "code_challenge")
+            );
+            let deny = format!(
+                "{back}?error=access_denied&error_description=The+user+said+no&state={state}"
+            );
+            let user = escape(get(&q, "login_hint"));
+            Some((
+                "200 OK",
+                "text/html; charset=utf-8",
+                format!(
+                    "<!doctype html><html><head><meta charset=\"utf-8\"><title>Demo sign-in</title></head>\
+                     <body style=\"font:15px system-ui;max-width:420px;margin:12vh auto\">\
+                     <h2>Demo Microsoft sign-in</h2><p>Postflow wants to read mail for <b>{user}</b>.</p>\
+                     <p>This page is fake and only exists for the demo.</p>\
+                     <p><a id=\"allow\" href=\"{}\">Allow</a> &nbsp; <a id=\"deny\" href=\"{}\">Deny</a></p></body></html>",
+                    escape(&allow),
+                    escape(&deny)
+                ),
+            ))
+        }
+        ("POST", "/common/oauth2/v2.0/token") => {
+            let f = form(body);
+            let ok = !get(&f, "client_id").is_empty()
+                && match get(&f, "grant_type") {
+                    "authorization_code" => {
+                        use sha2::{Digest, Sha256};
+                        let challenge =
+                            base64url(&Sha256::digest(get(&f, "code_verifier").as_bytes()));
+                        get(&f, "code").strip_prefix("demo.") == Some(challenge.as_str())
+                    }
+                    "refresh_token" => get(&f, "refresh_token") == "demo-refresh",
+                    _ => false,
+                };
+            Some(if ok {
+                (
+                    "200 OK",
+                    json,
+                    r#"{"token_type":"Bearer","access_token":"demo","refresh_token":"demo-refresh","expires_in":120}"#.into(),
+                )
+            } else {
+                (
+                    "400 Bad Request",
+                    json,
+                    r#"{"error":"invalid_grant","error_description":"The code or refresh token is not valid."}"#.into(),
+                )
+            })
+        }
+        _ => None,
+    }
+}
+
 async fn serve_feeds() {
     let listener = TcpListener::bind(("127.0.0.1", FEED_PORT))
         .await
         .expect("bind feed server");
     while let Ok((mut stream, _)) = listener.accept().await {
         tokio::spawn(async move {
-            let mut buf = vec![0u8; 8192];
-            let Ok(n) = stream.read(&mut buf).await else {
+            let Some(request) = read_request(&mut stream).await else {
                 return;
             };
-            let request = String::from_utf8_lossy(&buf[..n]);
-            let path = request
-                .split_whitespace()
-                .nth(1)
-                .unwrap_or("/")
-                .split('?')
-                .next()
-                .unwrap_or("/");
+            let method = request.split_whitespace().next().unwrap_or("GET");
+            let target = request.split_whitespace().nth(1).unwrap_or("/");
+            let (path, query) = target.split_once('?').unwrap_or((target, ""));
+            let body = request.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+            if let Some((status, kind, body)) = fake_microsoft(method, path, query, body) {
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                return;
+            }
             let response = match route(path) {
                 Some((kind, body)) => format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -577,6 +742,19 @@ async fn serve_feeds() {
 async fn main() {
     let work = FakeImap::start_on("work@example.com", "demo", 1143).await;
     let personal = FakeImap::start_on("me@example.org", "demo", 1144).await;
+    let outlook = FakeImap::start_on(OUTLOOK_USER, "demo", OUTLOOK_PORT).await;
+    outlook.deliver(
+        "INBOX",
+        &text_mail(
+            "welcome-1@outlook-demo.example",
+            "Demo Team <team@outlook-demo.example>",
+            OUTLOOK_USER,
+            "Signed in with OAuth",
+            10 * MINUTE,
+            "This mailbox only accepts XOAUTH2 sign-in, like Outlook.com.\r\n\r\nIf you can read this, Postflow signed in through the browser.",
+        ),
+        &[],
+    );
     if std::env::var_os("DEMO_QUIET_IDLE").is_some() {
         work.quiet_idle(Duration::from_secs(20));
         personal.quiet_idle(Duration::from_secs(20));
@@ -598,6 +776,14 @@ async fn main() {
     }
     println!();
     println!("AI (custom, no key, any model name): http://127.0.0.1:{AI_PORT}/v1");
+    println!();
+    println!("Microsoft sign-in (OAuth): start the app with");
+    println!(
+        "  POSTFLOW_MICROSOFT_AUTHORITY=http://127.0.0.1:{FEED_PORT}/common POSTFLOW_MICROSOFT_CLIENT_ID=demo"
+    );
+    println!(
+        "  then add an Outlook account {OUTLOOK_USER}, server 127.0.0.1 port {OUTLOOK_PORT}, encryption none."
+    );
 
     let mut n = 0;
     loop {

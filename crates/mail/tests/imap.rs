@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use postflow_mail::{Connection, Error, FlagChange, IdleOutcome, Security, ServerConfig};
+use postflow_mail::{Auth, Connection, Error, FlagChange, IdleOutcome, Security, ServerConfig};
 use postflow_testkit::{FakeImap, mail};
 
 fn config(port: u16, user: &str) -> ServerConfig {
@@ -17,10 +17,13 @@ fn config(port: u16, user: &str) -> ServerConfig {
 #[tokio::test]
 async fn wrong_password_is_an_auth_error() {
     let server = FakeImap::start("me@example.com", "secret").await;
-    let err = Connection::connect(&config(server.port, "me@example.com"), "nope")
-        .await
-        .err()
-        .unwrap();
+    let err = Connection::connect(
+        &config(server.port, "me@example.com"),
+        &Auth::Password("nope".into()),
+    )
+    .await
+    .err()
+    .unwrap();
     assert!(matches!(err, Error::Auth(_)), "{err:?}");
     assert!(err.needs_user());
     assert_eq!(err.code(), "mail_auth");
@@ -28,7 +31,7 @@ async fn wrong_password_is_an_auth_error() {
 
 #[tokio::test]
 async fn nothing_listening_is_a_connect_error() {
-    let err = Connection::connect(&config(9, "me"), "x")
+    let err = Connection::connect(&config(9, "me"), &Auth::Password("x".into()))
         .await
         .err()
         .unwrap();
@@ -57,9 +60,12 @@ async fn list_fetch_flag_move_and_search() {
         &["\\Seen"],
     );
 
-    let mut conn = Connection::connect(&config(server.port, "me@example.com"), "secret")
-        .await
-        .unwrap();
+    let mut conn = Connection::connect(
+        &config(server.port, "me@example.com"),
+        &Auth::Password("secret".into()),
+    )
+    .await
+    .unwrap();
     assert!(conn.supports_idle());
     let info = conn.select("INBOX").await.unwrap();
     assert_eq!(info.exists, 6);
@@ -133,7 +139,7 @@ async fn idle_ends_on_time_even_when_the_server_keeps_it_alive() {
     // 否则连接会一直停在 IDLE 里，新邮件永远收不到
     let server = FakeImap::start("me", "pw").await;
     server.quiet_idle(Duration::from_millis(100));
-    let mut conn = Connection::connect(&config(server.port, "me"), "pw")
+    let mut conn = Connection::connect(&config(server.port, "me"), &Auth::Password("pw".into()))
         .await
         .unwrap();
     conn.select("INBOX").await.unwrap();
@@ -158,7 +164,7 @@ async fn idle_ends_on_time_even_when_the_server_keeps_it_alive() {
 #[tokio::test]
 async fn idle_wakes_up_on_new_mail_and_can_be_interrupted() {
     let server = FakeImap::start("me", "pw").await;
-    let mut conn = Connection::connect(&config(server.port, "me"), "pw")
+    let mut conn = Connection::connect(&config(server.port, "me"), &Auth::Password("pw".into()))
         .await
         .unwrap();
     conn.select("INBOX").await.unwrap();

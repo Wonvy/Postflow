@@ -7,6 +7,7 @@ mod list_translate;
 pub mod logging;
 mod mail;
 mod mail_rpc;
+mod oauth;
 mod refresh;
 mod rpc;
 mod secrets;

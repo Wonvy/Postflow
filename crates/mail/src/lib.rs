@@ -4,10 +4,11 @@
 
 mod imap;
 mod message;
+pub mod oauth;
 mod presets;
 
 pub use imap::{
-    Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig,
+    Auth, Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig,
     SpecialMailbox,
 };
 pub use message::{

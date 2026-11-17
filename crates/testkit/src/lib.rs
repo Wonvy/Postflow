@@ -16,7 +16,7 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 
-const CAPS: &str = "IMAP4rev1 IDLE MOVE UIDPLUS ID";
+const CAPS: &str = "IMAP4rev1 IDLE MOVE UIDPLUS ID AUTH=XOAUTH2";
 
 #[derive(Debug, Clone)]
 struct Msg {
@@ -293,6 +293,50 @@ impl FakeImap {
                         ));
                     }
                 }
+                // XOAUTH2：访问令牌和密码相同就算对，演示和测试里的假登录服务发的就是它
+                "AUTHENTICATE"
+                    if args
+                        .first()
+                        .is_some_and(|m| m.eq_ignore_ascii_case("XOAUTH2")) =>
+                {
+                    let response = match args.get(1) {
+                        Some(initial) => initial.clone(),
+                        None => {
+                            w.write_all(b"+ \r\n").await?;
+                            let mut answer = String::new();
+                            reader.read_line(&mut answer).await?;
+                            answer.trim().to_string()
+                        }
+                    };
+                    let text = String::from_utf8_lossy(&base64_decode(&response)).to_string();
+                    let field = |name: &str| {
+                        text.split('\x01')
+                            .find_map(|part| part.strip_prefix(name))
+                            .map(str::to_string)
+                    };
+                    let user = field("user=").unwrap_or_default();
+                    let token = field("auth=Bearer ").unwrap_or_default();
+                    let ok = {
+                        let mut s = self.lock();
+                        let ok = s.refuse_login.is_none() && user == s.user && token == s.pass;
+                        if ok {
+                            s.logins += 1;
+                        }
+                        ok
+                    };
+                    if ok {
+                        authed = true;
+                        out.push_str(&format!("{tag} OK [CAPABILITY {CAPS}] Logged in\r\n"));
+                    } else {
+                        // 和真服务器一样：先发一段错误说明，等客户端回一个空行，再拒绝
+                        w.write_all(b"+ eyJzdGF0dXMiOiI0MDEifQ==\r\n").await?;
+                        let mut answer = String::new();
+                        reader.read_line(&mut answer).await?;
+                        out.push_str(&format!(
+                            "{tag} NO [AUTHENTICATIONFAILED] Invalid token\r\n"
+                        ));
+                    }
+                }
                 "LOGOUT" => {
                     w.write_all(format!("* BYE logging out\r\n{tag} OK done\r\n").as_bytes())
                         .await?;
@@ -561,9 +605,35 @@ async fn write(w: &mut OwnedWriteHalf, out: &str) -> std::io::Result<()> {
 fn redact(cmd: &str, rest: &str) -> String {
     if cmd == "LOGIN" {
         "LOGIN ***".to_string()
+    } else if cmd == "AUTHENTICATE" {
+        "AUTHENTICATE ***".to_string()
     } else {
         rest.to_string()
     }
+}
+
+/// 解码标准 base64，忽略看不懂的字符。只给测试用，不追求严格。
+fn base64_decode(text: &str) -> Vec<u8> {
+    let value = |c: u8| match c {
+        b'A'..=b'Z' => Some(c - b'A'),
+        b'a'..=b'z' => Some(c - b'a' + 26),
+        b'0'..=b'9' => Some(c - b'0' + 52),
+        b'+' => Some(62),
+        b'/' => Some(63),
+        _ => None,
+    };
+    let mut out = Vec::new();
+    let mut acc = 0u32;
+    let mut bits = 0;
+    for v in text.bytes().filter_map(value) {
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    out
 }
 
 fn contains(raw: &[u8], needle: &str) -> bool {
