@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.12 — 2026-11-17
+
+### English
+
 - Signatures: each mailbox can have one (in its settings). It's added below new messages and above the quote in
   replies, and switches when you change the mailbox you send from.
 - Move mail into a folder: "Move to folder" in the right-click menu, or drag it onto the folder in the sidebar.
