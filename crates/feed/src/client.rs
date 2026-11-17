@@ -11,7 +11,7 @@ const MAX_BODY_MB: usize = 16;
 
 #[derive(Clone)]
 pub struct Client {
-    http: reqwest::Client,
+    pub(crate) http: reqwest::Client,
 }
 
 /// 上次抓取时服务器给的校验值，用来做条件请求。
@@ -127,7 +127,7 @@ impl Client {
 }
 
 /// 把 reqwest 的错误压成一句人能看懂的话，带上最底层的原因。
-fn describe(err: reqwest::Error) -> Error {
+pub(crate) fn describe(err: reqwest::Error) -> Error {
     let kind = if err.is_timeout() {
         "timed out"
     } else if err.is_connect() {

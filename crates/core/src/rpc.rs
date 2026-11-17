@@ -209,6 +209,13 @@ struct SetSetting {
 }
 
 #[derive(Deserialize)]
+struct WebCheck {
+    url: String,
+    /// 要把网页嵌进去的那个页面的地址，也就是界面自己的地址。
+    origin: String,
+}
+
+#[derive(Deserialize)]
 struct Rename {
     name: String,
 }
@@ -270,6 +277,15 @@ impl Core {
             "app.logging" => {
                 let p: LoggingParams = parse(params)?;
                 return reply(json!({ "ok": crate::logging::set_verbose(p.verbose) }));
+            }
+            // 阅读区的原网页模式：这个网页肯不肯被嵌进界面里
+            "web.check" => {
+                let p: WebCheck = parse(params)?;
+                let lower = p.url.trim().to_ascii_lowercase();
+                if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+                    return Err(RpcError::new("invalid_url", "only http and https pages"));
+                }
+                return reply(self.client.frame_policy(p.url.trim(), &p.origin).await?);
             }
             _ => {}
         }

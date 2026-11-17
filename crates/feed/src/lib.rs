@@ -4,6 +4,7 @@
 
 mod client;
 mod discover;
+mod frame;
 mod fulltext;
 pub mod opml;
 mod parse;
@@ -11,6 +12,7 @@ mod sanitize;
 
 pub use client::{Client, Conditional, FetchResult, Fetched};
 pub use discover::Candidate;
+pub use frame::FramePolicy;
 pub use parse::{ParsedEntry, ParsedFeed, parse_feed};
 pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html};
 
