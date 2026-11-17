@@ -5,9 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# 拉取请求推了新提交时取消旧的检查。main 上每个提交各自一组，谁也不取消谁：
+# 发版提交后面紧跟着推了别的提交，它的检查也会跑完，不会显示成被取消。
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
