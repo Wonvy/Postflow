@@ -4,7 +4,7 @@
 //! 生成的内容和对话记录只存在本机。邮件内容默认不发给云端服务，本机运行的服务不受限制。
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
@@ -23,12 +23,8 @@ const DEFAULT: &str = "ai.default";
 const FAST: &str = "ai.fast";
 const ALLOW_MAIL: &str = "ai.allow_mail";
 const CATEGORIES: &str = "ai.categories";
-const AUTO_CLASSIFY: &str = "ai.auto_classify";
 /// 分类一次请求处理几条。只发标题和开头一小段，几条一起省请求。
 const CLASSIFY_BATCH: usize = 10;
-/// 后台自动分类每次最多处理这么多条，只看最近几天的。
-const AUTO_CLASSIFY_LIMIT: u32 = 30;
-const AUTO_CLASSIFY_DAYS: i64 = 3;
 /// 长文分段整理要点时最多分这么多段，更长的只看前面这些。
 const MAX_PARTS: usize = 8;
 /// 列表摘要一次请求处理几条。
@@ -45,8 +41,6 @@ pub(crate) struct AiRuntime {
     pub(crate) client: Client,
     running: Mutex<HashMap<String, tokio::task::AbortHandle>>,
     next: AtomicU64,
-    /// 后台分类正在进行，同一时间只跑一个。
-    classifying: AtomicBool,
 }
 
 impl From<postflow_ai::Error> for RpcError {
@@ -68,7 +62,6 @@ pub(crate) struct AiSettings {
     pub fast: Option<String>,
     pub allow_mail: bool,
     pub categories: Vec<postflow_ai::Category>,
-    pub auto_classify: bool,
 }
 
 impl AiSettings {
@@ -680,10 +673,6 @@ impl Core {
                 .into_iter()
                 .filter(|c| !c.name.trim().is_empty())
                 .collect(),
-            auto_classify: settings
-                .get(AUTO_CLASSIFY)
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
         })
     }
 
@@ -985,6 +974,16 @@ impl Core {
                 )
                 .await?;
             let parsed = prompts::parse_classes(&answer, &settings.categories);
+            if parsed.is_empty() {
+                // 只记回答的样子，不记内容：被截断的回答里可能有邮件标题
+                tracing::warn!(
+                    provider = %provider.id,
+                    chars = answer.chars().count(),
+                    thinking = answer.contains("<think"),
+                    has_json = answer.contains('{'),
+                    "classify: could not read the answer"
+                );
+            }
             let mut labels = Vec::new();
             for (i, item) in batch.iter().enumerate() {
                 // 回答里漏掉的条目不记，下次再分
@@ -999,36 +998,6 @@ impl Core {
             self.emit_changed(&[Scope::Feeds, Scope::Items], None);
         }
         Ok(out)
-    }
-
-    /// 后台定时调用：打开了自动分类时，把最近几天新来的条目分好。
-    pub(crate) async fn auto_classify(self: &Arc<Self>, session: &Arc<Session>) {
-        if self.ai.classifying.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        let result = async {
-            let settings = self.ai_settings(session).await?;
-            if !settings.auto_classify
-                || settings.categories.is_empty()
-                || settings.providers.is_empty()
-            {
-                return Ok(());
-            }
-            let mail = settings.allow_mail || settings.pick(Use::Fast)?.is_local();
-            let since = now() - AUTO_CLASSIFY_DAYS * 86_400_000;
-            let items = session
-                .db(move |s| s.unlabeled(since, mail, AUTO_CLASSIFY_LIMIT))
-                .await?;
-            if !items.is_empty() {
-                self.classify(session, &settings, items).await?;
-            }
-            Ok::<(), RpcError>(())
-        }
-        .await;
-        if let Err(e) = result {
-            tracing::warn!("auto classify: {e}");
-        }
-        self.ai.classifying.store(false, Ordering::Release);
     }
 
     /// 分批翻译带标记的段落。某一批的回答对不上数时拆成两半再试，单独一段也不行就留空（保留原文）。

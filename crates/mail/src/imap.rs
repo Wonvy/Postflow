@@ -701,6 +701,35 @@ impl Connection {
             .map(|m| m.name.clone()))
     }
 
+    /// 服务器上所有邮箱的名字（解码后的完整路径），找不到特殊文件夹时写进日志排查用。
+    pub async fn mailbox_names(&mut self) -> Result<Vec<String>> {
+        Ok(self
+            .mailboxes()
+            .await?
+            .iter()
+            .map(|m| {
+                let flags = [
+                    (m.sent, "\\Sent"),
+                    (m.drafts, "\\Drafts"),
+                    (m.junk, "\\Junk"),
+                    (m.trash, "\\Trash"),
+                    (!m.selectable, "\\NoSelect"),
+                ]
+                .iter()
+                .filter(|(on, _)| *on)
+                .map(|(_, f)| *f)
+                .collect::<Vec<_>>()
+                .join(" ");
+                let name = decode_mailbox_name(&m.name);
+                if flags.is_empty() {
+                    name
+                } else {
+                    format!("{name} ({flags})")
+                }
+            })
+            .collect())
+    }
+
     /// 下次用到时重新列一遍邮箱：连接期间服务器上可能新建或改名了文件夹
     /// （比如发信时才建出来的「已发送」）。
     pub fn forget_mailboxes(&mut self) {

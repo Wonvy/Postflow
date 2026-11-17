@@ -14,6 +14,11 @@ that heading into the version number and date.
   textrank-zh: keywords and a three-sentence summary for Chinese articles and mail, computed offline with
   TextRank (textrank4zh-ts, MIT); a reader button turns it on and off. The plugin guide now explains bundling
   libraries, which a plugin can't load from the web in the desktop app.
+- Automatic AI classification is gone. With some models it could keep sending the same items again every minute when
+  the answer couldn't be read, costing money for nothing. New items are filed by your rules (Settings → Rules);
+  "Classify now" still asks the AI once when you click it, and logs the shape of an answer it can't read.
+- Mail: when Postflow can't find a mailbox's Sent, Drafts, Spam or Trash folder, verbose logs list the folders the
+  server offers, to help with providers that name them differently.
 
 ### 中文
 - 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
@@ -21,6 +26,9 @@ that heading into the version number and date.
 - 插件可以在阅读区正文上方加自己的一块内容（api.ui.addReaderSection）。新增示例插件 textrank-zh：用 TextRank 离线
   为中文文章和邮件提取关键词和三句摘要（textrank4zh-ts，MIT），阅读区有按钮可以开关。插件开发文档补充了如何把第三方库打包进插件
   （桌面应用里插件不能从网上加载库）。
+- 去掉了 AI 自动分类：有些模型的回答读不出来时，它会每分钟把同一批内容再发一次，白白花钱。新内容改由你的规则分类
+  （设置 → 自动规则）；「立即分类」仍然可以点一下让 AI 分一次，读不出回答时日志里会记下回答的样子。
+- 邮件：找不到邮箱的「已发送」「草稿」「垃圾邮件」「已删除」文件夹时，详细日志里会列出服务器提供的文件夹，方便排查叫法不同的邮箱。
 
 ## 0.1.14 — 2026-11-17
 

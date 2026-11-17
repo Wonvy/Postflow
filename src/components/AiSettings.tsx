@@ -204,12 +204,10 @@ export function CategorySettings() {
   const qc = useQueryClient();
   const saved = useCategories();
   const labelColor = useLabelColor();
-  const settings = useSettings();
   const [draft, setDraft] = useState<Category[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const list = draft ?? saved;
-  const auto = settings.data?.["ai.auto_classify"] === true;
 
   const save = (next: Category[]) => {
     const clean = next.map((c) => ({ name: c.name.trim(), description: c.description.trim() })).filter((c) => c.name);
@@ -219,10 +217,6 @@ export function CategorySettings() {
   };
   const change = (i: number, patch: Partial<Category>) =>
     setDraft((list ?? []).map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  const setAuto = (v: boolean) => {
-    qc.setQueryData(keys.settings, (old: Record<string, unknown> | undefined) => ({ ...old, "ai.auto_classify": v }));
-    void api.setSetting("ai.auto_classify", v);
-  };
   const classifyNow = async () => {
     setBusy(true);
     setNote(null);
@@ -286,9 +280,6 @@ export function CategorySettings() {
           </div>
         )}
       </div>
-      <SettingRow label={t("ai.autoClassify")} hint={t("ai.autoClassifyHint")}>
-        <Switch label={t("ai.autoClassify")} checked={auto} disabled={!list?.length} onChange={setAuto} />
-      </SettingRow>
       <SettingRow label={t("ai.classifyNow")} hint={note ?? undefined}>
         <Button busy={busy} disabled={!list?.length} onClick={() => void classifyNow()}>
           {t("ai.classifyNow")}

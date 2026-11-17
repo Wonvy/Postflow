@@ -827,7 +827,14 @@ async fn sync_all_folders(
         };
         let result = match mailbox {
             Ok(Some(mailbox)) => sync_folder(conn, session, account_id, folder, &mailbox).await,
-            Ok(None) => continue,
+            Ok(None) => {
+                // 找不到「已发送」这类文件夹时，把服务器列出的文件夹记下来，好知道它叫什么
+                if kind.is_some() {
+                    let names = conn.mailbox_names().await.unwrap_or_default();
+                    tracing::debug!(account = %account_id, ?folder, ?names, "mail: special folder not found");
+                }
+                continue;
+            }
             Err(err) => Err(err),
         };
         match result {

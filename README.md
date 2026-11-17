@@ -161,8 +161,9 @@ click **More info → Run anyway**.
 - Press `A` for an AI panel beside the reader: a summary with key points and keywords, and a chat about the message
   or article (key points, what you need to do, draft a reply).
 - Translate with AI instead of the offline model, keeping layout and links.
-- One-line AI summaries in the summary and card views, and automatic sorting into categories you define, with a
-  Categories section in the sidebar. Your own corrections always win.
+- One-line AI summaries in the summary and card views. Categories you define show up in the sidebar; new items are
+  filed by your rules (Settings → Rules), and you can ask the AI to sort recent items once with "Classify now".
+  Your own choices always win.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
