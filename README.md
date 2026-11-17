@@ -146,8 +146,7 @@ click **More info → Run anyway**.
   40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read is sent anywhere.
 - List translation (the translate button in the list toolbar): titles and summaries in the list show in your
   language. Items already in your language are left alone, in the list and in the reader.
-- The sidebar's Mail and Feeds sections fold away, or switch to tabs (All / Mail / Feeds, keys `1` `2` `3`): each tab
-  is its own workspace with its own views, last list and display mode.
+- The sidebar's Mail and Feeds sections fold away; the filter at the top of the list shows only mail or only feeds.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - The same interface also runs in your browser, served by the app on your own machine.
 - Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
@@ -188,7 +187,6 @@ download page instead.
 | `/` or `⌘F` / `Ctrl+F` | Search |
 | `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |
-| `1` `2` `3` | Switch sidebar tab (in the tabs layout) |
 | `C` | Write a new message |
 | `⌘R` / `Ctrl+R` | Reply |
 | `⇧⌘R` / `Ctrl+Shift+R` | Reply all |
