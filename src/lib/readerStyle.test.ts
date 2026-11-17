@@ -61,8 +61,15 @@ test("leading and width saved as the old three choices carry over", () => {
 
 test("slider values stay in range and snap to the step", () => {
   assert.equal(clampTo("leading", 9), 2.4);
-  assert.equal(clampTo("leading", 1.7231), 1.7);
+  assert.equal(clampTo("leading", 1.7231), 1.72);
   assert.equal(clampTo("tracking", 0.0124), 0.01);
   assert.equal(clampTo("width", 726), 720);
   assert.equal(clampTo("spacing", 0), 0.4);
+});
+
+test("every default sits on its slider's steps", () => {
+  assert.deepEqual(normalizeReaderStyle(READER_DEFAULT), READER_DEFAULT);
+  for (const key of ["size", "leading", "tracking", "spacing", "width"] as const) {
+    assert.equal(clampTo(key, READER_DEFAULT[key]), READER_DEFAULT[key], key);
+  }
 });

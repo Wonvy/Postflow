@@ -30,7 +30,7 @@ export interface Range {
 
 export const READER_RANGE: Record<ReaderNumber, Range> = {
   size: { min: 12, max: 24, step: 1 },
-  leading: { min: 1.3, max: 2.4, step: 0.05 },
+  leading: { min: 1.3, max: 2.4, step: 0.01 },
   tracking: { min: -0.02, max: 0.12, step: 0.005 },
   spacing: { min: 0.4, max: 2, step: 0.05 },
   width: { min: 480, max: 1100, step: 20 },
