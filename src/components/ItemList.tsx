@@ -84,6 +84,7 @@ import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
 import { ItemMenuItems } from "./ItemMenu";
 import { SenderIcon, useMixedAccounts } from "./SourceIcon";
+import { PluginMenuItems } from "./PluginMenu";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import {
   Button,
@@ -1135,6 +1136,7 @@ function RowMenu({ id }: { id: string }) {
         </>
       )}
       <ItemMenuItems items={items} />
+      <PluginMenuItems items={items} />
       <MenuSeparator />
       <MenuItem icon={targets.inSelection ? <X size={14} /> : <Check size={14} />} onSelect={() => toggleSelected(id)}>
         {targets.inSelection ? t("menu.deselect") : t("menu.select")}

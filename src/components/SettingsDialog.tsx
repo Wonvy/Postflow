@@ -4,6 +4,7 @@ import {
   Database,
   HardDrive,
   Workflow,
+  Puzzle,
   Info,
   Languages,
   type LucideIcon,
@@ -32,6 +33,7 @@ import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
 import { StorageSettings } from "./StorageSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { RulesSettings } from "./RulesSettings";
+import { PluginsSettings } from "./PluginsSettings";
 
 /** 设置的各页，按组排：常用的、AI、数据和应用本身。 */
 const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
@@ -41,6 +43,7 @@ const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: M
   { page: "ai", icon: Sparkles, label: "settings.ai", group: 1 },
   { page: "categories", icon: Tags, label: "ai.categories", hint: "ai.categoriesHint", group: 1 },
   { page: "rules", icon: Workflow, label: "rules.title", group: 1 },
+  { page: "plugins", icon: Puzzle, label: "plugins.title", group: 1 },
   { page: "data", icon: Database, label: "settings.data", group: 2 },
   { page: "storage", icon: HardDrive, label: "storage.title", group: 2 },
   { page: "diagnostics", icon: Activity, label: "settings.diagnostics", group: 2 },
@@ -238,6 +241,7 @@ export function SettingsDialog() {
     ai: () => <AiSettings open={open} />,
     categories: () => <CategorySettings />,
     rules: () => <RulesSettings />,
+    plugins: () => <PluginsSettings open={open && page === "plugins"} />,
     data: () => (
       <>
         <SettingRow label={t("settings.dataDir")}>

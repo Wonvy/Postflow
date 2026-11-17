@@ -47,11 +47,15 @@ export const TOOL_DEFAULTS: Record<ToolbarId, ToolbarLayout> = {
 
 const PLACES: readonly ToolPlace[] = ["top", "status", "hidden"];
 
+/** 插件加的按钮 ID 以这个开头（见 lib/plugins.ts）。 */
+export const PLUGIN_PREFIX = "plugin:";
+
 /**
  * 本机存的布局可能来自旧版本：去掉已经没有的按钮、去掉重复的，
  * 新加的按钮按默认位置接在它默认的前一个按钮后面。
+ * `extra` 是插件加的按钮：没排过的放在顶部最后；暂时停用的插件的按钮保留在布局里（只是不显示），重新启用时还在原来的位置。
  */
-export function normalizeLayout(toolbar: ToolbarId, raw: unknown): ToolbarLayout {
+export function normalizeLayout(toolbar: ToolbarId, raw: unknown, extra: readonly string[] = []): ToolbarLayout {
   const defaults = TOOL_DEFAULTS[toolbar];
   const known = new Set(defaults.map((d) => d.id));
   const seen = new Set<string>();
@@ -60,7 +64,8 @@ export function normalizeLayout(toolbar: ToolbarId, raw: unknown): ToolbarLayout
     for (const entry of raw) {
       if (!entry || typeof entry !== "object") continue;
       const { id, place } = entry as Partial<ToolSlot>;
-      if (typeof id !== "string" || !known.has(id) || seen.has(id)) continue;
+      if (typeof id !== "string" || seen.has(id)) continue;
+      if (!known.has(id) && !id.startsWith(PLUGIN_PREFIX)) continue;
       seen.add(id);
       out.push({ id, place: PLACES.includes(place as ToolPlace) ? (place as ToolPlace) : "top" });
     }
@@ -72,6 +77,11 @@ export function normalizeLayout(toolbar: ToolbarId, raw: unknown): ToolbarLayout
     out.splice(at + 1, 0, { ...slot });
     seen.add(slot.id);
   });
+  for (const id of extra) {
+    if (seen.has(id)) continue;
+    out.push({ id, place: "top" });
+    seen.add(id);
+  }
   return out;
 }
 
@@ -97,5 +107,6 @@ export function toolsAt(layout: ToolbarLayout, place: ToolPlace): string[] {
 
 export function isDefaultLayout(toolbar: ToolbarId, layout: ToolbarLayout): boolean {
   const defaults = TOOL_DEFAULTS[toolbar];
-  return layout.length === defaults.length && layout.every((s, i) => s.id === defaults[i]?.id && s.place === defaults[i]?.place);
+  const own = layout.filter((s) => !s.id.startsWith(PLUGIN_PREFIX));
+  return own.length === defaults.length && own.every((s, i) => s.id === defaults[i]?.id && s.place === defaults[i]?.place);
 }

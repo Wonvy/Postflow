@@ -9,6 +9,7 @@ pub mod logging;
 mod mail;
 mod mail_rpc;
 mod oauth;
+mod plugins;
 mod refresh;
 mod rpc;
 mod rsshub;

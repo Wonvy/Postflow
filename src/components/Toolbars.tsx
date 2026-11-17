@@ -28,9 +28,13 @@ import {
   Trash2,
   Type,
   LayoutList,
+  Puzzle,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, type ReactElement, type ReactNode, useState } from "react";
+import type { ItemDetail } from "../lib/api";
 import { type MessageKey, useT } from "../lib/i18n";
+import { type ToolbarButton, usePlugins } from "../lib/plugins";
 import { useToolbarLayout, useUi } from "../lib/store";
 import {
   isDefaultLayout,
@@ -40,7 +44,8 @@ import {
   type ToolPlace,
   toolsAt,
 } from "../lib/toolbars";
-import { ContextMenu, cx, MenuItem, Modal, Segmented } from "./ui";
+import { toast } from "./Toast";
+import { ContextMenu, cx, ICON, IconButton, MenuItem, Modal, Segmented } from "./ui";
 
 /** 对话框里每个按钮的名字和图标。 */
 const TOOL_META: Record<ToolbarId, Record<string, { label: MessageKey; icon: LucideIcon }>> = {
@@ -82,11 +87,48 @@ export function Tools({
   place: ToolPlace;
   tools: Partial<Record<string, ReactNode>>;
 }) {
-  const layout = useToolbarLayout(toolbar);
+  const pluginButtons = usePlugins((s) => s.buttons).filter((b) => b.toolbar === toolbar);
+  const layout = useToolbarLayout(
+    toolbar,
+    pluginButtons.map((b) => b.key),
+  );
+  const all: Partial<Record<string, ReactNode>> = { ...tools };
+  for (const b of pluginButtons) all[b.key] = <PluginButton button={b} />;
   return (
     <>
-      {toolsAt(layout, place).map((id) => (tools[id] ? <Fragment key={id}>{tools[id]}</Fragment> : null))}
+      {toolsAt(layout, place).map((id) => (all[id] ? <Fragment key={id}>{all[id]}</Fragment> : null))}
     </>
+  );
+}
+
+/** 插件加的按钮。点的时候把打开的条目和选中的条目交给插件。 */
+function PluginButton({ button }: { button: ToolbarButton }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    const { openId, selection } = useUi.getState();
+    // 打开的条目可能是按「显示远程图片」另取的，按 ID 前缀找
+    const item = openId
+      ? (qc.getQueriesData<ItemDetail>({ queryKey: ["item", openId] }).find(([, d]) => d)?.[1] ?? null)
+      : null;
+    setBusy(true);
+    try {
+      await button.onClick({ item, selection: [...selection] });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <IconButton label={button.label} disabled={busy} onClick={() => void run()}>
+      {button.icon ? (
+        // 插件和界面一样受信任（只有用户手动启用的插件才会加载），图标直接用它给的 SVG
+        <span aria-hidden className="inline-flex size-4 items-center justify-center [&>svg]:size-4" dangerouslySetInnerHTML={{ __html: button.icon }} />
+      ) : (
+        <Puzzle {...ICON} />
+      )}
+    </IconButton>
   );
 }
 
@@ -137,7 +179,17 @@ export function ToolbarsDialog() {
   const open = dialog?.type === "toolbars";
   const [picked, setPicked] = useState<ToolbarId | null>(null);
   const toolbar: ToolbarId = picked ?? (open ? dialog.toolbar : undefined) ?? "list";
-  const layout = useToolbarLayout(toolbar);
+  const pluginButtons = usePlugins((s) => s.buttons).filter((b) => b.toolbar === toolbar);
+  const layout = useToolbarLayout(
+    toolbar,
+    pluginButtons.map((b) => b.key),
+  );
+  const metaOf = (id: string): { label: string; icon: LucideIcon } | null => {
+    const own = TOOL_META[toolbar][id];
+    if (own) return { label: t(own.label), icon: own.icon };
+    const plugin = pluginButtons.find((b) => b.key === id);
+    return plugin ? { label: plugin.label, icon: Puzzle } : null;
+  };
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
 
@@ -166,7 +218,7 @@ export function ToolbarsDialog() {
         <p className="text-[12px] leading-relaxed text-fg-3">{t("tool.hint")}</p>
         <ul className="flex flex-col gap-px rounded-md border border-line p-1">
           {layout.map((slot, index) => {
-            const meta = TOOL_META[toolbar][slot.id];
+            const meta = metaOf(slot.id);
             if (!meta) return null;
             const Icon = meta.icon;
             return (
@@ -202,7 +254,7 @@ export function ToolbarsDialog() {
               >
                 <GripVertical size={14} className="shrink-0 cursor-grab text-fg-4" aria-hidden />
                 <Icon size={14} strokeWidth={1.75} className="shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-[13px]">{t(meta.label)}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px]">{meta.label}</span>
                 <Segmented<ToolPlace>
                   value={slot.place}
                   onChange={(place) => setToolbar(toolbar, setPlace(layout, slot.id, place))}

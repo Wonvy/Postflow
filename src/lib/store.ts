@@ -45,6 +45,7 @@ export type SettingsPage =
   | "ai"
   | "categories"
   | "rules"
+  | "plugins"
   | "data"
   | "storage"
   | "diagnostics"
@@ -147,6 +148,10 @@ interface UiState {
   toolbars: Partial<Record<ToolbarId, ToolbarLayout>>;
   /** 中间列表是滚动还是一页一页翻。 */
   listPaging: "scroll" | "pages";
+  /** 在这台设备上启用的插件 ID。插件只有手动启用才会加载。 */
+  enabledPlugins: string[];
+  /** 变一下就重新扫描插件目录、重新加载插件。不保存。 */
+  pluginReload: number;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
   mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
@@ -191,6 +196,8 @@ interface UiState {
   setSenderLogos: (on: boolean) => void;
   setToolbar: (id: ToolbarId, layout: ToolbarLayout | null) => void;
   setListPaging: (mode: "scroll" | "pages") => void;
+  setPluginEnabled: (id: string, on: boolean) => void;
+  reloadPlugins: () => void;
   requestTranslate: () => void;
   openSearch: () => void;
   closeSearch: () => void;
@@ -260,6 +267,8 @@ export const useUi = create<UiState>()(
       senderLogos: true,
       toolbars: {},
       listPaging: "scroll",
+      enabledPlugins: [],
+      pluginReload: 0,
 
       // 换列表时收起搜索
       setScope: (scope) =>
@@ -348,6 +357,11 @@ export const useUi = create<UiState>()(
           return { toolbars };
         }),
       setListPaging: (listPaging) => set({ listPaging }),
+      setPluginEnabled: (id, on) =>
+        set((s) => ({
+          enabledPlugins: on ? [...new Set([...s.enabledPlugins, id])] : s.enabledPlugins.filter((p) => p !== id),
+        })),
+      reloadPlugins: () => set((s) => ({ pluginReload: s.pluginReload + 1 })),
       rememberFolder: (folder) =>
         set((s) => {
           const name = folder.trim();
@@ -417,6 +431,7 @@ export const useUi = create<UiState>()(
         senderLogos: s.senderLogos,
         toolbars: s.toolbars,
         listPaging: s.listPaging,
+        enabledPlugins: s.enabledPlugins,
       }),
     },
   ),
@@ -519,8 +534,11 @@ export function useReaderStyle(): ReaderStyle {
   return useMemo(() => normalizeReaderStyle(raw), [raw]);
 }
 
-/** 一套工具栏的布局，补齐旧版本缺的按钮。 */
-export function useToolbarLayout(id: ToolbarId): ToolbarLayout {
+/** 一套工具栏的布局，补齐旧版本缺的按钮。`extra` 是插件加的按钮，没排过的接在最后。 */
+export function useToolbarLayout(id: ToolbarId, extra: readonly string[] = NO_EXTRA): ToolbarLayout {
   const raw = useUi((s) => s.toolbars[id]);
-  return useMemo(() => normalizeLayout(id, raw), [id, raw]);
+  const key = extra.join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: key 已经代表 extra
+  return useMemo(() => normalizeLayout(id, raw, extra), [id, raw, key]);
 }
+const NO_EXTRA: readonly string[] = [];

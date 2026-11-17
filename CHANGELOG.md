@@ -16,6 +16,14 @@ that heading into the version number and date.
 - Paged list: under List style → Browse by → Pages, each turn of the mouse wheel moves one page, and every page
   starts on a whole row. The status bar shows the page number with previous and next buttons.
 - The list can hide source names as well as source icons, and the List style and Fold menus open when you hover.
+- Rules (Settings → Rules): when new mail or articles arrive, file them in a category, mark them read, star or
+  archive them, based on the title, sender, recipients, body or source (contains, starts with, regular expression
+  and more). A ready-made rule handles verification-code mail. "Try it" shows what a rule would match, and
+  rules can be applied to items you already have. Rules sync to your other devices.
+- Plugins (Settings → Plugins): put a plugin folder in the plugins folder and turn it on. Plugins can add toolbar
+  buttons (which you can place like any other button), right-click menu items and styles, react to new mail, and
+  read and change items. The developer guide is docs/plugins.md, and examples/plugins/copy-code is a complete
+  example. Plugins only load after you turn them on, on each device.
 
 ### 中文
 
@@ -25,6 +33,10 @@ that heading into the version number and date.
   列表样式、折叠、翻译这些显示开关默认挪到了状态栏，顶部工具栏清爽了。
 - 分页视图：「列表样式 → 浏览方式 → 分页」，滚轮滚一下翻一页，每页都从一整行开始；状态栏显示第几页和上一页、下一页按钮。
 - 列表除了来源图标，也可以隐藏来源名称；「列表样式」和「折叠」菜单鼠标移上去就会打开。
+- 自动规则（设置 → 自动规则）：新邮件和新文章进来时，按标题、发件人、收件人、正文或来源（包含、开头是、正则表达式等）
+  自动分类、标为已读、加星标或归档。自带一条「验证码邮件」规则；「试一下」能看到会命中哪些；也可以应用到已有的条目。规则会同步到其他设备。
+- 插件（设置 → 插件）：把插件文件夹放进插件目录并启用。插件可以加工具栏按钮（和其他按钮一样可以排）、右键菜单项和样式，
+  响应新邮件，读取和修改条目。开发文档见 docs/plugins.md，完整的例子在 examples/plugins/copy-code。插件要在每台设备上手动启用才会加载。
 
 ## 0.1.13 — 2026-11-17
 

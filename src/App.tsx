@@ -9,6 +9,7 @@ import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
 import { ToolbarsDialog } from "./components/Toolbars";
+import { usePluginLoader } from "./lib/plugins";
 import { WindowControls } from "./components/WindowControls";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
@@ -103,6 +104,7 @@ function Shell() {
   useMailCatchUp();
   useUnreadBadge(useNav().data?.counts.unread_mail);
   useEffect(() => startUpdateChecks(), []);
+  usePluginLoader();
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);
   const setSidebarWidth = useUi((s) => s.setSidebarWidth);

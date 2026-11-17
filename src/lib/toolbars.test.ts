@@ -48,3 +48,12 @@ test("moving and placing buttons", () => {
   assert.deepEqual(toolsAt(base, "status"), ["view", "group", "translate"]);
   assert.ok(!isDefaultLayout("list", hidden));
 });
+
+test("plugin buttons join at the end and keep their place while the plugin is off", () => {
+  const withPlugin = normalizeLayout("reader", undefined, ["plugin:copy-code:copy"]);
+  assert.deepEqual(withPlugin.at(-1), { id: "plugin:copy-code:copy", place: "top" });
+  assert.ok(isDefaultLayout("reader", withPlugin));
+  const saved = setPlace(withPlugin, "plugin:copy-code:copy", "status");
+  const off = normalizeLayout("reader", saved, []);
+  assert.equal(off.find((s) => s.id === "plugin:copy-code:copy")?.place, "status");
+});
