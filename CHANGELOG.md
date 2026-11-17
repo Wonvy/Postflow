@@ -8,7 +8,23 @@ that heading into the version number and date.
 
 ### English
 
+- Toolbars you can arrange: right-click the list or reader toolbar and choose "Customize toolbar…" to reorder
+  buttons and put each one in the top toolbar, in the new status bar, or hide it. Keyboard shortcuts keep working.
+- Status bars under the list (number of items, unread, selected, refreshing) and the reader (date, word count,
+  reading time and how far you've read). Display switches like list style, folding and translation now sit there
+  by default, so the top toolbars are shorter.
+- Paged list: under List style → Browse by → Pages, each turn of the mouse wheel moves one page, and every page
+  starts on a whole row. The status bar shows the page number with previous and next buttons.
+- The list can hide source names as well as source icons, and the List style and Fold menus open when you hover.
+
 ### 中文
+
+- 工具栏可以自己排：在列表或阅读区的工具栏上点右键，选「自定义工具栏…」，可以调整按钮顺序，每个按钮放在顶部工具栏、
+  新的状态栏，或者隐藏。快捷键不受影响。
+- 列表和阅读区底部有了状态栏：列表显示条数、未读、已选和刷新状态；阅读区显示时间、字数、预计阅读时间和读到了哪里。
+  列表样式、折叠、翻译这些显示开关默认挪到了状态栏，顶部工具栏清爽了。
+- 分页视图：「列表样式 → 浏览方式 → 分页」，滚轮滚一下翻一页，每页都从一整行开始；状态栏显示第几页和上一页、下一页按钮。
+- 列表除了来源图标，也可以隐藏来源名称；「列表样式」和「折叠」菜单鼠标移上去就会打开。
 
 ## 0.1.13 — 2026-11-17
 
