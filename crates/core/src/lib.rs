@@ -60,6 +60,12 @@ pub enum Event {
     },
     /// 正在刷新的订阅源数量，0 表示空闲。
     Refresh { active: usize },
+    /// 收件箱里来了新邮件。界面据此弹系统通知；只列最新的几封，`total` 是总数。
+    NewMail {
+        account_id: String,
+        mails: Vec<postflow_store::FreshMail>,
+        total: usize,
+    },
     /// 配置状态变了，例如首次设置完成。
     Status,
     /// 翻译模型的下载进度。

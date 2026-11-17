@@ -230,6 +230,82 @@ pub fn summarize(raw: &[u8]) -> Summary {
     }
 }
 
+/// 邮件列表的退订方式：信头里的 List-Unsubscribe（RFC 2369），以及能不能一键退订（RFC 8058）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Unsubscribe {
+    /// 退订网页。
+    pub url: Option<String>,
+    /// 发一封邮件来退订。
+    pub mailto: Option<String>,
+    /// 往 `url` 发一个 POST 就能退订，不用打开网页。
+    pub one_click: bool,
+}
+
+/// 一键退订只认 https；演示和测试时也接受本机的 http。
+fn one_click_url(url: &str) -> bool {
+    url.starts_with("https://")
+        || ["http://127.0.0.1", "http://localhost", "http://[::1]"]
+            .iter()
+            .any(|p| url.starts_with(p) && url[p.len()..].starts_with([':', '/']))
+}
+
+/// 读出这封邮件的退订方式。不是邮件列表（没有 List-Unsubscribe）时返回 `None`。
+pub fn unsubscribe(raw: &[u8]) -> Option<Unsubscribe> {
+    let raw = utf8_headers(raw);
+    let msg = parse(&raw)?;
+    let value = msg.header_raw("List-Unsubscribe")?;
+    let mut out = Unsubscribe::default();
+    // 每个地址写在尖括号里，用逗号隔开；长的会折行，去掉中间的空白
+    let mut rest = value;
+    while let Some(open) = rest.find('<') {
+        let Some(close) = rest[open..].find('>') else {
+            break;
+        };
+        let uri: String = rest[open + 1..open + close].split_whitespace().collect();
+        rest = &rest[open + close + 1..];
+        let lower = uri.to_ascii_lowercase();
+        if (lower.starts_with("https://") || lower.starts_with("http://")) && out.url.is_none() {
+            out.url = Some(uri);
+        } else if lower.starts_with("mailto:") && out.mailto.is_none() {
+            out.mailto = Some(uri);
+        }
+    }
+    let post = msg
+        .header_raw("List-Unsubscribe-Post")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    out.one_click = post.contains("list-unsubscribe=one-click")
+        && out.url.as_deref().is_some_and(one_click_url);
+    (out.url.is_some() || out.mailto.is_some()).then_some(out)
+}
+
+/// 一键退订：按 RFC 8058 往退订地址发一个 POST。服务器回 2xx 或跳转就算成功。
+pub async fn unsubscribe_one_click(url: &str) -> Result<(), String> {
+    if !one_click_url(url) {
+        return Err("one-click unsubscribe needs an https address".into());
+    }
+    let resp = crate::oauth::http()
+        .post(url)
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .timeout(std::time::Duration::from_secs(30))
+        .body("List-Unsubscribe=One-Click")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if status.is_success() || status.is_redirection() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the list's server answered HTTP {}",
+            status.as_u16()
+        ))
+    }
+}
+
 /// 全文搜索最多收录正文的这么多字。
 const SEARCH_CHARS: usize = 50_000;
 
@@ -846,5 +922,42 @@ PGh0bWw+PGJvZHk+PHA+x9ewrrXE08O7p6OsxOO1xNXLusXU2tDCyeixuMnPtcfCvKGjPC9wPjxwPsjn
             clean_text("\u{200c}\u{034f} hi\u{feff}  there "),
             "hi there"
         );
+    }
+}
+
+#[cfg(test)]
+mod unsubscribe_tests {
+    use super::*;
+
+    fn mail(headers: &str) -> Vec<u8> {
+        format!("From: a@example.com\r\nSubject: hi\r\n{headers}\r\n\r\nbody\r\n").into_bytes()
+    }
+
+    #[test]
+    fn reads_list_unsubscribe() {
+        let both = mail(
+            "List-Unsubscribe: <mailto:leave@example.com?subject=unsubscribe>,\r\n <https://example.com/u?id=1>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click",
+        );
+        assert_eq!(
+            unsubscribe(&both),
+            Some(Unsubscribe {
+                url: Some("https://example.com/u?id=1".into()),
+                mailto: Some("mailto:leave@example.com?subject=unsubscribe".into()),
+                one_click: true,
+            })
+        );
+        // 没有 List-Unsubscribe-Post：只能打开网页
+        let page = mail("List-Unsubscribe: <https://example.com/u>");
+        assert!(!unsubscribe(&page).unwrap().one_click);
+        // 一键退订不接受普通的 http
+        let plain = mail(
+            "List-Unsubscribe: <http://example.com/u>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click",
+        );
+        assert!(!unsubscribe(&plain).unwrap().one_click);
+        let local = mail(
+            "List-Unsubscribe: <http://127.0.0.1:1145/u>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click",
+        );
+        assert!(unsubscribe(&local).unwrap().one_click);
+        assert_eq!(unsubscribe(&mail("X-Other: 1")), None);
     }
 }

@@ -112,7 +112,8 @@ To: work@example.com\r\n\
 Subject: Weekly digest: making the inbox a tool again\r\n\
 Date: {}\r\n\
 Message-ID: <digest-48@signal-noise.example>\r\n\
-List-Unsubscribe: <https://signal-noise.example/unsubscribe?u=1>\r\n\
+List-Unsubscribe: <mailto:leave@signal-noise.example?subject=unsubscribe>, <http://127.0.0.1:1145/unsubscribe?list=signal-noise>\r\n\
+List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n\
 Content-Type: text/html; charset=utf-8\r\n\
 \r\n\
 <html><head><style>\
@@ -629,9 +630,9 @@ fn base64url(data: &[u8]) -> String {
     out
 }
 
-/// 假的微软登录服务：登录页上点「允许」或「拒绝」，换令牌时检查 PKCE。
-/// 发出的访问令牌就是演示邮箱的密码 `demo`，假 IMAP 服务器认它。
-fn fake_microsoft(
+/// 演示用的几个假服务：一键退订，以及微软登录（登录页上点「允许」或「拒绝」，换令牌时检查 PKCE；
+/// 发出的访问令牌就是演示邮箱的密码 `demo`，假 IMAP 服务器认它）。
+fn fake_services(
     method: &str,
     path: &str,
     query: &str,
@@ -672,6 +673,22 @@ fn fake_microsoft(
                     escape(&deny)
                 ),
             ))
+        }
+        // 演示邮件里的一键退订
+        ("POST", "/unsubscribe") => {
+            let ok = body.contains("List-Unsubscribe=One-Click");
+            if ok {
+                println!("demo: unsubscribed {query}");
+            }
+            Some(if ok {
+                ("200 OK", "text/plain", "You're unsubscribed.".into())
+            } else {
+                (
+                    "400 Bad Request",
+                    "text/plain",
+                    "missing List-Unsubscribe=One-Click".into(),
+                )
+            })
         }
         ("POST", "/common/oauth2/v2.0/token") => {
             let f = form(body);
@@ -717,7 +734,7 @@ async fn serve_feeds() {
             let target = request.split_whitespace().nth(1).unwrap_or("/");
             let (path, query) = target.split_once('?').unwrap_or((target, ""));
             let body = request.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
-            if let Some((status, kind, body)) = fake_microsoft(method, path, query, body) {
+            if let Some((status, kind, body)) = fake_services(method, path, query, body) {
                 let response = format!(
                     "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                     body.len()

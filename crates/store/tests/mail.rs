@@ -114,7 +114,8 @@ fn sync_adds_updates_and_removes_mail() {
         postflow_store::MailSyncStats {
             added: 0,
             updated: 1,
-            removed: 1
+            removed: 1,
+            fresh: vec![],
         }
     );
     let inbox = store.items(&ItemFilter::default(), None, 50).unwrap();

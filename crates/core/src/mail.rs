@@ -165,7 +165,30 @@ pub(crate) async fn verify(cfg: &ServerConfig, auth: &Auth) -> Result<(), RpcErr
     result.map(|_| ())
 }
 
+/// 新邮件通知最多列几封。
+const NOTIFY_LIST: usize = 3;
+/// 比这更早的邮件不弹通知：比如电脑关了几天，开机后补收的那些。
+const NOTIFY_MAX_AGE_MS: i64 = 2 * 24 * 60 * 60 * 1000;
+
 impl Core {
+    /// 告诉界面来了新邮件。补收的旧邮件不算，太多时只列最新的几封。
+    fn announce_new_mail(&self, account_id: &str, fresh: Vec<postflow_store::FreshMail>) {
+        let since = crate::refresh::now() - NOTIFY_MAX_AGE_MS;
+        let mut mails: Vec<_> = fresh.into_iter().filter(|m| m.date >= since).collect();
+        if mails.is_empty() {
+            return;
+        }
+        mails.sort_by_key(|m| std::cmp::Reverse(m.date));
+        let total = mails.len();
+        mails.truncate(NOTIFY_LIST);
+        tracing::debug!(account = %account_id, total, "new mail");
+        self.emit(Event::NewMail {
+            account_id: account_id.to_string(),
+            mails,
+            total,
+        });
+    }
+
     /// 为一个账户启动后台任务。已有的会先停掉，这样改了设置或密码会立刻生效。
     pub(crate) fn start_worker(self: &Arc<Self>, session: &Arc<Session>, account_id: &str) {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -413,7 +436,18 @@ async fn run(
         };
         backoff = MIN_BACKOFF;
 
-        match serve(&core, &session, &account_id, conn, &mut rx, &mut pending).await {
+        let synced_before = account.last_sync_at.is_some();
+        match serve(
+            &core,
+            &session,
+            &account_id,
+            conn,
+            &mut rx,
+            &mut pending,
+            synced_before,
+        )
+        .await
+        {
             Ok(()) => return,
             Err(err) => {
                 tracing::warn!(account = %account_id, code = err.code(), "mail connection dropped: {err}");
@@ -500,9 +534,12 @@ async fn serve(
     mut conn: Connection,
     rx: &mut mpsc::UnboundedReceiver<Command>,
     pending: &mut Vec<Command>,
+    synced_before: bool,
 ) -> Result<(), postflow_mail::Error> {
     // 刚连上的第一次同步也在界面上显示，让用户知道在收信
     let mut announce = true;
+    // 刚添加的邮箱第一次同步会收进一大批旧邮件，那些不算「新邮件」
+    let mut notify = synced_before;
     let mut healthy = false;
     loop {
         // 先执行用户的操作，再同步，免得同步把刚做的改动又改回去
@@ -570,6 +607,10 @@ async fn serve(
         if stats.changed() {
             core.emit_changed(&[Scope::Feeds, Scope::Items], None);
         }
+        if notify {
+            core.announce_new_mail(account_id, stats.fresh);
+        }
+        notify = true;
 
         if conn.supports_idle() {
             let mut closed = false;

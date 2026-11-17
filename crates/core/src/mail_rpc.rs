@@ -127,6 +127,7 @@ impl Core {
             },
             "mail.attachment" => self.attachment(params, session).await,
             "mail.trust_sender" => self.trust_sender(params, session).await,
+            "mail.unsubscribe" => self.unsubscribe(params, session).await,
             _ => return self.oauth_rpc(method, params, session).await,
         };
         Some(result)
@@ -425,8 +426,29 @@ impl Core {
             "cc": rendered.cc,
             "reply_to": rendered.reply_to,
             "attachments": rendered.attachments,
+            "unsubscribe": postflow_mail::unsubscribe(&raw),
         });
         Ok(value)
+    }
+
+    /// 一键退订：替用户向邮件列表发退订请求。不支持一键退订的，界面改为打开网页或写信。
+    async fn unsubscribe(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
+        let p: Id = parse(params)?;
+        let raw = self.raw_mail(session, &p.id).await?;
+        let info = postflow_mail::unsubscribe(&raw).ok_or_else(|| {
+            RpcError::new("unsubscribe_none", "this message has no unsubscribe link")
+        })?;
+        let url = info.url.filter(|_| info.one_click).ok_or_else(|| {
+            RpcError::new("unsubscribe_manual", "this list needs its page or an email")
+        })?;
+        postflow_mail::unsubscribe_one_click(&url)
+            .await
+            .map_err(|e| {
+                tracing::warn!(item = %p.id, "one-click unsubscribe failed: {e}");
+                RpcError::new("unsubscribe_failed", e)
+            })?;
+        tracing::info!(item = %p.id, "unsubscribed from a mailing list");
+        reply(json!({}))
     }
 
     async fn attachment(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {

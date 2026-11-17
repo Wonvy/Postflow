@@ -338,6 +338,22 @@ impl Store {
         }
 
         for mail in sync.new {
+            let known: bool = tx
+                .query_row("SELECT 1 FROM items WHERE id = ?1", [&mail.id], |_| Ok(()))
+                .optional()?
+                .is_some();
+            if !known && folder == MailFolder::Inbox && !mail.read {
+                stats.fresh.push(FreshMail {
+                    id: mail.id.clone(),
+                    from: mail
+                        .from_name
+                        .clone()
+                        .or_else(|| mail.from_address.clone())
+                        .unwrap_or_default(),
+                    subject: mail.subject.clone(),
+                    date: mail.date,
+                });
+            }
             // 同一封邮件可能因为被移回收件箱而换了 UID，按 ID 合并
             tx.execute(
                 "INSERT INTO items \

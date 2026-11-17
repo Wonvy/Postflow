@@ -12,8 +12,8 @@ pub use imap::{
     SpecialMailbox,
 };
 pub use message::{
-    AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, Summary, attachment, base64,
-    plain_text, render, summarize,
+    AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, Summary, Unsubscribe, attachment,
+    base64, plain_text, render, summarize, unsubscribe, unsubscribe_one_click,
 };
 pub use presets::{Preset, detect, guess, presets, provider_for_mx};
 

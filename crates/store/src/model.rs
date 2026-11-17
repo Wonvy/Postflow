@@ -367,11 +367,22 @@ pub struct MailSync {
     pub vanished: Vec<u32>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MailSyncStats {
     pub added: usize,
     pub updated: usize,
     pub removed: usize,
+    /// 这次第一次出现在收件箱里的未读邮件（不算从别处移回来的），新邮件通知用。
+    pub fresh: Vec<FreshMail>,
+}
+
+/// 新邮件通知里显示的几样。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FreshMail {
+    pub id: String,
+    pub from: String,
+    pub subject: String,
+    pub date: i64,
 }
 
 impl MailSyncStats {

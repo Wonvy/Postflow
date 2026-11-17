@@ -163,8 +163,8 @@ struct ErrorBody {
     error_description: String,
 }
 
-/// 换令牌用的 HTTP 客户端，整个进程共用一个。
-fn http() -> &'static reqwest::Client {
+/// 换令牌、一键退订用的 HTTP 客户端，整个进程共用一个。
+pub(crate) fn http() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
