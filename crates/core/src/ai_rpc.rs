@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use postflow_ai::{Client, Doc, Message, Provider, Request, prompts, text};
+use futures::StreamExt;
+use postflow_ai::{Client, Doc, Message, Provider, Request, markup, prompts, text};
 use postflow_feed::html_to_paragraphs;
 use postflow_mail::RenderOptions;
 use postflow_store::{AiResult, ItemSummary, day_of, ids};
@@ -25,6 +26,11 @@ const ALLOW_MAIL: &str = "ai.allow_mail";
 const MAX_PARTS: usize = 8;
 /// 列表摘要一次请求处理几条。
 const ABSTRACT_BATCH: usize = 8;
+/// AI 翻译时每次请求最多带这么多段、这么多 token 的原文。
+const TRANSLATE_CHUNK_ITEMS: usize = 30;
+const TRANSLATE_CHUNK_TOKENS: usize = 1_800;
+/// 同时进行的翻译请求数。
+const TRANSLATE_PARALLEL: usize = 3;
 
 /// 正在进行的请求，可以随时取消。
 #[derive(Default)]
@@ -162,6 +168,49 @@ struct ChatParams {
     message: String,
     #[serde(default)]
     lang: String,
+}
+
+/// 要翻译的一段：文字和行内元素的位置（UTF-16），和离线翻译的格式一样。
+#[derive(Clone, Serialize, Deserialize)]
+struct SourceSegment {
+    text: String,
+    #[serde(default)]
+    marks: Vec<[usize; 2]>,
+}
+
+/// 译文：每个标记是 `[start, end, 原文里第几个元素]`。
+#[derive(Clone, Serialize, Deserialize)]
+struct TranslatedSegment {
+    text: String,
+    marks: Vec<[usize; 3]>,
+}
+
+#[derive(Deserialize)]
+struct TranslateParams {
+    /// 哪一条，用来判断能不能发给云端服务，以及缓存译文。
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    from: String,
+    to: String,
+    segments: Vec<SourceSegment>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CachedTranslation {
+    hash: String,
+    segments: Vec<TranslatedSegment>,
+}
+
+/// 原文、语言和所用模型的指纹，原文变了缓存就不算数。
+fn fingerprint(p: &TranslateParams, provider: &Provider) -> String {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    (&p.from, &p.to, &provider.id, &provider.model).hash(&mut hasher);
+    serde_json::to_string(&p.segments)
+        .unwrap_or_default()
+        .hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 #[derive(Deserialize)]
@@ -442,6 +491,86 @@ impl Core {
                 }
                 reply(json!({}))
             }
+            "ai.translate" => {
+                let p: TranslateParams = parse(params)?;
+                if p.segments.len() > 3000 {
+                    return Err(RpcError::new(
+                        "bad_params",
+                        "too much text to translate at once",
+                    ));
+                }
+                let settings = self.ai_settings(session).await?;
+                let provider = settings.pick(Use::Main)?;
+                if let Some(id) = p.id.clone()
+                    && let Some(detail) = session.db(move |s| s.item(&id)).await?
+                {
+                    settings.check(&detail.item, &provider)?;
+                }
+                let hash = fingerprint(&p, &provider);
+                if let Some(id) = p.id.clone() {
+                    let to = p.to.clone();
+                    if let Some(cached) = session
+                        .db(move |s| s.ai_result(&id, "translate", &to))
+                        .await?
+                        && let Ok(cached) =
+                            serde_json::from_str::<CachedTranslation>(&cached.content)
+                        && cached.hash == hash
+                    {
+                        return reply(json!({ "segments": cached.segments }));
+                    }
+                }
+                let key = self.ai_key(&provider.id).await;
+                let tagged: Vec<String> = p
+                    .segments
+                    .iter()
+                    .map(|s| {
+                        let marks: Vec<markup::Span> = s
+                            .marks
+                            .iter()
+                            .enumerate()
+                            .map(|(i, [a, b])| (*a, *b, i))
+                            .collect();
+                        markup::tag(&s.text, &marks)
+                    })
+                    .collect();
+                let translated = self
+                    .translate_tagged(session, &provider, key.as_deref(), &tagged, &p.from, &p.to)
+                    .await?;
+                let segments: Vec<TranslatedSegment> = p
+                    .segments
+                    .iter()
+                    .zip(translated)
+                    .map(|(source, out)| match out {
+                        Some(text) => {
+                            let (text, spans) = markup::untag(&text);
+                            TranslatedSegment {
+                                text,
+                                marks: spans.into_iter().map(|(a, b, i)| [a, b, i]).collect(),
+                            }
+                        }
+                        // 这一段没翻出来就保留原文
+                        None => TranslatedSegment {
+                            text: source.text.clone(),
+                            marks: source
+                                .marks
+                                .iter()
+                                .enumerate()
+                                .map(|(i, [a, b])| [*a, *b, i])
+                                .collect(),
+                        },
+                    })
+                    .collect();
+                if let Some(id) = p.id.clone() {
+                    let content = serde_json::to_string(&CachedTranslation {
+                        hash,
+                        segments: segments.clone(),
+                    })
+                    .unwrap_or_default();
+                    self.save_result(session, &id, "translate", &p.to, &provider, content)
+                        .await?;
+                }
+                reply(json!({ "segments": segments }))
+            }
             "ai.usage" => {
                 let today = day_of(now());
                 let (day, month) = session
@@ -716,6 +845,89 @@ impl Core {
             .save_result(session, &doc.item.id, "keywords", lang, provider, content)
             .await?;
         Ok(json!({ "task": "keywords", "result": saved }))
+    }
+
+    /// 分批翻译带标记的段落。某一批的回答对不上数时拆成两半再试，单独一段也不行就留空（保留原文）。
+    async fn translate_tagged(
+        &self,
+        session: &Arc<Session>,
+        provider: &Provider,
+        key: Option<&str>,
+        texts: &[String],
+        from: &str,
+        to: &str,
+    ) -> Result<Vec<Option<String>>, RpcError> {
+        let mut chunks: Vec<Vec<usize>> = Vec::new();
+        let mut current: Vec<usize> = Vec::new();
+        let mut cost = 0;
+        for (i, t) in texts.iter().enumerate() {
+            if t.trim().is_empty() {
+                continue;
+            }
+            let c = text::estimate_tokens(t);
+            if !current.is_empty()
+                && (cost + c > TRANSLATE_CHUNK_TOKENS || current.len() >= TRANSLATE_CHUNK_ITEMS)
+            {
+                chunks.push(std::mem::take(&mut current));
+                cost = 0;
+            }
+            current.push(i);
+            cost += c;
+        }
+        if !current.is_empty() {
+            chunks.push(current);
+        }
+        let results: Vec<Result<Vec<(usize, Option<String>)>, RpcError>> = futures::stream::iter(
+            chunks
+                .into_iter()
+                .map(|chunk| self.translate_chunk(session, provider, key, texts, chunk, from, to)),
+        )
+        .buffer_unordered(TRANSLATE_PARALLEL)
+        .collect()
+        .await;
+        let mut out = vec![None; texts.len()];
+        for result in results {
+            for (i, t) in result? {
+                out[i] = t;
+            }
+        }
+        Ok(out)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn translate_chunk(
+        &self,
+        session: &Arc<Session>,
+        provider: &Provider,
+        key: Option<&str>,
+        texts: &[String],
+        chunk: Vec<usize>,
+        from: &str,
+        to: &str,
+    ) -> Result<Vec<(usize, Option<String>)>, RpcError> {
+        let mut pending = vec![chunk];
+        let mut done = Vec::new();
+        while let Some(part) = pending.pop() {
+            let inputs: Vec<String> = part.iter().map(|&i| texts[i].clone()).collect();
+            let answer = self
+                .complete_ai(
+                    session,
+                    provider,
+                    key,
+                    &prompts::translate(&inputs, from, to),
+                )
+                .await?;
+            match prompts::parse_translation(&answer, inputs.len()) {
+                Some(list) => done.extend(part.iter().copied().zip(list.into_iter().map(Some))),
+                None if part.len() > 1 => {
+                    let mid = part.len() / 2;
+                    pending.push(part[mid..].to_vec());
+                    pending.push(part[..mid].to_vec());
+                }
+                None => done.push((part[0], None)),
+            }
+        }
+        Ok(done)
     }
 
     /// 列表里一句话的摘要。已有的直接返回，缺的几条一批生成。不能发的邮件跳过。

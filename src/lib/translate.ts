@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { api, type SourceSegment, type TranslatePlan, type TranslatedSegment } from "./api";
 import { useLang } from "./i18n";
+import { useSettings } from "./queries";
 import { useUi } from "./store";
 import type { Lang } from "./time";
 import { RpcError } from "./transport";
@@ -261,9 +262,25 @@ function applyRun(run: Run, out: TranslatedSegment) {
 
 /** 要翻译的正文。邮件是完整的 HTML 文档，文章和纯文本邮件是一段 HTML 片段。 */
 export interface TranslateSource {
+  /** 条目 ID。AI 翻译用它判断能不能发给云端服务，以及缓存译文。 */
+  id: string;
   title: string;
   html: string;
   document: boolean;
+}
+
+/** 用离线模型还是 AI 服务翻译。 */
+export type TranslateEngine = "offline" | "ai";
+
+export function useTranslateEngine(): TranslateEngine {
+  const settings = useSettings();
+  return settings.data?.["ai.translate_engine"] === "ai" ? "ai" : "offline";
+}
+
+/** 简体和繁体、两种挪威语之间不需要翻译。 */
+function sameLanguage(a: string, b: string): boolean {
+  const base = (c: string) => (c === "zh_hant" ? "zh" : c === "no" ? "nb" : c);
+  return base(a) === base(b);
 }
 
 function parse(source: TranslateSource): Document {
@@ -277,13 +294,12 @@ function sampleOf(source: TranslateSource): string {
   return `${source.title}\n${body.slice(0, 3000)}`;
 }
 
-export async function translateSource(source: TranslateSource, from: string, to: string) {
+export async function translateSource(source: TranslateSource, from: string, to: string, engine: TranslateEngine) {
   const doc = parse(source);
   const runs = doc.body ? collectRuns(doc.body) : [];
-  const { segments } = await api.translateText(from, to, [
-    { text: source.title, marks: [] },
-    ...runs.map((r) => r.segment),
-  ]);
+  const input = [{ text: source.title, marks: [] as [number, number][] }, ...runs.map((r) => r.segment)];
+  const { segments } =
+    engine === "ai" ? await api.aiTranslate(source.id, from, to, input) : await api.translateText(from, to, input);
   const [title, ...rest] = segments;
   rest.forEach((out, i) => {
     const run = runs[i];
@@ -303,7 +319,7 @@ export type TranslationPhase =
   | { kind: "need"; plan: TranslatePlan }
   | { kind: "downloading"; plan: TranslatePlan }
   | { kind: "translating" }
-  | { kind: "on"; from: string; title: string; html: string }
+  | { kind: "on"; from: string; title: string; html: string; engine: TranslateEngine }
   /** 原文已经是目标语言。 */
   | { kind: "same"; from: string }
   | { kind: "error"; error: unknown };
@@ -311,6 +327,7 @@ export type TranslationPhase =
 interface Done {
   from: string;
   to: string;
+  engine: TranslateEngine;
   forHtml: string;
   title: string;
   html: string;
@@ -325,6 +342,7 @@ export function useTranslation(source: TranslateSource | null) {
   const latest = useRef(source);
   latest.current = source;
 
+  const engine = useTranslateEngine();
   const translate = useCallback(
     async (from: string) => {
       const src = latest.current;
@@ -332,15 +350,15 @@ export function useTranslation(source: TranslateSource | null) {
       const gen = ++generation.current;
       setPhase({ kind: "translating" });
       try {
-        const out = await translateSource(src, from, to);
+        const out = await translateSource(src, from, to, engine);
         if (gen !== generation.current) return;
-        done.current = { from, to, forHtml: src.html, ...out };
-        setPhase({ kind: "on", from, ...out });
+        done.current = { from, to, engine, forHtml: src.html, ...out };
+        setPhase({ kind: "on", from, engine, ...out });
       } catch (error) {
         if (gen === generation.current) setPhase({ kind: "error", error });
       }
     },
-    [to],
+    [engine, to],
   );
 
   // 正文还没加载完就按了翻译，等它到了再开始
@@ -355,13 +373,21 @@ export function useTranslation(source: TranslateSource | null) {
     }
     pending.current = false;
     const cached = done.current;
-    if (cached && cached.forHtml === src.html && cached.to === to) {
-      setPhase({ kind: "on", from: cached.from, title: cached.title, html: cached.html });
+    if (cached && cached.forHtml === src.html && cached.to === to && cached.engine === engine) {
+      setPhase({ kind: "on", from: cached.from, title: cached.title, html: cached.html, engine });
       return;
     }
     const gen = ++generation.current;
     setPhase({ kind: "checking" });
     try {
+      // AI 什么语言都能翻，不需要下载模型；只在本机识别一下原文是不是已经是目标语言
+      if (engine === "ai") {
+        const { from } = await api.detectLanguage(sampleOf(src));
+        if (gen !== generation.current) return;
+        if (from && sameLanguage(from, to)) setPhase({ kind: "same", from });
+        else await translate(from ?? "");
+        return;
+      }
       const plan = await api.translatePlan(sampleOf(src), to);
       if (gen !== generation.current) return;
       if (!plan.from) {
@@ -376,7 +402,7 @@ export function useTranslation(source: TranslateSource | null) {
     } catch (error) {
       if (gen === generation.current) setPhase({ kind: "error", error });
     }
-  }, [to, translate]);
+  }, [engine, to, translate]);
 
   const download = useCallback((plan: TranslatePlan) => {
     const { update } = useModelDownloads.getState();
@@ -409,10 +435,10 @@ export function useTranslation(source: TranslateSource | null) {
     }
   }, [phase.kind, source, start]);
 
-  // 换了目标语言而译文还开着
+  // 换了目标语言或翻译引擎而译文还开着
   useEffect(() => {
-    if (phase.kind === "on" && done.current && done.current.to !== to) void start();
-  }, [phase.kind, start, to]);
+    if (phase.kind === "on" && done.current && (done.current.to !== to || done.current.engine !== engine)) void start();
+  }, [engine, phase.kind, start, to]);
 
   const off = useCallback(() => {
     generation.current++;

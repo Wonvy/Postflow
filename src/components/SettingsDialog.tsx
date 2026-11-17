@@ -7,9 +7,9 @@ import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type LangPref, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
-import { languageName, useModelDownloads, useTranslateLanguages } from "../lib/translate";
+import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
-import { AiSettings } from "./AiSettings";
+import { AiSettings, useAiProviders } from "./AiSettings";
 import { Section, SettingRow } from "./SettingsParts";
 import { Button, Modal, Segmented, Select, TextInput } from "./ui";
 
@@ -271,8 +271,31 @@ function TranslationSettings({ open }: { open: boolean }) {
     }
   };
 
+  const engine = useTranslateEngine();
+  const ai = useAiProviders(open);
+  const hasAi = (ai.data?.providers.length ?? 0) > 0;
+
   return (
     <>
+      <SettingRow label={t("settings.translateEngine")} hint={t("settings.translateEngineHint")}>
+        <Select
+          className="w-44"
+          value={engine}
+          onChange={(e) => {
+            const value = e.target.value;
+            qc.setQueryData(keys.settings, (old: Record<string, unknown> | undefined) => ({
+              ...old,
+              "ai.translate_engine": value,
+            }));
+            void api.setSetting("ai.translate_engine", value);
+          }}
+        >
+          <option value="offline">{t("settings.engineOffline")}</option>
+          <option value="ai" disabled={!hasAi}>
+            {hasAi ? t("settings.engineAi") : t("settings.engineAiMissing")}
+          </option>
+        </Select>
+      </SettingRow>
       <SettingRow label={t("settings.translateTo")} hint={t("settings.translateToHint")}>
         <Select className="w-44" value={translateTo ?? ""} onChange={(e) => setTranslateTo(e.target.value || null)}>
           <option value="">{t("settings.translateFollow")}</option>

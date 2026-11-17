@@ -222,6 +222,52 @@ async fn ai_features_end_to_end() {
     let history = call(&core, "ai.chat.history", json!({ "id": article })).await;
     assert_eq!(history["messages"].as_array().unwrap().len(), 2);
 
+    // AI 翻译：标记跟着译文走，同样的原文第二次直接用缓存
+    let segments = json!([
+        { "text": "Please review it before Friday.", "marks": [[7, 13], [17, 30]] },
+        { "text": "Thanks", "marks": [] },
+    ]);
+    let sent = ai.requests().len();
+    let out = call(
+        &core,
+        "ai.translate",
+        json!({ "id": article, "from": "en", "to": "zh", "segments": segments }),
+    )
+    .await;
+    assert_eq!(
+        out["segments"][0]["text"],
+        "〔译〕Please review it before Friday."
+    );
+    assert_eq!(
+        out["segments"][0]["marks"],
+        json!([[10, 16, 0], [20, 33, 1]])
+    );
+    assert_eq!(out["segments"][1]["text"], "〔译〕Thanks");
+    assert_eq!(
+        ai.requests().len(),
+        sent + 1,
+        "both segments go in one request"
+    );
+    let again = call(
+        &core,
+        "ai.translate",
+        json!({ "id": article, "from": "en", "to": "zh", "segments": segments }),
+    )
+    .await;
+    assert_eq!(again, out);
+    assert_eq!(
+        ai.requests().len(),
+        sent + 1,
+        "the second time comes from the cache"
+    );
+    let detected = call(
+        &core,
+        "translate.detect",
+        json!({ "text": "今天天气很好，我们去散步吧。" }),
+    )
+    .await;
+    assert_eq!(detected["from"], "zh");
+
     // 邮件：默认不发给云端服务，本机的服务可以
     call(
         &core,

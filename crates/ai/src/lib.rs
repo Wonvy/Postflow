@@ -3,6 +3,7 @@
 //! 只用各家都支持的 OpenAI 兼容接口。用户自己的 API Key，从这台电脑直接请求，没有中间服务器。
 
 pub mod client;
+pub mod markup;
 pub mod presets;
 pub mod prompts;
 pub mod text;

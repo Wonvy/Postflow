@@ -381,6 +381,10 @@ export const api = {
   aiCancel: (request_id: string) => rpc<void>("ai.cancel", { request_id }),
   aiUsage: () => rpc<{ today: AiUsage[]; last30: AiUsage[] }>("ai.usage"),
 
+  aiTranslate: (id: string | undefined, from: string, to: string, segments: SourceSegment[]) =>
+    rpc<{ segments: TranslatedSegment[] }>("ai.translate", { id, from, to, segments }),
+  detectLanguage: (text: string) => rpc<{ from: string | null }>("translate.detect", { text }),
+
   translateLanguages: () => rpc<TranslateLanguages>("translate.languages"),
   translatePlan: (text: string, to: string, from?: string) =>
     rpc<TranslatePlan>("translate.plan", { text, to, from }),

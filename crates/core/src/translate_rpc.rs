@@ -30,6 +30,11 @@ struct PlanParams {
 }
 
 #[derive(Deserialize)]
+struct DetectParams {
+    text: String,
+}
+
+#[derive(Deserialize)]
 struct DownloadParams {
     pairs: Vec<String>,
 }
@@ -69,6 +74,11 @@ impl Core {
     ) -> Result<Value, RpcError> {
         match method {
             "translate.languages" => reply(self.translator.languages().await),
+            // 只识别语言，不需要模型。用 AI 翻译时先用它判断原文是不是已经是目标语言
+            "translate.detect" => {
+                let p: DetectParams = parse(params)?;
+                reply(json!({ "from": postflow_translate::detect::detect(&p.text) }))
+            }
             "translate.plan" => {
                 let p: PlanParams = parse(params)?;
                 let plan = self

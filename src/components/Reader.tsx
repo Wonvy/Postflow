@@ -78,10 +78,10 @@ function Article({ id }: { id: string }) {
   const source = useMemo<TranslateSource | null>(() => {
     if (!item) return null;
     if (item.mail) {
-      return { title: item.title, html: item.mail.body, document: item.mail.body_kind === "html" };
+      return { id: item.id, title: item.title, html: item.mail.body, document: item.mail.body_kind === "html" };
     }
     const html = mode === "full" && item.full_text ? item.full_text : (item.content ?? "");
-    return { title: item.title, html, document: false };
+    return { id: item.id, title: item.title, html, document: false };
   }, [item, mode]);
   const translation = useTranslation(source);
   const aiPanel = useUi((s) => s.aiPanel);
@@ -529,7 +529,10 @@ function TranslateBar({ translation }: { translation: ReturnType<typeof useTrans
     case "on":
       return bar(
         icon,
-        t("translate.done", { from: name(phase.from), to: name(to) }),
+        t(phase.engine === "ai" ? "translate.doneAi" : "translate.done", {
+          from: phase.from ? name(phase.from) : t("translate.original"),
+          to: name(to),
+        }),
         <Button variant="ghost" className={small} onClick={off}>
           {t("action.showOriginal")}
         </Button>,
