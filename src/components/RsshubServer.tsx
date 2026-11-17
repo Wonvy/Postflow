@@ -2,8 +2,11 @@
 // 地址和密钥存在同步的设置里，改一次所有设备都用新的。
 
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CircleCheck, CircleX, PlugZap } from "lucide-react";
+import { BookOpen, CircleCheck, CircleX, ExternalLink, PlugZap } from "lucide-react";
 import { type ReactNode, useState } from "react";
+// 部署指南随应用打包：在应用里直接看，打不开 GitHub 的网络也能用
+import GUIDE_EN from "../../docs/rsshub.md?raw";
+import GUIDE_ZH from "../../docs/rsshub.zh-CN.md?raw";
 import { api } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
 import { openExternal } from "../lib/platform";
@@ -16,7 +19,8 @@ import {
   normalizeInstance,
   SETTING_KEY,
 } from "../lib/rsshub";
-import { Button, cx } from "./ui";
+import { Markdown } from "./Markdown";
+import { Button, cx, Modal } from "./ui";
 
 /** 设置里的 RSSHub 实例地址和访问密钥。 */
 export function useRsshubSettings() {
@@ -63,7 +67,7 @@ function checkText(t: ReturnType<typeof useT>, check: InstanceCheck, instance: s
 
 export function RsshubServer({ compact = false, children }: { compact?: boolean; children?: ReactNode }) {
   const t = useT();
-  const lang = useLang();
+  const [guide, setGuide] = useState(false);
   const { instance, key, save } = useRsshubSettings();
   const [instanceDraft, setInstanceDraft] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState<string | null>(null);
@@ -163,13 +167,42 @@ export function RsshubServer({ compact = false, children }: { compact?: boolean;
         <span className="flex-1" />
         <button
           type="button"
-          onClick={() => void openExternal(guideUrl(lang))}
+          onClick={() => setGuide(true)}
           className="flex items-center gap-1 text-[12px] text-accent hover:underline"
         >
           <BookOpen size={12} />
           {t("rsshubServer.guide")}
         </button>
+        <RsshubGuide open={guide} onClose={() => setGuide(false)} />
       </div>
     </div>
+  );
+}
+
+/**
+ * 部署指南（docs/rsshub*.md）。去掉只在网页上有用的语言切换和目录，
+ * 底部可以去 GitHub 看最新版。
+ */
+function RsshubGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const lang = useLang();
+  const text = (lang === "zh" ? GUIDE_ZH : GUIDE_EN)
+    .split("\n")
+    .filter((line) => !/^\[(English|中文版)\]\(/.test(line.trim()) && !/^- \[[^\]]+\]\(#/.test(line.trim()))
+    .join("\n");
+  return (
+    <Modal open={open} onClose={onClose} title={t("rsshubServer.guide")} width={680}>
+      <div className="px-5 py-4">
+        <Markdown text={text} wrapped className="select-text text-[13px] leading-relaxed text-fg-2" />
+        <button
+          type="button"
+          onClick={() => void openExternal(guideUrl(lang))}
+          className="mt-4 flex items-center gap-1 text-[12px] text-fg-3 hover:text-fg-2"
+        >
+          <ExternalLink size={12} />
+          {t("rsshubServer.guideOnline")}
+        </button>
+      </div>
+    </Modal>
   );
 }

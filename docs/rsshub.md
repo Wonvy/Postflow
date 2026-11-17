@@ -157,5 +157,8 @@ What **Test connection** says, and what to do:
 | Didn't answer like RSSHub | The address has an extra path, or points at something else. Use only the host and port. |
 | Error (5xx) | The instance is having trouble; look at its log with `docker logs rsshub`. |
 
-If the test works but one feed fails, the route itself may need setup, or the site may be blocking requests
-for now. The instance log usually says which.
+If the test works but one feed fails (Postflow says the route returned nothing, HTTP 503), the route itself may
+need setup, or the site may be blocking requests for now. The instance log (`docker logs rsshub`) usually says
+which. The most common case is YouTube: RSSHub's YouTube routes need `YOUTUBE_KEY` (a Google YouTube Data API
+key). YouTube doesn't need RSSHub at all, though: click **Follow directly** in the RSSHub form, or paste the
+channel address under **Add feed → URL**.

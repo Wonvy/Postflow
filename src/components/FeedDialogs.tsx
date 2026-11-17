@@ -246,11 +246,25 @@ export function AddFeedDialog() {
       } catch {
         // 用原样
       }
-      return status === 401 || status === 403 || status === 429
-        ? t("rsshub.refused", { host, status })
-        : t("rsshub.serverError", { host, status });
+      if (status === 401 || status === 403 || status === 429) return t("rsshub.refused", { host, status });
+      // RSSHub 用 503 表示这个路由没取到内容：服务器上缺了这个路由要的配置（比如 YouTube 的 YOUTUBE_KEY），
+      // 或者 RSSHub 访问不到源网站。实例本身是好的，连接测试也会通过
+      if (status === 503) {
+        const youtube = /^\/youtube\//.test(pathOf(target));
+        return t("rsshub.routeFailed", { host }) + (youtube ? ` ${t("rsshub.routeFailedYoutube")}` : "");
+      }
+      return t("rsshub.serverError", { host, status });
     }
     return errorText(t, err);
+  };
+
+  /** 地址的路径部分，解析不了时为空。 */
+  const pathOf = (target: string): string => {
+    try {
+      return new URL(target).pathname;
+    } catch {
+      return "";
+    }
   };
 
   /** 读取预览。`keepCandidates` 时是在同一个网站的几个源之间换，候选列表保留。 */

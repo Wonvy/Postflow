@@ -146,4 +146,7 @@ docker run -d --name rsshub --restart unless-stopped -p 1200:1200 diygod/rsshub
 | 返回的不是 RSSHub 的订阅源 | 地址里多写了路径，或者指向了别的服务。只写主机和端口。 |
 | 出错了（5xx） | 实例本身有问题，用 `docker logs rsshub` 看日志。 |
 
-测试能通过、但某个订阅失败时，多半是这条路由需要额外配置，或者那个网站暂时在拦截请求，实例的日志里通常能看出是哪种。
+测试能通过、但某个订阅失败时（Postflow 提示这个路由没取到内容，HTTP 503），多半是这条路由需要额外配置，或者那个网站暂时在拦截请求，
+实例的日志（`docker logs rsshub`）里通常能看出是哪种。最常见的是 YouTube：RSSHub 的 YouTube 路由要设置 `YOUTUBE_KEY`
+（Google 的 YouTube Data API 密钥）。其实 YouTube 不用 RSSHub 也能订阅：在 RSSHub 表单里点**直接订阅**，
+或者在**添加订阅 → 网址**里粘贴频道地址。

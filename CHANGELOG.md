@@ -11,11 +11,18 @@ that heading into the version number and date.
   adding feeds (or importing OPML), the layout and main shortcuts, and where to find rules, translation, AI and
   plugins. Every step can be skipped, and it closes for good once skipped or finished. Open it again from
   Settings → About. People upgrading with mail or feeds already set up don't see it.
+- RSSHub: the guide to running your own instance now opens inside Postflow, so it works on networks where GitHub
+  doesn't load; commands in it have a copy button. When a route fails with HTTP 503 even though the connection test
+  passes, Postflow now says the route needs setup on the RSSHub server (YouTube routes need YOUTUBE_KEY) and, for
+  YouTube, points to Follow directly, which needs no RSSHub.
 
 ### 中文
 - 新手引导：第一次安装后，一步步带你选语言和主题、添加邮箱、添加订阅（或导入 OPML）、认识界面和常用快捷键，
   并告诉你自动规则、翻译、AI 和插件在哪里。每一步都可以跳过，跳过或看完后不再自动弹出，设置 → 关于里可以再打开。
   已经有邮箱或订阅的老用户升级后不会看到。
+- RSSHub：「怎么部署自己的 RSSHub」改为在 Postflow 里直接打开，打不开 GitHub 的网络也能看，里面的命令可以一键拷贝。
+  测试连接通过、但某个路由返回 HTTP 503 时，会说明这个路由要在 RSSHub 服务器上另外配置（YouTube 路由要设置 YOUTUBE_KEY），
+  YouTube 还会提示用不需要 RSSHub 的「直接订阅」。
 
 ## 0.1.15 — 2026-11-17
 
