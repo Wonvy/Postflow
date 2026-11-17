@@ -263,6 +263,13 @@ pub struct AccountConfig {
     /// tls、starttls 或 none。
     pub imap_security: String,
     pub username: String,
+    /// 发信服务器。为空时按服务商预设或收信服务器推断。
+    #[serde(default)]
+    pub smtp_host: Option<String>,
+    #[serde(default)]
+    pub smtp_port: Option<u16>,
+    #[serde(default)]
+    pub smtp_security: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -272,6 +279,12 @@ pub struct AccountPatch {
     pub imap_port: Option<u16>,
     pub imap_security: Option<String>,
     pub username: Option<String>,
+    /// 空字符串表示改回自动。
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<u16>,
+    pub smtp_security: Option<String>,
+    /// 发信时收件人看到的名字。
+    pub sender_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -283,11 +296,26 @@ pub struct Account {
     pub imap_port: u16,
     pub imap_security: String,
     pub username: String,
+    /// 自己填的发信服务器；为空表示自动。
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<u16>,
+    pub smtp_security: Option<String>,
+    /// 发信时收件人看到的名字。`name` 只是这个邮箱在侧栏里的名字（比如「工作」），不拿来发信。
+    pub sender_name: String,
     pub added_at: i64,
     pub unread: i64,
     pub last_sync_at: Option<i64>,
     pub error: Option<String>,
     pub error_code: Option<String>,
+}
+
+/// 写信时给收件人一栏提示的联系人：给你来过信的人。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Contact {
+    pub name: Option<String>,
+    pub address: String,
+    /// 收到过多少封他的信，越多越靠前。
+    pub count: i64,
 }
 
 /// 一封邮件在服务器上的位置，写回服务器时用。

@@ -92,6 +92,7 @@ fn finds_articles_and_mail_by_title_people_and_body() {
             imap_port: 1143,
             imap_security: "none".into(),
             username: "me@example.com".into(),
+            ..Default::default()
         })
         .unwrap();
     store

@@ -22,7 +22,7 @@ use tokio_rustls::rustls::pki_types::ServerName;
 
 use crate::{Error, Result};
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 /// 单个命令的超时。同步一批邮件正文可能比较慢，给得宽松一些。
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(90);
 /// 结束 IDLE 时等服务器回应多久。
@@ -68,7 +68,7 @@ impl ServerConfig {
     }
 }
 
-fn is_loopback(host: &str) -> bool {
+pub(crate) fn is_loopback(host: &str) -> bool {
     let host = host
         .trim_start_matches('[')
         .trim_end_matches(']')
@@ -99,13 +99,15 @@ pub enum FlagChange {
     Flagged(bool),
 }
 
-/// 除了收件箱，还会同步的两个邮箱。
+/// 除了收件箱以外，按用途找的邮箱。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpecialMailbox {
     /// 垃圾邮件。
     Junk,
     /// 已删除的邮件。
     Trash,
+    /// 已发送的邮件。
+    Sent,
 }
 
 /// LIST 列出的一个邮箱。
@@ -120,6 +122,7 @@ struct MailboxEntry {
     all: bool,
     junk: bool,
     trash: bool,
+    sent: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,8 +135,8 @@ pub enum IdleOutcome {
     Interrupted,
 }
 
-/// TLS 和明文连接的统一包装，好让 async-imap 只面对一种类型。
-enum Stream {
+/// TLS 和明文连接的统一包装，好让 async-imap 只面对一种类型。发信也用它。
+pub(crate) enum Stream {
     Plain(TcpStream),
     Tls(Box<TlsStream<TcpStream>>),
 }
@@ -201,7 +204,7 @@ fn tls_config() -> Result<Arc<ClientConfig>> {
         .map_err(Error::Tls)
 }
 
-async fn upgrade(host: &str, tcp: TcpStream) -> Result<Stream> {
+pub(crate) async fn upgrade(host: &str, tcp: TcpStream) -> Result<Stream> {
     let name = ServerName::try_from(host.to_string())
         .map_err(|_| Error::Config(format!("invalid server name: {host}")))?;
     let tls = TlsConnector::from(tls_config()?)
@@ -495,6 +498,7 @@ impl Connection {
                         all: attrs.contains(&NameAttribute::All),
                         junk: attrs.contains(&NameAttribute::Junk),
                         trash: attrs.contains(&NameAttribute::Trash),
+                        sent: attrs.contains(&NameAttribute::Sent),
                     }
                 })
                 .collect();
@@ -556,10 +560,20 @@ impl Connection {
                 "已删除邮件",
                 "废纸篓",
             ],
+            SpecialMailbox::Sent => &[
+                "sent",
+                "sent items",
+                "sent messages",
+                "sent mail",
+                "已发送",
+                "已发送邮件",
+                "已发邮件",
+            ],
         };
         let marked = |m: &MailboxEntry| match kind {
             SpecialMailbox::Junk => m.junk,
             SpecialMailbox::Trash => m.trash,
+            SpecialMailbox::Sent => m.sent,
         };
         Ok(list
             .iter()
@@ -573,6 +587,16 @@ impl Connection {
             .map(|m| m.name.clone()))
     }
 
+    /// 找到存放已发送邮件的邮箱。找不到就建一个叫 Sent 的。
+    pub async fn sent_mailbox(&mut self) -> Result<String> {
+        if let Some(name) = self.special_mailbox(SpecialMailbox::Sent).await? {
+            return Ok(name);
+        }
+        timed(async { Ok(self.session.create("Sent").await?) }).await?;
+        self.mailboxes = None;
+        Ok("Sent".to_string())
+    }
+
     /// 在当前选中的邮箱里按 Message-ID 找邮件。
     pub async fn find_by_message_id(&mut self, message_id: &str) -> Result<Vec<u32>> {
         let query = format!("HEADER Message-ID {}", quote(message_id));
@@ -584,6 +608,30 @@ impl Connection {
 
     pub fn selected(&self) -> Option<&str> {
         self.selected.as_deref()
+    }
+
+    /// 把一封邮件的原文存进 `mailbox`，标成已读。发出去的信存到「已发送」用。
+    pub async fn append(&mut self, mailbox: &str, raw: &[u8]) -> Result<()> {
+        timed(async {
+            self.session
+                .append(mailbox, Some("(\\Seen)"), None, raw)
+                .await?;
+            Ok(())
+        })
+        .await?;
+        self.drain_unsolicited();
+        Ok(())
+    }
+
+    /// 在 `mailbox` 里按 Message-ID 找邮件，找完回到原来选中的邮箱。
+    pub async fn contains_message_id(&mut self, mailbox: &str, message_id: &str) -> Result<bool> {
+        let previous = self.selected.clone();
+        self.select(mailbox).await?;
+        let found = !self.find_by_message_id(message_id).await?.is_empty();
+        if let Some(previous) = previous.filter(|p| p != mailbox) {
+            self.select(&previous).await?;
+        }
+        Ok(found)
     }
 
     /// 进入 IDLE，等服务器通知、等到超时，或者等 `interrupt` 完成。

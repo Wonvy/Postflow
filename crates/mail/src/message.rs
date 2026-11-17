@@ -306,6 +306,109 @@ pub async fn unsubscribe_one_click(url: &str) -> Result<(), String> {
     }
 }
 
+/// 回复和转发时引用原信最多取这么多字。
+const QUOTE_CHARS: usize = 100_000;
+
+/// 回复或转发一封信要用到的原信内容。
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ReplyContext {
+    /// 不带尖括号的 Message-ID。
+    pub message_id: Option<String>,
+    pub references: Vec<String>,
+    pub subject: String,
+    /// 信头里的发信时间，Unix 毫秒。
+    pub date: Option<i64>,
+    pub from: Vec<Mailbox>,
+    pub reply_to: Vec<Mailbox>,
+    pub to: Vec<Mailbox>,
+    pub cc: Vec<Mailbox>,
+    /// 正文的纯文字，保留分行，引用时用。
+    pub text: String,
+}
+
+/// 读出回复、转发一封信时要用的东西。
+pub fn reply_context(raw: &[u8]) -> Option<ReplyContext> {
+    let raw = utf8_headers(raw);
+    let msg = parse(&raw)?;
+    let ids = |v: &mail_parser::HeaderValue<'_>| -> Vec<String> {
+        match v {
+            mail_parser::HeaderValue::Text(t) => vec![t.to_string()],
+            mail_parser::HeaderValue::TextList(list) => {
+                list.iter().map(|t| t.to_string()).collect()
+            }
+            _ => Vec::new(),
+        }
+        .into_iter()
+        .map(|id| id.trim().trim_matches(['<', '>']).to_string())
+        .filter(|id| !id.is_empty())
+        .collect()
+    };
+    let has_plain = msg
+        .text_bodies()
+        .any(|part| matches!(part.body, PartType::Text(_)));
+    let mut text = String::new();
+    for part in msg.text_bodies() {
+        let piece = match &part.body {
+            PartType::Text(t) if has_plain => t.to_string(),
+            PartType::Html(h) if !has_plain => html_lines(h),
+            _ => continue,
+        };
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(&piece);
+    }
+    if !has_plain && text.is_empty() {
+        for part in msg.html_bodies() {
+            if let PartType::Html(h) = &part.body {
+                text.push_str(&html_lines(h));
+            }
+        }
+    }
+    Some(ReplyContext {
+        message_id: msg
+            .message_id()
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty()),
+        references: ids(msg.references()),
+        subject: msg.subject().map(clean_text).unwrap_or_default(),
+        date: msg.date().map(|d| d.to_timestamp() * 1000),
+        from: mailboxes(msg.from()),
+        reply_to: mailboxes(msg.reply_to()),
+        to: mailboxes(msg.to()),
+        cc: mailboxes(msg.cc()),
+        text: tidy_lines(&text, QUOTE_CHARS),
+    })
+}
+
+/// 去掉每行末尾的空白和看不见的字符，连续的空行只留一行，太长的截断。
+fn tidy_lines(text: &str, max_chars: usize) -> String {
+    let mut out = String::new();
+    let mut chars = 0;
+    let mut blank = 0;
+    for line in text.replace("\r\n", "\n").replace('\r', "\n").lines() {
+        let line: String = line
+            .chars()
+            .filter(|c| !matches!(c, '\u{200b}'..='\u{200f}' | '\u{2060}'..='\u{2064}' | '\u{feff}' | '\u{034f}' | '\u{00ad}'))
+            .collect();
+        let line = line.trim_end();
+        if line.trim().is_empty() {
+            blank += 1;
+            continue;
+        }
+        if !out.is_empty() {
+            out.push_str(if blank > 0 { "\n\n" } else { "\n" });
+        }
+        blank = 0;
+        out.push_str(line);
+        chars += line.chars().count() + 2;
+        if chars > max_chars {
+            return truncate(&out, max_chars);
+        }
+    }
+    out
+}
+
 /// 全文搜索最多收录正文的这么多字。
 const SEARCH_CHARS: usize = 50_000;
 
@@ -580,6 +683,19 @@ a{{color:#4a55bd}}\
 
 /// 从 HTML 里取出给人看的文字，块级元素之间留一个空格。只用来生成列表摘要。
 fn html_text(html: &str) -> String {
+    html_to_text(html, false)
+}
+
+/// 从 HTML 里取出给人看的文字，块级元素分成不同的行。引用原信时用。
+fn html_lines(html: &str) -> String {
+    html_to_text(html, true)
+        .lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn html_to_text(html: &str, lines: bool) -> String {
     const BLOCKS: &[&str] = &[
         "p",
         "br",
@@ -605,8 +721,19 @@ fn html_text(html: &str) -> String {
     ];
     let mut out = String::with_capacity(html.len() / 2);
     let mut rest = html;
+    let push_text = |out: &mut String, text: &str| {
+        if lines {
+            // 源码里的换行只是空白，分行看标签
+            out.extend(
+                text.chars()
+                    .map(|c| if c.is_whitespace() { ' ' } else { c }),
+            );
+        } else {
+            out.push_str(text);
+        }
+    };
     while let Some(start) = rest.find('<') {
-        out.push_str(&rest[..start]);
+        push_text(&mut out, &rest[..start]);
         let Some(end) = rest[start..].find('>') else {
             rest = "";
             break;
@@ -632,10 +759,10 @@ fn html_text(html: &str) -> String {
             continue;
         }
         if BLOCKS.contains(&name.as_str()) {
-            out.push(' ');
+            out.push(if lines { '\n' } else { ' ' });
         }
     }
-    out.push_str(rest);
+    push_text(&mut out, rest);
     out.replace("&nbsp;", " ")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
@@ -959,5 +1086,35 @@ mod unsubscribe_tests {
         );
         assert!(unsubscribe(&local).unwrap().one_click);
         assert_eq!(unsubscribe(&mail("X-Other: 1")), None);
+    }
+}
+
+#[cfg(test)]
+mod reply_tests {
+    use super::*;
+
+    #[test]
+    fn reply_context_keeps_ids_addresses_and_lines() {
+        let raw = b"From: Ada <ada@example.com>\r\nReply-To: list@example.com\r\nTo: me@example.com, Bob <bob@example.com>\r\nCc: carol@example.com\r\nSubject: Plans\r\nDate: Tue, 14 Nov 2023 22:13:20 +0000\r\nMessage-ID: <c@example.com>\r\nReferences: <a@example.com>\r\n <b@example.com>\r\n\r\nFirst line\r\n\r\n\r\n\r\nSecond line   \r\n";
+        let ctx = reply_context(raw).unwrap();
+        assert_eq!(ctx.message_id.as_deref(), Some("c@example.com"));
+        assert_eq!(ctx.references, ["a@example.com", "b@example.com"]);
+        assert_eq!(ctx.subject, "Plans");
+        assert_eq!(ctx.date, Some(1_700_000_000_000));
+        assert_eq!(ctx.from[0].name.as_deref(), Some("Ada"));
+        assert_eq!(ctx.reply_to[0].address.as_deref(), Some("list@example.com"));
+        assert_eq!(ctx.to.len(), 2);
+        assert_eq!(ctx.cc[0].address.as_deref(), Some("carol@example.com"));
+        assert_eq!(ctx.text, "First line\n\nSecond line");
+    }
+
+    #[test]
+    fn html_only_mail_is_quoted_line_by_line() {
+        let raw = b"From: a@example.com\r\nSubject: hi\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html><head><style>p{}</style></head><body><p>Hello\r\n  there</p><p>Fish &amp; chips</p><div>a<br>b</div></body></html>\r\n";
+        let ctx = reply_context(raw).unwrap();
+        // 段落之间空一行
+        assert_eq!(ctx.text, "Hello there\n\nFish & chips\n\na\nb");
+        assert!(ctx.message_id.is_none());
+        assert!(ctx.references.is_empty());
     }
 }

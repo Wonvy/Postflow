@@ -4,14 +4,16 @@
 //! 序号与 UID 的区别、「n:*」的边界行为、MOVE 之后的 EXPUNGE、IDLE 期间推送新邮件。
 
 pub mod ai;
+pub mod smtp;
 
 pub use ai::FakeAi;
+pub use smtp::{Delivered, FakeSmtp};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
@@ -534,6 +536,52 @@ impl FakeImap {
                         format!(" {}", hits.join(" "))
                     };
                     out.push_str(&format!("* SEARCH{list}\r\n{tag} OK done\r\n"));
+                }
+                // APPEND 邮箱 [(标记)] [时间] {字节数}：先等服务器说可以，再发原文
+                "APPEND" => {
+                    let name = args.first().cloned().unwrap_or_default();
+                    let flags: BTreeSet<String> = args
+                        .iter()
+                        .skip(1)
+                        .find(|a| a.starts_with('('))
+                        .map(|f| {
+                            f.trim_matches(['(', ')'])
+                                .split_whitespace()
+                                .map(str::to_string)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let size = args
+                        .last()
+                        .and_then(|a| a.strip_prefix('{'))
+                        .and_then(|a| a.strip_suffix('}'))
+                        .and_then(|n| n.parse::<usize>().ok());
+                    let Some(size) = size else {
+                        out.push_str(&format!("{tag} BAD bad append\r\n"));
+                        w.write_all(out.as_bytes()).await?;
+                        continue;
+                    };
+                    if !self.lock().mailboxes.contains_key(&name) {
+                        out.push_str(&format!("{tag} NO [TRYCREATE] no such mailbox\r\n"));
+                        w.write_all(out.as_bytes()).await?;
+                        continue;
+                    }
+                    w.write_all(b"+ Ready for literal data\r\n").await?;
+                    let mut raw = vec![0u8; size];
+                    reader.read_exact(&mut raw).await?;
+                    // 原文后面是这一行剩下的部分，只有换行
+                    line.clear();
+                    reader.read_line(&mut line).await?;
+                    let (validity, uid) = {
+                        let mut s = self.lock();
+                        let mbox = s.mailboxes.get_mut(&name).expect("checked above");
+                        let uid = mbox.push(raw, flags);
+                        (mbox.uidvalidity, uid)
+                    };
+                    self.changed();
+                    out.push_str(&format!(
+                        "{tag} OK [APPENDUID {validity} {uid}] APPEND completed\r\n"
+                    ));
                 }
                 "IDLE" => {
                     w.write_all(b"+ idling\r\n").await?;

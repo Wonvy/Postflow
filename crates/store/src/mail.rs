@@ -21,7 +21,8 @@ const ACCOUNT_SQL: &str = "SELECT a.id, a.email, a.name, a.imap_host, a.imap_por
             a.username, a.added_at, \
             (SELECT COUNT(*) FROM items i \
               WHERE i.kind = 'mail' AND i.source_id = a.id AND i.read = 0 AND i.archived = 0), \
-            s.last_sync_at, s.error, s.error_code \
+            s.last_sync_at, s.error, s.error_code, a.smtp_host, a.smtp_port, a.smtp_security, \
+            a.sender_name \
      FROM accounts a LEFT JOIN mail_state s ON s.account_id = a.id";
 
 fn account_from_row(r: &Row<'_>) -> rusqlite::Result<Account> {
@@ -33,6 +34,10 @@ fn account_from_row(r: &Row<'_>) -> rusqlite::Result<Account> {
         imap_port: r.get(4)?,
         imap_security: r.get(5)?,
         username: r.get(6)?,
+        smtp_host: r.get(12)?,
+        smtp_port: r.get(13)?,
+        smtp_security: r.get(14)?,
+        sender_name: r.get(15)?,
         added_at: r.get(7)?,
         unread: r.get(8)?,
         last_sync_at: r.get(9)?,
@@ -62,10 +67,13 @@ pub(crate) fn materialize_account(conn: &Connection, id: &str) -> Result<()> {
     let Some(email) = text("email") else {
         return Ok(());
     };
+    // 发信服务器没填就是自动，端口和加密方式跟着它
+    let smtp_host = text("smtp_host").filter(|h| !h.trim().is_empty());
     conn.execute(
         "INSERT OR REPLACE INTO accounts \
-         (id, email, name, imap_host, imap_port, imap_security, username, deleted, added_at, position) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         (id, email, name, imap_host, imap_port, imap_security, username, deleted, added_at, position, \
+          smtp_host, smtp_port, smtp_security, sender_name) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             id,
             email,
@@ -83,6 +91,12 @@ pub(crate) fn materialize_account(conn: &Connection, id: &str) -> Result<()> {
                 .unwrap_or(false),
             fields.get("added_at").and_then(Value::as_i64).unwrap_or(0),
             fields.get("position").and_then(Value::as_f64),
+            smtp_host.as_deref(),
+            smtp_host
+                .as_ref()
+                .and_then(|_| fields.get("smtp_port").and_then(Value::as_i64)),
+            smtp_host.as_ref().and_then(|_| text("smtp_security")),
+            text("sender_name").unwrap_or_default(),
         ],
     )?;
     // 别的设备移除了这个邮箱：本机同步下来的邮件也清掉
@@ -146,6 +160,19 @@ impl Store {
         set.insert("imap_port".into(), json!(cfg.imap_port));
         set.insert("imap_security".into(), json!(cfg.imap_security));
         set.insert("username".into(), json!(cfg.username.trim()));
+        if let Some(host) = cfg
+            .smtp_host
+            .as_deref()
+            .map(str::trim)
+            .filter(|h| !h.is_empty())
+        {
+            set.insert("smtp_host".into(), json!(host));
+            set.insert("smtp_port".into(), json!(cfg.smtp_port.unwrap_or(465)));
+            set.insert(
+                "smtp_security".into(),
+                json!(cfg.smtp_security.as_deref().unwrap_or("tls")),
+            );
+        }
         set.insert("deleted".into(), json!(false));
         if existing.is_none() {
             set.insert("added_at".into(), json!(now_ms()));
@@ -171,6 +198,18 @@ impl Store {
         }
         if let Some(username) = patch.username {
             set.insert("username".into(), json!(username.trim()));
+        }
+        if let Some(host) = patch.smtp_host {
+            set.insert("smtp_host".into(), json!(host.trim()));
+        }
+        if let Some(port) = patch.smtp_port {
+            set.insert("smtp_port".into(), json!(port));
+        }
+        if let Some(security) = patch.smtp_security {
+            set.insert("smtp_security".into(), json!(security));
+        }
+        if let Some(name) = patch.sender_name {
+            set.insert("sender_name".into(), json!(name.trim()));
         }
         self.set_fields("account", &[id.to_string()], set)
     }
@@ -536,6 +575,60 @@ impl Store {
         }
         tx.commit()?;
         Ok(refs)
+    }
+
+    /// 给你来过信的人，来信多的在前。电子报、通知一类自动发的信不算。
+    pub fn mail_contacts(&self, limit: usize) -> Result<Vec<Contact>> {
+        let guard = self.lock();
+        let mut stmt = guard.conn.prepare(
+            "SELECT MAX(from_name), MIN(from_address), COUNT(*) AS n FROM mail_meta \
+             WHERE from_address IS NOT NULL AND from_address LIKE '%_@_%' \
+               AND list_unsubscribe IS NULL \
+               AND account_id IN (SELECT id FROM accounts WHERE deleted = 0) \
+             GROUP BY lower(from_address) \
+             ORDER BY n DESC, lower(MIN(from_address)) \
+             LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit as i64], |r| {
+            Ok(Contact {
+                name: r
+                    .get::<_, Option<String>>(0)?
+                    .filter(|n| !n.trim().is_empty()),
+                address: r.get(1)?,
+                count: r.get(2)?,
+            })
+        })?;
+        let automated = |address: &str| {
+            let local = address.split('@').next().unwrap_or("").to_ascii_lowercase();
+            [
+                "noreply",
+                "no-reply",
+                "no_reply",
+                "donotreply",
+                "do-not-reply",
+                "mailer-daemon",
+                "postmaster",
+                "notifications",
+                "notification",
+                "bounce",
+            ]
+            .iter()
+            .any(|bad| {
+                local == *bad
+                    || local.starts_with(&format!("{bad}+"))
+                    || local.starts_with(&format!("{bad}-"))
+                    || local.ends_with(&format!("-{bad}"))
+                    || local.ends_with(&format!(".{bad}"))
+            })
+        };
+        let mut out = Vec::new();
+        for row in rows {
+            let contact = row?;
+            if !automated(&contact.address) {
+                out.push(contact);
+            }
+        }
+        Ok(out)
     }
 
     pub fn mail_ref(&self, id: &str) -> Result<Option<MailRef>> {

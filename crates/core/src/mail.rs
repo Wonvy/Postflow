@@ -118,6 +118,31 @@ pub(crate) fn server_config(account: &Account) -> Result<ServerConfig, RpcError>
     Ok(cfg)
 }
 
+/// 发信服务器：自己填过就用填的，否则按服务商预设或收信服务器推断。
+pub(crate) fn smtp_config(account: &Account) -> Result<ServerConfig, RpcError> {
+    let imap = ServerConfig {
+        host: account.imap_host.clone(),
+        port: account.imap_port,
+        security: parse_security(&account.imap_security)?,
+        username: account.username.clone(),
+    };
+    let mut cfg = match account.smtp_host.as_deref().map(str::trim) {
+        Some(host) if !host.is_empty() => ServerConfig {
+            host: host.to_string(),
+            port: account.smtp_port.unwrap_or(465),
+            security: parse_security(account.smtp_security.as_deref().unwrap_or("tls"))?,
+            username: account.username.clone(),
+        },
+        _ => postflow_mail::smtp_for(&account.email, &imap),
+    };
+    // iCloud 收信用 @ 前面的名字，发信要完整的地址
+    if cfg.host.eq_ignore_ascii_case("smtp.mail.me.com") && !cfg.username.contains('@') {
+        cfg.username = account.email.trim().to_string();
+    }
+    cfg.validate().map_err(|e| mail_error(&e))?;
+    Ok(cfg)
+}
+
 /// 用户名有两种写法的服务商。iCloud 的说明里写着用户名「通常」是不带 @icloud.com 的名字，
 /// 有的客户端要用完整地址才行，所以登录被拒时换另一种写法再试一次。
 fn alternate_username(cfg: &ServerConfig, email: &str) -> Option<String> {

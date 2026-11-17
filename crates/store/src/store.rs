@@ -80,7 +80,13 @@ CREATE TABLE IF NOT EXISTS accounts (
     username      TEXT NOT NULL DEFAULT '',
     deleted       INTEGER NOT NULL DEFAULT 0,
     added_at      INTEGER NOT NULL DEFAULT 0,
-    position      REAL
+    position      REAL,
+    -- 自己填的发信服务器。为空表示按服务商预设自动选
+    smtp_host     TEXT,
+    smtp_port     INTEGER,
+    smtp_security TEXT,
+    -- 发信时收件人看到的名字
+    sender_name   TEXT NOT NULL DEFAULT ''
 ) WITHOUT ROWID;
 
 -- 信息流里的每一条：订阅文章（kind = article）或邮件（kind = mail）。
@@ -840,6 +846,10 @@ fn init_schema(conn: &Connection, data_dir: &Path) -> Result<()> {
 fn migrate(conn: &Connection) -> Result<()> {
     add_column(conn, "feeds", "position", "REAL")?;
     add_column(conn, "accounts", "position", "REAL")?;
+    add_column(conn, "accounts", "smtp_host", "TEXT")?;
+    add_column(conn, "accounts", "smtp_port", "INTEGER")?;
+    add_column(conn, "accounts", "smtp_security", "TEXT")?;
+    add_column(conn, "accounts", "sender_name", "TEXT NOT NULL DEFAULT ''")?;
     if add_column(conn, "items", "image", "TEXT")? {
         backfill_images(conn)?;
     }

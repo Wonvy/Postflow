@@ -3,8 +3,8 @@
 use std::fs;
 
 use postflow_store::{
-    AccountConfig, Article, ItemFilter, ItemKind, ItemPatch, MailFolder, MailSync, NewFeed,
-    NewMail, Store, View, ids,
+    AccountConfig, AccountPatch, Article, ItemFilter, ItemKind, ItemPatch, MailFolder, MailSync,
+    NewFeed, NewMail, Store, View, ids,
 };
 
 fn open(dir: &std::path::Path, data: &std::path::Path, device: &str) -> Store {
@@ -19,6 +19,7 @@ fn account(email: &str) -> AccountConfig {
         imap_port: 993,
         imap_security: "tls".into(),
         username: email.into(),
+        ..Default::default()
     }
 }
 
@@ -75,6 +76,88 @@ fn account_settings_sync_to_other_devices_without_secrets() {
     a.put_account(changed).unwrap();
     assert_eq!(a.accounts().unwrap().len(), 1);
     assert_eq!(a.accounts().unwrap()[0].name, "Personal");
+}
+
+#[test]
+fn send_server_is_automatic_until_set_and_syncs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = tmp.path().join("data");
+    let a = open(tmp.path(), &data, "aaaaaaaaaaaa");
+    let id = a.put_account(account("me@example.com")).unwrap().id;
+    let acc = &a.accounts().unwrap()[0];
+    assert_eq!((acc.smtp_host.as_deref(), acc.smtp_port), (None, None));
+
+    a.update_account(
+        &id,
+        AccountPatch {
+            smtp_host: Some(" smtp.example.com ".into()),
+            smtp_port: Some(587),
+            smtp_security: Some("starttls".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let b = open(tmp.path(), &data, "bbbbbbbbbbbb");
+    for store in [&a, &b] {
+        let acc = &store.accounts().unwrap()[0];
+        assert_eq!(acc.smtp_host.as_deref(), Some("smtp.example.com"));
+        assert_eq!(acc.smtp_port, Some(587));
+        assert_eq!(acc.smtp_security.as_deref(), Some("starttls"));
+    }
+
+    // 清空服务器名就回到自动，端口和加密方式也不再算数
+    a.update_account(
+        &id,
+        AccountPatch {
+            smtp_host: Some(String::new()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let acc = &a.accounts().unwrap()[0];
+    assert_eq!(
+        (
+            acc.smtp_host.as_deref(),
+            acc.smtp_port,
+            acc.smtp_security.as_deref()
+        ),
+        (None, None, None)
+    );
+}
+
+#[test]
+fn contacts_are_people_who_wrote_to_you() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");
+    let acc = store.put_account(account("me@example.com")).unwrap().id;
+    let from = |uid: u32, name: Option<&str>, address: &str, list: bool| NewMail {
+        from_name: name.map(str::to_string),
+        from_address: Some(address.into()),
+        list_unsubscribe: list.then(|| "https://example.com/u".to_string()),
+        ..mail(&acc, uid, i64::from(uid))
+    };
+    let mut first = sync(1, 1_000);
+    first.new = vec![
+        from(1, Some("Ada"), "ada@example.com", false),
+        from(2, None, "ADA@example.com", false),
+        from(3, Some("Bob"), "bob@example.com", false),
+        from(4, Some("News"), "news@example.com", true),
+        from(5, Some("Shop"), "no-reply@example.com", false),
+        from(6, Some("Alerts"), "alerts.noreply@example.com", false),
+    ];
+    store.apply_mail_sync(&acc, first).unwrap();
+    let contacts = store.mail_contacts(10).unwrap();
+    let found: Vec<(Option<&str>, &str, i64)> = contacts
+        .iter()
+        .map(|c| (c.name.as_deref(), c.address.as_str(), c.count))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (Some("Ada"), "ADA@example.com", 2),
+            (Some("Bob"), "bob@example.com", 1)
+        ]
+    );
 }
 
 #[test]

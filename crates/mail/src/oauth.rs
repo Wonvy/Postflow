@@ -21,8 +21,11 @@ use tokio::sync::oneshot;
 
 /// 微软的登录服务。`common` 同时接受个人账户（Outlook.com）和工作、学校账户（Microsoft 365）。
 pub const MICROSOFT_AUTHORITY: &str = "https://login.microsoftonline.com/common";
-/// 读写 IMAP 邮箱的权限，加上 `offline_access` 才会给刷新令牌。
-pub const MICROSOFT_SCOPE: &str = "offline_access https://outlook.office.com/IMAP.AccessAsUser.All";
+/// 读写 IMAP 邮箱和用 SMTP 发信的权限，加上 `offline_access` 才会给刷新令牌。
+pub const MICROSOFT_SCOPE: &str = "offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send";
+/// 加上发信以前登录的邮箱只同意过收信。刷新时要不到发信权限就退回到这个，收信照常。
+const MICROSOFT_IMAP_SCOPE: &str =
+    "offline_access https://outlook.office.com/IMAP.AccessAsUser.All";
 
 /// 一个 OAuth 服务的地址。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +33,8 @@ pub struct Provider {
     pub authorize_url: String,
     pub token_url: String,
     pub scope: String,
+    /// 刷新时拿不到 `scope` 里全部权限的话，退而求其次要这些。
+    pub fallback_scope: Option<String>,
 }
 
 impl Provider {
@@ -40,6 +45,7 @@ impl Provider {
             authorize_url: format!("{base}/oauth2/v2.0/authorize"),
             token_url: format!("{base}/oauth2/v2.0/token"),
             scope: MICROSOFT_SCOPE.to_string(),
+            fallback_scope: Some(MICROSOFT_IMAP_SCOPE.to_string()),
         }
     }
 }
@@ -203,16 +209,29 @@ pub async fn refresh(
     client_id: &str,
     refresh_token: &str,
 ) -> Result<Tokens, OAuthError> {
-    token_request(
-        provider,
-        &[
+    let request = |scope: &str| {
+        let form = [
             ("client_id", client_id),
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh_token),
-            ("scope", &provider.scope),
-        ],
-    )
-    .await
+            ("scope", scope),
+        ]
+        .map(|(k, v)| (k, v.to_string()));
+        async move {
+            let form: Vec<(&str, &str)> = form.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            token_request(provider, &form).await
+        }
+    };
+    match request(&provider.scope).await {
+        Err(err @ (OAuthError::Expired(_) | OAuthError::Denied(_) | OAuthError::Failed(_))) => {
+            match &provider.fallback_scope {
+                // 早先登录时没同意过新加的权限：用原来的权限刷新，不同意的那部分功能用不了
+                Some(fallback) => request(fallback).await.map_err(|_| err),
+                None => Err(err),
+            }
+        }
+        other => other,
+    }
 }
 
 async fn token_request(provider: &Provider, form: &[(&str, &str)]) -> Result<Tokens, OAuthError> {

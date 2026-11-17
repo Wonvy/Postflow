@@ -2,20 +2,24 @@
 //!
 //! 和 `postflow-feed` 一样，这个 crate 不碰存储，只负责和邮件服务器打交道、把邮件变成结构化数据。
 
+mod compose;
 mod imap;
 mod message;
 pub mod oauth;
 mod presets;
+pub mod smtp;
 
+pub use compose::{Built, Outgoing, build, parse_address, thread_headers};
 pub use imap::{
     Auth, Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig,
     SpecialMailbox,
 };
 pub use message::{
-    AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, Summary, Unsubscribe, attachment,
-    base64, plain_text, render, summarize, unsubscribe, unsubscribe_one_click,
+    AttachmentInfo, BodyKind, Mailbox, RenderOptions, Rendered, ReplyContext, Summary, Unsubscribe,
+    attachment, base64, plain_text, render, reply_context, summarize, unsubscribe,
+    unsubscribe_one_click,
 };
-pub use presets::{Preset, detect, guess, presets, provider_for_mx};
+pub use presets::{Preset, detect, guess, presets, provider_for_mx, smtp_for};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

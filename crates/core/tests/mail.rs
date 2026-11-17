@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use postflow_core::{Core, MemorySecrets};
-use postflow_testkit::{FakeImap, mail};
+use postflow_testkit::{FakeImap, FakeSmtp, mail};
 use serde_json::{Value, json};
 
 const USER: &str = "me@example.com";
@@ -598,4 +598,134 @@ async fn refresh_reconnects_after_a_refused_login() {
     .await;
     let account = call(&core, "nav.get", json!({})).await["accounts"][0].clone();
     assert!(account["error_code"].is_null(), "{account}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replies_are_sent_threaded_and_saved_to_sent() {
+    let server = FakeImap::start(USER, PASS).await;
+    let smtp = FakeSmtp::start(USER, PASS).await;
+    server.deliver(
+        "INBOX",
+        "From: Ada <ada@example.com>\r\nTo: me@example.com, Bob <bob@example.com>\r\n\
+         Cc: carol@example.com\r\nSubject: Lunch?\r\nDate: Mon, 16 Nov 2026 08:00:00 +0000\r\n\
+         Message-ID: <lunch-2@example.com>\r\nReferences: <lunch-1@example.com>\r\n\r\n\
+         Noon at the usual place?\r\n",
+        &[],
+    );
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    let account = call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    let id = account["id"].clone();
+    wait_for("initial sync", || async {
+        mail_items(&core, "inbox").await.len() == 1
+    })
+    .await;
+
+    // 本机的收信服务器：发信服务器猜同一台机器的 1025 端口
+    let auto = call(&core, "accounts.smtp", json!({ "id": id })).await;
+    assert_eq!(
+        auto,
+        json!({ "host": "127.0.0.1", "port": 1025, "security": "none", "custom": false })
+    );
+
+    // 填错的发信服务器保存不了
+    let err = core
+        .rpc(
+            "accounts.update",
+            json!({ "id": id, "smtp_host": "127.0.0.1", "smtp_port": 9, "smtp_security": "none" }),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "send_connect");
+    call(
+        &core,
+        "accounts.update",
+        json!({ "id": id, "smtp_host": "127.0.0.1", "smtp_port": smtp.port, "smtp_security": "none" }),
+    )
+    .await;
+    let custom = call(&core, "accounts.smtp", json!({ "id": id })).await;
+    assert_eq!(custom["port"], smtp.port);
+    assert_eq!(custom["custom"], true);
+
+    // 回复要用到的原信内容
+    let original = find(&core, "inbox", "Lunch?").await.unwrap();
+    let ctx = call(
+        &core,
+        "mail.compose_context",
+        json!({ "id": original["id"] }),
+    )
+    .await;
+    assert_eq!(ctx["account_id"], id);
+    assert_eq!(ctx["message_id"], "lunch-2@example.com");
+    assert_eq!(ctx["from"][0]["address"], "ada@example.com");
+    assert_eq!(ctx["to"].as_array().unwrap().len(), 2);
+    assert_eq!(ctx["text"], "Noon at the usual place?");
+
+    // 收件人写错了：不发
+    let err = core
+        .rpc(
+            "mail.send",
+            json!({ "account_id": id, "to": ["not an address"], "subject": "x", "text": "y" }),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "send_bad_address");
+    assert!(smtp.delivered().is_empty());
+
+    call(
+        &core,
+        "accounts.update",
+        json!({ "id": id, "sender_name": " Sam Doe " }),
+    )
+    .await;
+    let sent = call(
+        &core,
+        "mail.send",
+        json!({
+            "account_id": id,
+            "to": ["Ada <ada@example.com>"],
+            "cc": ["bob@example.com", "carol@example.com"],
+            "subject": "Re: Lunch?",
+            "text": "Sounds good.\n\n> Noon at the usual place?",
+            "in_reply_to": original["id"],
+        }),
+    )
+    .await;
+    let message_id = sent["message_id"].as_str().unwrap().to_string();
+    assert!(message_id.ends_with("@example.com"));
+
+    let delivered = smtp.delivered();
+    assert_eq!(delivered.len(), 1);
+    assert_eq!(delivered[0].from, USER);
+    assert_eq!(
+        delivered[0].to,
+        ["ada@example.com", "bob@example.com", "carol@example.com"]
+    );
+    let raw = String::from_utf8_lossy(&delivered[0].raw).to_string();
+    assert!(raw.contains("In-Reply-To: <lunch-2@example.com>"), "{raw}");
+    assert!(
+        raw.contains("References: <lunch-1@example.com> <lunch-2@example.com>"),
+        "{raw}"
+    );
+    // 侧栏里的邮箱名 Work 不是人名，发信用专门填的发件人名字
+    assert!(raw.contains("From: \"Sam Doe\" <me@example.com>"), "{raw}");
+
+    // 发出去的信过一会儿出现在服务器的「已发送」里，只存一份
+    wait_for("copy saved to Sent", || async {
+        server.contains("Sent", &message_id)
+    })
+    .await;
+    assert_eq!(server.count("Sent"), 1);
+    core.shutdown();
 }

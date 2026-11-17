@@ -21,6 +21,10 @@ pub struct Preset {
     pub username_local_part: bool,
     /// 这个服务商的邮箱域名，界面用来给出示例地址。企业邮箱用自己的域名，这里为空。
     pub domains: &'static [&'static str],
+    /// 发信服务器。
+    pub smtp_host: &'static str,
+    pub smtp_port: u16,
+    pub smtp_security: Security,
 }
 
 const fn p(
@@ -38,13 +42,36 @@ const fn p(
         password_kind,
         username_local_part: false,
         domains: &[],
+        smtp_host: "",
+        smtp_port: 465,
+        smtp_security: Security::Tls,
+    }
+}
+
+impl Preset {
+    /// 发信服务器，默认 465 端口直接走 TLS。
+    const fn smtp(self, host: &'static str) -> Preset {
+        Preset {
+            smtp_host: host,
+            ..self
+        }
+    }
+
+    /// 发信服务器要先明文连上再 STARTTLS 的（587 端口）。
+    const fn smtp_starttls(self, host: &'static str) -> Preset {
+        Preset {
+            smtp_host: host,
+            smtp_port: 587,
+            smtp_security: Security::Starttls,
+            ..self
+        }
     }
 }
 
 const PRESETS: &[(&[&str], Preset)] = &[
     (
         &["gmail.com", "googlemail.com"],
-        p("gmail", "Gmail", "imap.gmail.com", "app_password"),
+        p("gmail", "Gmail", "imap.gmail.com", "app_password").smtp("smtp.gmail.com"),
     ),
     (
         &[
@@ -54,116 +81,123 @@ const PRESETS: &[(&[&str], Preset)] = &[
             "msn.com",
             "outlook.cn",
         ],
-        p("outlook", "Outlook", "outlook.office365.com", "oauth"),
+        p("outlook", "Outlook", "outlook.office365.com", "oauth")
+            .smtp_starttls("smtp-mail.outlook.com"),
     ),
     (
         &["icloud.com", "me.com", "mac.com"],
-        p("icloud", "iCloud", "imap.mail.me.com", "app_password"),
+        p("icloud", "iCloud", "imap.mail.me.com", "app_password").smtp_starttls("smtp.mail.me.com"),
     ),
     (
         &["yahoo.com", "ymail.com", "rocketmail.com", "yahoo.co.jp"],
-        p("yahoo", "Yahoo", "imap.mail.yahoo.com", "app_password"),
+        p("yahoo", "Yahoo", "imap.mail.yahoo.com", "app_password").smtp("smtp.mail.yahoo.com"),
     ),
     (
         &["qq.com", "vip.qq.com", "foxmail.com"],
-        p("qq", "QQ 邮箱", "imap.qq.com", "auth_code"),
+        p("qq", "QQ 邮箱", "imap.qq.com", "auth_code").smtp("smtp.qq.com"),
     ),
     (
         &["163.com", "vip.163.com"],
-        p("163", "网易 163", "imap.163.com", "auth_code"),
+        p("163", "网易 163", "imap.163.com", "auth_code").smtp("smtp.163.com"),
     ),
     (
         &["126.com", "vip.126.com"],
-        p("126", "网易 126", "imap.126.com", "auth_code"),
+        p("126", "网易 126", "imap.126.com", "auth_code").smtp("smtp.126.com"),
     ),
     (
         &["yeah.net"],
-        p("yeah", "网易 yeah.net", "imap.yeah.net", "auth_code"),
+        p("yeah", "网易 yeah.net", "imap.yeah.net", "auth_code").smtp("smtp.yeah.net"),
     ),
     (
         &["188.com"],
-        p("188", "网易 188", "imap.188.com", "auth_code"),
+        p("188", "网易 188", "imap.188.com", "auth_code").smtp("smtp.188.com"),
     ),
     (
         &["sina.com", "sina.cn", "vip.sina.com"],
-        p("sina", "新浪邮箱", "imap.sina.com", "auth_code"),
+        p("sina", "新浪邮箱", "imap.sina.com", "auth_code").smtp("smtp.sina.com"),
     ),
     (
         &["sohu.com"],
-        p("sohu", "搜狐邮箱", "imap.sohu.com", "auth_code"),
+        p("sohu", "搜狐邮箱", "imap.sohu.com", "auth_code").smtp("smtp.sohu.com"),
     ),
     (
         &["139.com"],
-        p("139", "139 邮箱", "imap.139.com", "auth_code"),
+        p("139", "139 邮箱", "imap.139.com", "auth_code").smtp("smtp.139.com"),
     ),
     (
         &["aliyun.com"],
-        p("aliyun", "阿里邮箱", "imap.aliyun.com", "password"),
+        p("aliyun", "阿里邮箱", "imap.aliyun.com", "password").smtp("smtp.aliyun.com"),
     ),
     (
         &["fastmail.com", "fastmail.fm"],
-        p("fastmail", "Fastmail", "imap.fastmail.com", "app_password"),
+        p("fastmail", "Fastmail", "imap.fastmail.com", "app_password").smtp("smtp.fastmail.com"),
     ),
     (
         &["zoho.com", "zohomail.com"],
-        p("zoho", "Zoho Mail", "imap.zoho.com", "app_password"),
+        p("zoho", "Zoho Mail", "imap.zoho.com", "app_password").smtp("smtp.zoho.com"),
     ),
     (
         &["yandex.com", "yandex.ru", "ya.ru"],
-        p("yandex", "Yandex", "imap.yandex.com", "app_password"),
+        p("yandex", "Yandex", "imap.yandex.com", "app_password").smtp("smtp.yandex.com"),
     ),
     (
         &["gmx.com", "gmx.net", "gmx.de"],
-        p("gmx", "GMX", "imap.gmx.com", "password"),
+        p("gmx", "GMX", "imap.gmx.com", "password").smtp("mail.gmx.com"),
     ),
     (
         &["mail.ru"],
-        p("mailru", "Mail.ru", "imap.mail.ru", "app_password"),
+        p("mailru", "Mail.ru", "imap.mail.ru", "app_password").smtp("smtp.mail.ru"),
     ),
     (
         &["aol.com"],
-        p("aol", "AOL", "imap.aol.com", "app_password"),
+        p("aol", "AOL", "imap.aol.com", "app_password").smtp("smtp.aol.com"),
     ),
 ];
 
 /// 企业邮箱用自己的域名，没法从地址推断，只能让用户手动选。
 const BUSINESS: &[Preset] = &[
-    p("exmail", "腾讯企业邮箱", "imap.exmail.qq.com", "auth_code"),
-    p("qiye163", "网易企业邮箱", "imap.qiye.163.com", "auth_code"),
+    p("exmail", "腾讯企业邮箱", "imap.exmail.qq.com", "auth_code").smtp("smtp.exmail.qq.com"),
+    p("qiye163", "网易企业邮箱", "imap.qiye.163.com", "auth_code").smtp("smtp.qiye.163.com"),
     p(
         "qiye_aliyun",
         "阿里企业邮箱",
         "imap.qiye.aliyun.com",
         "password",
-    ),
+    )
+    .smtp("smtp.qiye.aliyun.com"),
     p(
         "workspace",
         "Google Workspace",
         "imap.gmail.com",
         "app_password",
-    ),
-    p("m365", "Microsoft 365", "outlook.office365.com", "oauth"),
-    p("feishu", "飞书邮箱", "imap.feishu.cn", "app_password"),
-    p("lark", "Lark Mail", "imap.larksuite.com", "app_password"),
-    p("263", "263 企业邮箱", "imap.263.net", "password"),
+    )
+    .smtp("smtp.gmail.com"),
+    p("m365", "Microsoft 365", "outlook.office365.com", "oauth")
+        .smtp_starttls("smtp.office365.com"),
+    p("feishu", "飞书邮箱", "imap.feishu.cn", "app_password").smtp("smtp.feishu.cn"),
+    p("lark", "Lark Mail", "imap.larksuite.com", "app_password").smtp("smtp.larksuite.com"),
+    p("263", "263 企业邮箱", "imap.263.net", "password").smtp("smtp.263.net"),
     p(
         "icloud_custom",
         "iCloud 自定域名",
         "imap.mail.me.com",
         "app_password",
-    ),
+    )
+    .smtp_starttls("smtp.mail.me.com"),
     p(
         "fastmail_custom",
         "Fastmail 自定域名",
         "imap.fastmail.com",
         "app_password",
-    ),
+    )
+    .smtp("smtp.fastmail.com"),
     p(
         "zoho_custom",
         "Zoho Mail 自定域名",
         "imap.zoho.com",
         "app_password",
-    ),
+    )
+    .smtp("smtp.zoho.com"),
 ];
 
 /// 企业邮箱和自定义域名的邮件交给谁收，看域名的 MX 记录就知道。按 MX 主机名后缀对应到服务商。
@@ -290,6 +324,52 @@ pub fn guess(email: &str) -> Option<(ServerConfig, Option<Preset>)> {
     Some((config, preset))
 }
 
+/// 一个账户的发信服务器。服务商预设里有就用预设的；没有就照收信服务器猜：
+/// `imap.example.com` 换成 `smtp.example.com`，用 465 端口和 TLS；本机的桥接程序猜 1025 端口。
+pub fn smtp_for(email: &str, imap: &ServerConfig) -> ServerConfig {
+    let imap_host = imap.host.trim().to_ascii_lowercase();
+    let same_host = |p: &Preset| p.imap_host == imap_host && !p.smtp_host.is_empty();
+    // 先看邮箱域名认得的服务商，再看收信服务器（企业邮箱优先，自定义域名多是企业邮箱）
+    let preset = guess(email)
+        .and_then(|(_, p)| p)
+        .filter(same_host)
+        .or_else(|| BUSINESS.iter().find(|p| same_host(p)).cloned())
+        .or_else(|| {
+            PRESETS
+                .iter()
+                .map(|(_, p)| p)
+                .find(|p| same_host(p))
+                .cloned()
+        });
+    let username = imap.username.clone();
+    if let Some(p) = preset {
+        return ServerConfig {
+            host: p.smtp_host.to_string(),
+            port: p.smtp_port,
+            security: p.smtp_security,
+            username,
+        };
+    }
+    if crate::imap::is_loopback(&imap_host) {
+        return ServerConfig {
+            host: imap.host.trim().to_string(),
+            port: 1025,
+            security: imap.security,
+            username,
+        };
+    }
+    let host = match imap_host.strip_prefix("imap.") {
+        Some(rest) => format!("smtp.{rest}"),
+        None => imap_host,
+    };
+    ServerConfig {
+        host,
+        port: 465,
+        security: Security::Tls,
+        username,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,6 +423,62 @@ mod tests {
         // 只看后缀的边界，不能把 notqq.com 认成 QQ
         assert_eq!(id(&["mx.notqq.com."]), None);
         assert_eq!(id(&[]), None);
+    }
+
+    #[test]
+    fn every_provider_has_a_send_server() {
+        for p in presets() {
+            assert!(!p.smtp_host.is_empty(), "{} has no SMTP server", p.id);
+            assert!(matches!(
+                (p.smtp_port, p.smtp_security),
+                (465, Security::Tls) | (587, Security::Starttls)
+            ));
+        }
+    }
+
+    #[test]
+    fn send_server_follows_the_account() {
+        let imap = |host: &str, security| ServerConfig {
+            host: host.into(),
+            port: 993,
+            security,
+            username: "me".into(),
+        };
+        let smtp = |email: &str, host: &str| {
+            let c = smtp_for(email, &imap(host, Security::Tls));
+            (c.host, c.port, c.security)
+        };
+        assert_eq!(
+            smtp("a@qq.com", "imap.qq.com"),
+            ("smtp.qq.com".into(), 465, Security::Tls)
+        );
+        assert_eq!(
+            smtp("a@hotmail.com", "outlook.office365.com"),
+            ("smtp-mail.outlook.com".into(), 587, Security::Starttls)
+        );
+        // 自定义域名用 Microsoft 365
+        assert_eq!(
+            smtp("a@example.org", "outlook.office365.com"),
+            ("smtp.office365.com".into(), 587, Security::Starttls)
+        );
+        assert_eq!(
+            smtp("a@example.org", "imap.gmail.com"),
+            ("smtp.gmail.com".into(), 465, Security::Tls)
+        );
+        assert_eq!(
+            smtp("a@example.org", "IMAP.Example.org"),
+            ("smtp.example.org".into(), 465, Security::Tls)
+        );
+        assert_eq!(
+            smtp("a@example.org", "mail.example.org"),
+            ("mail.example.org".into(), 465, Security::Tls)
+        );
+        let local = smtp_for("a@example.org", &imap("127.0.0.1", Security::None));
+        assert_eq!(
+            (local.host.as_str(), local.port, local.security),
+            ("127.0.0.1", 1025, Security::None)
+        );
+        assert_eq!(local.username, "me");
     }
 
     #[test]

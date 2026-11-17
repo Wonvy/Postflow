@@ -53,6 +53,12 @@ struct UpdateAccount {
     imap_port: Option<u16>,
     imap_security: Option<String>,
     username: Option<String>,
+    /// 发信服务器。空字符串表示改回自动。
+    smtp_host: Option<String>,
+    smtp_port: Option<u16>,
+    smtp_security: Option<String>,
+    /// 发信时收件人看到的名字。
+    sender_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -128,7 +134,10 @@ impl Core {
             "mail.attachment" => self.attachment(params, session).await,
             "mail.trust_sender" => self.trust_sender(params, session).await,
             "mail.unsubscribe" => self.unsubscribe(params, session).await,
-            _ => return self.oauth_rpc(method, params, session).await,
+            _ => match self.compose_rpc(method, params.clone(), session).await {
+                Some(result) => result,
+                None => return self.oauth_rpc(method, params, session).await,
+            },
         };
         Some(result)
     }
@@ -184,6 +193,7 @@ impl Core {
             imap_port: cfg.port,
             imap_security: security_str(cfg.security).to_string(),
             username: cfg.username.clone(),
+            ..Default::default()
         };
         let account = session.db(move |s| s.put_account(config)).await?;
         tracing::info!(account = %account.id, host = %account.imap_host, "mail account added");
@@ -215,10 +225,7 @@ impl Core {
                 let id = account.id.clone();
                 let patch = AccountPatch {
                     name: Some(name),
-                    imap_host: None,
-                    imap_port: None,
-                    imap_security: None,
-                    username: None,
+                    ..Default::default()
                 };
                 session.db(move |s| s.update_account(&id, patch)).await?;
             }
@@ -262,12 +269,53 @@ impl Core {
             }
         }
 
+        // 自己填了发信服务器：先试着登录一下，免得发信时才发现填错了
+        let smtp_host = p.smtp_host.map(|h| h.trim().to_string());
+        let smtp_changed = smtp_host.as_deref().is_some_and(|h| {
+            h != account.smtp_host.as_deref().unwrap_or("")
+                || (!h.is_empty()
+                    && (p
+                        .smtp_port
+                        .is_some_and(|port| Some(port) != account.smtp_port)
+                        || p.smtp_security
+                            .as_ref()
+                            .is_some_and(|s| Some(s) != account.smtp_security.as_ref())))
+        });
+        if let Some(host) = smtp_host
+            .as_deref()
+            .filter(|h| smtp_changed && !h.is_empty())
+        {
+            let security = parse_security(p.smtp_security.as_deref().unwrap_or("tls"))?;
+            let mut changed = account.clone();
+            changed.smtp_host = Some(host.to_string());
+            changed.smtp_port = Some(p.smtp_port.unwrap_or(465));
+            changed.smtp_security = Some(security_str(security).to_string());
+            if let Some(name) = &username {
+                changed.username = name.clone();
+            }
+            let cfg = crate::mail::smtp_config(&changed)?;
+            let auth = match &password {
+                Some(pw) => Some(Auth::Password(pw.clone())),
+                None => self.mail_auth(&account.id).await?,
+            }
+            .ok_or_else(|| {
+                RpcError::new("mail_no_password", "enter the password for this account")
+            })?;
+            postflow_mail::smtp::check(&cfg, &auth)
+                .await
+                .map_err(|e| crate::compose::send_error(&e, matches!(auth, Auth::OAuth2(_))))?;
+        }
+
         let patch = AccountPatch {
             name: p.name,
             imap_host: host,
             imap_port: p.imap_port,
             imap_security: p.imap_security,
             username,
+            smtp_host,
+            smtp_port: p.smtp_port,
+            smtp_security: p.smtp_security,
+            sender_name: p.sender_name,
         };
         let id = account.id.clone();
         session.db(move |s| s.update_account(&id, patch)).await?;
@@ -331,6 +379,7 @@ impl Core {
             imap_port: cfg.port,
             imap_security: security_str(cfg.security).to_string(),
             username: cfg.username.clone(),
+            ..Default::default()
         };
         let account = session.db(move |s| s.put_account(config)).await?;
         tracing::info!(account = %account.id, host = %account.imap_host, "mail account added with microsoft sign-in");

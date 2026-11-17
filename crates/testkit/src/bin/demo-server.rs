@@ -5,6 +5,8 @@
 //! - `work@example.com` / `demo` on 127.0.0.1:1143
 //! - `me@example.org` / `demo` on 127.0.0.1:1144
 //! - feeds on http://127.0.0.1:1145/ (see the list printed at start-up)
+//! - outgoing mail (SMTP) on 127.0.0.1:1025 for all demo mailboxes. Mail sent to another demo
+//!   address lands in its inbox; everything else is only printed.
 //!
 //! A new message arrives in the work mailbox every minute, to show live delivery.
 //!
@@ -13,7 +15,7 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use postflow_testkit::FakeImap;
+use postflow_testkit::{FakeImap, FakeSmtp};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -22,6 +24,8 @@ const AI_PORT: u16 = 1146;
 /// 用微软账户登录的演示邮箱（假的登录服务在 FEED_PORT 上）。
 const OUTLOOK_PORT: u16 = 1147;
 const OUTLOOK_USER: &str = "outlook-demo@example.com";
+/// 演示邮箱共用的发信服务器。本机收信服务器的发信端口，Postflow 自动猜的就是它。
+const SMTP_PORT: u16 = 1025;
 const MINUTE: i64 = 60;
 const HOUR: i64 = 60 * MINUTE;
 const DAY: i64 = 24 * HOUR;
@@ -777,6 +781,34 @@ async fn main() {
         personal.quiet_idle(Duration::from_secs(20));
     }
     seed_mail(&work, &personal);
+    work.add_mailbox("Sent", Some("\\Sent"));
+    personal.add_mailbox("[Gmail]/Sent Mail", Some("\\Sent"));
+    outlook.add_mailbox("Sent Items", Some("\\Sent"));
+
+    // 发给演示邮箱的信投进它的收件箱，发给别人的只打印出来
+    let smtp = FakeSmtp::start_on(SMTP_PORT).await;
+    for user in ["work@example.com", "me@example.org", OUTLOOK_USER] {
+        smtp.add_user(user, "demo");
+    }
+    let inboxes = [
+        ("work@example.com", work.clone()),
+        ("me@example.org", personal.clone()),
+        (OUTLOOK_USER, outlook.clone()),
+    ];
+    smtp.on_deliver(move |mail| {
+        let raw = String::from_utf8_lossy(&mail.raw);
+        for to in &mail.to {
+            match inboxes
+                .iter()
+                .find(|(user, _)| to.eq_ignore_ascii_case(user))
+            {
+                Some((_, server)) => {
+                    server.deliver("INBOX", &raw, &[]);
+                }
+                None => println!("demo: {} sent mail to {to}", mail.from),
+            }
+        }
+    });
     tokio::spawn(serve_feeds());
     // 假的 AI 服务，不需要密钥，回答是从正文里拼出来的
     let _ai = postflow_testkit::FakeAi::start_on(None, AI_PORT).await;
@@ -786,6 +818,7 @@ async fn main() {
     println!("Mail (server 127.0.0.1, encryption: none, password: demo):");
     println!("  work@example.com  port 1143");
     println!("  me@example.org    port 1144");
+    println!("  sending (SMTP)    port {SMTP_PORT}, chosen automatically");
     println!();
     println!("Feeds:");
     for path in ["field-notes/atom.xml", "weekly/atom.xml", "cn/atom.xml"] {

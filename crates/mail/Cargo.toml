@@ -10,6 +10,7 @@ async-imap = { version = "0.12.0", default-features = false, features = ["runtim
 encoding_rs = "0.8.44"
 futures = "0.3.34"
 hickory-resolver = "0.26.3"
+mail-builder = { version = "=0.4.4", default-features = false }
 mail-parser = { version = "0.11.9", features = ["full_encoding"] }
 rand = "0.10.4"
 reqwest = "0.13.5"
