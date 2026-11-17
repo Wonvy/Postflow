@@ -55,7 +55,7 @@ JavaScript module. It runs inside Postflow's interface and talks to the app thro
 
 ## Examples
 
-Three complete plugins live in [`examples/plugins`](../examples/plugins). To try one, copy its folder into
+Four complete plugins live in [`examples/plugins`](../examples/plugins). To try one, copy its folder into
 your plugins folder, choose **Rescan** and turn it on.
 
 | Plugin | What it does | What it shows |
@@ -63,6 +63,7 @@ your plugins folder, choose **Rescan** and turn it on.
 | [`copy-code`](../examples/plugins/copy-code) | Copies the verification code from the open message; "Copy title and link" in the list's right-click menu; a notice when new mail carries a code. | A reader toolbar button with an SVG icon, `api.items.get`, a right-click item with `when`, the `"new-mail"` event. |
 | [`important-senders`](../examples/plugins/important-senders) | Right-click mail to mark its sender as important; new unread mail from those senders is starred automatically. | Per-plugin storage, `"items-changed"` with a debounce, `api.items.list` with a filter, `api.items.set`, `api.onUnload`. |
 | [`daily-digest`](../examples/plugins/daily-digest) | Copies today's unread items as Markdown, grouped by feed or mailbox; copies the open item as a Markdown note. | Buttons in both toolbars, `api.items.list` with `view: "today"`, the `"item-open"` event, storage that resets daily. |
+| [`textrank-zh`](../examples/plugins/textrank-zh) | Above Chinese articles and mail, shows keywords and the three sentences that best sum it up, computed offline with TextRank. A reader button turns it on and off. | `api.ui.addReaderSection`, `api.ui.addStyle`, adding and removing a section to toggle it, bundling a library ([textrank4zh-ts](https://github.com/ChasLui/textrank4zh-ts), MIT) into one file. |
 
 ## Folder layout and manifest
 
@@ -86,7 +87,10 @@ plugins/
 
 `main.js` is loaded as an **ES module** and can be up to 4 MB. It can't `import` other files from the
 plugin folder, so bundle everything into one file if you use a build step (esbuild, Rollup, Vite library
-mode, all with `format: "esm"`). It can `import()` modules from URLs if your plugin needs a library.
+mode, all with `format: "esm"`). Libraries have to be bundled in too: the desktop app doesn't let pages load
+scripts from other websites, so `import()` from a URL fails there. [`textrank-zh`](../examples/plugins/textrank-zh)
+shows how: its `src/main.js` imports a library and a JSON file, and `npm run build:plugins` bundles them into
+one `main.js` with [Rolldown](https://rolldown.rs/).
 
 ## Lifecycle
 
@@ -127,6 +131,7 @@ export default function (api) {
 | --- | --- |
 | `addToolbarButton({ id, toolbar, label, icon?, onClick })` | Adds a button to the `"list"` or `"reader"` toolbar. It starts at the end of the top toolbar; users can move it to the status bar or hide it in **Customize toolbar**. `icon` is an SVG string drawn with `currentColor` (24×24 viewBox); without it a puzzle piece is shown. `onClick({ item, selection })` gets the open item (or `null`) and the IDs selected in the list. Returns a function that removes the button. |
 | `addItemMenuItem({ id, label, when?, onClick })` | Adds an item to the end of the list's right-click menu. `onClick(items)` gets the items the menu is for (the right-clicked one, or the whole selection). `when(items)` decides whether to show it. Returns a remover. |
+| `addReaderSection({ id, when?, render })` | Adds a block above the body in the reader, for articles and mail. For every opened item, `render(item, el)` gets the full `ItemDetail` and an empty element to fill with plain DOM; it may be async and may return a cleanup function. Postflow calls it again when another item is opened or full-text mode changes, after running the cleanup and discarding the old element, so a slow render that finishes late never shows up on the wrong item. `when(item)` decides whether to show it. Returns a remover; removing and adding the section again is the way to toggle it. Use the theme's CSS variables (`--fg`, `--fg-2`, `--fg-3`, `--line`, `--accent`, `--accent-soft`, `--hover`) so it fits light and dark mode. |
 | `addStyle(css)` | Adds a `<style>` to the page. Returns a remover. |
 | `toast(message)` | Shows a short message at the bottom of the window. |
 

@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { toast } from "../components/Toast";
-import { api, type Item, type ItemFilter, type ItemPatch } from "./api";
+import { api, type Item, type ItemDetail, type ItemFilter, type ItemPatch } from "./api";
 import { resolveLang } from "./i18n";
 import { useUi } from "./store";
 import { type CoreEvent, rpc, subscribe } from "./transport";
@@ -57,6 +57,18 @@ export interface ItemMenuItem {
   onClick: (items: Item[]) => void | Promise<void>;
 }
 
+/** 阅读区里正文上方的一块，插件自己往里画内容。 */
+export interface ReaderSection {
+  id: string;
+  /** 只对这些条目显示；不给就都显示。 */
+  when?: (item: ItemDetail) => boolean;
+  /**
+   * 往 `el` 里画内容。打开别的条目、切换全文、插件停用时调用返回的清理函数（如果有），再清空 `el`。
+   * 可以是 async；画到一半换了条目时，`el` 已经不在页面上了，画了也看不到，不会出错。
+   */
+  render: (item: ItemDetail, el: HTMLElement) => void | (() => void) | Promise<void | (() => void)>;
+}
+
 type Registered<T> = T & { pluginId: string; key: string };
 
 export type PluginStatus = { state: "loaded" } | { state: "error"; error: string };
@@ -64,11 +76,12 @@ export type PluginStatus = { state: "loaded" } | { state: "error"; error: string
 interface Registry {
   buttons: Registered<ToolbarButton>[];
   menu: Registered<ItemMenuItem>[];
+  sections: Registered<ReaderSection>[];
   status: Record<string, PluginStatus>;
 }
 
 /** 插件登记的按钮和菜单项，以及每个插件的加载状态。 */
-export const usePlugins = create<Registry>()(() => ({ buttons: [], menu: [], status: {} }));
+export const usePlugins = create<Registry>()(() => ({ buttons: [], menu: [], sections: [], status: {} }));
 
 /** 工具栏上插件按钮的 ID，和布局里用的一样。 */
 export function buttonKey(pluginId: string, id: string): string {
@@ -123,7 +136,7 @@ function storageKey(pluginId: string, key: string) {
 /** 交给插件的接口。说明见 docs/plugins.md，那里的内容要和这里一致。 */
 function makeApi(manifest: PluginManifest, track: (fn: () => void) => void) {
   const pid = manifest.id;
-  const register = <T>(list: "buttons" | "menu", spec: T & { id: string }) => {
+  const register = <T>(list: "buttons" | "menu" | "sections", spec: T & { id: string }) => {
     const key = list === "buttons" ? buttonKey(pid, spec.id) : `${pid}:${spec.id}`;
     usePlugins.setState((s) => ({
       [list]: [...s[list].filter((x) => x.key !== key), { ...spec, pluginId: pid, key }],
@@ -156,6 +169,8 @@ function makeApi(manifest: PluginManifest, track: (fn: () => void) => void) {
       toast: (message: string) => toast(String(message)),
       addToolbarButton: (spec: ToolbarButton) => register("buttons", spec),
       addItemMenuItem: (spec: ItemMenuItem) => register("menu", spec),
+      /** 在阅读区正文上方加一块，插件自己画内容（比如关键词、摘要）。 */
+      addReaderSection: (spec: ReaderSection) => register("sections", spec),
       /** 加一段 CSS，卸载时去掉。 */
       addStyle: (css: string) => {
         const el = document.createElement("style");

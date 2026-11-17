@@ -10,10 +10,17 @@ that heading into the version number and date.
 - Sent mail shows up in Sent a few seconds after sending, instead of waiting for the next time new mail arrives.
   Folders created or renamed on the server while Postflow is running (such as a Sent folder made when the first
   message is sent) are found without restarting. Sent has its own hint when it's empty.
+- Plugins can add their own section above the body in the reader (api.ui.addReaderSection). New example plugin
+  textrank-zh: keywords and a three-sentence summary for Chinese articles and mail, computed offline with
+  TextRank (textrank4zh-ts, MIT); a reader button turns it on and off. The plugin guide now explains bundling
+  libraries, which a plugin can't load from the web in the desktop app.
 
 ### 中文
 - 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
   （比如第一次发信时才建出来的「已发送」）不用重启也能找到。「已发送」为空时有了自己的提示。
+- 插件可以在阅读区正文上方加自己的一块内容（api.ui.addReaderSection）。新增示例插件 textrank-zh：用 TextRank 离线
+  为中文文章和邮件提取关键词和三句摘要（textrank4zh-ts，MIT），阅读区有按钮可以开关。插件开发文档补充了如何把第三方库打包进插件
+  （桌面应用里插件不能从网上加载库）。
 
 ## 0.1.14 — 2026-11-17
 

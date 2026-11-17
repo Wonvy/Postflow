@@ -54,7 +54,7 @@ JavaScript 模块。插件在 Postflow 的界面里运行，通过 `api` 对象�
 
 ## 例子
 
-[`examples/plugins`](../examples/plugins) 里有三个完整的插件。想试试的话，把插件文件夹复制到你的插件目录，
+[`examples/plugins`](../examples/plugins) 里有四个完整的插件。想试试的话，把插件文件夹复制到你的插件目录，
 点「重新扫描」，再启用它。
 
 | 插件 | 做什么 | 演示了哪些接口 |
@@ -62,6 +62,7 @@ JavaScript 模块。插件在 Postflow 的界面里运行，通过 `api` 对象�
 | [`copy-code`](../examples/plugins/copy-code) | 复制打开的邮件里的验证码；列表右键菜单里加「复制标题和链接」；收到含验证码的新邮件时提示。 | 带 SVG 图标的阅读区按钮、`api.items.get`、带 `when` 的右键菜单项、`"new-mail"` 事件。 |
 | [`important-senders`](../examples/plugins/important-senders) | 在邮件上点右键把发件人设为重要发件人；之后这些发件人的未读新邮件自动加星标。 | 插件自己的存储、带防抖的 `"items-changed"`、带筛选条件的 `api.items.list`、`api.items.set`、`api.onUnload`。 |
 | [`daily-digest`](../examples/plugins/daily-digest) | 把今天的未读条目按订阅源或邮箱分组，复制成 Markdown；把打开的条目复制成一条 Markdown 笔记。 | 两个工具栏上的按钮、`view: "today"` 的 `api.items.list`、`"item-open"` 事件、每天清零的存储。 |
+| [`textrank-zh`](../examples/plugins/textrank-zh) | 在中文文章和邮件的正文上方显示关键词，以及最能概括全文的三句话，用 TextRank 离线计算。阅读区有个按钮可以打开、关闭。 | `api.ui.addReaderSection`、`api.ui.addStyle`、用添加和移除来开关一块内容、把第三方库（[textrank4zh-ts](https://github.com/ChasLui/textrank4zh-ts)，MIT）打包成一个文件。 |
 
 ## 文件夹结构和 manifest
 
@@ -85,7 +86,9 @@ plugins/
 
 `main.js` 按 **ES 模块** 加载，最大 4 MB。它不能 `import` 插件文件夹里的其他文件，所以如果用了构建工具，
 请把所有代码打包成一个文件（esbuild、Rollup、Vite 的库模式都可以，格式选 `format: "esm"`）。
-需要第三方库时，可以用 `import()` 从网址加载模块。
+第三方库也要一起打包进去：桌面应用不允许页面从别的网站加载脚本，所以在那里用 `import()` 从网址加载会失败。
+[`textrank-zh`](../examples/plugins/textrank-zh) 是一个例子：它的 `src/main.js` 引入了一个库和一个 JSON 文件，
+`npm run build:plugins` 用 [Rolldown](https://rolldown.rs/) 把它们打包成一个 `main.js`。
 
 ## 生命周期
 
@@ -125,6 +128,7 @@ export default function (api) {
 | --- | --- |
 | `addToolbarButton({ id, toolbar, label, icon?, onClick })` | 在 `"list"`（列表）或 `"reader"`（阅读区）工具栏加一个按钮。默认放在顶部工具栏的最后，用户可以在「自定义工具栏」里把它挪到状态栏或隐藏。`icon` 是用 `currentColor` 画的 SVG 字符串（viewBox 24×24），不给就显示拼图图标。`onClick({ item, selection })` 收到阅读区打开的条目（没有就是 `null`）和列表里选中的条目 ID。返回一个移除这个按钮的函数。 |
 | `addItemMenuItem({ id, label, when?, onClick })` | 在列表右键菜单的最后加一项。`onClick(items)` 收到这个菜单针对的条目（右键点的那一条，或者整个选中的范围）。`when(items)` 决定显不显示。返回一个移除函数。 |
+| `addReaderSection({ id, when?, render })` | 在阅读区正文上方加一块内容，文章和邮件都有。每打开一个条目，`render(item, el)` 会收到完整的 `ItemDetail` 和一个空元素，用普通 DOM 往里画；可以是 async，也可以返回一个清理函数。打开别的条目、切换全文模式时，Postflow 先调清理函数、丢掉旧的元素，再重新调用，所以算得慢、晚到的结果不会出现在别的条目上。`when(item)` 决定显不显示。返回一个移除函数；要开关这块内容，就移除后再重新添加。样式请用主题的 CSS 变量（`--fg`、`--fg-2`、`--fg-3`、`--line`、`--accent`、`--accent-soft`、`--hover`），浅色和深色模式下都合适。 |
 | `addStyle(css)` | 往页面里加一段 `<style>`。返回一个移除函数。 |
 | `toast(message)` | 在窗口底部显示一句很快消失的提示。 |
 

@@ -56,6 +56,7 @@ import {
 import { isTauri } from "../lib/transport";
 import { isWebUrl } from "../lib/webDevice";
 import { AiPanel } from "./AiPanel";
+import { PluginSections } from "./PluginSections";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import { useWindowControlsGap } from "./WindowControls";
 import { ItemMenuItems, useSetLabel } from "./ItemMenu";
@@ -652,6 +653,7 @@ function ArticleView({
         <time dateTime={new Date(item.published_at).toISOString()}>{fullTime(item.published_at, lang)}</time>
       </div>
       {bar}
+      <PluginSections item={item} mode={mode} />
       {fullError && (
         <p className="mb-6 rounded-md border border-line bg-hover px-3 py-2 text-[13px] leading-relaxed text-fg-2">
           {t("reader.fullTextFallback", { reason: fullError })}
@@ -788,6 +790,7 @@ function MailView({
       )}
 
       {bar}
+      <PluginSections item={item} />
 
       {mail.body_kind === "html" ? (
         <MailFrame html={shown?.html ?? mail.body} zoom={mailZoom(style)} onContext={onContext} />
