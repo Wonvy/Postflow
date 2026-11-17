@@ -406,6 +406,8 @@ impl Core {
                 reply(json!({ "full_text": clean }))
             }
 
+            m if m.starts_with("ai.") => self.ai_rpc(m, params, &session, client).await,
+
             "settings.get" => reply(session.db(|s| s.settings()).await?),
             "settings.set" => {
                 let p: SetSetting = parse(params)?;

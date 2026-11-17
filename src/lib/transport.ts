@@ -14,6 +14,16 @@ export type CoreEvent =
       total: number;
       state: "downloading" | "installed" | "failed";
       error?: string;
+    }
+  | {
+      type: "ai";
+      request_id: string;
+      /** 流式输出的一段文字。 */
+      delta?: string;
+      done: boolean;
+      result?: Record<string, unknown>;
+      error?: string;
+      message?: string;
     };
 
 export class RpcError extends Error {

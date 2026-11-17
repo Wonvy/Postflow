@@ -2,6 +2,7 @@
 //!
 //! 桌面外壳通过进程内调用使用它，网页访问通过 HTTP 使用它，两边走的是同一套方法。
 
+mod ai_rpc;
 mod mail;
 mod mail_rpc;
 mod refresh;
@@ -67,6 +68,19 @@ pub enum Event {
         /// 失败时的错误码。
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+    },
+    /// 一个 AI 请求的进展：流式输出的一段文字，或者结束（带结果或错误）。
+    Ai {
+        request_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        delta: Option<String>,
+        done: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        result: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
     },
 }
 
@@ -156,6 +170,8 @@ pub struct Core {
     pub(crate) secrets: Arc<dyn Secrets>,
     /// 离线翻译，模型放在 `local_dir/translation` 下。
     pub(crate) translator: Arc<Translator>,
+    /// 正在进行的 AI 请求。
+    pub(crate) ai: ai_rpc::AiRuntime,
 }
 
 impl Core {
@@ -174,6 +190,7 @@ impl Core {
         let (events, _) = broadcast::channel(256);
         let translator = Arc::new(Translator::new(local_dir.join("translation"))?);
         let core = Arc::new(Core {
+            ai: Default::default(),
             translator,
             local_dir,
             client: Client::new()?,

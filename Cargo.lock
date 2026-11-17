@@ -3915,6 +3915,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "postflow-ai"
+version = "0.1.2"
+dependencies = [
+ "postflow-testkit",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "postflow-core"
 version = "0.1.2"
 dependencies = [
@@ -3923,6 +3936,7 @@ dependencies = [
  "gethostname",
  "keyring",
  "notify",
+ "postflow-ai",
  "postflow-feed",
  "postflow-mail",
  "postflow-store",
@@ -4009,6 +4023,7 @@ dependencies = [
 name = "postflow-testkit"
 version = "0.1.2"
 dependencies = [
+ "serde_json",
  "tokio",
 ]
 

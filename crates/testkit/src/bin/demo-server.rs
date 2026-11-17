@@ -15,6 +15,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 const FEED_PORT: u16 = 1145;
+const AI_PORT: u16 = 1146;
 const MINUTE: i64 = 60;
 const HOUR: i64 = 60 * MINUTE;
 const DAY: i64 = 24 * HOUR;
@@ -494,6 +495,8 @@ async fn main() {
     let personal = FakeImap::start_on("me@example.org", "demo", 1144).await;
     seed_mail(&work, &personal);
     tokio::spawn(serve_feeds());
+    // 假的 AI 服务，不需要密钥，回答是从正文里拼出来的
+    let _ai = postflow_testkit::FakeAi::start_on(None, AI_PORT).await;
 
     println!("Postflow demo data is ready. Everything below is fictional.");
     println!();
@@ -505,6 +508,8 @@ async fn main() {
     for path in ["field-notes/atom.xml", "weekly/atom.xml", "cn/atom.xml"] {
         println!("  http://127.0.0.1:{FEED_PORT}/{path}");
     }
+    println!();
+    println!("AI (custom, no key, any model name): http://127.0.0.1:{AI_PORT}/v1");
 
     let mut n = 0;
     loop {

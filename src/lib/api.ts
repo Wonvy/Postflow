@@ -200,6 +200,61 @@ export interface ImportStats {
 
 export type Settings = Record<string, unknown>;
 
+/** 一个配置好的 AI 服务。密钥不在这里，在系统钥匙串里。 */
+export interface AiProvider {
+  id: string;
+  preset: string;
+  name: string;
+  base_url: string;
+  model: string;
+  proxy?: string | null;
+}
+
+export interface AiProviderView extends AiProvider {
+  has_key: boolean;
+  /** 在这台电脑上运行（Ollama、LM Studio）。 */
+  local: boolean;
+}
+
+export interface AiPreset {
+  id: string;
+  name: string;
+  base_url: string;
+  model: string;
+  key_url: string;
+  local: boolean;
+}
+
+export interface AiProviders {
+  providers: AiProviderView[];
+  default: string | null;
+  fast: string | null;
+  allow_mail: boolean;
+}
+
+export interface AiResult {
+  task: string;
+  lang: string;
+  provider: string;
+  model: string;
+  content: string;
+  created_at: number;
+}
+
+export interface AiMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: number;
+}
+
+export interface AiUsage {
+  provider: string;
+  requests: number;
+  input: number;
+  output: number;
+}
+
 /** 已经下载到本机的翻译模型。语言代码用的是模型目录里的写法，比如 `zh`、`zh_hant`。 */
 export interface InstalledModel {
   pair: string;
@@ -303,6 +358,28 @@ export const api = {
   renameDevice: (name: string) => rpc<void>("devices.rename", { name }),
 
   rebuildIndex: () => rpc<ImportStats>("index.rebuild"),
+
+  aiPresets: () => rpc<{ presets: AiPreset[] }>("ai.presets"),
+  aiProviders: () => rpc<AiProviders>("ai.providers"),
+  saveAiProvider: (provider: Partial<AiProvider> & { base_url: string }, api_key?: string) =>
+    rpc<AiProvider>("ai.providers.save", { provider, api_key }),
+  removeAiProvider: (id: string) => rpc<void>("ai.providers.remove", { id }),
+  testAiProvider: (provider: Partial<AiProvider> & { base_url: string }, api_key?: string) =>
+    rpc<{ ok: boolean; reply: string }>("ai.providers.test", { provider, api_key }),
+  aiModels: (provider: Partial<AiProvider> & { base_url: string }, api_key?: string) =>
+    rpc<{ models: string[] }>("ai.models", { provider, api_key }),
+  aiResults: (id: string, lang: string) =>
+    rpc<{ summary: AiResult | null; keywords: AiResult | null }>("ai.results", { id, lang }),
+  aiRun: (id: string, task: "summary" | "keywords", lang: string, force = false) =>
+    rpc<{ cached?: AiResult; request_id?: string }>("ai.run", { id, task, lang, force }),
+  aiAbstracts: (ids: string[], lang: string) =>
+    rpc<{ abstracts: Record<string, string> }>("ai.abstracts", { ids, lang }),
+  aiChat: (id: string, message: string, lang: string) =>
+    rpc<{ request_id: string; message: AiMessage }>("ai.chat", { id, message, lang }),
+  aiChatHistory: (id: string) => rpc<{ messages: AiMessage[] }>("ai.chat.history", { id }),
+  aiChatClear: (id: string) => rpc<void>("ai.chat.clear", { id }),
+  aiCancel: (request_id: string) => rpc<void>("ai.cancel", { request_id }),
+  aiUsage: () => rpc<{ today: AiUsage[]; last30: AiUsage[] }>("ai.usage"),
 
   translateLanguages: () => rpc<TranslateLanguages>("translate.languages"),
   translatePlan: (text: string, to: string, from?: string) =>

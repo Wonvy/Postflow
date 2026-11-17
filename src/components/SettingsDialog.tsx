@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
 import { exportOpml, formatSize } from "../lib/platform";
@@ -9,28 +9,9 @@ import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type LangPref, type SidebarLayout, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateLanguages } from "../lib/translate";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
+import { AiSettings } from "./AiSettings";
+import { Section, SettingRow } from "./SettingsParts";
 import { Button, Modal, Segmented, Select, TextInput } from "./ui";
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="border-b border-line px-4 py-4 last:border-b-0">
-      <h2 className="mb-3 text-[12px] font-medium text-fg-3">{title}</h2>
-      <div className="flex flex-col gap-3">{children}</div>
-    </section>
-  );
-}
-
-function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="text-fg">{label}</div>
-        {hint && <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{hint}</div>}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">{children}</div>
-    </div>
-  );
-}
 
 export function SettingsDialog() {
   const t = useT();
@@ -148,6 +129,10 @@ export function SettingsDialog() {
 
       <Section title={t("settings.translation")}>
         <TranslationSettings open={open} />
+      </Section>
+
+      <Section title={t("settings.ai")}>
+        <AiSettings open={open} />
       </Section>
 
       <Section title={t("settings.feeds")}>

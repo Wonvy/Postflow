@@ -5,6 +5,7 @@
 //! - **数据目录**：只追加的 JSONL 日志，是唯一的事实来源，可以交给任何文件同步工具。
 //! - **本机索引**：由日志推导出的 SQLite 数据库，只在本机，随时可以删除重建。
 
+mod ai;
 mod error;
 pub mod hlc;
 pub mod ids;
@@ -14,6 +15,7 @@ mod mail;
 mod model;
 mod store;
 
+pub use ai::{AiMessage, AiResult, AiUsage, day_of};
 pub use error::{Error, Result};
 pub use model::*;
 pub use store::Store;

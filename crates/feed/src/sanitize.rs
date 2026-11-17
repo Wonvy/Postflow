@@ -60,6 +60,42 @@ pub fn html_to_text(html: &str) -> String {
     collapse_whitespace(&out)
 }
 
+/// 去掉标签，但保留段落：块级元素和换行之间换行，行内的空白折叠。交给 AI 读的正文用它。
+pub fn html_to_paragraphs(html: &str) -> String {
+    let fragment = scraper::Html::parse_fragment(html);
+    let mut out = String::new();
+    for node in fragment.root_element().descendants() {
+        match node.value() {
+            scraper::Node::Text(text) => {
+                let hidden = node
+                    .parent()
+                    .and_then(|p| p.value().as_element())
+                    .is_some_and(|e| {
+                        matches!(e.name(), "script" | "style" | "template" | "head" | "title")
+                    });
+                if !hidden {
+                    out.push_str(text);
+                }
+            }
+            scraper::Node::Element(el) if is_block(el.name()) => out.push('\n'),
+            _ => {}
+        }
+    }
+    let mut lines: Vec<String> = Vec::new();
+    for line in out.lines() {
+        let line = collapse_whitespace(line);
+        // 连续的空行只留一个
+        if line.is_empty() && lines.last().is_none_or(|l| l.is_empty()) {
+            continue;
+        }
+        lines.push(line);
+    }
+    while lines.last().is_some_and(|l| l.is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
+}
+
 fn is_block(tag: &str) -> bool {
     matches!(
         tag,
@@ -94,6 +130,15 @@ pub(crate) fn collapse_whitespace(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keeps_paragraphs_for_reading() {
+        let html = "<style>p{}</style><h1>Title</h1><p>First   line<br>second</p><ul><li>a</li><li>b</li></ul>";
+        assert_eq!(
+            html_to_paragraphs(html),
+            "Title\nFirst line\nsecond\n\na\nb"
+        );
+    }
 
     #[test]
     fn strips_active_content() {

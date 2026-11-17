@@ -3,7 +3,7 @@
 // 有开源图标的用 Simple Icons（CC0 协议）里的品牌图形；没有的（比如微软、网易，它们不允许或没有收录）
 // 用品牌色加一两个字做成方块，一眼也能认出来。
 
-import { Mail } from "lucide-react";
+import { type LucideIcon, Mail } from "lucide-react";
 import {
   siAlibabacloud,
   siGmail,
@@ -17,10 +17,10 @@ import {
 } from "simple-icons";
 import type { Account, Preset } from "../lib/api";
 
-type Glyph = { kind: "logo"; path: string; color: string } | { kind: "text"; text: string; color: string };
+export type Glyph = { kind: "logo"; path: string; color: string } | { kind: "text"; text: string; color: string };
 
-const logo = (icon: SimpleIcon): Glyph => ({ kind: "logo", path: icon.path, color: `#${icon.hex}` });
-const text = (t: string, color: string): Glyph => ({ kind: "text", text: t, color });
+export const logo = (icon: SimpleIcon): Glyph => ({ kind: "logo", path: icon.path, color: `#${icon.hex}` });
+export const text = (t: string, color: string): Glyph => ({ kind: "text", text: t, color });
 
 const GLYPHS: Record<string, Glyph> = {
   gmail: logo(siGmail),
@@ -61,7 +61,19 @@ export function hasProviderIcon(id: string | null | undefined): boolean {
 
 /** 圆角方块里的服务商图标。不认识的服务商显示一个通用的信封。 */
 export function ProviderIcon({ id, size = 16 }: { id: string | null | undefined; size?: number }) {
-  const glyph = id ? GLYPHS[id] : undefined;
+  return <GlyphIcon glyph={id ? GLYPHS[id] : undefined} size={size} fallback={Mail} />;
+}
+
+/** 品牌图形放在白底上，或者品牌色方块里写一两个字。没有图形时显示 `fallback` 图标。 */
+export function GlyphIcon({
+  glyph,
+  size = 16,
+  fallback: Fallback,
+}: {
+  glyph: Glyph | undefined;
+  size?: number;
+  fallback: LucideIcon;
+}) {
   const radius = Math.max(3, Math.round(size * 0.24));
   const box = { width: size, height: size, borderRadius: radius };
 
@@ -72,7 +84,7 @@ export function ProviderIcon({ id, size = 16 }: { id: string | null | undefined;
         className="inline-flex shrink-0 items-center justify-center bg-active text-fg-2"
         style={box}
       >
-        <Mail size={Math.round(size * 0.62)} strokeWidth={1.75} />
+        <Fallback size={Math.round(size * 0.62)} strokeWidth={1.75} />
       </span>
     );
   }

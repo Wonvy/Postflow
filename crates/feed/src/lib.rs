@@ -12,7 +12,7 @@ mod sanitize;
 pub use client::{Client, Conditional, FetchResult, Fetched};
 pub use discover::Candidate;
 pub use parse::{ParsedEntry, ParsedFeed, parse_feed};
-pub use sanitize::{html_to_text, sanitize_html};
+pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

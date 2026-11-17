@@ -272,7 +272,11 @@ impl Core {
     }
 
     /// 邮件原文：本机有就用本机的，没有就让后台任务去服务器取。
-    async fn raw_mail(&self, session: &Arc<Session>, id: &str) -> Result<Vec<u8>, RpcError> {
+    pub(crate) async fn raw_mail(
+        &self,
+        session: &Arc<Session>,
+        id: &str,
+    ) -> Result<Vec<u8>, RpcError> {
         let key = id.to_string();
         if let Some(raw) = session.db(move |s| s.mail_body(&key)).await? {
             return Ok(raw);

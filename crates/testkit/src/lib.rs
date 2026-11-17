@@ -3,6 +3,10 @@
 //! 它不追求完整，只追求在协议细节上足够真实，让客户端代码在测试里走的是和真实服务器一样的路径：
 //! 序号与 UID 的区别、「n:*」的边界行为、MOVE 之后的 EXPUNGE、IDLE 期间推送新邮件。
 
+pub mod ai;
+
+pub use ai::FakeAi;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 

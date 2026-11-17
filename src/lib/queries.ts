@@ -19,6 +19,7 @@ import {
   type ItemPatch,
 } from "./api";
 import { useUi } from "./store";
+import { useAiStreams } from "./ai";
 import { useModelDownloads } from "./translate";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
@@ -150,6 +151,10 @@ export function useCoreEvents() {
         case "status":
           void qc.invalidateQueries({ queryKey: keys.status });
           break;
+        case "ai":
+          useAiStreams.getState().push(event);
+          if (event.done) void qc.invalidateQueries({ queryKey: ["ai", "usage"] });
+          break;
         case "model":
           useModelDownloads.getState().update(event.pair, {
             received: event.received,
@@ -171,6 +176,7 @@ export function useCoreEvents() {
           }
           if (event.scope.includes("settings")) {
             void qc.invalidateQueries({ queryKey: keys.settings });
+            void qc.invalidateQueries({ queryKey: ["ai", "providers"] });
           }
           if (event.scope.includes("devices")) {
             void qc.invalidateQueries({ queryKey: keys.devices });

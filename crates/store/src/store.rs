@@ -30,6 +30,9 @@ const LOCAL_TABLES: &[&str] = &[
     "mail_meta",
     "mail_body",
     "mail_state",
+    "ai_results",
+    "ai_messages",
+    "ai_usage",
 ];
 
 const SCHEMA: &str = r#"
@@ -138,6 +141,36 @@ CREATE TABLE IF NOT EXISTS mail_state (
     last_sync_at INTEGER,
     error        TEXT,
     error_code   TEXT
+) WITHOUT ROWID;
+
+-- AI 生成的内容和对话，只在本机
+CREATE TABLE IF NOT EXISTS ai_results (
+    item_id    TEXT NOT NULL,
+    task       TEXT NOT NULL,
+    lang       TEXT NOT NULL DEFAULT '',
+    provider   TEXT NOT NULL DEFAULT '',
+    model      TEXT NOT NULL DEFAULT '',
+    content    TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (item_id, task, lang)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS ai_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id    TEXT NOT NULL,
+    role       TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ai_messages_by_item ON ai_messages (item_id, id);
+
+CREATE TABLE IF NOT EXISTS ai_usage (
+    day      INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    requests INTEGER NOT NULL DEFAULT 0,
+    input    INTEGER NOT NULL DEFAULT 0,
+    output   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, provider)
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS feed_fetch (
