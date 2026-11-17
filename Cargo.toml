@@ -11,7 +11,6 @@ rust-version = "1.90"
 postflow-store = { path = "crates/store" }
 postflow-feed = { path = "crates/feed" }
 postflow-core = { path = "crates/core" }
-postflow-web = { path = "crates/web" }
 
 [profile.dev.package."*"]
 # 依赖用优化构建，开发时抓取与解析不至于太慢

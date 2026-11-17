@@ -10,9 +10,9 @@ gethostname = "1.1.0"
 keyring = "4.2.0"
 notify = "8"
 postflow-ai = { version = "0.1.0", path = "../ai" }
-postflow-feed = { version = "0.1.0", path = "../feed" }
+postflow-feed = { workspace = true }
 postflow-mail = { version = "0.1.0", path = "../mail" }
-postflow-store = { version = "0.1.0", path = "../store" }
+postflow-store = { workspace = true }
 postflow-translate = { version = "0.1.0", path = "../translate" }
 regex = "1.13.1"
 serde = { version = "1.0.229", features = ["derive"] }
