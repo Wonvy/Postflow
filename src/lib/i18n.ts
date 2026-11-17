@@ -471,6 +471,10 @@ const zh = {
   "settings.noModels": "还没有下载。第一次翻译时会提示下载。",
   "settings.modelsOffline": "现在连不上模型目录，只能用已经下载的模型。",
 
+  "window.minimize": "最小化",
+  "window.maximize": "最大化",
+  "window.restore": "还原",
+  "window.close": "关闭",
   "update.title": "软件更新",
   "update.view": "查看更新",
   "update.updating": "正在更新",
@@ -1162,6 +1166,10 @@ const en: Record<MessageKey, string> = {
   "settings.noModels": "None yet. You'll be asked the first time you translate.",
   "settings.modelsOffline": "The model list can't be reached right now. Only downloaded models can be used.",
 
+  "window.minimize": "Minimize",
+  "window.maximize": "Maximize",
+  "window.restore": "Restore",
+  "window.close": "Close",
   "update.title": "Software update",
   "update.view": "See what's new",
   "update.updating": "Updating",

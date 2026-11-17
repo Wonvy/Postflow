@@ -9,6 +9,17 @@ export const isMac = /Mac|iPhone|iPad/i.test(navigator.userAgent);
 /** macOS 桌面应用用的是内嵌在窗口里的红绿灯，左上角要给它们留位置。 */
 export const hasInsetTitlebar = isTauri && isMac;
 
+export const isWindows = /Windows/i.test(navigator.userAgent);
+
+/**
+ * Windows 桌面应用没有系统标题栏，右上角由界面自己画最小化、最大化和关闭三个按钮（WindowControls）。
+ * 最右边那一栏的顶栏要给它们留出 WINDOW_CONTROLS_WIDTH 的位置。
+ * 开发时可以在浏览器里加上 `?wincontrols` 看效果（按钮不起作用）。
+ */
+export const hasWindowControls =
+  (isTauri && isWindows) || (import.meta.env.DEV && new URLSearchParams(location.search).has("wincontrols"));
+export const WINDOW_CONTROLS_WIDTH = 138;
+
 export async function openExternal(url: string): Promise<void> {
   if (!/^(https?:\/\/|mailto:)/i.test(url)) return;
   if (isTauri) {

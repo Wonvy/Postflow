@@ -80,6 +80,12 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Windows 上不用系统的标题栏，由界面自己画最小化、最大化和关闭（见 WindowControls.tsx）。
+            // 去掉边框后 Tauri 仍保留窗口阴影，边缘也还能拖动改大小。
+            #[cfg(target_os = "windows")]
+            if let Some(window) = app.get_window("main") {
+                let _ = window.set_decorations(false);
+            }
             // 索引和本机配置放在系统给应用分配的私有目录里，不参与同步
             let local_dir = app.path().app_local_data_dir()?;
             // 日志写到本机目录的 logs 下，设置里能查看；开发时同时打到终端

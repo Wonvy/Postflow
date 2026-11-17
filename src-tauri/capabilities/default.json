@@ -1,13 +1,18 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口权限：窗口拖拽、程序坞图标上的未读数、目录选择、用系统浏览器打开链接、在文件管理器里显示日志目录、在线更新、新邮件通知",
+  "description": "主窗口权限：窗口拖拽、Windows 上自己画的最小化/最大化/关闭、程序坞图标上的未读数、目录选择、用系统浏览器打开链接、在文件管理器里显示日志目录、在线更新、新邮件通知",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-close",
     "core:window:allow-set-badge-count",
     "notification:default",
     "dialog:allow-open",

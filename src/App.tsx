@@ -8,6 +8,7 @@ import { Reader } from "./components/Reader";
 import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
+import { WindowControls } from "./components/WindowControls";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
@@ -146,6 +147,16 @@ function Shell() {
 }
 
 export default function App() {
+  // 窗口按钮在所有界面上都要有：加载中、连不上核心、首次设置
+  return (
+    <>
+      <Body />
+      <WindowControls />
+    </>
+  );
+}
+
+function Body() {
   useAppearance();
   useCoreEvents();
   const status = useStatus();

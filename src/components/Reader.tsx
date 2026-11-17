@@ -46,6 +46,7 @@ import {
 import { isTauri } from "../lib/transport";
 import { isWebUrl } from "../lib/webDevice";
 import { AiPanel } from "./AiPanel";
+import { useWindowControlsGap } from "./WindowControls";
 import { ItemMenuItems, useSetLabel } from "./ItemMenu";
 import { ReaderStyleMenu } from "./ReaderStyleMenu";
 import { AccountIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
@@ -81,8 +82,14 @@ export function Reader() {
 }
 
 function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactNode }) {
+  // 阅读区的顶栏总在窗口最右上角（AI 栏在它下面），窗口按钮的位置由它留
+  const gap = useWindowControlsGap(true);
   return (
-    <header data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2">
+    <header
+      data-tauri-drag-region
+      className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2"
+      style={gap ? { paddingRight: gap + 8 } : undefined}
+    >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center pr-2">
         {leading}
       </div>

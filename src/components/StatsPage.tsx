@@ -11,6 +11,7 @@ import { type Flag, flagsOf, hoursMinutes, niceMax, perWeek, ratio, type SortKey
 import { useUi } from "../lib/store";
 import { type Lang, shortTime } from "../lib/time";
 import { Button, cx, Favicon, ICON, IconButton, Spinner } from "./ui";
+import { useWindowControlsGap } from "./WindowControls";
 
 const PERIODS = [7, 30, 90] as const;
 const DAY = 86_400_000;
@@ -38,6 +39,7 @@ function dayLabel(day: number, lang: Lang): string {
 
 export function StatsPage() {
   const t = useT();
+  const gap = useWindowControlsGap(true);
   const lang = useLang();
   const setMainView = useUi((s) => s.setMainView);
   const [days, setDays] = useState<number>(30);
@@ -58,7 +60,11 @@ export function StatsPage() {
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-bg">
-      <header data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-2 border-b border-line pl-4 pr-2">
+      <header
+        data-tauri-drag-region
+        className="flex h-11 shrink-0 items-center gap-2 border-b border-line pl-4 pr-2"
+        style={gap ? { paddingRight: gap + 8 } : undefined}
+      >
         <ChartColumn size={15} strokeWidth={1.75} className="text-fg-3" />
         <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold">
           {t("stats.title")}
