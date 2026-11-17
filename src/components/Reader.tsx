@@ -4,8 +4,11 @@ import {
   ArchiveRestore,
   BookOpenText,
   Download,
+  Copy,
   ExternalLink,
+  Globe,
   ImageOff,
+  Link,
   Languages,
   Mail,
   MailOpen,
@@ -17,11 +20,12 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import type { Item } from "../lib/api";
 import { type CSSProperties, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { formatSize, openExternal, saveAttachment } from "../lib/platform";
+import { copyText, formatSize, openExternal, saveAttachment } from "../lib/platform";
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
@@ -34,10 +38,28 @@ import {
   useTranslation,
 } from "../lib/translate";
 import { isTauri } from "../lib/transport";
+import { isWebUrl } from "../lib/webDevice";
 import { AiPanel } from "./AiPanel";
+import { ItemMenuItems, useSetLabel } from "./ItemMenu";
 import { ReaderStyleMenu } from "./ReaderStyleMenu";
+import { AccountIcon, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
-import { Avatar, Button, cx, Favicon, ICON, IconButton, Kbd, Menu, MenuItem, MenuSeparator, Spinner } from "./ui";
+import { WebPage } from "./WebPage";
+import {
+  Avatar,
+  Button,
+  ContextMenu,
+  cx,
+  Favicon,
+  ICON,
+  IconButton,
+  Kbd,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  Spinner,
+  Tip,
+} from "./ui";
 
 export function Reader() {
   const openId = useUi((s) => s.openId);
@@ -49,14 +71,93 @@ export function Reader() {
   );
 }
 
-function Toolbar({ children }: { children?: ReactNode }) {
+function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactNode }) {
   return (
-    <header
-      data-tauri-drag-region
-      className="flex h-11 shrink-0 items-center justify-end gap-0.5 border-b border-line px-2"
-    >
+    <header data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2">
+      <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center pr-2">
+        {leading}
+      </div>
       {children}
     </header>
+  );
+}
+
+/** 工具栏左边：这一条来自哪个订阅源或邮箱，点一下列表换成那里的全部内容。 */
+function SourceChip({ item }: { item: Item }) {
+  const t = useT();
+  const { goToSource } = useActions();
+  if (!item.source_title) return null;
+  return (
+    <Tip label={t("source.open", { name: item.source_title })}>
+      <button
+        type="button"
+        onClick={() => goToSource(item)}
+        className="flex h-7 min-w-0 max-w-full items-center gap-2 rounded-md px-1.5 text-fg-2 transition-colors hover:bg-hover hover:text-fg"
+      >
+        <SourceIcon item={item} size={18} />
+        <span className="min-w-0 truncate text-[13px] font-medium">{item.source_title}</span>
+      </button>
+    </Tip>
+  );
+}
+
+/** 在阅读区里点右键时，鼠标下面是什么：选中的文字、链接、图片。 */
+interface ContextInfo {
+  selection: string;
+  link: string | null;
+  image: string | null;
+}
+
+const EMPTY_CONTEXT: ContextInfo = { selection: "", link: null, image: null };
+
+/** 触屏上长按是选文字，不弹菜单。 */
+const coarsePointer = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+
+/** 阅读区的右键菜单：先是针对鼠标下内容的操作，然后是这一条的操作，最后是阅读区的开关。 */
+function ReaderMenu({
+  context,
+  fallback,
+  toggles,
+}: {
+  context: { current: ContextInfo };
+  fallback: Item;
+  toggles: ReactNode;
+}) {
+  const t = useT();
+  const { openTargets } = useActions();
+  const [info] = useState(() => context.current);
+  const group = openTargets();
+  const targets = group.length > 0 ? group : [fallback];
+  const link = info.link && /^(https?:|mailto:)/i.test(info.link) ? info.link : null;
+  const image = info.image && /^https?:/i.test(info.image) ? info.image : null;
+  const specific = Boolean(info.selection || link || image);
+  return (
+    <>
+      {info.selection && (
+        <MenuItem icon={<Copy size={14} />} onSelect={() => void copyText(info.selection)}>
+          {t("menu.copySelection")}
+        </MenuItem>
+      )}
+      {link && (
+        <>
+          <MenuItem icon={<ExternalLink size={14} />} onSelect={() => void openExternal(link)}>
+            {t("menu.openLink")}
+          </MenuItem>
+          <MenuItem icon={<Link size={14} />} onSelect={() => void copyText(link.replace(/^mailto:/i, ""))}>
+            {t("menu.copyLink")}
+          </MenuItem>
+        </>
+      )}
+      {image && (
+        <MenuItem icon={<ImageOff size={14} />} onSelect={() => void copyText(image)}>
+          {t("menu.copyImage")}
+        </MenuItem>
+      )}
+      {specific && <MenuSeparator />}
+      <ItemMenuItems items={targets} />
+      <MenuSeparator />
+      {toggles}
+    </>
   );
 }
 
@@ -146,9 +247,27 @@ function Article({ id }: { id: string }) {
   const readerFullText = useUi((s) => s.readerFullText);
   const setReaderFullText = useUi((s) => s.setReaderFullText);
 
+  // 原网页模式：开着时有网页链接的条目直接显示原网页，没有链接的（多数邮件）照常显示正文
+  const readerWeb = useUi((s) => s.readerWeb);
+  const setReaderWeb = useUi((s) => s.setReaderWeb);
+  const webUrl = summary && isWebUrl(summary.url) ? summary.url : null;
+  const webShown = readerWeb && webUrl !== null;
+
+  // 右键点在了什么上面。HTML 邮件在 iframe 里，由 MailFrame 记下来
+  const context = useRef<ContextInfo>(EMPTY_CONTEXT);
+  const captureContext = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === "IFRAME") return;
+    context.current = {
+      selection: window.getSelection()?.toString() ?? "",
+      link: target.closest<HTMLAnchorElement>("a[href]")?.href ?? null,
+      image: target instanceof HTMLImageElement ? target.currentSrc || target.src : null,
+    };
+  };
+
   // 订阅统计：这篇文章看了多久、看到了哪里。邮件不记
   const scrollRef = useRef<HTMLDivElement>(null);
-  useReadingTracker(id, scrollRef, Boolean(item), summary?.kind === "article");
+  useReadingTracker(id, scrollRef, Boolean(item), summary?.kind === "article" && !webShown);
 
   /** 显示全文：抓过的直接用，没抓过的去原网页抓。 */
   const showFullText = async () => {
@@ -192,11 +311,11 @@ function Article({ id }: { id: string }) {
 
   return (
     <>
-      <Toolbar>
+      <Toolbar leading={summary && <SourceChip item={summary} />}>
         {summary && (
           <>
-            <ReaderStyleMenu />
-            {!isMail && summary.url && (
+            {!webShown && <ReaderStyleMenu />}
+            {!isMail && summary.url && !webShown && (
               <IconButton
                 label={readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
                 active={readerFullText || mode === "full"}
@@ -212,23 +331,33 @@ function Article({ id }: { id: string }) {
                 )}
               </IconButton>
             )}
+            <IconButton
+              label={readerWeb ? (webUrl ? t("web.toggleOff") : t("web.noLink")) : t("web.toggleOn")}
+              shortcut="W"
+              active={readerWeb}
+              onClick={() => setReaderWeb(!readerWeb)}
+            >
+              <Globe {...ICON} />
+            </IconButton>
             <LabelMenu ids={group.length > 0 ? group.map((i) => i.id) : [summary.id]} current={summary.label} />
             <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
               <Sparkles {...ICON} />
             </IconButton>
-            <IconButton
-              label={readerTranslate ? t("action.translateOff") : t("action.translateOn")}
-              shortcut="T"
-              active={readerTranslate || phase.kind === "on"}
-              disabled={!item}
-              onClick={toggleTranslate}
-            >
-              {phase.kind === "checking" || phase.kind === "translating" || phase.kind === "downloading" ? (
-                <Spinner size={15} />
-              ) : (
-                <Languages {...ICON} />
-              )}
-            </IconButton>
+            {!webShown && (
+              <IconButton
+                label={readerTranslate ? t("action.translateOff") : t("action.translateOn")}
+                shortcut="T"
+                active={readerTranslate || phase.kind === "on"}
+                disabled={!item}
+                onClick={toggleTranslate}
+              >
+                {phase.kind === "checking" || phase.kind === "translating" || phase.kind === "downloading" ? (
+                  <Spinner size={15} />
+                ) : (
+                  <Languages {...ICON} />
+                )}
+              </IconButton>
+            )}
             <IconButton
               label={all("read") ? t("action.markUnread") : t("action.markRead")}
               shortcut="U"
@@ -262,6 +391,39 @@ function Article({ id }: { id: string }) {
       </Toolbar>
 
       <div className="flex min-h-0 flex-1">
+      {webShown && webUrl ? (
+        <WebPage url={webUrl} onShowContent={() => setReaderWeb(false)} />
+      ) : (
+      <ContextMenu
+        bare
+        disabled={coarsePointer || !summary}
+        onContextMenu={captureContext}
+        items={
+          summary && (
+            <ReaderMenu
+              context={context}
+              fallback={summary}
+              toggles={
+                <>
+                  {item && (
+                    <MenuItem icon={<Languages size={14} />} onSelect={toggleTranslate}>
+                      {readerTranslate || phase.kind !== "off" ? t("menu.translateOff") : t("menu.translate")}
+                    </MenuItem>
+                  )}
+                  <MenuItem icon={<Sparkles size={14} />} onSelect={toggleAiPanel}>
+                    {t("action.ai")}
+                  </MenuItem>
+                  {webUrl && (
+                    <MenuItem icon={<Globe size={14} />} onSelect={() => setReaderWeb(true)}>
+                      {t("web.toggleOn")}
+                    </MenuItem>
+                  )}
+                </>
+              }
+            />
+          )
+        }
+      >
       <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {item ? (
           item.mail ? (
@@ -273,6 +435,9 @@ function Article({ id }: { id: string }) {
               onShowImages={() => setAllowRemote(true)}
               onTrusted={() => {
                 void qc.invalidateQueries({ queryKey: ["item", item.id] });
+              }}
+              onContext={(info) => {
+                context.current = info;
               }}
             />
           ) : (
@@ -300,6 +465,8 @@ function Article({ id }: { id: string }) {
           </div>
         )}
       </div>
+      </ContextMenu>
+      )}
       {aiPanel && item && <AiPanel item={item} autoRun={aiPanelFor === item.id} />}
       </div>
     </>
@@ -390,6 +557,7 @@ function MailView({
   bar,
   onShowImages,
   onTrusted,
+  onContext,
 }: {
   item: ItemDetail;
   mail: MailDetail;
@@ -397,6 +565,7 @@ function MailView({
   bar: ReactNode;
   onShowImages: () => void;
   onTrusted: () => void;
+  onContext: (info: ContextInfo) => void;
 }) {
   const t = useT();
   const lang = useLang();
@@ -450,7 +619,10 @@ function MailView({
         </div>
         <div className="shrink-0 text-right text-[12px] leading-relaxed text-fg-3">
           <time dateTime={new Date(item.published_at).toISOString()}>{fullTime(item.published_at, lang)}</time>
-          <div className="truncate">{item.source_title}</div>
+          <div className="flex min-w-0 items-center justify-end gap-1.5">
+            <AccountIcon accountId={item.source_id} fallback={item.source_title} size={13} />
+            <span className="truncate">{item.source_title}</span>
+          </div>
         </div>
       </div>
 
@@ -474,7 +646,7 @@ function MailView({
       {bar}
 
       {mail.body_kind === "html" ? (
-        <MailFrame html={shown?.html ?? mail.body} zoom={mailZoom(style)} />
+        <MailFrame html={shown?.html ?? mail.body} zoom={mailZoom(style)} onContext={onContext} />
       ) : (
         // 纯文本邮件在核心里已转义成安全的 HTML，见 postflow-mail 的 text_to_html
         <div
@@ -493,8 +665,18 @@ function MailView({
  * HTML 邮件放进沙箱 iframe：不允许脚本，只允许同源，好让外层量出内容高度、接管链接点击。
  * 文档自带内容安全策略，远程图片是否加载由核心决定。
  */
-function MailFrame({ html, zoom }: { html: string; zoom: number }) {
+function MailFrame({
+  html,
+  zoom,
+  onContext,
+}: {
+  html: string;
+  zoom: number;
+  onContext: (info: ContextInfo) => void;
+}) {
   const ref = useRef<HTMLIFrameElement>(null);
+  const onContextRef = useRef(onContext);
+  onContextRef.current = onContext;
   const [height, setHeight] = useState(240);
   // HTML 邮件有自己的样式，阅读设置里的字号只能整体缩放它
   const zoomRef = useRef(zoom);
@@ -530,6 +712,31 @@ function MailFrame({ html, zoom }: { html: string; zoom: number }) {
         e.preventDefault();
         void openExternal(link.getAttribute("href") ?? "");
       });
+      // 右键：记下点在了什么上面，再把事件转给外面，弹出和正文其他地方一样的菜单
+      doc.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const target = e.target as {
+          closest?: (s: string) => HTMLAnchorElement | null;
+          tagName?: string;
+          src?: string;
+        } | null;
+        onContextRef.current({
+          selection: doc.getSelection()?.toString() ?? "",
+          link: target?.closest?.("a[href]")?.getAttribute("href") ?? null,
+          image: target?.tagName === "IMG" ? (target.src ?? null) : null,
+        });
+        const rect = iframe.getBoundingClientRect();
+        const scale = zoomRef.current;
+        iframe.dispatchEvent(
+          new window.MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            button: 2,
+            clientX: rect.left + e.clientX * scale,
+            clientY: rect.top + e.clientY * scale,
+          }),
+        );
+      });
     };
 
     iframe.addEventListener("load", onLoad);
@@ -555,17 +762,11 @@ function MailFrame({ html, zoom }: { html: string; zoom: number }) {
 /** 工具栏里设置分类。只有在设置里定义了类别时才出现。 */
 function LabelMenu({ ids, current }: { ids: string[]; current: string | null | undefined }) {
   const t = useT();
-  const qc = useQueryClient();
   const categories = useCategories();
   const labelColor = useLabelColor();
+  const setLabel = useSetLabel();
   if (!categories || categories.length === 0) return null;
-  const set = (label: string | null) => {
-    void api.setLabel(ids, label).then(() => {
-      void qc.invalidateQueries({ queryKey: ["items"] });
-      void qc.invalidateQueries({ queryKey: ["item"] });
-      void qc.invalidateQueries({ queryKey: keys.nav });
-    });
-  };
+  const set = (label: string | null) => setLabel(ids, label);
   return (
     <Menu
       align="end"
@@ -758,6 +959,7 @@ function Empty() {
     [["V"], t("reader.hintOpen")],
     [["X"], t("reader.hintSelect")],
     [["T"], t("reader.hintTranslate")],
+    [["W"], t("reader.hintWeb")],
     [["A"], t("reader.hintAi")],
     [["+", "−"], t("reader.hintSize")],
     [["→", "←"], t("reader.hintGroup")],

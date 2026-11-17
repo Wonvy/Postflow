@@ -64,6 +64,12 @@ click **More info → Run anyway**.
   only publish summaries or that you never read are flagged. Reading records stay on this device and can be cleared.
 - Reading settings (the Aa button in the reader): text size, line spacing, a sans or serif font and column width,
   kept on this device. HTML mail keeps its own layout and only scales with the text size.
+- Web page view (the globe button in the reader, or `W`): a switch that shows each item's original web page right in
+  the reader instead of the parsed content. A device picker above the page previews it as Desktop, iPad, iPhone or
+  Android, with that device's screen size and, in the desktop app, its user agent; rotate for landscape. The desktop app
+  shows the page in a separate web view, so sites that refuse to be embedded still work. In a browser, Postflow checks
+  first and, when a site doesn't allow embedding, says so and offers to open it in your browser. Mail without a web
+  link keeps its normal view.
 
 **One inbox**
 
@@ -80,6 +86,15 @@ click **More info → Run anyway**.
 - Three ways to show a list: compact rows, a summary with an excerpt and thumbnail, or a grid of cards with cover
   images. Each list remembers its own choice. Hold Ctrl (⌘ on a Mac) and scroll, or pinch on a trackpad, to resize
   the cards.
+- List style (the layout button in the list toolbar): title and summary text size, row spacing, padding, how many
+  summary lines to show, and whether to show summaries, source icons and images, kept on this device.
+- Every row shows where it came from: the feed's icon for articles, and for mail the sender, with a small badge for
+  the mailbox when you have more than one. The reader's toolbar shows the source's icon and name; click it to see
+  everything from that feed or mailbox.
+- Right-click a row or the reader for its menu: read / unread, star, archive, category, open or copy the link, copy
+  the title or sender, and go to the source. In the reader it also copies selected text and links under the pointer.
+  Right-click a selected row to act on the whole selection.
+- Mark all as read (the double check in the list toolbar, or `Shift` + `A`) asks before it runs.
 - Offline translation for mail and articles. The translate button in the reader (or `T`) is a switch: while it is on,
   every message and article you open is translated on your device as it opens, keeping its layout and links; turn it
   off for the original. The language is detected for you, and models for more than 50 languages download once (about
@@ -122,8 +137,9 @@ download page instead.
 | `V` | Open the original page in your browser |
 | `X` | Select the current item for a bulk action |
 | `→` / `←` | Expand / collapse a group |
-| `Shift` + `A` | Mark everything in the list as read |
+| `Shift` + `A` | Mark everything in the list as read (asks first) |
 | `T` | Auto-translate on / off |
+| `W` | Web page view on / off |
 | `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |
 | `1` `2` `3` | Switch sidebar tab (in the tabs layout) |

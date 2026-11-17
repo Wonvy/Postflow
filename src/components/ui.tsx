@@ -4,10 +4,12 @@ import * as Context from "@radix-ui/react-context-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { LoaderCircle, Rss, X } from "lucide-react";
+import { ChevronRight, LoaderCircle, Rss, X } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
+  type MouseEvent,
+  type ReactElement,
   type ReactNode,
   type SelectHTMLAttributes,
   createContext,
@@ -304,14 +306,36 @@ function keepDialogFocus(e: Event) {
   if (document.querySelector("[role=dialog]")) e.preventDefault();
 }
 
-/** 右键菜单：在 `children` 上点右键（触屏上长按）弹出 `items`。`items` 用 MenuItem 和 MenuSeparator。 */
-export function ContextMenu({ items, children }: { items: ReactNode; children: ReactNode }) {
+/**
+ * 右键菜单：在 `children` 上点右键（触屏上长按）弹出 `items`。`items` 用 MenuItem 和 MenuSeparator。
+ *
+ * 默认在外面包一层带圆角描边的 div。`bare` 时 `children` 必须是单个元素，直接当作触发区域，
+ * 打开时它会带上 `data-state="open"`，样式自己定。
+ */
+export function ContextMenu({
+  items,
+  children,
+  bare,
+  disabled,
+  onContextMenu,
+}: {
+  items: ReactNode;
+  children: ReactNode;
+  bare?: boolean;
+  disabled?: boolean;
+  /** 菜单打开前调用，可以在这里记下右键点在了什么上面。 */
+  onContextMenu?: (e: MouseEvent) => void;
+}) {
   return (
     <Context.Root>
-      <Context.Trigger asChild>
-        <div className="rounded-md data-[state=open]:outline data-[state=open]:outline-1 data-[state=open]:-outline-offset-1 data-[state=open]:outline-accent/60">
-          {children}
-        </div>
+      <Context.Trigger asChild disabled={disabled} onContextMenu={onContextMenu}>
+        {bare ? (
+          (children as ReactElement)
+        ) : (
+          <div className="rounded-md data-[state=open]:outline data-[state=open]:outline-1 data-[state=open]:-outline-offset-1 data-[state=open]:outline-accent/60">
+            {children}
+          </div>
+        )}
       </Context.Trigger>
       <Context.Portal>
         <Context.Content onCloseAutoFocus={keepDialogFocus} className={MENU_CONTENT}>
@@ -372,6 +396,47 @@ export function MenuItem({
       {children}
     </Item>
   );
+}
+
+/** 子菜单，比如右键菜单里的「分类」。 */
+export function MenuSub({ icon, label, children }: { icon?: ReactNode; label: ReactNode; children: ReactNode }) {
+  const kind = useContext(MenuKind);
+  const trigger = (
+    <>
+      <span className="flex size-4 items-center justify-center text-fg-3">{icon}</span>
+      <span className="flex-1">{label}</span>
+      <ChevronRight size={14} className="ml-3 text-fg-3" />
+    </>
+  );
+  const triggerClass =
+    "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] text-fg outline-none data-[highlighted]:bg-active data-[state=open]:bg-active";
+  if (kind === "context") {
+    return (
+      <Context.Sub>
+        <Context.SubTrigger className={triggerClass}>{trigger}</Context.SubTrigger>
+        <Context.Portal>
+          <Context.SubContent sideOffset={2} alignOffset={-4} className={MENU_CONTENT}>
+            {children}
+          </Context.SubContent>
+        </Context.Portal>
+      </Context.Sub>
+    );
+  }
+  return (
+    <Dropdown.Sub>
+      <Dropdown.SubTrigger className={triggerClass}>{trigger}</Dropdown.SubTrigger>
+      <Dropdown.Portal>
+        <Dropdown.SubContent sideOffset={2} alignOffset={-4} className={MENU_CONTENT}>
+          {children}
+        </Dropdown.SubContent>
+      </Dropdown.Portal>
+    </Dropdown.Sub>
+  );
+}
+
+/** 菜单顶上一行灰色的小字，说明菜单作用于什么。 */
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return <div className="max-w-[260px] truncate px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{children}</div>;
 }
 
 export function MenuSeparator() {

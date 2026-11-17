@@ -3,8 +3,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ItemFilter, ItemKind, View } from "./api";
 import type { GroupMode } from "./grouping";
+import { LIST_STYLE_DEFAULT, type ListStyle, normalizeListStyle } from "./listStyle";
 import { normalizeReaderStyle, READER_DEFAULT, type ReaderStyle } from "./readerStyle";
 import { startOfToday } from "./time";
+import { devicePreset, type WebDevice } from "./webDevice";
 
 /** 列表当前显示的范围：一个内置视图、一个订阅源，或一个文件夹。 */
 export type ListScope =
@@ -51,6 +53,8 @@ export type Dialog =
   | { type: "remove-account"; accountId: string }
   /** 新建文件夹，或者给 `folder` 改名。 */
   | { type: "folder"; folder?: string }
+  /** 确认把当前列表全部标为已读。 */
+  | { type: "mark-all-read" }
   | null;
 
 interface UiState {
@@ -98,6 +102,13 @@ interface UiState {
   readerFullText: boolean;
   /** 阅读区的字号、行距、字体和宽度。读的时候用 `useReaderStyle`，它会补齐旧版本缺的字段。 */
   readerStyle: ReaderStyle;
+  /** 列表的字号、间距和显示哪些部分。读的时候用 `useListStyle`。 */
+  listStyle: ListStyle;
+  /** 阅读面板的原网页开关：开着时有链接的条目直接显示原网页，直到关掉。 */
+  readerWeb: boolean;
+  /** 原网页模拟的设备，以及是否横过来。 */
+  webDevice: WebDevice;
+  webLandscape: boolean;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
   mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
@@ -131,6 +142,10 @@ interface UiState {
   setReaderTranslate: (on: boolean) => void;
   setReaderFullText: (on: boolean) => void;
   setReaderStyle: (patch: Partial<ReaderStyle>) => void;
+  setListStyle: (patch: Partial<ListStyle>) => void;
+  setReaderWeb: (on: boolean) => void;
+  setWebDevice: (device: WebDevice) => void;
+  setWebLandscape: (landscape: boolean) => void;
   requestTranslate: () => void;
 }
 
@@ -176,6 +191,10 @@ export const useUi = create<UiState>()(
       readerTranslate: false,
       readerFullText: false,
       readerStyle: READER_DEFAULT,
+      listStyle: LIST_STYLE_DEFAULT,
+      readerWeb: false,
+      webDevice: "desktop",
+      webLandscape: false,
 
       setScope: (scope) => set({ scope, mainView: "list", openId: null, selection: [], expandedGroups: [] }),
       setMainView: (mainView) => set({ mainView }),
@@ -230,6 +249,11 @@ export const useUi = create<UiState>()(
       setReaderFullText: (readerFullText) => set({ readerFullText }),
       setReaderStyle: (patch) =>
         set((s) => ({ readerStyle: normalizeReaderStyle({ ...normalizeReaderStyle(s.readerStyle), ...patch }) })),
+      setListStyle: (patch) =>
+        set((s) => ({ listStyle: normalizeListStyle({ ...normalizeListStyle(s.listStyle), ...patch }) })),
+      setReaderWeb: (readerWeb) => set({ readerWeb }),
+      setWebDevice: (webDevice) => set({ webDevice: devicePreset(webDevice).id }),
+      setWebLandscape: (webLandscape) => set({ webLandscape }),
       toggleAiPanel: () => set((s) => ({ aiPanel: !s.aiPanel, aiPanelFor: s.aiPanel ? null : s.openId })),
       toggleSection: (section) =>
         set((s) => ({
@@ -276,6 +300,10 @@ export const useUi = create<UiState>()(
         readerTranslate: s.readerTranslate,
         readerFullText: s.readerFullText,
         readerStyle: s.readerStyle,
+        listStyle: s.listStyle,
+        readerWeb: s.readerWeb,
+        webDevice: s.webDevice,
+        webLandscape: s.webLandscape,
       }),
     },
   ),
@@ -350,6 +378,12 @@ export function sameScope(a: ListScope, b: ListScope): boolean {
   if (a.kind === "folder" && b.kind === "folder") return a.folder === b.folder;
   if (a.kind === "label" && b.kind === "label") return a.label === b.label;
   return false;
+}
+
+/** 列表的样式设置，缺的字段补成默认值。 */
+export function useListStyle(): ListStyle {
+  const raw = useUi((s) => s.listStyle);
+  return useMemo(() => normalizeListStyle(raw), [raw]);
 }
 
 /** 阅读区的排版设置，缺的字段补成默认值。 */

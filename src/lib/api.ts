@@ -392,6 +392,9 @@ export const api = {
   markAllRead: (filter: ItemFilter) =>
     rpc<{ count: number }>("items.mark_all_read", { filter }),
   fullText: (id: string) => rpc<{ full_text: string }>("items.full_text", { id }),
+  /** 原网页能不能嵌进 `origin` 这个页面（界面自己的地址）。 */
+  webCheck: (url: string, origin: string) =>
+    rpc<{ embeddable: boolean; reason: string | null; final_url: string }>("web.check", { url, origin }),
 
   presets: () => rpc<{ presets: Preset[] }>("mail.presets"),
   guessAccount: (email: string) => rpc<AccountGuess>("accounts.guess", { email }),

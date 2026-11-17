@@ -1,3 +1,4 @@
+import * as Popover from "@radix-ui/react-popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Archive,
@@ -25,7 +26,17 @@ import {
   Star,
   X,
 } from "lucide-react";
-import { type CSSProperties, type DragEvent, type MouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useActions } from "../lib/actions";
 import { requestAbstracts, useAbstracts } from "../lib/ai";
 import { api } from "../lib/api";
@@ -35,33 +46,54 @@ import { languageName, useModelDownloads, useTranslateEngine, useTranslateTarget
 import type { Item, ItemKind } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
-import { type Translate, useLang, useT } from "../lib/i18n";
+import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
+import {
+  isDefaultListStyle,
+  LIST_STYLE_DEFAULT,
+  LIST_STYLE_RANGE,
+  type ListMetrics,
+  type ListStyle,
+  listMetrics,
+  THUMB_SIZE,
+} from "../lib/listStyle";
 import { isMac } from "../lib/platform";
 import { useNav, useSettings } from "../lib/queries";
 import {
   CARD_MAX,
   CARD_MIN,
+  type Density,
   isMailOnlyView,
   type ListScope,
   type ListView,
   listKey,
   useGroupMode,
+  useListStyle,
   useListView,
   useUi,
 } from "../lib/store";
 import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
-import { Avatar, Button, cx, Favicon, ICON, IconButton, Menu, MenuItem, Spinner, Tip } from "./ui";
+import { ItemMenuItems } from "./ItemMenu";
+import { SenderIcon, useMixedAccounts } from "./SourceIcon";
+import {
+  Button,
+  ContextMenu,
+  cx,
+  ICON,
+  IconButton,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  Modal,
+  Segmented,
+  Spinner,
+  Switch,
+  Tip,
+} from "./ui";
 
-const ROW_HEIGHT = { compact: 34, comfortable: 58 } as const;
-/** 摘要视图一行的高度：标题、两行摘要、来源。 */
-const SUMMARY_HEIGHT = 98;
 /** 展开的组的标题行。 */
 const HEADER_HEIGHT = 30;
-/** 卡片之间的间距，以及卡片下半部分文字区的高度。 */
-const CARD_GAP = 10;
-const CARD_TEXT = 128;
 /** 每个列表上次滚到的位置，只在这次打开应用期间记着。 */
 const scrollPositions = new Map<string, number>();
 
@@ -117,7 +149,10 @@ const VIEW_OPTIONS: { value: ListView; icon: LucideIcon; label: "view.list" | "v
   { value: "cards", icon: LayoutGrid, label: "view.cards" },
 ];
 
-/** 工具栏里切换显示方式：列表、摘要、卡片。卡片视图下还能调大小。 */
+/**
+ * 工具栏里的显示方式和列表样式：列表、摘要、卡片，以及字号、间距、显示哪些部分。
+ * 改动立即生效，所有列表共用一套样式。
+ */
 function ViewControl() {
   const t = useT();
   const scope = useUi((s) => s.scope);
@@ -125,55 +160,157 @@ function ViewControl() {
   const setView = useUi((s) => s.setListView);
   const cardSize = useUi((s) => s.cardSize);
   const setCardSize = useUi((s) => s.setCardSize);
+  const density = useUi((s) => s.density);
+  const setDensity = useUi((s) => s.setDensity);
+  const style = useListStyle();
+  const set = useUi((s) => s.setListStyle);
   const Icon = VIEW_OPTIONS.find((o) => o.value === view)?.icon ?? List;
+  // 单行的列表只有标题，没有摘要可调
+  const oneLine = view === "list" && density === "compact";
+
+  const step = (key: keyof typeof LIST_STYLE_RANGE, label: MessageKey, by = 1) => (
+    <StyleLine label={t(label)}>
+      <Stepper
+        value={style[key]}
+        min={LIST_STYLE_RANGE[key][0]}
+        max={LIST_STYLE_RANGE[key][1]}
+        onChange={(value) => set({ [key]: value })}
+        by={by}
+      />
+    </StyleLine>
+  );
+  const toggle = (key: "showSummary" | "showIcon" | "showImage", label: MessageKey) => (
+    <StyleLine label={t(label)}>
+      <Switch label={t(label)} checked={style[key]} onChange={(on) => set({ [key]: on })} />
+    </StyleLine>
+  );
+
   return (
-    <Menu
-      align="end"
-      trigger={
-        <button
-          type="button"
-          aria-label={t("view.label")}
-          title={t("view.label")}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+    <Popover.Root>
+      <Tip label={t("listStyle.title")}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            aria-label={t("listStyle.title")}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
+          >
+            <Icon {...ICON} />
+          </button>
+        </Popover.Trigger>
+      </Tip>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+          aria-label={t("listStyle.title")}
+          className="anim-pop z-50 flex max-h-[var(--radix-popover-content-available-height)] w-[296px] flex-col gap-2.5 overflow-y-auto rounded-lg bg-surface p-3 shadow-pop outline-none"
         >
-          <Icon {...ICON} />
-        </button>
-      }
-    >
-      <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{t("view.label")}</div>
-      {VIEW_OPTIONS.map(({ value, icon: OptionIcon, label }) => (
-        <MenuItem key={value} icon={<OptionIcon size={14} />} onSelect={() => setView(scope, value)}>
-          <span className="flex-1">{t(label)}</span>
-          {view === value && <Check size={14} className="ml-3 text-fg-2" />}
-        </MenuItem>
-      ))}
-      {view === "cards" && (
-        <div className="mt-1 border-t border-line px-2 pb-1.5 pt-2">
-          <div className="flex items-center gap-1">
-            <span className="flex-1 text-[12px] text-fg-2">{t("view.cardSize")}</span>
+          <StyleLine label={t("listStyle.view")}>
+            <Segmented<ListView>
+              value={view}
+              onChange={(v) => setView(scope, v)}
+              options={VIEW_OPTIONS.map(({ value, label }) => ({ value, label: t(label) }))}
+            />
+          </StyleLine>
+          {view === "list" && (
+            <StyleLine label={t("listStyle.lines")}>
+              <Segmented<Density>
+                value={density}
+                onChange={setDensity}
+                options={[
+                  { value: "compact", label: t("listStyle.oneLine") },
+                  { value: "comfortable", label: t("listStyle.twoLines") },
+                ]}
+              />
+            </StyleLine>
+          )}
+          {view === "cards" && (
+            <div>
+              <StyleLine label={t("view.cardSize")}>
+                <Stepper value={cardSize} min={CARD_MIN} max={CARD_MAX} by={40} onChange={setCardSize} />
+              </StyleLine>
+              <div className="mt-1 text-right text-[11px] text-fg-3">
+                {t("view.cardSizeHint", { key: isMac ? "⌘" : "Ctrl" })}
+              </div>
+            </div>
+          )}
+          <div className="my-0.5 h-px bg-line" />
+          {step("titleSize", "listStyle.titleSize")}
+          {!oneLine && step("summarySize", "listStyle.summarySize")}
+          {step("gap", "listStyle.gap")}
+          {step("padding", "listStyle.padding")}
+          {view === "summary" && style.showSummary && step("summaryLines", "listStyle.summaryLines")}
+          <div className="my-0.5 h-px bg-line" />
+          {!oneLine && toggle("showSummary", "listStyle.showSummary")}
+          {toggle("showIcon", "listStyle.showIcon")}
+          {view !== "list" && toggle("showImage", "listStyle.showImage")}
+          <div className="flex justify-end border-t border-line pt-2">
             <button
               type="button"
-              aria-label={t("view.smaller")}
-              disabled={cardSize <= CARD_MIN}
-              onClick={() => setCardSize(cardSize - 40)}
-              className="flex size-6 items-center justify-center rounded text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-40"
+              disabled={isDefaultListStyle(style)}
+              onClick={() => set(LIST_STYLE_DEFAULT)}
+              className="shrink-0 rounded px-1.5 py-0.5 text-[12px] text-accent hover:bg-hover disabled:pointer-events-none disabled:text-fg-4"
             >
-              <Minus size={13} />
-            </button>
-            <button
-              type="button"
-              aria-label={t("view.larger")}
-              disabled={cardSize >= CARD_MAX}
-              onClick={() => setCardSize(cardSize + 40)}
-              className="flex size-6 items-center justify-center rounded text-fg-2 hover:bg-hover hover:text-fg disabled:opacity-40"
-            >
-              <Plus size={13} />
+              {t("listStyle.reset")}
             </button>
           </div>
-          <div className="mt-1 text-[11px] text-fg-3">{t("view.cardSizeHint", { key: isMac ? "⌘" : "Ctrl" })}</div>
-        </div>
-      )}
-    </Menu>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function StyleLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-h-7 items-center justify-between gap-3">
+      <span className="text-[13px] text-fg-2">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** 减号、数字、加号。 */
+function Stepper({
+  value,
+  min,
+  max,
+  by = 1,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  by?: number;
+  onChange: (value: number) => void;
+}) {
+  const t = useT();
+  const button =
+    "inline-flex size-6 items-center justify-center rounded-md border border-line-strong text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-40";
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        aria-label={t("listStyle.less")}
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - by))}
+        className={button}
+      >
+        <Minus size={13} strokeWidth={2} />
+      </button>
+      <output aria-live="polite" className="tabular w-8 text-center text-[13px] text-fg">
+        {Math.round(value)}
+      </output>
+      <button
+        type="button"
+        aria-label={t("listStyle.more")}
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + by))}
+        className={button}
+      >
+        <Plus size={13} strokeWidth={2} />
+      </button>
+    </div>
   );
 }
 
@@ -280,7 +417,7 @@ export function ItemList({ width }: { width: number }) {
   const setDialog = useUi((s) => s.setDialog);
   const nav = useNav();
   const setGroupExpanded = useUi((s) => s.setGroupExpanded);
-  const { markAllRead, refresh, membersOf } = useActions();
+  const { confirmMarkAllRead, refresh, membersOf } = useActions();
   const { query, items, rows: listRows, stops, groupMode } = useListModel();
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   const view = useListView();
@@ -296,6 +433,9 @@ export function ItemList({ width }: { width: number }) {
   const translateTo = useTranslateTarget();
   const engine = useTranslateEngine();
   const translations = useListTranslations((s) => s.byKey);
+  const style = useListStyle();
+  const metrics = useMemo(() => listMetrics(style), [style]);
+  const mixedAccounts = useMixedAccounts() && scope.kind !== "account";
 
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
@@ -311,10 +451,12 @@ export function ItemList({ width }: { width: number }) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  const columns = Math.max(1, Math.floor((inner + CARD_GAP) / (cardSize + CARD_GAP)));
-  const cardWidth = Math.floor((inner - CARD_GAP * (columns - 1)) / columns);
-  const imageHeight = Math.round(cardWidth * 0.56);
-  const cardHeight = imageHeight + CARD_TEXT;
+  const cardGap = metrics.cardGap;
+  const columns = Math.max(1, Math.floor((inner + cardGap) / (cardSize + cardGap)));
+  const cardWidth = Math.floor((inner - cardGap * (columns - 1)) / columns);
+  const imageHeight = style.showImage ? Math.round(cardWidth * 0.56) : 0;
+  const cardHeight = imageHeight + metrics.cardText;
+  const rowHeight = view === "summary" ? metrics.summaryRow : density === "compact" ? metrics.compact : metrics.comfortable;
 
   const lines = useMemo(() => linesOf(listRows, view, columns), [listRows, view, columns]);
   const sizeOf = (line: Line | undefined) =>
@@ -323,10 +465,8 @@ export function ItemList({ width }: { width: number }) {
       : line.kind === "header"
         ? HEADER_HEIGHT
         : line.kind === "cards"
-          ? cardHeight + CARD_GAP
-          : view === "summary"
-            ? SUMMARY_HEIGHT
-            : ROW_HEIGHT[density];
+          ? cardHeight + cardGap
+          : rowHeight + metrics.gap;
   const virtualizer = useVirtualizer({
     count: lines.length,
     getScrollElement: () => scroller.current,
@@ -334,7 +474,7 @@ export function ItemList({ width }: { width: number }) {
     overscan: view === "cards" ? 3 : 12,
   });
 
-  useEffect(() => virtualizer.measure(), [density, view, cardHeight, columns, virtualizer]);
+  useEffect(() => virtualizer.measure(), [rowHeight, metrics.gap, cardGap, view, cardHeight, columns, virtualizer]);
 
   // 按住 Ctrl（Mac 上是 ⌘，或者触控板双指捏合）滚动滚轮调整卡片大小
   const viewRef = useRef(view);
@@ -477,7 +617,7 @@ export function ItemList({ width }: { width: number }) {
         </IconButton>
         <ViewControl />
         <GroupControl />
-        <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={markAllRead}>
+        <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={confirmMarkAllRead}>
           <CheckCheck {...ICON} />
         </IconButton>
         <IconButton label={t("action.refresh")} onClick={refresh}>
@@ -505,7 +645,7 @@ export function ItemList({ width }: { width: number }) {
             {virtualRows.map((virtual) => {
               const line = lines[virtual.index];
               if (!line) return null;
-              const position = { height: virtual.size - 1, transform: `translateY(${virtual.start}px)` };
+              const position = { transform: `translateY(${virtual.start}px)` };
 
               // 展开的组：一行标题，点一下收起
               if (line.kind === "header") {
@@ -517,7 +657,7 @@ export function ItemList({ width }: { width: number }) {
                     tabIndex={-1}
                     onClick={() => setGroupExpanded(group.key, false)}
                     className="absolute inset-x-0 top-0 flex items-center gap-2 rounded-md px-2.5 text-[12px] text-fg-3 hover:bg-hover hover:text-fg-2"
-                    style={position}
+                    style={{ ...position, height: HEADER_HEIGHT - 1 }}
                   >
                     <ChevronDown size={14} strokeWidth={2} className="shrink-0" />
                     <span className="min-w-0 flex-1 truncate font-medium">
@@ -547,6 +687,7 @@ export function ItemList({ width }: { width: number }) {
                   onExpand: group ? () => setGroupExpanded(group.key, true) : undefined,
                   expandLabel: t("group.expand"),
                   abstract: showAbstracts ? abstracts[`${lang}:${item.id}`] : undefined,
+                  look: { style, m: metrics, badge: mixedAccounts },
                 };
                 return {
                   id,
@@ -573,31 +714,33 @@ export function ItemList({ width }: { width: number }) {
                       ...position,
                       height: cardHeight,
                       gridTemplateColumns: `repeat(${columns}, ${cardWidth}px)`,
-                      columnGap: CARD_GAP,
+                      columnGap: cardGap,
                     }}
                   >
                     {line.rows.map((row) => {
                       const d = describe(row);
                       return (
-                        <div
-                          key={d.key}
-                          role="option"
-                          aria-selected={d.opened || d.selected}
-                          onClick={(e) => onRowClick(e, d.id)}
-                          title={d.tooltip}
-                          {...d.drag}
-                          className={cx(
-                            "overflow-hidden rounded-lg border transition-colors",
-                            d.selected
-                              ? "border-accent/60 bg-accent-soft"
-                              : d.opened
-                                ? "border-accent/60 bg-active"
-                                : "border-line bg-surface hover:border-line-strong hover:bg-hover",
-                          )}
-                          style={{ height: cardHeight }}
-                        >
-                          <Card {...d.props} imageHeight={imageHeight} />
-                        </div>
+                        <ContextMenu key={d.key} bare items={<RowMenu id={d.id} />}>
+                          <div
+                            role="option"
+                            aria-selected={d.opened || d.selected}
+                            onClick={(e) => onRowClick(e, d.id)}
+                            title={d.tooltip}
+                            {...d.drag}
+                            className={cx(
+                              "overflow-hidden rounded-lg border transition-colors",
+                              d.selected
+                                ? "border-accent/60 bg-accent-soft"
+                                : d.opened
+                                  ? "border-accent/60 bg-active"
+                                  : "border-line bg-surface hover:border-line-strong hover:bg-hover",
+                              "data-[state=open]:border-accent/60",
+                            )}
+                            style={{ height: cardHeight }}
+                          >
+                            <Card {...d.props} imageHeight={imageHeight} />
+                          </div>
+                        </ContextMenu>
                       );
                     })}
                   </div>
@@ -606,34 +749,36 @@ export function ItemList({ width }: { width: number }) {
 
               const d = describe(line.row);
               return (
-                <div
-                  key={d.key}
-                  role="option"
-                  aria-selected={d.opened || d.selected}
-                  onClick={(e) => onRowClick(e, d.id)}
-                  title={d.tooltip}
-                  {...d.drag}
-                  className={cx(
-                    "absolute inset-x-0 top-0 flex rounded-md px-2.5 transition-colors",
-                    view === "summary"
-                      ? "items-center gap-3"
-                      : density === "compact"
-                        ? "items-center gap-2.5"
-                        : "flex-col justify-center gap-1",
-                    d.child && "ml-5",
-                    d.selected ? "bg-accent-soft" : d.opened ? "bg-active" : "hover:bg-hover",
-                    d.selected && d.opened && "ring-1 ring-inset ring-accent/50",
-                  )}
-                  style={position}
-                >
-                  {view === "summary" ? (
-                    <SummaryRow {...d.props} />
-                  ) : density === "compact" ? (
-                    <CompactRow {...d.props} />
-                  ) : (
-                    <ComfortableRow {...d.props} />
-                  )}
-                </div>
+                <ContextMenu key={d.key} bare items={<RowMenu id={d.id} />}>
+                  <div
+                    role="option"
+                    aria-selected={d.opened || d.selected}
+                    onClick={(e) => onRowClick(e, d.id)}
+                    title={d.tooltip}
+                    {...d.drag}
+                    className={cx(
+                      "absolute inset-x-0 top-0 flex rounded-md transition-colors",
+                      view === "summary"
+                        ? "items-center gap-3"
+                        : density === "compact"
+                          ? "items-center gap-2.5"
+                          : "flex-col justify-center gap-1",
+                      d.child && "ml-5",
+                      d.selected ? "bg-accent-soft" : d.opened ? "bg-active" : "hover:bg-hover",
+                      d.selected && d.opened && "ring-1 ring-inset ring-accent/50",
+                      "data-[state=open]:ring-1 data-[state=open]:ring-inset data-[state=open]:ring-accent/60",
+                    )}
+                    style={{ ...position, height: rowHeight, paddingLeft: metrics.padX, paddingRight: metrics.padX }}
+                  >
+                    {view === "summary" ? (
+                      <SummaryRow {...d.props} />
+                    ) : density === "compact" ? (
+                      <CompactRow {...d.props} />
+                    ) : (
+                      <ComfortableRow {...d.props} />
+                    )}
+                  </div>
+                </ContextMenu>
               );
             })}
           </div>
@@ -648,6 +793,94 @@ export function ItemList({ width }: { width: number }) {
       </div>
       {selection.length > 0 && <SelectionBar count={selection.length} />}
     </section>
+  );
+}
+
+/**
+ * 列表里一行的右键菜单。点在勾选着的行上作用于所有勾选的，否则只作用于这一行（折叠的组是整组）。
+ * 只有菜单打开时才挂载，平时不占资源。
+ */
+function RowMenu({ id }: { id: string }) {
+  const t = useT();
+  const { membersOf, itemsOf, toggleSelected } = useActions();
+  const [targets] = useState(() => {
+    const { selection } = useUi.getState();
+    const members = membersOf(id);
+    const inSelection = selection.length > 0 && members.every((m) => selection.includes(m));
+    return { ids: inSelection ? selection : members, inSelection };
+  });
+  const items = itemsOf(targets.ids);
+  const open = useUi((s) => s.openId === id);
+  return (
+    <>
+      {!open && !targets.inSelection && (
+        <>
+          <MenuItem icon={<MailOpen size={14} />} onSelect={() => useUi.getState().open(id)}>
+            {t("menu.open")}
+          </MenuItem>
+          <MenuSeparator />
+        </>
+      )}
+      <ItemMenuItems items={items} />
+      <MenuSeparator />
+      <MenuItem icon={targets.inSelection ? <X size={14} /> : <Check size={14} />} onSelect={() => toggleSelected(id)}>
+        {targets.inSelection ? t("menu.deselect") : t("menu.select")}
+      </MenuItem>
+    </>
+  );
+}
+
+/**
+ * 全部标为已读之前确认一下，免得手滑把一大片还没看的标掉。
+ * 放在外壳里一直挂着：在订阅统计页按 Shift+A 也有对话框，不会留下一个看不见的对话框挡住快捷键。
+ */
+export function MarkAllReadDialog() {
+  const t = useT();
+  const dialog = useUi((s) => s.dialog);
+  const setDialog = useUi((s) => s.setDialog);
+  const scope = useUi((s) => s.scope);
+  const nav = useNav();
+  const title = scopeTitle(
+    scope,
+    t,
+    (id) =>
+      nav.data?.feeds.find((f) => f.id === id)?.title ??
+      nav.data?.accounts.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean),
+  );
+  const { items, query } = useListModel();
+  const { markAllRead } = useActions();
+  const open = dialog?.type === "mark-all-read";
+  const unread = items.filter((i) => !i.read).length;
+  // 列表还有没加载的部分时说不准有多少条，不写数字
+  const counted = !query.hasNextPage;
+  const close = () => setDialog(null);
+  return (
+    <Modal open={open} onClose={close} title={t("markAll.title")} width={400}>
+      <div className="flex flex-col gap-4 p-4">
+        <div>
+          <p className="leading-relaxed text-fg-2">
+            {counted ? t("markAll.bodyCount", { name: title, n: unread }) : t("markAll.body", { name: title })}
+          </p>
+          {!counted && <p className="mt-1 text-[12px] leading-relaxed text-fg-3">{t("markAll.hint")}</p>}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={close}>
+            {t("action.cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            data-autofocus=""
+            onClick={() => {
+              markAllRead();
+              close();
+            }}
+          >
+            <CheckCheck size={14} />
+            {t("markAll.confirm")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -759,13 +992,19 @@ interface RowProps {
   expandLabel: string;
   /** AI 写的一句话摘要，有的话代替原文开头。 */
   abstract?: string;
+  look: Look;
 }
 
-function Sender({ item, size = 16 }: { item: Item; size?: number }) {
-  if (item.kind === "mail") {
-    return <Avatar name={item.author || item.sender_address || "?"} seed={item.sender_address} size={size} />;
-  }
-  return <Favicon src={item.source_icon} size={size} />;
+/** 列表样式算出来的尺寸，以及邮件要不要标出是哪个邮箱的。 */
+interface Look {
+  style: ListStyle;
+  m: ListMetrics;
+  badge: boolean;
+}
+
+function Sender({ item, look, size = 16 }: { item: Item; look: Look; size?: number }) {
+  if (!look.style.showIcon) return null;
+  return <SenderIcon item={item} size={size} badge={look.badge} />;
 }
 
 /** 折叠的组右侧的数字，点一下展开。 */
@@ -798,7 +1037,7 @@ export function LabelChip({ label }: { label: string }) {
   );
 }
 
-function Trailing({ item, group, time, onExpand, expandLabel }: RowProps) {
+function Trailing({ item, group, time, onExpand, expandLabel, look }: RowProps) {
   const attachments = group ? group.hasAttachments : item.has_attachments;
   const starred = group ? group.starred : item.starred;
   return (
@@ -807,7 +1046,9 @@ function Trailing({ item, group, time, onExpand, expandLabel }: RowProps) {
       {group && onExpand && <CountPill count={group.items.length} onExpand={onExpand} label={expandLabel} />}
       {attachments && <Paperclip size={12} className="shrink-0 text-fg-3" />}
       {starred && <Star size={12} className="shrink-0 fill-warning text-warning" />}
-      <span className="tabular shrink-0 text-[12px] text-fg-3">{time}</span>
+      <span className="tabular shrink-0 text-fg-3" style={{ fontSize: Math.min(look.m.summary.size, 13) }}>
+        {time}
+      </span>
     </>
   );
 }
@@ -818,21 +1059,30 @@ function senderLabel(item: Item, group: Group | undefined, groupMode: GroupMode)
   return item.author || item.sender_address || "";
 }
 
+const text = (font: { size: number; line: number }): CSSProperties => ({ fontSize: font.size, lineHeight: `${font.line}px` });
+
 function CompactRow(props: RowProps) {
-  const { item, group, groupMode, untitled } = props;
+  const { item, group, groupMode, untitled, look } = props;
   const unread = group ? group.unread > 0 : !item.read;
   const unreadText = unread ? "font-medium text-fg" : "text-fg-3";
+  const font = text(look.m.title);
   return (
     <>
       <UnreadDot unread={unread} />
-      <Sender item={item} />
+      <Sender item={item} look={look} />
       {item.kind === "mail" ? (
         <>
-          <span className={cx("w-[110px] shrink-0 truncate", unreadText)}>{senderLabel(item, group, groupMode)}</span>
-          <span className={cx("min-w-0 flex-1 truncate", unread ? "text-fg" : "text-fg-3")}>{item.title || untitled}</span>
+          <span className={cx("w-[110px] shrink-0 truncate", unreadText)} style={font}>
+            {senderLabel(item, group, groupMode)}
+          </span>
+          <span className={cx("min-w-0 flex-1 truncate", unread ? "text-fg" : "text-fg-3")} style={font}>
+            {item.title || untitled}
+          </span>
         </>
       ) : (
-        <span className={cx("min-w-0 flex-1 truncate", unreadText)}>{item.title || untitled}</span>
+        <span className={cx("min-w-0 flex-1 truncate", unreadText)} style={font}>
+          {item.title || untitled}
+        </span>
       )}
       <Trailing {...props} />
     </>
@@ -840,23 +1090,26 @@ function CompactRow(props: RowProps) {
 }
 
 function ComfortableRow(props: RowProps) {
-  const { item, group, groupMode, untitled } = props;
+  const { item, group, groupMode, untitled, look } = props;
   const unread = group ? group.unread > 0 : !item.read;
   const source = item.kind === "mail" ? senderLabel(item, group, groupMode) : item.source_title;
   return (
     <>
       <div className="flex items-center gap-2.5">
         <UnreadDot unread={unread} />
-        <span className={cx("min-w-0 flex-1 truncate", unread ? "font-medium text-fg" : "text-fg-3")}>
+        <span
+          className={cx("min-w-0 flex-1 truncate", unread ? "font-medium text-fg" : "text-fg-3")}
+          style={text(look.m.title)}
+        >
           {item.title || untitled}
         </span>
         <Trailing {...props} />
       </div>
-      <div className="flex items-center gap-2 pl-4 text-[12px] text-fg-3">
-        <Sender item={item} size={14} />
+      <div className="flex items-center gap-2 pl-4 text-fg-3" style={text(look.m.summary)}>
+        <Sender item={item} look={look} size={14} />
         <span className="min-w-0 truncate">
           <span className="text-fg-2">{source}</span>
-          {item.summary && <span> · {item.summary}</span>}
+          {look.style.showSummary && item.summary && <span> · {item.summary}</span>}
         </span>
       </div>
     </>
@@ -865,11 +1118,11 @@ function ComfortableRow(props: RowProps) {
 
 /** 来源：文章是订阅源的图标和名字，邮件是发件人。 */
 function SourceLine(props: RowProps & { size?: number }) {
-  const { item, group, groupMode, size = 14 } = props;
+  const { item, group, groupMode, look, size = 14 } = props;
   const source = item.kind === "mail" ? senderLabel(item, group, groupMode) : item.source_title;
   return (
-    <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-3">
-      <Sender item={item} size={size} />
+    <div className="flex min-w-0 items-center gap-1.5 text-fg-3" style={text(look.m.summary)}>
+      <Sender item={item} look={look} size={size} />
       <span className="min-w-0 flex-1 truncate">{source}</span>
       <Trailing {...props} />
     </div>
@@ -907,24 +1160,45 @@ function Excerpt({ item, abstract }: { item: Item; abstract?: string }) {
   );
 }
 
-/** 摘要视图：标题、两行摘要、来源，有图时右边一张缩略图。 */
+/** 截成 `lines` 行，多出来的用省略号。 */
+const clampLines = (lines: number): CSSProperties => ({
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: lines,
+  overflow: "hidden",
+});
+
+/** 摘要视图：标题、几行摘要、来源，有图时右边一张缩略图。 */
 function SummaryRow(props: RowProps) {
-  const { item, group, untitled } = props;
+  const { item, group, untitled, look } = props;
   const unread = group ? group.unread > 0 : !item.read;
   return (
     <>
       <UnreadDot unread={unread} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className={cx("truncate text-[14px]", unread ? "font-semibold text-fg" : "text-fg-2")}>
+        <span className={cx("truncate", unread ? "font-semibold text-fg" : "text-fg-2")} style={text(look.m.bigTitle)}>
           {item.title || untitled}
         </span>
-        <p className="line-clamp-2 text-[12px] leading-[17px] text-fg-3">
-          <Excerpt item={item} abstract={props.abstract} />
-        </p>
+        {look.style.showSummary && (
+          <p
+            className="text-fg-3"
+            style={{
+              ...text(look.m.summary),
+              ...clampLines(look.style.summaryLines),
+              height: look.m.summary.line * look.style.summaryLines,
+            }}
+          >
+            <Excerpt item={item} abstract={props.abstract} />
+          </p>
+        )}
         <SourceLine {...props} />
       </div>
-      {item.image && (
-        <Picture src={item.image} className="size-[72px] shrink-0 rounded-md bg-active object-cover" />
+      {look.style.showImage && item.image && (
+        <Picture
+          src={item.image}
+          className="shrink-0 rounded-md bg-active object-cover"
+          style={{ width: THUMB_SIZE, height: THUMB_SIZE }}
+        />
       )}
     </>
   );
@@ -932,11 +1206,13 @@ function SummaryRow(props: RowProps) {
 
 /** 卡片视图里的一张。没有图的把位置留给摘要。 */
 function Card(props: RowProps & { imageHeight: number }) {
-  const { item, group, untitled, imageHeight } = props;
+  const { item, group, untitled, imageHeight, look } = props;
   const unread = group ? group.unread > 0 : !item.read;
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [item.image]);
-  const picture = item.image && !broken;
+  const picture = look.style.showImage && item.image && !broken;
+  const padY = look.m.padY + 2;
+  const padX = look.m.padX + 2;
   return (
     <div className="flex h-full flex-col">
       {picture && (
@@ -952,7 +1228,10 @@ function Card(props: RowProps & { imageHeight: number }) {
           style={{ height: imageHeight }}
         />
       )}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 pb-2.5 pt-2.5">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-1.5"
+        style={{ padding: `${padY}px ${padX}px` }}
+      >
         <div className="flex h-5 shrink-0 items-center gap-1.5">
           <UnreadDot unread={unread} />
           <div className="min-w-0 flex-1">
@@ -960,22 +1239,22 @@ function Card(props: RowProps & { imageHeight: number }) {
           </div>
         </div>
         <span
-          className={cx(
-            "shrink-0 text-[14px] leading-[19px]",
-            picture ? "line-clamp-2" : "line-clamp-3",
-            unread ? "font-semibold text-fg" : "text-fg-2",
-          )}
+          className={cx("shrink-0", unread ? "font-semibold text-fg" : "text-fg-2")}
+          style={{ ...text(look.m.bigTitle), ...clampLines(picture || !look.style.showSummary ? 2 : 3) }}
         >
           {item.title || untitled}
         </span>
-        <p
-          className={cx(
-            "min-h-0 overflow-hidden text-[12px] leading-[17px] text-fg-3",
-            picture ? "line-clamp-2" : "flex-1 [mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
-          )}
-        >
-          <Excerpt item={item} abstract={props.abstract} />
-        </p>
+        {look.style.showSummary && (
+          <p
+            className={cx(
+              "min-h-0 overflow-hidden text-fg-3",
+              !picture && "flex-1 [mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
+            )}
+            style={{ ...text(look.m.summary), ...(picture ? clampLines(2) : {}) }}
+          >
+            <Excerpt item={item} abstract={props.abstract} />
+          </p>
+        )}
       </div>
     </div>
   );

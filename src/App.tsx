@@ -2,7 +2,7 @@ import { Unplug } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
 import { AddFeedDialog, EditFeedDialog } from "./components/FeedDialogs";
-import { ItemList } from "./components/ItemList";
+import { ItemList, MarkAllReadDialog } from "./components/ItemList";
 import { Onboarding } from "./components/Onboarding";
 import { Reader } from "./components/Reader";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -131,6 +131,7 @@ function Shell() {
       <AddAccountDialog />
       <EditAccountDialog />
       <RemoveAccountDialog />
+      <MarkAllReadDialog />
       <UpdateDialog />
       <SettingsDialog />
     </div>

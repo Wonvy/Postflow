@@ -42,7 +42,7 @@ export function useShortcuts() {
       if (e.shiftKey) {
         if (key === "a") {
           e.preventDefault();
-          a.markAllRead();
+          a.confirmMarkAllRead();
         }
         return;
       }
@@ -78,6 +78,11 @@ export function useShortcuts() {
         case "a":
           if (!ui.openId) return;
           ui.toggleAiPanel();
+          break;
+        case "w":
+          // 原网页开关
+          if (!ui.openId) return;
+          ui.setReaderWeb(!ui.readerWeb);
           break;
         case "1":
         case "2":

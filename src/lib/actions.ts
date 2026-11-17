@@ -147,6 +147,9 @@ export function useActions() {
 
   const markAllRead = useCallback(() => markAll.mutate(filter), [filter, markAll]);
 
+  /** 全部标为已读之前先问一下：工具栏按钮和 Shift+A 都走这里。 */
+  const confirmMarkAllRead = useCallback(() => useUi.getState().setDialog({ type: "mark-all-read" }), []);
+
   const refresh = useCallback(() => {
     const id = scope.kind === "feed" ? scope.feedId : scope.kind === "account" ? scope.accountId : undefined;
     void api.refresh(id);
@@ -154,10 +157,21 @@ export function useActions() {
 
   const refreshAll = useCallback(() => void api.refresh(), []);
 
+  /** 列表换成这一条所在的订阅源或邮箱，阅读面板里还开着它。 */
+  const goToSource = useCallback((item: Pick<Item, "id" | "kind" | "source_id">) => {
+    const ui = useUi.getState();
+    ui.setScope(
+      item.kind === "mail" ? { kind: "account", accountId: item.source_id } : { kind: "feed", feedId: item.source_id },
+    );
+    // 内置视图里只看邮件或订阅时，换到订阅源或邮箱不受影响；打开的那一条留着
+    ui.open(item.id);
+  }, []);
+
   return {
     items,
     filter,
     membersOf,
+    itemsOf: resolve,
     targets,
     openTargets,
     apply,
@@ -169,6 +183,8 @@ export function useActions() {
     collapseOpen,
     openOriginal,
     markAllRead,
+    confirmMarkAllRead,
+    goToSource,
     refresh,
     refreshAll,
   };
