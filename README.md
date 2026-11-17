@@ -54,7 +54,13 @@ click **More info → Run anyway**.
   in any order. Mailboxes can be dragged into order too, and the order syncs to your other devices. Right-click a
   mailbox, feed or folder for its menu.
 - Load the full article from the original page for feeds that only publish a summary. The full-text button in the
-  reader is a switch: while it is on, every article you open loads in full.
+  reader is a switch: while it is on, every article you open loads in full. WeChat articles and pages that describe
+  their article in structured data are supported. When a page can't be loaded, the reader says why (the site blocks
+  apps, needs a login, or loads its text with scripts) and shows the feed's own content.
+- Feed stats (the chart icon on the Feeds heading): how often each feed posts, how many of its posts carry the full
+  article, and how much of it you actually read — articles opened, read to the end, and reading time, measured from
+  scrolling and time spent in the reader while the window is in front. Feeds that fail to fetch, have gone quiet,
+  only publish summaries or that you never read are flagged. Reading records stay on this device and can be cleared.
 - Reading settings (the Aa button in the reader): text size, line spacing, a sans or serif font and column width,
   kept on this device. HTML mail keeps its own layout and only scales with the text size.
 

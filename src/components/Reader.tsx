@@ -22,6 +22,7 @@ import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
 import { formatSize, openExternal, saveAttachment } from "../lib/platform";
+import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
 import { useReaderStyle, useUi } from "../lib/store";
@@ -145,6 +146,10 @@ function Article({ id }: { id: string }) {
   const readerFullText = useUi((s) => s.readerFullText);
   const setReaderFullText = useUi((s) => s.setReaderFullText);
 
+  // 订阅统计：这篇文章看了多久、看到了哪里。邮件不记
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useReadingTracker(id, scrollRef, Boolean(item), summary?.kind === "article");
+
   /** 显示全文：抓过的直接用，没抓过的去原网页抓。 */
   const showFullText = async () => {
     if (!item) return;
@@ -257,7 +262,7 @@ function Article({ id }: { id: string }) {
       </Toolbar>
 
       <div className="flex min-h-0 flex-1">
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {item ? (
           item.mail ? (
             <MailView
@@ -349,7 +354,18 @@ function ArticleView({
       </div>
       {bar}
       {fullError && (
-        <p className="mb-6 rounded-md border border-line bg-hover px-3 py-2 text-[13px] text-fg-2">{fullError}</p>
+        <p className="mb-6 rounded-md border border-line bg-hover px-3 py-2 text-[13px] leading-relaxed text-fg-2">
+          {t("reader.fullTextFallback", { reason: fullError })}
+          {item.url && (
+            <button
+              type="button"
+              onClick={() => void openExternal(item.url ?? "")}
+              className="ml-1 text-accent hover:underline"
+            >
+              {t("action.openOriginal")}
+            </button>
+          )}
+        </p>
       )}
       {loadingFull && (
         <p className="mb-6 flex items-center gap-2 text-[13px] text-fg-3">

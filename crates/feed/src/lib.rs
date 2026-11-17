@@ -32,6 +32,12 @@ pub enum Error {
     Opml(String),
     #[error("could not extract the article: {0}")]
     Extract(String),
+    #[error("the site blocks automatic fetching ({0})")]
+    Blocked(String),
+    #[error("the page needs a login or subscription (HTTP {0})")]
+    NeedsLogin(u16),
+    #[error("the page loads its text with scripts")]
+    ScriptPage,
 }
 
 impl Error {
@@ -46,6 +52,9 @@ impl Error {
             Error::NoFeedFound => "no_feed_found",
             Error::Opml(_) => "invalid_opml",
             Error::Extract(_) => "extract_failed",
+            Error::Blocked(_) => "fulltext_blocked",
+            Error::NeedsLogin(_) => "fulltext_login",
+            Error::ScriptPage => "fulltext_script",
         }
     }
 }

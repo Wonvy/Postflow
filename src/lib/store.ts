@@ -98,12 +98,15 @@ interface UiState {
   readerFullText: boolean;
   /** 阅读区的字号、行距、字体和宽度。读的时候用 `useReaderStyle`，它会补齐旧版本缺的字段。 */
   readerStyle: ReaderStyle;
+  /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
+  mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
   aiPanel: boolean;
   /** 用户是在哪一条上打开 AI 栏的。只有这一条会自动开始总结。 */
   aiPanelFor: string | null;
 
   setScope: (scope: ListScope) => void;
+  setMainView: (view: "list" | "stats") => void;
   open: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
   setDialog: (dialog: Dialog) => void;
@@ -168,12 +171,14 @@ export const useUi = create<UiState>()(
       tabScopes: {},
       aiPanel: false,
       aiPanelFor: null,
+      mainView: "list",
       listTranslate: false,
       readerTranslate: false,
       readerFullText: false,
       readerStyle: READER_DEFAULT,
 
-      setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
+      setScope: (scope) => set({ scope, mainView: "list", openId: null, selection: [], expandedGroups: [] }),
+      setMainView: (mainView) => set({ mainView }),
       open: (id) => set({ openId: id }),
       setSelection: (ids) => set({ selection: ids }),
       setDialog: (dialog) => set({ dialog }),

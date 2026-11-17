@@ -8,6 +8,7 @@ import { Reader } from "./components/Reader";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
+import { StatsPage } from "./components/StatsPage";
 import { Button, Spinner } from "./components/ui";
 import { resolveLang } from "./lib/i18n";
 import { useCoreEvents, useStatus } from "./lib/queries";
@@ -74,6 +75,7 @@ function Shell() {
   const listWidth = useUi((s) => s.listWidth);
   const setSidebarWidth = useUi((s) => s.setSidebarWidth);
   const setListWidth = useUi((s) => s.setListWidth);
+  const mainView = useUi((s) => s.mainView);
 
   // 卡片视图里列表可以拉得很宽，但要给阅读面板留出位置
   const [viewport, setViewport] = useState(window.innerWidth);
@@ -89,9 +91,15 @@ function Shell() {
     <div className="flex h-full">
       <Sidebar width={sidebarWidth} />
       <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
-      <ItemList width={listShown} />
-      <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
-      <Reader />
+      {mainView === "stats" ? (
+        <StatsPage />
+      ) : (
+        <>
+          <ItemList width={listShown} />
+          <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
+          <Reader />
+        </>
+      )}
       <AddFeedDialog />
       <EditFeedDialog />
       <AddAccountDialog />

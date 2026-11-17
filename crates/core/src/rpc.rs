@@ -138,6 +138,29 @@ struct IdParam {
     id: String,
 }
 
+/// 一次阅读：在一篇上停留了多久、往下看到了哪里、看没看完。
+#[derive(Deserialize)]
+struct ReadingParams {
+    item_id: String,
+    dwell_ms: i64,
+    depth: f64,
+    #[serde(default)]
+    finished: bool,
+}
+
+#[derive(Deserialize)]
+struct StatsParams {
+    #[serde(default = "default_stats_days")]
+    days: i64,
+    /// 本地时间比 UTC 快多少分钟，用来按本地的日子分天。
+    #[serde(default)]
+    tz_offset_min: i64,
+}
+
+fn default_stats_days() -> i64 {
+    30
+}
+
 #[derive(Deserialize)]
 struct OptionalId {
     #[serde(default)]
@@ -460,8 +483,43 @@ impl Core {
                     .ok_or_else(|| RpcError::new("extract_failed", "item has no link"))?;
                 let raw = self.client.full_text(&url).await?;
                 let clean = postflow_feed::sanitize_html(&raw, Some(&url));
+                // 原网页上的正文比源里给的还短：多半只给了没登录的人看开头，不如源里的内容
+                let chars = |html: &str| {
+                    postflow_feed::html_to_text(html)
+                        .chars()
+                        .filter(|c| !c.is_whitespace())
+                        .count()
+                };
+                if chars(&clean) * 10 < chars(&detail.content) * 8 {
+                    return Err(RpcError::new(
+                        "fulltext_shorter",
+                        "the page has less text than the feed",
+                    ));
+                }
                 session.db(move |s| s.set_full_text(&p.id, &raw)).await?;
                 reply(json!({ "full_text": clean }))
+            }
+
+            // 订阅统计。阅读记录只在本机
+            "stats.reading" => {
+                let p: ReadingParams = parse(params)?;
+                let at = now();
+                let saved = session
+                    .db(move |s| s.record_reading(&p.item_id, at, p.dwell_ms, p.depth, p.finished))
+                    .await?;
+                reply(json!({ "saved": saved }))
+            }
+            "stats.feeds" => {
+                let p: StatsParams = parse(params)?;
+                let at = now();
+                let stats = session
+                    .db(move |s| s.feed_stats(at, p.days, p.tz_offset_min * 60_000))
+                    .await?;
+                reply(stats)
+            }
+            "stats.clear" => {
+                session.db(|s| s.clear_reading()).await?;
+                reply(json!({}))
             }
 
             "translate.items" => self.translate_items(params, &session).await,

@@ -289,7 +289,7 @@ fn looks_like_html(s: &str) -> bool {
     s.contains("</") || s.contains("/>") || s.contains("<p>") || s.contains("<br")
 }
 
-fn text_to_html(text: &str) -> String {
+pub(crate) fn text_to_html(text: &str) -> String {
     let escaped = text
         .replace('&', "&amp;")
         .replace('<', "&lt;")

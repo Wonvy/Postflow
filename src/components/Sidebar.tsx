@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
+  ChartColumn,
   ChevronRight,
   CircleDot,
   Copy,
@@ -405,6 +406,8 @@ export function Sidebar({ width }: { width: number }) {
   const scope = useUi((s) => s.scope);
   const setScope = useUi((s) => s.setScope);
   const setDialog = useUi((s) => s.setDialog);
+  const mainView = useUi((s) => s.mainView);
+  const setMainView = useUi((s) => s.setMainView);
   const refreshing = useUi((s) => s.refreshing);
   const collapsed = useUi((s) => s.collapsedFolders);
   const toggleFolder = useUi((s) => s.toggleFolder);
@@ -795,6 +798,21 @@ export function Sidebar({ width }: { width: number }) {
               drag={feedsSectionTarget}
               highlight={dropAt("section:feeds") !== null}
               extra={
+                <>
+                <Tip label={t("stats.title")} side="right">
+                  <button
+                    type="button"
+                    aria-label={t("stats.title")}
+                    aria-pressed={mainView === "stats"}
+                    onClick={() => setMainView(mainView === "stats" ? "list" : "stats")}
+                    className={cx(
+                      "flex size-5 items-center justify-center rounded hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100",
+                      mainView === "stats" ? "text-accent opacity-100" : "text-fg-3 opacity-0",
+                    )}
+                  >
+                    <ChartColumn size={14} strokeWidth={2} />
+                  </button>
+                </Tip>
                 <Tip label={t("folder.new")} side="right">
                   <button
                     type="button"
@@ -805,6 +823,7 @@ export function Sidebar({ width }: { width: number }) {
                     <FolderPlus size={14} strokeWidth={2} />
                   </button>
                 </Tip>
+                </>
               }
             />
 

@@ -211,6 +211,46 @@ export interface ImportStats {
 
 export type Settings = Record<string, unknown>;
 
+/** 一个订阅源的统计。阅读相关的数字来自本机的阅读记录。 */
+export interface FeedStats {
+  id: string;
+  title: string;
+  url: string;
+  icon_url: string | null;
+  folder: string;
+  added_at: number;
+  error: string | null;
+  total: number;
+  last_published: number | null;
+  /** 统计期内发布的文章数。 */
+  published: number;
+  /** 每周发布几篇，最早的一周在前。 */
+  weekly: number[];
+  /** 最近几篇里带全文的比例。 */
+  full_share: number | null;
+  read: number;
+  opened: number;
+  finished: number;
+  avg_depth: number | null;
+  dwell_ms: number;
+}
+
+export interface ReadingDay {
+  /** 从 1970-01-01 起的第几天（本地时间）。 */
+  day: number;
+  published: number;
+  opened: number;
+  dwell_ms: number;
+}
+
+export interface Stats {
+  since: number;
+  now: number;
+  tracking_since: number | null;
+  feeds: FeedStats[];
+  days: ReadingDay[];
+}
+
 /** 一个配置好的 AI 服务。密钥不在这里，在系统钥匙串里。 */
 export interface AiProvider {
   id: string;
@@ -370,6 +410,12 @@ export const api = {
 
   settings: () => rpc<Settings>("settings.get"),
   setSetting: (key: string, value: unknown) => rpc<void>("settings.set", { key, value }),
+
+  recordReading: (p: { item_id: string; dwell_ms: number; depth: number; finished: boolean }) =>
+    rpc<{ saved: boolean }>("stats.reading", p),
+  feedStats: (days: number) =>
+    rpc<Stats>("stats.feeds", { days, tz_offset_min: -new Date().getTimezoneOffset() }),
+  clearReading: () => rpc<void>("stats.clear"),
 
   devices: () => rpc<Device[]>("devices.list"),
   renameDevice: (name: string) => rpc<void>("devices.rename", { name }),

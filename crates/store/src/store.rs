@@ -184,6 +184,19 @@ CREATE TABLE IF NOT EXISTS item_labels (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS item_labels_by_label ON item_labels (label);
 
+-- 阅读记录：每次打开一篇停留了多久、往下看到了哪里。只在本机，用来做订阅统计
+CREATE TABLE IF NOT EXISTS reading (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id   TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    at        INTEGER NOT NULL,
+    dwell_ms  INTEGER NOT NULL,
+    depth     REAL NOT NULL,
+    finished  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS reading_by_at ON reading (at);
+CREATE INDEX IF NOT EXISTS reading_by_item ON reading (item_id);
+
 CREATE TABLE IF NOT EXISTS feed_fetch (
     feed_id       TEXT PRIMARY KEY,
     etag          TEXT,
