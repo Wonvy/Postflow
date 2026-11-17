@@ -58,7 +58,8 @@ export type Dialog =
   /** 新建文件夹，或者给 `folder` 改名。 */
   | { type: "folder"; folder?: string }
   /** 确认把当前列表全部标为已读。 */
-  | { type: "mark-all-read" }
+  /** `scope` 省略时是当前打开的列表；侧栏右键菜单会指定别的列表。 */
+  | { type: "mark-all-read"; scope?: ListScope }
   /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
   | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string }
   | null;

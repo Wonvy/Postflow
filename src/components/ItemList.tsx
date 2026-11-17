@@ -61,15 +61,17 @@ import {
   THUMB_SIZE,
 } from "../lib/listStyle";
 import { isMac } from "../lib/platform";
-import { useNav, useSettings } from "../lib/queries";
+import { useMarkAllRead, useNav, useSettings } from "../lib/queries";
 import {
   CARD_MAX,
   CARD_MIN,
   type Density,
+  filterOf,
   isMailOnlyView,
   type ListScope,
   type ListView,
   listKey,
+  sameScope,
   scopeKey,
   useGroupMode,
   useListStyle,
@@ -986,8 +988,13 @@ export function MarkAllReadDialog() {
   const t = useT();
   const dialog = useUi((s) => s.dialog);
   const setDialog = useUi((s) => s.setDialog);
-  const scope = useUi((s) => s.scope);
+  const current = useUi((s) => s.scope);
+  const kindFilter = useUi((s) => s.kindFilter);
   const nav = useNav();
+  const open = dialog?.type === "mark-all-read";
+  // 侧栏右键菜单可以指定别的列表；那时不知道列表里有多少条，不写数字
+  const scope = (open && dialog.scope) || current;
+  const isCurrent = sameScope(scope, current);
   const title = scopeTitle(
     scope,
     t,
@@ -996,11 +1003,12 @@ export function MarkAllReadDialog() {
       nav.data?.accounts.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean),
   );
   const { items, query } = useListModel();
-  const { markAllRead } = useActions();
-  const open = dialog?.type === "mark-all-read";
+  const { markAllRead: markCurrent } = useActions();
+  const markAll = useMarkAllRead();
+  const markAllRead = () => (isCurrent ? markCurrent() : markAll.mutate(filterOf(scope, kindFilter)));
   const unread = items.filter((i) => !i.read).length;
   // 列表还有没加载的部分时说不准有多少条，不写数字
-  const counted = !query.hasNextPage;
+  const counted = isCurrent && !query.hasNextPage;
   const close = () => setDialog(null);
   return (
     <Modal open={open} onClose={close} title={t("markAll.title")} width={400}>

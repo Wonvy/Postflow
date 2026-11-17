@@ -6,9 +6,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { TooltipProvider } from "./components/ui";
+import { disableDefaultContextMenu } from "./lib/contextMenu";
 import { captureErrors } from "./lib/errors";
 
 captureErrors();
+disableDefaultContextMenu();
 
 const queryClient = new QueryClient({
   defaultOptions: {

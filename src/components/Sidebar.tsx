@@ -2,7 +2,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   ChartColumn,
+  CheckCheck,
   ChevronRight,
+  ChevronsDownUp,
   CircleDot,
   Copy,
   Ellipsis,
@@ -22,6 +24,7 @@ import {
   Send,
   Settings,
   ShieldAlert,
+  Tags,
   SquarePen,
   Star,
   Sun,
@@ -163,6 +166,17 @@ function Count({ n }: { n: number }) {
   return <span className="tabular shrink-0 px-1 text-[12px] text-fg-3">{n > 999 ? "999+" : n}</span>;
 }
 
+/** 「全部标为已读」：先问一下，再把这个范围里的未读都标为已读。侧栏里每个能打开的列表的右键菜单里都有。 */
+function MarkAllReadItem({ scope }: { scope: ListScope }) {
+  const t = useT();
+  const setDialog = useUi((s) => s.setDialog);
+  return (
+    <MenuItem icon={<CheckCheck size={14} />} onSelect={() => setDialog({ type: "mark-all-read", scope })}>
+      {t("action.markAllRead")}
+    </MenuItem>
+  );
+}
+
 function FeedRow({
   feed,
   indent,
@@ -192,6 +206,8 @@ function FeedRow({
 
   const items = (
     <>
+      <MarkAllReadItem scope={{ kind: "feed", feedId: feed.id }} />
+      <MenuSeparator />
       <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "edit-feed", feedId: feed.id })}>
         {t("action.edit")}
       </MenuItem>
@@ -281,6 +297,8 @@ function AccountRow({
 
   const items = (
     <>
+      <MarkAllReadItem scope={{ kind: "account", accountId: account.id }} />
+      <MenuSeparator />
       <MenuItem icon={<Folder size={14} />} onSelect={() => toggleFolders(account.id)}>
         {expanded ? t("folders.hide") : t("folders.show")}
       </MenuItem>
@@ -434,7 +452,7 @@ function AccountFolders({
         const label = parts[parts.length - 1] ?? f.path;
         const active = scope.kind === "mailbox" && scope.accountId === account.id && scope.mailbox === f.name;
         const dnd = f.selectable ? folderDrop(f.name) : null;
-        return (
+        const row = (
           <Row
             key={f.name}
             depth={Math.max(1, parts.length)}
@@ -449,6 +467,29 @@ function AccountFolders({
             leading={<Folder {...ICON} />}
             label={label}
           />
+        );
+        if (!f.selectable) return row;
+        return (
+          <ContextMenu
+            key={f.name}
+            items={
+              <>
+                <MarkAllReadItem scope={{ kind: "mailbox", accountId: account.id, mailbox: f.name, label }} />
+                <MenuItem
+                  icon={<RefreshCw size={14} />}
+                  onSelect={() => void api.openFolder(account.id, f.name).catch(() => {})}
+                >
+                  {t("action.syncNow")}
+                </MenuItem>
+                <MenuSeparator />
+                <MenuItem icon={<Copy size={14} />} onSelect={() => void copyText(f.path)}>
+                  {t("folders.copyName")}
+                </MenuItem>
+              </>
+            }
+          >
+            {row}
+          </ContextMenu>
         );
       })}
     </>
@@ -465,6 +506,7 @@ function SectionHeader({
   collapsed,
   onToggle,
   unread = 0,
+  menu,
 }: {
   label: string;
   addLabel: string;
@@ -476,8 +518,23 @@ function SectionHeader({
   onToggle: () => void;
   /** 收起时在标题右边显示这一组的未读数。 */
   unread?: number;
+  /** 右键菜单里另外的条目，排在「展开/收起」前面。 */
+  menu?: ReactNode;
 }) {
+  const t = useT();
   return (
+    <ContextMenu
+      bare
+      items={
+        <>
+          {menu}
+          {menu && <MenuSeparator />}
+          <MenuItem icon={<ChevronsDownUp size={14} />} onSelect={onToggle}>
+            {collapsed ? t("section.expand") : t("section.collapse")}
+          </MenuItem>
+        </>
+      }
+    >
     <div
       {...drag}
       className={cx(
@@ -511,6 +568,7 @@ function SectionHeader({
         </button>
       </Tip>
     </div>
+    </ContextMenu>
   );
 }
 
@@ -829,16 +887,17 @@ export function Sidebar({ width }: { width: number }) {
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <div className="flex flex-col gap-px">
           {VIEWS.map(({ view, icon: Icon, label }) => (
-            <Row
-              key={view}
-              active={isActive({ kind: "view", view })}
-              onClick={() => setScope({ kind: "view", view })}
-              drag={viewTarget(view)}
-              drop={dropAt(`view:${view}`)}
-              leading={<Icon {...ICON} />}
-              label={t(label)}
-              trailing={<Count n={countFor(view) ?? 0} />}
-            />
+            <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
+              <Row
+                active={isActive({ kind: "view", view })}
+                onClick={() => setScope({ kind: "view", view })}
+                drag={viewTarget(view)}
+                drop={dropAt(`view:${view}`)}
+                leading={<Icon {...ICON} />}
+                label={t(label)}
+                trailing={<Count n={countFor(view) ?? 0} />}
+              />
+            </ContextMenu>
           ))}
         </div>
 
@@ -851,6 +910,23 @@ export function Sidebar({ width }: { width: number }) {
               collapsed={isCollapsed("mail")}
               onToggle={() => toggleSection("mail")}
               unread={counts?.unread_mail}
+              menu={
+                <>
+                  <MenuItem icon={<Plus size={14} />} onSelect={() => setDialog({ type: "add-account" })}>
+                    {t("action.addAccount")}
+                  </MenuItem>
+                  {hasAccounts && (
+                    <>
+                      <MenuItem icon={<SquarePen size={14} />} onSelect={() => compose("new")}>
+                        {t("compose.new")}
+                      </MenuItem>
+                      <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.syncAccount()}>
+                        {t("action.syncAllMail")}
+                      </MenuItem>
+                    </>
+                  )}
+                </>
+              }
             />
             {!isCollapsed("mail") && (
               <div className="flex flex-col gap-px">
@@ -885,13 +961,14 @@ export function Sidebar({ width }: { width: number }) {
                 {accounts &&
                   accounts.length > 0 &&
                   MAIL_FOLDERS.map(({ view, icon: Icon, label }) => (
-                    <Row
-                      key={view}
-                      active={isActive({ kind: "view", view })}
-                      onClick={() => setScope({ kind: "view", view })}
-                      leading={<Icon {...ICON} />}
-                      label={t(label)}
-                    />
+                    <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
+                      <Row
+                        active={isActive({ kind: "view", view })}
+                        onClick={() => setScope({ kind: "view", view })}
+                        leading={<Icon {...ICON} />}
+                        label={t(label)}
+                      />
+                    </ContextMenu>
                   ))}
                 {accounts && accounts.length === 0 && (
                   <button
@@ -917,12 +994,31 @@ export function Sidebar({ width }: { width: number }) {
               collapsed={isCollapsed("labels")}
               onToggle={() => toggleSection("labels")}
               unread={labelCounts.reduce((n, l) => n + l.unread, 0)}
+              menu={
+                <MenuItem icon={<Tags size={14} />} onSelect={() => setDialog({ type: "settings", page: "categories" })}>
+                  {t("label.edit")}
+                </MenuItem>
+              }
             />
             {!isCollapsed("labels") && (
               <div className="flex flex-col gap-px">
                 {labels.map((label) => (
-                  <Row
+                  <ContextMenu
                     key={label}
+                    items={
+                      <>
+                        <MarkAllReadItem scope={{ kind: "label", label }} />
+                        <MenuSeparator />
+                        <MenuItem
+                          icon={<Tags size={14} />}
+                          onSelect={() => setDialog({ type: "settings", page: "categories" })}
+                        >
+                          {t("label.edit")}
+                        </MenuItem>
+                      </>
+                    }
+                  >
+                  <Row
                     active={isActive({ kind: "label", label })}
                     onClick={() => setScope({ kind: "label", label })}
                     drag={labelTarget(label)}
@@ -931,6 +1027,7 @@ export function Sidebar({ width }: { width: number }) {
                     label={label}
                     trailing={<Count n={labelCounts.find((l) => l.label === label)?.unread ?? 0} />}
                   />
+                  </ContextMenu>
                 ))}
               </div>
             )}
@@ -946,6 +1043,25 @@ export function Sidebar({ width }: { width: number }) {
               collapsed={isCollapsed("feeds")}
               onToggle={() => toggleSection("feeds")}
               unread={counts?.unread_article}
+              menu={
+                <>
+                  <MenuItem icon={<Plus size={14} />} onSelect={() => setDialog({ type: "add-feed" })}>
+                    {t("action.addFeed")}
+                  </MenuItem>
+                  <MenuItem icon={<FolderPlus size={14} />} onSelect={() => setDialog({ type: "folder" })}>
+                    {t("folder.new")}
+                  </MenuItem>
+                  <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.refresh()}>
+                    {t("action.refreshAll")}
+                  </MenuItem>
+                  <MenuItem
+                    icon={<ChartColumn size={14} />}
+                    onSelect={() => setMainView(mainView === "stats" ? "list" : "stats")}
+                  >
+                    {t("stats.title")}
+                  </MenuItem>
+                </>
+              }
               drag={feedsSectionTarget}
               highlight={dropAt("section:feeds") !== null}
               extra={
@@ -1092,6 +1208,8 @@ function FolderMenuItems({ folder }: { folder: string }) {
   const { remove } = useFolderActions();
   return (
     <>
+      <MarkAllReadItem scope={{ kind: "folder", folder }} />
+      <MenuSeparator />
       <MenuItem icon={<Plus size={14} />} onSelect={() => setDialog({ type: "add-feed", folder })}>
         {t("folder.addFeed")}
       </MenuItem>
