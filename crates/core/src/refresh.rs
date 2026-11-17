@@ -56,6 +56,8 @@ impl Core {
             .await;
         // 新文章要让所有界面都看到，所以不带发起方
         self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+        // 新文章按自动规则处理
+        self.run_rules_on_new(session).await;
     }
 
     async fn refresh_one(&self, session: &Session, target: &FetchTarget, default_interval: i64) {

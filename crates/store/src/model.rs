@@ -100,7 +100,7 @@ where
     Option::<T>::deserialize(de).map(Some)
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct ItemPatch {
     pub read: Option<bool>,
     pub starred: Option<bool>,

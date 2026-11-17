@@ -12,6 +12,7 @@ mod oauth;
 mod refresh;
 mod rpc;
 mod rsshub;
+mod rules;
 mod secrets;
 mod sender_icon;
 mod storage;
@@ -222,6 +223,8 @@ pub struct Core {
     pub(crate) sender_icons: sender_icon::SenderIcons,
     /// RSSHub 路由目录，见 rsshub.rs。
     pub(crate) rsshub: rsshub::Rsshub,
+    /// 自动规则处理到哪儿了，见 rules.rs。
+    pub(crate) rules_state: rules::RulesState,
 }
 
 impl Core {
@@ -242,6 +245,7 @@ impl Core {
         let core = Arc::new(Core {
             sender_icons: sender_icon::SenderIcons::new(&local_dir),
             rsshub: rsshub::Rsshub::new(&local_dir),
+            rules_state: rules::RulesState::new(&local_dir),
             ai: Default::default(),
             translator,
             local_dir,

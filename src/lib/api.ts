@@ -1,6 +1,7 @@
 import type { ReplyContext } from "./compose";
 import { rpc } from "./transport";
 import type { RsshubRoute } from "./rsshub";
+import type { Rule } from "./rules";
 
 /** junk 和 trash 是邮箱里的垃圾邮件和已删除邮件。 */
 export type View =
@@ -546,6 +547,14 @@ export const api = {
     rpc<{ routes: RsshubRoute[]; total: number }>("rsshub.search", { query, zh }),
   rsshubRadar: (url: string, zh: boolean) =>
     rpc<{ matches: { route: RsshubRoute; values: Record<string, string> }[] }>("rsshub.radar", { url, zh }),
+  /** 试一条规则：最新的条目里有多少会命中。不改动任何东西。 */
+  rulesTest: (rule: Rule) =>
+    rpc<{ matched: number; checked: number; samples: { id: string; title: string; source: string; kind: ItemKind }[] }>(
+      "rules.test",
+      { rule },
+    ),
+  /** 把一条规则（不给就是全部启用的规则）应用到已有的条目。 */
+  rulesApply: (rule?: Rule) => rpc<{ matched: number }>("rules.apply", rule ? { rule } : {}),
   storageUsage: () => rpc<StorageUsage>("storage.usage"),
   /** 清理本机缓存：抓取的全文、30 天前的邮件原文、发件人图标。清完会顺手压缩索引。 */
   clearCache: (what: "fulltext" | "mail" | "icons") => rpc<{ count: number }>("storage.clear", { what }),

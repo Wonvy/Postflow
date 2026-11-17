@@ -746,6 +746,10 @@ async fn serve(
         if stats.changed() {
             core.emit_changed(&[Scope::Feeds, Scope::Items], None);
         }
+        // 新邮件按自动规则处理（分类、标已读……），然后再通知
+        if stats.added > 0 {
+            core.run_rules_on_new(session).await;
+        }
         if notify {
             core.announce_new_mail(account_id, stats.fresh);
         }

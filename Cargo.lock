@@ -3977,6 +3977,7 @@ dependencies = [
  "postflow-store",
  "postflow-testkit",
  "postflow-translate",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",

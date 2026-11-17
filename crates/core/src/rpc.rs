@@ -632,6 +632,7 @@ impl Core {
             }
 
             m if m.starts_with("storage.") => self.storage_rpc(m, params, &session).await,
+            m if m.starts_with("rules.") => self.rules_rpc(m, params, &session).await,
             "index.rebuild" => {
                 let stats = session.db(|s| s.rebuild_index()).await?;
                 self.emit_changed(&crate::ALL_SCOPES, None);

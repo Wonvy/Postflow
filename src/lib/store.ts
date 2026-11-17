@@ -44,6 +44,7 @@ export type SettingsPage =
   | "translation"
   | "ai"
   | "categories"
+  | "rules"
   | "data"
   | "storage"
   | "diagnostics"
