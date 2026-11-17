@@ -164,8 +164,8 @@ back to a temporary address on your own computer (`http://localhost:<port>`), an
 (OAuth 2.0 authorization code with PKCE). The refresh token is kept in the system keychain like a password, never in
 the data folder, so each device signs in on its own. No server of ours is involved.
 
-This needs an application ID registered with Microsoft. Until Postflow ships with its own, register one; it's free and
-takes a few minutes:
+This needs an application ID registered with Microsoft. Postflow doesn't come with one: you register your own, so
+the sign-in goes through your app and nobody else's. It's free and takes a few minutes:
 
 1. Sign in to the [Microsoft Entra admin center](https://entra.microsoft.com) (or the Azure portal) and open
    **App registrations → New registration**.

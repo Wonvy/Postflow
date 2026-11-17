@@ -5,8 +5,8 @@
 //! 刷新令牌换新的。账户本身会同步到其他设备，但不记登录方式：界面按服务商判断，
 //! Outlook 和 Microsoft 365 一律走 OAuth，别的设备上同样要登录一次。
 //!
-//! 登录要用一个在微软注册的应用 ID：优先用环境变量 `POSTFLOW_MICROSOFT_CLIENT_ID`（开发时用），
-//! 其次是用户自己注册、填进设置的（`mail.microsoft_client_id`，会同步到其他设备），最后是 Postflow 自带的。
+//! 登录要用一个在微软注册的应用 ID。Postflow 不自带，由用户自己注册后填进设置
+//! （`mail.microsoft_client_id`，会同步到其他设备）；开发时也可以用环境变量 `POSTFLOW_MICROSOFT_CLIENT_ID`。
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -20,8 +20,6 @@ use serde_json::{Value, json};
 use crate::rpc::{parse, reply};
 use crate::{Core, RpcError, Session};
 
-/// Postflow 在微软注册的应用 ID（公开客户端，不是密钥，可以放进源码）。为空时只能用用户自己的。
-pub(crate) const MICROSOFT_CLIENT_ID: &str = "";
 /// 用户自己注册的应用 ID 存在这个设置里。
 const CLIENT_ID_SETTING: &str = "mail.microsoft_client_id";
 /// 在浏览器里登录最多等这么久。
@@ -94,7 +92,7 @@ struct FlowId {
 }
 
 impl Core {
-    /// 用哪个应用 ID 登录微软：环境变量、用户自己的、自带的，依次找。
+    /// 用哪个应用 ID 登录微软：环境变量优先，其次是用户填进设置的。
     async fn microsoft_client_id(&self, session: &Arc<Session>) -> Option<String> {
         if let Some(id) = std::env::var("POSTFLOW_MICROSOFT_CLIENT_ID")
             .ok()
@@ -102,15 +100,13 @@ impl Core {
         {
             return Some(id.trim().to_string());
         }
-        let settings = session.db(|s| s.settings()).await.ok();
+        let settings = session.db(|s| s.settings()).await.ok()?;
         settings
-            .as_ref()
-            .and_then(|s| s.get(CLIENT_ID_SETTING))
+            .get(CLIENT_ID_SETTING)
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string)
-            .or_else(|| Some(MICROSOFT_CLIENT_ID.to_string()).filter(|s| !s.is_empty()))
     }
 
     pub(crate) async fn oauth_rpc(
