@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.13 — 2026-11-17
+
+### English
+
 - Reading settings use sliders: text size, line spacing, letter spacing (new), paragraph spacing (new) and width.
   Double-click a slider to reset it.
 - Sender avatars show the logo of the sender's website. Personal addresses (Gmail, QQ Mail and the like) keep the
