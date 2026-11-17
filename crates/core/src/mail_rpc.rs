@@ -66,6 +66,21 @@ struct Id {
     id: String,
 }
 
+#[derive(Deserialize)]
+struct AccountId {
+    account_id: String,
+}
+
+#[derive(Deserialize)]
+struct OpenFolder {
+    account_id: String,
+    /// 服务器上的文件夹名。
+    mailbox: String,
+}
+
+/// 列文件夹最多等这么久。
+const FOLDERS_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// 收信。`auto` 为真时是应用自己发起的（窗口回到前台），不是用户点的刷新。
 #[derive(Deserialize)]
 struct SyncParams {
@@ -132,6 +147,23 @@ impl Core {
                 Err(e) => Err(e),
             },
             "mail.attachment" => self.attachment(params, session).await,
+            "mail.folders" => self.folders(params, session).await,
+            "mail.open_folder" => match parse::<OpenFolder>(params) {
+                Ok(p) => {
+                    let name = p.mailbox.trim().to_string();
+                    if name.is_empty() || name.eq_ignore_ascii_case("INBOX") {
+                        Err(RpcError::new("bad_params", "which folder?"))
+                    } else if self.send_mail(session, &p.account_id, Command::WatchFolder(name)) {
+                        reply(json!({}))
+                    } else {
+                        Err(RpcError::new(
+                            "mail_unavailable",
+                            "this account is not connected",
+                        ))
+                    }
+                }
+                Err(e) => Err(e),
+            },
             "mail.trust_sender" => self.trust_sender(params, session).await,
             "mail.unsubscribe" => self.unsubscribe(params, session).await,
             _ => match self.compose_rpc(method, params.clone(), session).await {
@@ -396,6 +428,22 @@ impl Core {
             .await
             .map_err(|e| RpcError::new("internal", e.to_string()))?
             .map_err(|e| RpcError::new("keychain", e))
+    }
+
+    /// 邮箱里的普通文件夹，侧栏里列出来。交给后台任务用已有的连接去列。
+    async fn folders(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
+        let p: AccountId = parse(params)?;
+        let (tx, rx) = oneshot::channel();
+        let unavailable = || RpcError::new("mail_unavailable", "this account is not connected");
+        if !self.send_mail(session, &p.account_id, Command::ListFolders(tx)) {
+            return Err(unavailable());
+        }
+        match tokio::time::timeout(FOLDERS_TIMEOUT, rx).await {
+            Ok(Ok(Ok(folders))) => reply(json!({ "folders": folders })),
+            Ok(Ok(Err(e))) => Err(e),
+            Ok(Err(_)) => Err(unavailable()),
+            Err(_) => Err(RpcError::new("mail_timeout", "timed out")),
+        }
     }
 
     async fn load_password(&self, account_id: &str) -> Option<String> {

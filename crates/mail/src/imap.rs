@@ -22,6 +22,9 @@ use tokio_rustls::rustls::pki_types::ServerName;
 
 use crate::{Error, Result};
 
+/// 收件箱在 IMAP 里的名字，不分大小写。
+const INBOX_NAME: &str = "INBOX";
+
 pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 /// 单个命令的超时。同步一批邮件正文可能比较慢，给得宽松一些。
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(90);
@@ -126,6 +129,24 @@ struct MailboxEntry {
     trash: bool,
     sent: bool,
     drafts: bool,
+    /// Gmail 的「已加星标」「重要」这类按标记筛出来的虚拟文件夹。
+    virtual_view: bool,
+    /// 层级分隔符，比如「/」或「.」。
+    delimiter: Option<String>,
+    /// 解码成正常文字的完整名字。
+    path: String,
+}
+
+/// 邮箱里的一个普通文件夹（收件箱、已发送、草稿、垃圾邮件、已删除、归档以外的），侧栏里列出来。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FolderInfo {
+    /// 服务器上的原名，打开时用。
+    pub name: String,
+    /// 给人看的完整名字，按 `delimiter` 分层。
+    pub path: String,
+    pub delimiter: Option<String>,
+    /// 只是用来装子文件夹、自己打不开的。
+    pub selectable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -503,12 +524,67 @@ impl Connection {
                         trash: attrs.contains(&NameAttribute::Trash),
                         sent: attrs.contains(&NameAttribute::Sent),
                         drafts: attrs.contains(&NameAttribute::Drafts),
+                        virtual_view: attrs.iter().any(|a| match a {
+                            NameAttribute::Flagged => true,
+                            NameAttribute::Extension(e) => e.eq_ignore_ascii_case("\\Important"),
+                            _ => false,
+                        }),
+                        delimiter: n.delimiter().map(str::to_string),
+                        path: decode_mailbox_name(n.name()),
                     }
                 })
                 .collect();
             self.mailboxes = Some(entries);
         }
         Ok(self.mailboxes.as_deref().unwrap_or_default())
+    }
+
+    /// 普通文件夹：去掉收件箱、已发送、草稿、垃圾邮件、已删除、归档，以及 Gmail 的「所有邮件」
+    /// 「已加星标」「重要」这些另有地方看的。打不开、下面也没有文件夹的不要。
+    pub async fn folders(&mut self) -> Result<Vec<FolderInfo>> {
+        let mut special = Vec::new();
+        for kind in [
+            SpecialMailbox::Junk,
+            SpecialMailbox::Trash,
+            SpecialMailbox::Sent,
+            SpecialMailbox::Drafts,
+        ] {
+            if let Some(name) = self.special_mailbox(kind).await? {
+                special.push(name);
+            }
+        }
+        let list = self.mailboxes().await?;
+        let kept: Vec<&MailboxEntry> = list
+            .iter()
+            .filter(|m| {
+                !m.name.eq_ignore_ascii_case(INBOX_NAME)
+                    && !special.contains(&m.name)
+                    && !m.archive
+                    && !matches!(m.leaf.as_str(), "archive" | "archives")
+                    && !m.all
+                    && !m.virtual_view
+            })
+            .collect();
+        let has_children = |parent: &MailboxEntry| {
+            let Some(d) = &parent.delimiter else {
+                return false;
+            };
+            let prefix = format!("{}{d}", parent.name);
+            kept.iter()
+                .any(|m| m.selectable && m.name.starts_with(&prefix))
+        };
+        let mut out: Vec<FolderInfo> = kept
+            .iter()
+            .filter(|m| m.selectable || has_children(m))
+            .map(|m| FolderInfo {
+                name: m.name.clone(),
+                path: m.path.clone(),
+                delimiter: m.delimiter.clone(),
+                selectable: m.selectable,
+            })
+            .collect();
+        out.sort_by_key(|f| f.path.to_lowercase());
+        Ok(out)
     }
 
     /// 找到用来存放归档邮件的邮箱。找不到就建一个叫 Archive 的。

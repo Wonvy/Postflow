@@ -3,7 +3,7 @@
 //! 账户设置（不含密码）写进日志，同步给其他设备；邮件本身每台设备各自从邮件服务器同步，
 //! 只存在本机索引里。已读、星标、归档以服务器为准，本机改了以后再写回服务器。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde_json::{Map, Value, json};
@@ -125,7 +125,36 @@ fn delete_account_mail(conn: &Connection, account_id: &str) -> Result<()> {
         "DELETE FROM mail_folders WHERE account_id = ?1",
         [account_id],
     )?;
+    conn.execute(
+        "DELETE FROM mail_mailboxes WHERE account_id = ?1",
+        [account_id],
+    )?;
     Ok(())
+}
+
+/// 自动发的信用的地址：不回信，也不算联系人。
+fn automated(address: &str) -> bool {
+    let local = address.split('@').next().unwrap_or("").to_ascii_lowercase();
+    [
+        "noreply",
+        "no-reply",
+        "no_reply",
+        "donotreply",
+        "do-not-reply",
+        "mailer-daemon",
+        "postmaster",
+        "notifications",
+        "notification",
+        "bounce",
+    ]
+    .iter()
+    .any(|bad| {
+        local == *bad
+            || local.starts_with(&format!("{bad}+"))
+            || local.starts_with(&format!("{bad}-"))
+            || local.ends_with(&format!("-{bad}"))
+            || local.ends_with(&format!(".{bad}"))
+    })
 }
 
 fn delete_mail(conn: &Connection, id: &str) -> Result<()> {
@@ -283,15 +312,28 @@ impl Store {
     }
 
     /// 上次同步时，这个文件夹在服务器上叫什么、UIDVALIDITY 是多少。
+    /// 用户自己的文件夹按名字（`mailbox`）找，其他的按用途找。
     pub fn mail_folder(
         &self,
         account_id: &str,
         folder: MailFolder,
+        mailbox: &str,
     ) -> Result<Option<(String, u32)>> {
         if folder == MailFolder::Inbox {
             return Ok(self
                 .mail_uidvalidity(account_id)?
                 .map(|v| (INBOX.to_string(), v)));
+        }
+        if folder == MailFolder::Other {
+            return Ok(self
+                .lock()
+                .conn
+                .query_row(
+                    "SELECT name, uidvalidity FROM mail_mailboxes WHERE account_id = ?1 AND name = ?2",
+                    params![account_id, mailbox],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?);
         }
         Ok(self
             .lock()
@@ -326,16 +368,26 @@ impl Store {
     }
 
     /// 文件夹被服务器重建了（UIDVALIDITY 变了），或者换了一个文件夹：本机记的 UID 全部作废。
-    /// 收件箱里本机归档、还没写回服务器的那些保留。
-    pub fn reset_mail_folder(&self, account_id: &str, folder: MailFolder) -> Result<()> {
+    /// 收件箱里本机归档、还没写回服务器的那些保留。`mailbox` 是收件箱和用户自己的文件夹的名字，
+    /// 只清这一个文件夹里的。
+    pub fn reset_mail_folder(
+        &self,
+        account_id: &str,
+        folder: MailFolder,
+        mailbox: &str,
+    ) -> Result<()> {
         let guard = self.lock();
+        let by_name = matches!(folder, MailFolder::Inbox | MailFolder::Other);
         let ids: Vec<String> = {
             let mut stmt = guard.conn.prepare(
                 "SELECT m.id FROM mail_meta m JOIN items i ON i.id = m.id \
                  WHERE m.account_id = ?1 AND i.archived = ?2 \
-                   AND (?2 != 0 OR m.mailbox = ?3)",
+                   AND (?4 = 0 OR m.mailbox = ?3)",
             )?;
-            let rows = stmt.query_map(params![account_id, folder.code(), INBOX], |r| r.get(0))?;
+            let rows = stmt
+                .query_map(params![account_id, folder.code(), mailbox, by_name], |r| {
+                    r.get(0)
+                })?;
             rows.collect::<rusqlite::Result<_>>()?
         };
         for id in ids {
@@ -367,6 +419,12 @@ impl Store {
                 "INSERT INTO mail_state (account_id, uidvalidity) VALUES (?1, ?2) \
                  ON CONFLICT (account_id) DO UPDATE SET uidvalidity = excluded.uidvalidity",
                 params![account_id, sync.uidvalidity],
+            )?;
+        } else if folder == MailFolder::Other {
+            tx.execute(
+                "INSERT OR REPLACE INTO mail_mailboxes (account_id, name, uidvalidity) \
+                 VALUES (?1, ?2, ?3)",
+                params![account_id, mailbox, sync.uidvalidity],
             )?;
         } else {
             tx.execute(
@@ -418,8 +476,8 @@ impl Store {
             tx.execute(
                 "INSERT INTO mail_meta \
                  (id, account_id, mailbox, uidvalidity, uid, message_id, from_name, from_address, \
-                  has_attachments, list_unsubscribe, size) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+                  has_attachments, list_unsubscribe, size, recipients) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) \
                  ON CONFLICT (id) DO UPDATE SET mailbox = excluded.mailbox, \
                      uidvalidity = excluded.uidvalidity, uid = excluded.uid",
                 params![
@@ -434,6 +492,8 @@ impl Store {
                     mail.has_attachments,
                     mail.list_unsubscribe,
                     mail.size,
+                    (!mail.recipients.is_empty())
+                        .then(|| serde_json::to_string(&mail.recipients).unwrap_or_default()),
                 ],
             )?;
             if let Some(raw) = &mail.raw {
@@ -532,10 +592,11 @@ impl Store {
         Ok(out)
     }
 
-    pub(crate) fn draft_ids_among(&self, ids: &HashSet<String>) -> Result<HashSet<String>> {
+    /// 草稿和已发送的信：不能归档或移回收件箱。
+    pub(crate) fn pinned_ids_among(&self, ids: &HashSet<String>) -> Result<HashSet<String>> {
         let guard = self.lock();
         let mut stmt = guard.conn.prepare_cached(
-            "SELECT 1 FROM items WHERE id = ?1 AND kind = 'mail' AND archived = 4",
+            "SELECT 1 FROM items WHERE id = ?1 AND kind = 'mail' AND archived IN (4, 5)",
         )?;
         let mut out = HashSet::new();
         for id in ids {
@@ -591,58 +652,73 @@ impl Store {
         Ok(refs)
     }
 
-    /// 给你来过信的人，来信多的在前。电子报、通知一类自动发的信不算。
+    /// 给你来过信的人和你写过信的人，来往多的在前。写过信的分量重一些。
+    /// 电子报、通知一类自动发的信不算，垃圾邮件、已删除和草稿里的也不算。
     pub fn mail_contacts(&self, limit: usize) -> Result<Vec<Contact>> {
+        /// 写过一封信抵得上收到几封。
+        const SENT_WEIGHT: i64 = 3;
         let guard = self.lock();
-        let mut stmt = guard.conn.prepare(
-            "SELECT MAX(from_name), MIN(from_address), COUNT(*) AS n FROM mail_meta \
-             WHERE from_address IS NOT NULL AND from_address LIKE '%_@_%' \
-               AND list_unsubscribe IS NULL \
-               AND id IN (SELECT id FROM items WHERE kind = 'mail' AND archived < 2) \
-               AND account_id IN (SELECT id FROM accounts WHERE deleted = 0) \
-             GROUP BY lower(from_address) \
-             ORDER BY n DESC, lower(MIN(from_address)) \
-             LIMIT ?1",
-        )?;
-        let rows = stmt.query_map([limit as i64], |r| {
-            Ok(Contact {
-                name: r
-                    .get::<_, Option<String>>(0)?
-                    .filter(|n| !n.trim().is_empty()),
-                address: r.get(1)?,
-                count: r.get(2)?,
-            })
-        })?;
-        let automated = |address: &str| {
-            let local = address.split('@').next().unwrap_or("").to_ascii_lowercase();
-            [
-                "noreply",
-                "no-reply",
-                "no_reply",
-                "donotreply",
-                "do-not-reply",
-                "mailer-daemon",
-                "postmaster",
-                "notifications",
-                "notification",
-                "bounce",
-            ]
-            .iter()
-            .any(|bad| {
-                local == *bad
-                    || local.starts_with(&format!("{bad}+"))
-                    || local.starts_with(&format!("{bad}-"))
-                    || local.ends_with(&format!("-{bad}"))
-                    || local.ends_with(&format!(".{bad}"))
-            })
+        // 地址（小写）→ 名字、显示的地址、分数
+        let mut people: HashMap<String, (Option<String>, String, i64)> = HashMap::new();
+        let mut add = |name: Option<String>, address: String, n: i64| {
+            if !address.contains('@') || automated(&address) {
+                return;
+            }
+            let name = name.filter(|n| !n.trim().is_empty());
+            let entry = people
+                .entry(address.to_lowercase())
+                .or_insert_with(|| (None, address.clone(), 0));
+            if entry.0.is_none() {
+                entry.0 = name;
+            }
+            entry.2 += n;
         };
-        let mut out = Vec::new();
+        let mut stmt = guard.conn.prepare(
+            "SELECT MAX(from_name), MIN(from_address), COUNT(*) FROM mail_meta \
+             WHERE from_address IS NOT NULL AND list_unsubscribe IS NULL \
+               AND id IN (SELECT id FROM items WHERE kind = 'mail' AND archived IN (0, 1, 6)) \
+               AND account_id IN (SELECT id FROM accounts WHERE deleted = 0) \
+             GROUP BY lower(from_address)",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
+        })?;
         for row in rows {
-            let contact = row?;
-            if !automated(&contact.address) {
-                out.push(contact);
+            let (name, address, n) = row?;
+            add(name, address, n);
+        }
+        let mut stmt = guard.conn.prepare(
+            "SELECT recipients FROM mail_meta \
+             WHERE recipients IS NOT NULL \
+               AND id IN (SELECT id FROM items WHERE kind = 'mail' AND archived = 5) \
+               AND account_id IN (SELECT id FROM accounts WHERE deleted = 0)",
+        )?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        for row in rows {
+            let list: Vec<(Option<String>, String)> =
+                serde_json::from_str(&row?).unwrap_or_default();
+            for (name, address) in list {
+                add(name, address, SENT_WEIGHT);
             }
         }
+        let mut out: Vec<Contact> = people
+            .into_values()
+            .map(|(name, address, count)| Contact {
+                name,
+                address,
+                count,
+            })
+            .collect();
+        out.sort_by(|a, b| {
+            b.count
+                .cmp(&a.count)
+                .then_with(|| a.address.to_lowercase().cmp(&b.address.to_lowercase()))
+        });
+        out.truncate(limit);
         Ok(out)
     }
 
@@ -661,9 +737,11 @@ impl Store {
     pub fn mail_moved(&self, id: &str, mailbox: &str, uid: Option<u32>) -> Result<()> {
         let guard = self.lock();
         let from_other: bool = guard.conn.query_row(
-            "SELECT EXISTS (SELECT 1 FROM mail_meta m JOIN mail_folders f \
-                 ON f.account_id = m.account_id AND f.name = m.mailbox \
-             WHERE m.id = ?1 AND m.mailbox != ?2)",
+            "SELECT EXISTS (SELECT 1 FROM mail_meta m WHERE m.id = ?1 AND m.mailbox != ?2 AND ( \
+                 EXISTS (SELECT 1 FROM mail_folders f \
+                         WHERE f.account_id = m.account_id AND f.name = m.mailbox) \
+                 OR EXISTS (SELECT 1 FROM mail_mailboxes b \
+                         WHERE b.account_id = m.account_id AND b.name = m.mailbox)))",
             params![id, mailbox],
             |r| r.get(0),
         )?;

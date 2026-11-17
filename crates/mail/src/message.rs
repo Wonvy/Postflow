@@ -30,8 +30,9 @@ pub struct Summary {
     pub message_id: Option<String>,
     pub subject: String,
     pub from: Mailbox,
-    /// 收件人。草稿在列表里显示写给谁。
+    /// 收件人和抄送。草稿和已发送在列表里显示写给谁，发过信的人也算联系人。
     pub to: Vec<Mailbox>,
+    pub cc: Vec<Mailbox>,
     /// 信头里的发信时间，Unix 毫秒。
     pub date: Option<i64>,
     pub snippet: String,
@@ -226,6 +227,7 @@ pub fn summarize(raw: &[u8]) -> Summary {
         subject: msg.subject().map(clean_text).unwrap_or_default(),
         from: mailboxes(msg.from()).into_iter().next().unwrap_or_default(),
         to: mailboxes(msg.to()),
+        cc: mailboxes(msg.cc()),
         date: msg.date().map(|d| d.to_timestamp() * 1000),
         snippet,
         has_attachments: msg.attachment_count() > 0,

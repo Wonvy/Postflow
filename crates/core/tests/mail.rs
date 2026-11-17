@@ -916,3 +916,140 @@ async fn drafts_attachments_and_forwards() {
     .await;
     core.shutdown();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sent_mail_and_other_folders() {
+    let server = FakeImap::start(USER, PASS).await;
+    server.add_mailbox("Sent", Some("\\Sent"));
+    server.add_mailbox("Projects", None);
+    server.add_mailbox("Projects/Alpha", None);
+    server.add_mailbox("Receipts", None);
+    server.add_mailbox("[Gmail]/Starred", Some("\\Flagged"));
+    server.deliver(
+        "Sent",
+        "From: me@example.com\r\nTo: Bob <bob@example.com>\r\nCc: carol@example.com\r\nSubject: Status\r\n\
+         Date: Mon, 16 Nov 2026 09:00:00 +0000\r\nMessage-ID: <sent-1@example.com>\r\n\r\nAll good.\r\n",
+        &["\\Seen"],
+    );
+    for n in 1..=2 {
+        server.deliver(
+            "Receipts",
+            &mail(
+                &format!("receipt-{n}@shop.example"),
+                "Shop <orders@shop.example>",
+                &format!("Receipt {n}"),
+                "Thanks",
+            ),
+            &["\\Seen"],
+        );
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    let account = call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    let id = account["id"].clone();
+
+    // 已发送跟着收件箱一起同步，列表里显示写给谁
+    wait_for("sent synced", || async {
+        mail_items(&core, "sent").await.len() == 1
+    })
+    .await;
+    let sent = &mail_items(&core, "sent").await[0];
+    assert_eq!(sent["author"], "Bob");
+    assert_eq!(sent["sent"], true);
+    // 写过信的人出现在联系人里
+    let contacts = call(&core, "mail.contacts", json!({})).await;
+    let addresses: Vec<&str> = contacts["contacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["address"].as_str())
+        .collect();
+    assert!(addresses.contains(&"bob@example.com") && addresses.contains(&"carol@example.com"));
+
+    // 普通文件夹：收件箱、已发送、归档和 Gmail 的星标这类不在里面
+    let folders = call(&core, "mail.folders", json!({ "account_id": id })).await;
+    let names: Vec<&str> = folders["folders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|f| f["name"].as_str())
+        .collect();
+    assert_eq!(names, ["Projects", "Projects/Alpha", "Receipts"]);
+    assert_eq!(folders["folders"][1]["delimiter"], "/");
+
+    // 打开以前不同步，打开以后同步，之后每次同步都带上它
+    let receipts = || async {
+        call(
+            &core,
+            "items.list",
+            json!({ "filter": { "view": "folder", "source_id": id, "mailbox": "Receipts" } }),
+        )
+        .await["items"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    assert!(receipts().await.is_empty());
+    call(
+        &core,
+        "mail.open_folder",
+        json!({ "account_id": id, "mailbox": "Receipts" }),
+    )
+    .await;
+    wait_for("folder synced", || async { receipts().await.len() == 2 }).await;
+    server.deliver(
+        "Receipts",
+        &mail(
+            "receipt-3@shop.example",
+            "orders@shop.example",
+            "Receipt 3",
+            "x",
+        ),
+        &[],
+    );
+    call(&core, "accounts.sync", json!({ "id": id })).await;
+    wait_for("watched folder keeps syncing", || async {
+        receipts().await.len() == 3
+    })
+    .await;
+    // 不在收件箱里
+    assert!(find(&core, "inbox", "Receipt 1").await.is_none());
+
+    // 移回收件箱
+    let first = receipts()
+        .await
+        .into_iter()
+        .find(|i| i["title"] == "Receipt 1")
+        .unwrap();
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [first["id"]], "archived": false }),
+    )
+    .await;
+    wait_for("moved to the inbox", || async {
+        server.contains("INBOX", "receipt-1@shop.example")
+            && !server.contains("Receipts", "receipt-1@shop.example")
+    })
+    .await;
+
+    // 已发送的信不能移回收件箱
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [sent["id"]], "archived": false }),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(server.contains("Sent", "sent-1@example.com"));
+    core.shutdown();
+}

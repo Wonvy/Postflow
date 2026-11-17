@@ -116,6 +116,7 @@ fn finds_articles_and_mail_by_title_people_and_body() {
                     has_attachments: false,
                     list_unsubscribe: None,
                     raw: Some(b"Cloud spend went down 12% after the storage migration.".to_vec()),
+                    recipients: vec![],
                 }],
                 flags: vec![],
                 vanished: vec![],

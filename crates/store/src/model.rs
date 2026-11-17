@@ -124,6 +124,10 @@ pub enum View {
     Trash,
     /// 邮箱里的草稿。
     Drafts,
+    /// 邮箱里已发送的邮件。
+    Sent,
+    /// 邮箱里的某个其他文件夹：和 `source_id`、`mailbox` 一起用。
+    Folder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -151,6 +155,8 @@ pub struct ItemFilter {
     /// 只看文章或只看邮件。
     pub kind: Option<ItemKind>,
     pub folder: Option<String>,
+    /// 邮箱里的哪个文件夹（服务器上的名字），和 `View::Folder` 一起用。
+    pub mailbox: Option<String>,
     /// 「今天」视图的起点，由界面按本地时区算出。
     pub since: Option<i64>,
     /// 只看某个分类。
@@ -184,6 +190,8 @@ pub struct ItemSummary {
     pub archived: bool,
     /// 邮箱「草稿」里的一封草稿：打开时接着写，不能归档。
     pub draft: bool,
+    /// 「已发送」里自己发出去的信：不能归档。
+    pub sent: bool,
     /// 邮件发件人的地址，界面用来生成头像颜色。
     pub sender_address: Option<String>,
     pub has_attachments: bool,
@@ -362,18 +370,24 @@ pub struct NewMail {
     pub list_unsubscribe: Option<String>,
     /// 完整原文。大邮件同步时只取了信头，这时为空，打开时再取。
     pub raw: Option<Vec<u8>>,
+    /// 已发送的信写给了谁（名字、地址），这些人也算联系人。
+    pub recipients: Vec<(Option<String>, String)>,
 }
 
 /// 同步的是邮箱里的哪个文件夹。
 ///
-/// 邮件在哪个文件夹记在 `items.archived` 列里：0 收件箱，1 归档，2 垃圾邮件，3 已删除。
-/// 这样所有按 `archived = 0` 筛收件箱的地方（列表、未读数、今天）自然不含后两种。
+/// 邮件在哪个文件夹记在 `items.archived` 列里：0 收件箱，1 归档，2 垃圾邮件，3 已删除，
+/// 4 草稿，5 已发送，6 其他文件夹（具体是哪个看 `mail_meta.mailbox`）。
+/// 这样所有按 `archived = 0` 筛收件箱的地方（列表、未读数、今天）自然不含后面这些。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MailFolder {
     Inbox,
     Junk,
     Trash,
     Drafts,
+    Sent,
+    /// 用户自己建的文件夹，打开过才同步。
+    Other,
 }
 
 impl MailFolder {
@@ -384,6 +398,8 @@ impl MailFolder {
             MailFolder::Junk => 2,
             MailFolder::Trash => 3,
             MailFolder::Drafts => 4,
+            MailFolder::Sent => 5,
+            MailFolder::Other => 6,
         }
     }
 }

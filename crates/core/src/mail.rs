@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use postflow_mail::{
-    Auth, Connection, FlagChange, Listing, Security, ServerConfig, SpecialMailbox,
+    Auth, Connection, FlagChange, FolderInfo, Listing, Security, ServerConfig, SpecialMailbox,
 };
 use postflow_store::{
     Account, ItemPatch, MailFolder, MailRef, MailSync, MailSyncStats, NewMail, ids,
@@ -57,7 +57,14 @@ pub(crate) enum Command {
     },
     /// 删掉一封草稿：发出去了，或者用户不要了。
     DeleteDraft { message_id: String },
+    /// 列出邮箱里的普通文件夹。
+    ListFolders(oneshot::Sender<Result<Vec<FolderInfo>, RpcError>>),
+    /// 用户打开了一个普通文件夹：马上同步它，这次连接期间每次同步都带上它。
+    WatchFolder(String),
 }
+
+/// 同时跟着同步的普通文件夹最多这么多个，多了先不管最早打开的。
+const MAX_WATCHED: usize = 8;
 
 pub(crate) struct Worker {
     tx: mpsc::UnboundedSender<Command>,
@@ -359,6 +366,8 @@ async fn run(
 ) {
     let mut pending: Vec<Command> = Vec::new();
     let mut backoff = MIN_BACKOFF;
+    // 用户打开过的普通文件夹，最近打开的在最后。断线重连后接着同步它们
+    let mut watched: Vec<String> = Vec::new();
     loop {
         let id = account_id.clone();
         let Ok(Some(account)) = session.db(move |s| s.account(&id)).await else {
@@ -477,6 +486,7 @@ async fn run(
             conn,
             &mut rx,
             &mut pending,
+            &mut watched,
             synced_before,
         )
         .await
@@ -520,6 +530,9 @@ async fn park(
         match cmd {
             Command::FetchBody(_, reply) => fail(reply),
             Command::SaveDraft { reply, .. } => fail_draft(reply),
+            Command::ListFolders(reply) => {
+                let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+            }
             // 这次连接就是为它连的，已经失败了，不能拿它当再试的理由，否则会一直空转
             Command::Sync | Command::CatchUp => {}
             apply => keep.push(apply),
@@ -544,6 +557,9 @@ async fn park(
                 Some(Command::CatchUp) => {}
                 Some(Command::FetchBody(_, reply)) => fail(reply),
                 Some(Command::SaveDraft { reply, .. }) => fail_draft(reply),
+                Some(Command::ListFolders(reply)) => {
+                    let _ = reply.send(Err(RpcError::new(code, "mail account is not available")));
+                }
                 Some(apply) => pending.push(apply),
             },
             _ = &mut timer => return true,
@@ -561,6 +577,9 @@ fn fail_fetches(pending: &mut Vec<Command>, err: &postflow_mail::Error) {
             Command::SaveDraft { reply, .. } => {
                 let _ = reply.send(Err(mail_error(err)));
             }
+            Command::ListFolders(reply) => {
+                let _ = reply.send(Err(mail_error(err)));
+            }
             other => keep.push(other),
         }
     }
@@ -568,6 +587,7 @@ fn fail_fetches(pending: &mut Vec<Command>, err: &postflow_mail::Error) {
 }
 
 /// 连接期间的循环。正常结束（任务被停掉）返回 Ok，连接出错返回 Err。
+#[allow(clippy::too_many_arguments)]
 async fn serve(
     core: &Arc<Core>,
     session: &Arc<Session>,
@@ -575,6 +595,7 @@ async fn serve(
     mut conn: Connection,
     rx: &mut mpsc::UnboundedReceiver<Command>,
     pending: &mut Vec<Command>,
+    watched: &mut Vec<String>,
     synced_before: bool,
 ) -> Result<(), postflow_mail::Error> {
     // 刚连上的第一次同步也在界面上显示，让用户知道在收信
@@ -626,6 +647,23 @@ async fn serve(
                         return Err(err);
                     }
                 }
+                Command::ListFolders(reply) => {
+                    let result = conn.folders().await;
+                    let failed = result.as_ref().err().is_some_and(is_connection_error);
+                    let _ = reply.send(result.as_ref().map(|f| f.clone()).map_err(mail_error));
+                    if let (true, Err(err)) = (failed, result) {
+                        pending.extend(iter);
+                        return Err(err);
+                    }
+                }
+                Command::WatchFolder(name) => {
+                    watched.retain(|w| *w != name);
+                    watched.push(name);
+                    if watched.len() > MAX_WATCHED {
+                        watched.remove(0);
+                    }
+                    announce = true;
+                }
                 Command::DeleteDraft { message_id } => {
                     if let Err(err) = delete_draft(&mut conn, &message_id).await {
                         if is_connection_error(&err) {
@@ -644,7 +682,7 @@ async fn serve(
             let active = core.refreshing.fetch_add(1, Ordering::SeqCst) + 1;
             core.emit(Event::Refresh { active });
         }
-        let result = sync_all_folders(&mut conn, session, account_id).await;
+        let result = sync_all_folders(&mut conn, session, account_id, watched).await;
         if announce {
             let active = core.refreshing.fetch_sub(1, Ordering::SeqCst) - 1;
             core.emit(Event::Refresh { active });
@@ -712,20 +750,32 @@ async fn serve(
     }
 }
 
-/// 同步收件箱，再同步垃圾邮件、已删除和草稿，最后回到收件箱，好接着用 IDLE 等新邮件。
-/// 后两个文件夹服务器不让打开时跳过，不影响收件箱。
+/// 同步收件箱，再同步垃圾邮件、已删除、草稿、已发送和用户打开过的文件夹，最后回到收件箱，
+/// 好接着用 IDLE 等新邮件。别的文件夹服务器不让打开时跳过，不影响收件箱。
 async fn sync_all_folders(
     conn: &mut Connection,
     session: &Arc<Session>,
     account_id: &str,
+    watched: &[String],
 ) -> Result<MailSyncStats, postflow_mail::Error> {
     let mut stats = sync_folder(conn, session, account_id, MailFolder::Inbox, INBOX).await?;
-    for (folder, kind) in [
-        (MailFolder::Junk, SpecialMailbox::Junk),
-        (MailFolder::Trash, SpecialMailbox::Trash),
-        (MailFolder::Drafts, SpecialMailbox::Drafts),
-    ] {
-        let result = match conn.special_mailbox(kind).await {
+    let mut others: Vec<(MailFolder, Option<SpecialMailbox>, Option<&str>)> = vec![
+        (MailFolder::Junk, Some(SpecialMailbox::Junk), None),
+        (MailFolder::Trash, Some(SpecialMailbox::Trash), None),
+        (MailFolder::Drafts, Some(SpecialMailbox::Drafts), None),
+        (MailFolder::Sent, Some(SpecialMailbox::Sent), None),
+    ];
+    others.extend(
+        watched
+            .iter()
+            .map(|name| (MailFolder::Other, None, Some(name.as_str()))),
+    );
+    for (folder, kind, name) in others {
+        let mailbox = match (kind, name) {
+            (Some(kind), _) => conn.special_mailbox(kind).await,
+            (None, name) => Ok(name.map(str::to_string)),
+        };
+        let result = match mailbox {
             Ok(Some(mailbox)) => sync_folder(conn, session, account_id, folder, &mailbox).await,
             Ok(None) => continue,
             Err(err) => Err(err),
@@ -759,15 +809,20 @@ async fn sync_folder(
     let started_at = crate::refresh::now();
     let info = conn.select(mailbox).await?;
     let id = account_id.to_string();
+    let name = mailbox.to_string();
     let previous = session
-        .db(move |s| s.mail_folder(&id, folder))
+        .db(move |s| s.mail_folder(&id, folder, &name))
         .await
         .ok()
         .flatten();
     // 文件夹被服务器重建了，或者这次找到的是另一个文件夹
-    if previous.is_some_and(|(name, v)| name != mailbox || v != info.uidvalidity) {
+    if let Some((old_name, v)) = previous
+        && (old_name != mailbox || v != info.uidvalidity)
+    {
         let id = account_id.to_string();
-        let _ = session.db(move |s| s.reset_mail_folder(&id, folder)).await;
+        let _ = session
+            .db(move |s| s.reset_mail_folder(&id, folder, &old_name))
+            .await;
     }
 
     let (id, name) = (account_id.to_string(), mailbox.to_string());
@@ -831,6 +886,7 @@ async fn sync_folder(
                 let mail = new_mail(
                     account_id,
                     folder,
+                    mailbox,
                     info.uidvalidity,
                     l,
                     raw,
@@ -861,6 +917,7 @@ async fn sync_folder(
 fn new_mail(
     account_id: &str,
     folder: MailFolder,
+    mailbox: &str,
     uidvalidity: u32,
     l: &Listing,
     raw: &[u8],
@@ -880,6 +937,8 @@ fn new_mail(
         MailFolder::Junk => format!("junk:{key}"),
         MailFolder::Trash => format!("trash:{key}"),
         MailFolder::Drafts => format!("draft:{key}"),
+        MailFolder::Sent => format!("sent:{key}"),
+        MailFolder::Other => format!("box:{mailbox}:{key}"),
     };
     let mut id = ids::mail_id(account_id, &key);
     if taken.get(&id).is_some_and(|uid| *uid != l.uid) {
@@ -892,8 +951,19 @@ fn new_mail(
         .or(l.internal_date)
         .unwrap_or(now)
         .min(now);
-    // 草稿在列表里显示写给谁；发件人是自己，也不该进联系人
-    let (from_name, from_address) = if folder == MailFolder::Drafts {
+    // 草稿和已发送在列表里显示写给谁；发件人是自己，不进联系人，收件人进
+    let mine = matches!(folder, MailFolder::Drafts | MailFolder::Sent);
+    let recipients: Vec<(Option<String>, String)> = if folder == MailFolder::Sent {
+        summary
+            .to
+            .iter()
+            .chain(&summary.cc)
+            .filter_map(|m| Some((m.name.clone(), m.address.clone()?)))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let (from_name, from_address) = if mine {
         let to: Vec<String> = summary
             .to
             .iter()
@@ -919,6 +989,7 @@ fn new_mail(
         has_attachments: summary.has_attachments || !full,
         list_unsubscribe: summary.list_unsubscribe,
         raw: full.then(|| raw.to_vec()),
+        recipients,
     }
 }
 

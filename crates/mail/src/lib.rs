@@ -13,8 +13,8 @@ pub use compose::{
     Attachment, Built, MAX_ATTACHMENTS, Outgoing, build, build_draft, parse_address, thread_headers,
 };
 pub use imap::{
-    Auth, Connection, FlagChange, IdleOutcome, Listing, MailboxInfo, Security, ServerConfig,
-    SpecialMailbox,
+    Auth, Connection, FlagChange, FolderInfo, IdleOutcome, Listing, MailboxInfo, Security,
+    ServerConfig, SpecialMailbox,
 };
 pub use message::{
     AttachmentInfo, BodyKind, DraftContents, Mailbox, RenderOptions, Rendered, ReplyContext,

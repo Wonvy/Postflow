@@ -212,6 +212,116 @@ fn drafts_have_their_own_view_and_cannot_be_archived() {
 }
 
 #[test]
+fn sent_mail_and_other_folders_have_their_own_lists() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");
+    let acc = store.put_account(account("me@example.com")).unwrap().id;
+    let mut sent = mail(&acc, 1, 1_000);
+    sent.id = ids::mail_id(&acc, "sent:s1@example.com");
+    sent.from_address = None;
+    sent.recipients = vec![
+        (Some("Bob".into()), "bob@example.com".into()),
+        (None, "carol@example.com".into()),
+    ];
+    store
+        .apply_folder_sync(
+            &acc,
+            MailFolder::Sent,
+            "Sent",
+            MailSync {
+                new: vec![sent],
+                ..sync(5, 1_000)
+            },
+        )
+        .unwrap();
+    let project = |uid: u32, name: &str| {
+        let mut m = mail(&acc, uid, i64::from(uid) * 1_000);
+        m.id = ids::mail_id(&acc, &format!("box:{name}:{uid}"));
+        m
+    };
+    store
+        .apply_folder_sync(
+            &acc,
+            MailFolder::Other,
+            "Projects/Alpha",
+            MailSync {
+                new: vec![project(2, "Projects/Alpha")],
+                ..sync(7, 2_000)
+            },
+        )
+        .unwrap();
+    store
+        .apply_folder_sync(
+            &acc,
+            MailFolder::Other,
+            "Receipts",
+            MailSync {
+                new: vec![project(3, "Receipts"), project(4, "Receipts")],
+                ..sync(8, 3_000)
+            },
+        )
+        .unwrap();
+
+    let list = |filter: ItemFilter| store.items(&filter, None, 50).unwrap();
+    assert!(
+        list(ItemFilter::default()).is_empty(),
+        "none of these are in the inbox"
+    );
+    let sent = list(ItemFilter {
+        view: View::Sent,
+        ..ItemFilter::default()
+    });
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].sent && !sent[0].draft);
+    let folder = |name: &str| ItemFilter {
+        view: View::Folder,
+        source_id: Some(acc.clone()),
+        mailbox: Some(name.into()),
+        ..ItemFilter::default()
+    };
+    assert_eq!(list(folder("Receipts")).len(), 2);
+    assert_eq!(list(folder("Projects/Alpha")).len(), 1);
+    assert_eq!(
+        store
+            .mail_folder(&acc, MailFolder::Other, "Receipts")
+            .unwrap(),
+        Some(("Receipts".to_string(), 8))
+    );
+    assert_eq!(
+        store.mail_folder(&acc, MailFolder::Other, "Nope").unwrap(),
+        None
+    );
+
+    // 已发送的信不能归档
+    let refs = store
+        .set_item_state(
+            &[sent[0].id.clone()],
+            &ItemPatch {
+                archived: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert!(refs.is_empty());
+
+    // 重建一个文件夹只清它自己
+    store
+        .reset_mail_folder(&acc, MailFolder::Other, "Receipts")
+        .unwrap();
+    assert!(list(folder("Receipts")).is_empty());
+    assert_eq!(list(folder("Projects/Alpha")).len(), 1);
+
+    // 写过信的人排在前面
+    let contacts = store.mail_contacts(10).unwrap();
+    let names: Vec<&str> = contacts.iter().map(|c| c.address.as_str()).collect();
+    assert_eq!(
+        names,
+        ["bob@example.com", "carol@example.com", "ada@example.com"]
+    );
+    assert_eq!(contacts[0].name.as_deref(), Some("Bob"));
+}
+
+#[test]
 fn sync_adds_updates_and_removes_mail() {
     let tmp = tempfile::tempdir().unwrap();
     let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");
@@ -464,7 +574,9 @@ fn uidvalidity_reset_drops_stale_uids() {
         )
         .unwrap();
 
-    store.reset_mail_folder(&acc, MailFolder::Inbox).unwrap();
+    store
+        .reset_mail_folder(&acc, MailFolder::Inbox, "INBOX")
+        .unwrap();
     assert!(
         store
             .known_mail(&acc, "INBOX")

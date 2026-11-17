@@ -162,6 +162,14 @@ CREATE TABLE IF NOT EXISTS mail_folders (
     PRIMARY KEY (account_id, folder)
 ) WITHOUT ROWID;
 
+-- 用户自己建的文件夹，打开过才同步，按名字记
+CREATE TABLE IF NOT EXISTS mail_mailboxes (
+    account_id  TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    uidvalidity INTEGER NOT NULL,
+    PRIMARY KEY (account_id, name)
+) WITHOUT ROWID;
+
 -- AI 生成的内容和对话，只在本机
 CREATE TABLE IF NOT EXISTS ai_results (
     item_id    TEXT NOT NULL,
@@ -471,10 +479,10 @@ impl Store {
     /// 返回这些邮件在服务器上的位置，由调用方写回邮件服务器。
     pub fn set_item_state(&self, ids: &[String], patch: &ItemPatch) -> Result<Vec<MailRef>> {
         let mut mail: HashSet<String> = self.mail_ids_among(ids)?;
-        // 草稿只在「草稿」里，不能归档或移回收件箱
+        // 草稿和已发送的信只在各自的文件夹里，不能归档或移回收件箱
         if patch.archived.is_some() {
-            let drafts = self.draft_ids_among(&mail)?;
-            mail.retain(|id| !drafts.contains(id));
+            let pinned = self.pinned_ids_among(&mail)?;
+            mail.retain(|id| !pinned.contains(id));
         }
         let all_mail = self.mail_ids_among(ids)?;
         let articles: Vec<String> = ids
@@ -856,6 +864,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     add_column(conn, "accounts", "smtp_port", "INTEGER")?;
     add_column(conn, "accounts", "smtp_security", "TEXT")?;
     add_column(conn, "accounts", "sender_name", "TEXT NOT NULL DEFAULT ''")?;
+    add_column(conn, "mail_meta", "recipients", "TEXT")?;
     if add_column(conn, "items", "image", "TEXT")? {
         backfill_images(conn)?;
     }
@@ -1108,10 +1117,19 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         View::Junk => format!("i.archived = 2 AND {ALIVE}"),
         View::Trash => format!("i.archived = 3 AND {ALIVE}"),
         View::Drafts => format!("i.archived = 4 AND {ALIVE}"),
+        View::Sent => format!("i.archived = 5 AND {ALIVE}"),
+        View::Folder => format!("i.archived = 6 AND {ALIVE}"),
     };
     if let Some(source_id) = &filter.source_id {
         args.push(SqlValue::Text(source_id.clone()));
         conds.push_str(&format!(" AND i.source_id = ?{}", args.len()));
+    }
+    if let Some(mailbox) = &filter.mailbox {
+        args.push(SqlValue::Text(mailbox.clone()));
+        conds.push_str(&format!(
+            " AND i.id IN (SELECT id FROM mail_meta WHERE mailbox = ?{})",
+            args.len()
+        ));
     }
     if let Some(folder) = &filter.folder {
         args.push(SqlValue::Text(folder.clone()));
@@ -1187,6 +1205,7 @@ pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         // 0 收件箱，1 归档，2 垃圾邮件，3 已删除，4 草稿
         archived: r.get::<_, i64>(12)? != 0,
         draft: r.get::<_, i64>(12)? == 4,
+        sent: r.get::<_, i64>(12)? == 5,
         sender_address: r.get(13)?,
         has_attachments: r.get(14)?,
         image: r.get(15)?,

@@ -179,6 +179,67 @@ test machines,8000\r\n\
     )
 }
 
+/// 工作邮箱里已经发过的几封信，和几个自己建的文件夹。
+fn seed_folders(work: &FakeImap) {
+    let w = "Sam Lee <work@example.com>";
+    work.deliver(
+        "Sent",
+        &text_mail(
+            "sent-agenda@example.com",
+            w,
+            "Leo Park <leo@northwind.example>",
+            "Re: Offsite agenda for Friday",
+            3 * DAY,
+            "Looks good. I'll book the room.\r\n\r\nSam",
+        ),
+        &["\\Seen"],
+    );
+    work.deliver(
+        "Sent",
+        &text_mail(
+            "sent-budget@example.com",
+            w,
+            "Mei Han <mei@northwind.example>",
+            "Q4 budget comments",
+            5 * HOUR,
+            "Two small notes on the cloud line, otherwise approved.",
+        ),
+        &["\\Seen"],
+    );
+    for name in ["Projects", "Projects/Launch", "Receipts"] {
+        work.add_mailbox(name, None);
+    }
+    work.deliver(
+        "Projects/Launch",
+        &text_mail(
+            "launch-1@northwind.example",
+            "Mei Han <mei@northwind.example>",
+            "work@example.com",
+            "Launch checklist",
+            2 * DAY,
+            "Docs, release notes and the store listing are ready for review.",
+        ),
+        &[],
+    );
+    for (n, (shop, amount)) in [("Acme Hosting", "$24.00"), ("Paper & Ink", "$12.50")]
+        .into_iter()
+        .enumerate()
+    {
+        work.deliver(
+            "Receipts",
+            &text_mail(
+                &format!("receipt-{n}@shop.example"),
+                &format!("{shop} <billing@shop.example>"),
+                "work@example.com",
+                &format!("Your receipt from {shop}"),
+                (n as i64 + 4) * DAY,
+                &format!("Total paid: {amount}"),
+            ),
+            &["\\Seen"],
+        );
+    }
+}
+
 fn seed_mail(work: &FakeImap, personal: &FakeImap) {
     let w = "work@example.com";
     work.deliver(
@@ -783,6 +844,7 @@ async fn main() {
     seed_mail(&work, &personal);
     work.add_mailbox("Sent", Some("\\Sent"));
     work.add_mailbox("Drafts", Some("\\Drafts"));
+    seed_folders(&work);
     personal.add_mailbox("[Gmail]/Sent Mail", Some("\\Sent"));
     personal.add_mailbox("[Gmail]/Drafts", Some("\\Drafts"));
     outlook.add_mailbox("Sent Items", Some("\\Sent"));
