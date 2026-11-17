@@ -21,6 +21,14 @@ export function intervalLabel(t: Translate, minutes: number): string {
     : t("interval.hours", { n: minutes / 60 });
 }
 
+/** 抓取订阅源出错时核心给的原话，比如「server returned HTTP 404」。 */
+function fetchDetail(err: unknown): string | null {
+  if (!err || typeof err !== "object" || !("code" in err) || !("message" in err)) return null;
+  const code = String(err.code);
+  const message = String(err.message ?? "").trim();
+  return ["http_status", "network", "not_a_feed", "too_large", "invalid_url"].includes(code) && message ? message : null;
+}
+
 /** 「3 天前」这样的相对时间，一周以前的写日期。 */
 function ago(t: Translate, ms: number, lang: Lang, now = Date.now()): string {
   const diff = Math.max(0, now - ms);
@@ -414,8 +422,10 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
   const [title, setTitle] = useState(feed.title);
   const [folder, setFolder] = useState(feed.folder);
   const [interval, setIntervalMin] = useState<number | null>(feed.interval_min);
+  const [url, setUrl] = useState(feed.url);
+  const urlChanged = url.trim() !== "" && url.trim() !== feed.url;
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; detail: string | null } | null>(null);
 
   const globalDefault =
     typeof settings.data?.refresh_interval_min === "number" ? settings.data.refresh_interval_min : 30;
@@ -434,6 +444,8 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
         rememberFolder(folder);
       }
       if (interval !== feed.interval_min) patch.interval_min = interval;
+      // 新地址由核心先抓一次，确认能用才换；订阅源本身不变，已读和以前的文章都在
+      if (urlChanged) patch.url = url.trim();
       if (Object.keys(patch).length > 0) {
         await api.updateFeed(feed.id, patch);
         void qc.invalidateQueries({ queryKey: keys.nav });
@@ -441,7 +453,8 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
       }
       onDone();
     } catch (err) {
-      setError(errorText(t, err));
+      // 换地址失败时，服务器的原话（比如 HTTP 404）比笼统的说明更有用
+      setError({ text: errorText(t, err), detail: fetchDetail(err) });
       setSaving(false);
     }
   };
@@ -449,7 +462,7 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
   return (
     <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4 p-4">
       <Field label={t("edit.name")}>
-        <TextInput autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
+        <TextInput autoFocus={!feed.error} value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
       <Field label={t("edit.folder")}>
         <FolderPicker value={folder} onChange={setFolder} folders={folders} placeholder={t("add.folderPlaceholder")} />
@@ -469,20 +482,28 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
           ))}
         </Select>
       </Field>
-      <p className="select-text truncate text-[12px] text-fg-3" title={feed.url}>
-        {feed.url}
-      </p>
-      {feed.error && (
-        <p className="flex items-start gap-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
+      <Field label={t("edit.url")} hint={urlChanged ? t("edit.urlHint") : undefined}>
+        <TextInput
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          inputMode="url"
+          disabled={saving}
+          autoFocus={Boolean(feed.error)}
+        />
+      </Field>
+      {feed.error && !urlChanged && (
+        <p className="-mt-2 flex items-start gap-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
           <TriangleAlert size={14} strokeWidth={2} className="mt-px shrink-0 text-warning" />
           <span className="select-text">
             {t("edit.lastError")}: {feed.error}
+            <span className="mt-1 block text-fg-3">{t("edit.errorHint")}</span>
           </span>
         </p>
       )}
       {error && (
         <p role="alert" className="text-[13px] text-danger">
-          {error}
+          {error.text}
+          {error.detail && <span className="mt-0.5 block select-text text-[12px] text-fg-3">{error.detail}</span>}
         </p>
       )}
       <div className="flex justify-end gap-2">
@@ -490,7 +511,7 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
           {t("action.cancel")}
         </Button>
         <Button variant="primary" type="submit" busy={saving}>
-          {t("action.save")}
+          {saving && urlChanged ? t("edit.checking") : t("action.save")}
         </Button>
       </div>
     </form>

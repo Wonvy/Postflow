@@ -330,8 +330,36 @@ impl Core {
                 reply(feed)
             }
             "feeds.update" => {
-                let p: UpdateFeed = parse(params)?;
-                session.db(move |s| s.update_feed(&p.id, p.patch)).await?;
+                let mut p: UpdateFeed = parse(params)?;
+                let moved = match p.patch.url.take().filter(|u| !u.trim().is_empty()) {
+                    Some(input) => {
+                        self.change_feed_url(&session, &p.id, &input, &mut p.patch)
+                            .await?
+                    }
+                    None => None,
+                };
+                let id = p.id.clone();
+                session
+                    .db(move |s| {
+                        s.update_feed(&p.id, p.patch)?;
+                        // 新地址：旧的校验值和错误都作废，把刚抓到的内容收进来
+                        if let Some((url, fetched)) = moved {
+                            s.reset_fetch(&p.id)?;
+                            let at = now();
+                            let interval = crate::DEFAULT_INTERVAL_MIN * 60_000;
+                            ingest(s, &p.id, &url, fetched.feed, at)?;
+                            s.record_fetch_ok(
+                                &p.id,
+                                fetched.etag.as_deref(),
+                                fetched.last_modified.as_deref(),
+                                at,
+                                at + interval,
+                            )?;
+                        }
+                        Ok(())
+                    })
+                    .await?;
+                tracing::debug!(feed = %id, "feed updated");
                 self.emit_changed(&[Scope::Feeds, Scope::Items], client);
                 reply(json!({}))
             }
@@ -623,11 +651,12 @@ impl Core {
         }
     }
 
-    async fn add_feed(&self, session: &Session, p: AddFeed) -> Result<Feed, RpcError> {
-        let requested = normalize_url(&p.url)?.to_string();
-        let (url, fetched) = match self.fetch_new(&requested).await {
-            Ok(fetched) => (requested, fetched),
-            // 给的是网页而不是源：只有一个候选时直接采用，免得用户多点一步
+    /// 把用户给的地址变成能订阅的源：本身就是源就直接用；是网页时只有一个候选就采用它，
+    /// 免得用户多点一步。返回源的地址和抓到的内容。
+    async fn resolve_feed(&self, input: &str) -> Result<(String, Fetched), RpcError> {
+        let requested = normalize_url(input)?.to_string();
+        match self.fetch_new(&requested).await {
+            Ok(fetched) => Ok((requested, fetched)),
             Err(postflow_feed::Error::NotAFeed(_)) => {
                 let mut candidates = self.client.discover(&requested).await?;
                 if candidates.len() != 1 {
@@ -635,10 +664,46 @@ impl Core {
                 }
                 let url = candidates.remove(0).url;
                 let fetched = self.fetch_new(&url).await?;
-                (url, fetched)
+                Ok((url, fetched))
             }
-            Err(e) => return Err(e.into()),
-        };
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// 换订阅地址：先确认新地址能抓到源，订阅源的 ID 不变，已读、星标和以前的文章都留着，
+    /// 然后马上把新地址的内容收进来。返回实际用的地址（给的是网页时是找到的源）。
+    async fn change_feed_url(
+        &self,
+        session: &Session,
+        id: &str,
+        input: &str,
+        patch: &mut FeedPatch,
+    ) -> Result<Option<(String, Fetched)>, RpcError> {
+        let feed_id = id.to_string();
+        let feeds = session.db(|s| s.feeds()).await?;
+        let current = feeds
+            .iter()
+            .find(|f| f.id == feed_id)
+            .ok_or_else(|| RpcError::new("not_found", "no such feed"))?;
+        let (url, fetched) = self.resolve_feed(input).await?;
+        if url == current.url {
+            return Ok(None);
+        }
+        if feeds.iter().any(|f| f.id != feed_id && f.url == url) {
+            return Err(RpcError::new(
+                "feed_exists",
+                "another feed already uses this address",
+            ));
+        }
+        patch.url = Some(url.clone());
+        patch.site_url = fetched.feed.site_url.clone();
+        // 新源自己带图标才换，否则留着原来的（多半还是同一个网站）
+        patch.icon_url = fetched.feed.icon_url.clone();
+        Ok(Some((url, fetched)))
+    }
+
+    async fn add_feed(&self, session: &Session, p: AddFeed) -> Result<Feed, RpcError> {
+        let (url, fetched) = self.resolve_feed(&p.url).await?;
 
         let title = p
             .title

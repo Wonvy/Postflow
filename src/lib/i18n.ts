@@ -556,6 +556,11 @@ const zh = {
   "error.oauth_network": "连不上微软的登录服务，请检查网络或代理",
   "error.oauth_timeout": "等了太久还没在浏览器里完成登录",
   "error.oauth_cancelled": "已取消登录",
+  "edit.url": "订阅地址",
+  "edit.urlHint": "保存时先用新地址抓一次，能用才换。还是同一个订阅源，已读、星标和以前的文章都保留。",
+  "edit.errorHint": "如果这个源换了地址，在上面填新的地址就行。",
+  "edit.checking": "正在检查…",
+  "error.feed_exists": "已经订阅过这个地址了",
 } as const;
 
 export type MessageKey = keyof typeof zh;
@@ -1114,6 +1119,11 @@ const en: Record<MessageKey, string> = {
   "error.oauth_network": "Can't reach Microsoft's sign-in service. Check your connection or proxy.",
   "error.oauth_timeout": "The browser sign-in wasn't finished in time",
   "error.oauth_cancelled": "Sign-in cancelled",
+  "edit.url": "Feed address",
+  "edit.urlHint": "The new address is fetched once before it's saved. It stays the same feed, so read and starred states and earlier items are kept.",
+  "edit.errorHint": "If the feed has moved, enter its new address above.",
+  "edit.checking": "Checking…",
+  "error.feed_exists": "You're already subscribed to this address",
 };
 
 const messages: Record<Lang, Record<MessageKey, string>> = { zh, en };

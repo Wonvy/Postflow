@@ -458,3 +458,32 @@ fn pagination_walks_every_item_once() {
     seen.dedup();
     assert_eq!(seen.len(), 25);
 }
+
+#[test]
+fn changing_a_feed_address_keeps_its_id_and_syncs() {
+    let a = device("aaaaaaaaaaaa");
+    let b = device("bbbbbbbbbbbb");
+    let feed = subscribe(&a, "https://example.com/old.xml");
+    sync(&a, &b);
+
+    a.store
+        .update_feed(
+            &feed,
+            FeedPatch {
+                url: Some(" https://example.com/new.xml ".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    sync(&a, &b);
+    for dev in [&a, &b] {
+        let feeds = dev.store.feeds().unwrap();
+        assert_eq!(feeds.len(), 1, "device {}", dev.id);
+        assert_eq!(feeds[0].id, feed, "device {}", dev.id);
+        assert_eq!(
+            feeds[0].url, "https://example.com/new.xml",
+            "device {}",
+            dev.id
+        );
+    }
+}

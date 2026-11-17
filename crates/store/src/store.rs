@@ -403,6 +403,19 @@ impl Store {
         if let Some(folder) = patch.folder {
             set.insert("folder".into(), json!(folder));
         }
+        if let Some(url) = patch
+            .url
+            .map(|u| u.trim().to_string())
+            .filter(|u| !u.is_empty())
+        {
+            set.insert("url".into(), json!(url));
+        }
+        if let Some(site_url) = patch.site_url {
+            set.insert("site_url".into(), json!(site_url));
+        }
+        if let Some(icon_url) = patch.icon_url {
+            set.insert("icon_url".into(), json!(icon_url));
+        }
         if let Some(interval) = patch.interval_min {
             set.insert("interval_min".into(), json!(interval));
         }
@@ -714,6 +727,14 @@ impl Store {
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// 忘掉上次抓取的校验值和错误，换了订阅地址后用。
+    pub fn reset_fetch(&self, feed_id: &str) -> Result<()> {
+        self.lock()
+            .conn
+            .execute("DELETE FROM feed_fetch WHERE feed_id = ?1", [feed_id])?;
+        Ok(())
     }
 
     pub fn record_fetch_ok(

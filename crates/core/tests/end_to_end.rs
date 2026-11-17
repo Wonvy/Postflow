@@ -362,3 +362,91 @@ async fn translation_works_before_setup_without_network() {
     assert_eq!(err.code, "bad_params");
     assert!(tmp.path().join("local/translation").is_dir());
 }
+
+/// 源搬了家（比如 DeepMind 把博客从 /discover/blog/ 挪到 /blog/）：换地址后同一个订阅源接着用，
+/// 已读状态和以前的文章都在；新地址不能用、或者已经订阅过时不换。
+#[tokio::test(flavor = "multi_thread")]
+async fn changing_a_feed_address_keeps_its_history() {
+    let site = Site::default();
+    site.posts.store(2, Ordering::SeqCst);
+    let app = Router::new()
+        .route("/old.xml", get(feed))
+        .route("/new.xml", get(feed))
+        .route("/other.xml", get(feed))
+        .with_state(site.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    let data_dir = tmp.path().join("data");
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": data_dir.to_str().unwrap(), "device_name": "Test" }),
+    )
+    .await;
+
+    let feed = call(
+        &core,
+        "feeds.add",
+        json!({ "url": format!("http://{addr}/old.xml") }),
+    )
+    .await;
+    let id = feed["id"].as_str().unwrap().to_string();
+    let first = list(&core, "inbox").await[0]["id"].clone();
+    call(&core, "items.set", json!({ "ids": [first], "read": true })).await;
+
+    call(
+        &core,
+        "feeds.update",
+        json!({ "id": id, "url": format!("http://{addr}/new.xml") }),
+    )
+    .await;
+    let nav = call(&core, "nav.get", json!({})).await;
+    assert_eq!(nav["feeds"][0]["id"], id.as_str());
+    assert_eq!(nav["feeds"][0]["url"], format!("http://{addr}/new.xml"));
+    let items = list(&core, "inbox").await;
+    assert_eq!(items.len(), 2, "no duplicates after moving");
+    assert_eq!(list(&core, "unread").await.len(), 1, "read state kept");
+
+    // 新地址抓不到源：报错，地址不变
+    let err = core
+        .rpc(
+            "feeds.update",
+            json!({ "id": id, "url": format!("http://{addr}/missing.xml") }),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "http_status");
+
+    // 已经有另一个订阅源用这个地址
+    call(
+        &core,
+        "feeds.add",
+        json!({ "url": format!("http://{addr}/other.xml") }),
+    )
+    .await;
+    let err = core
+        .rpc(
+            "feeds.update",
+            json!({ "id": id, "url": format!("http://{addr}/other.xml") }),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "feed_exists");
+    let nav = call(&core, "nav.get", json!({})).await;
+    let url_of = |id: &str| {
+        nav["feeds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["id"] == id)
+            .unwrap()["url"]
+            .clone()
+    };
+    assert_eq!(url_of(&id), format!("http://{addr}/new.xml"));
+}

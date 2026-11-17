@@ -399,7 +399,7 @@ export const api = {
     rpc<Feed>("feeds.add", { url, folder, ...extra }),
   updateFeed: (
     id: string,
-    patch: { title?: string; folder?: string; interval_min?: number | null },
+    patch: { title?: string; folder?: string; interval_min?: number | null; url?: string },
   ) => rpc<void>("feeds.update", { id, ...patch }),
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */

@@ -63,6 +63,9 @@ click **More info → Run anyway**.
   folder to move it in, or above or below a folder to keep it outside; feeds outside folders and folders can be mixed
   in any order. Mailboxes can be dragged into order too, and the order syncs to your other devices. Right-click a
   mailbox, feed or folder for its menu.
+- A warning sign next to a feed means its last refresh failed; hover over it for the reason. When a feed has moved,
+  enter its new address in the feed's Edit dialog: Postflow checks it first and keeps the same feed, with its read
+  and starred states and earlier items.
 - Load the full article from the original page for feeds that only publish a summary. The full-text button in the
   reader is a switch: while it is on, every article you open loads in full. WeChat articles and pages that describe
   their article in structured data are supported. When a page can't be loaded, the reader says why (the site blocks

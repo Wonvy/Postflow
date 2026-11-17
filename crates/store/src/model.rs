@@ -80,6 +80,13 @@ pub struct NewFeed {
 pub struct FeedPatch {
     pub title: Option<String>,
     pub folder: Option<String>,
+    /// 换订阅地址。订阅源的 ID 不变，已读、星标和以前的文章都还在。调用方先确认新地址能用。
+    pub url: Option<String>,
+    /// 换了地址后，新源给的网站地址和图标。由核心填，界面不能直接改。
+    #[serde(skip)]
+    pub site_url: Option<String>,
+    #[serde(skip)]
+    pub icon_url: Option<String>,
     /// `Some(None)` 表示恢复默认刷新间隔。
     #[serde(default, deserialize_with = "double_option")]
     pub interval_min: Option<Option<i64>>,
