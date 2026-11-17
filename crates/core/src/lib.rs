@@ -347,6 +347,10 @@ impl Core {
         let tasks = vec![
             tokio::spawn(run_watcher(self.clone(), session.clone(), rx)),
             tokio::spawn(run_scheduler(self.clone(), session.clone())),
+            tokio::spawn({
+                let (core, session) = (self.clone(), session.clone());
+                async move { core.repair_mail_text(&session).await }
+            }),
         ];
         *session.tasks.lock().unwrap_or_else(|e| e.into_inner()) = tasks;
         *self.session.write().unwrap_or_else(|e| e.into_inner()) = Some(session.clone());

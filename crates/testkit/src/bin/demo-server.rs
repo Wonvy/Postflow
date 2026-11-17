@@ -83,6 +83,25 @@ fn text_mail(id: &str, from: &str, to: &str, subject: &str, ago: i64, body: &str
     )
 }
 
+/// 国内很多服务还在用 GB2312 发信：信头和正文都要按它解码，不然是乱码。
+fn gb2312_notice(to: &str, ago: i64) -> String {
+    format!(
+        "From: =?gb2312?B?1MbFzA==?= <notice@cloud-drive.example>\r\n\
+To: {to}\r\n\
+Subject: =?gb2312?B?0MLJ6LG4tcfCvMzh0NE=?=\r\n\
+Date: {}\r\n\
+Message-ID: <login-77@cloud-drive.example>\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: text/html; charset=gb2312\r\n\
+Content-Transfer-Encoding: base64\r\n\
+\r\n\
+PGh0bWw+PGJvZHk+PHA+xOO6w6OsPC9wPjxwPsTjtcTUxsXM1cu6xbjVuNXU2tK7zKjQwsnosbjJ\r\n\
+z7XHwryjuk1hY6Osyc+6o6GjPC9wPjxwPsjnufvV4rK7ysfE47G+yMu1xLLZ1/ejrMfrvqG/7NDe\r\n\
+uMTD3MLroaM8L3A+PC9ib2R5PjwvaHRtbD4=\r\n",
+        mail_date(ago)
+    )
+}
+
 fn newsletter(ago: i64) -> String {
     format!(
         "From: \"Signal & Noise\" <digest@signal-noise.example>\r\n\
@@ -252,6 +271,7 @@ fn seed_mail(work: &FakeImap, personal: &FakeImap) {
             "Thanks for your payment of $5.00.\r\n\r\nView it online: https://acme-hosting.example/billing"),
         &["\\Seen"],
     );
+    personal.deliver("INBOX", &gb2312_notice(p, 2 * HOUR), &[]);
     // Gmail 那样标了用途的垃圾邮件和已删除
     personal.add_mailbox("[Gmail]/Spam", Some("\\Junk"));
     personal.add_mailbox("[Gmail]/Trash", Some("\\Trash"));

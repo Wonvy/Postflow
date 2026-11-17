@@ -91,11 +91,17 @@ fn translate_sentence(
     marks: &[(usize, usize, usize)],
 ) -> (String, Vec<Mark>) {
     if marks.is_empty() {
-        return (engine.translate_long(sentence), Vec::new());
+        return (
+            merge_byte_pieces(&engine.translate_long(sentence)).0,
+            Vec::new(),
+        );
     }
     // 超过模型窗口的长句要拆开翻，词对齐对不上，标记只好放弃
     if engine.src_ids(sentence).len() > MAX_SOURCE_TOKENS {
-        return (engine.translate_long(sentence), Vec::new());
+        return (
+            merge_byte_pieces(&engine.translate_long(sentence)).0,
+            Vec::new(),
+        );
     }
     let aligned = engine.translate_aligned(sentence);
     let target = aligned.target_text;
@@ -152,7 +158,67 @@ fn translate_sentence(
             out.push(Mark { start, end, id });
         }
     }
-    (target, out)
+    let (text, map) = merge_byte_pieces(&target);
+    let out = out
+        .into_iter()
+        .map(|m| Mark {
+            start: map[m.start],
+            end: map[m.end],
+            id: m.id,
+        })
+        .filter(|m| m.start < m.end)
+        .collect();
+    (text, out)
+}
+
+/// 模型遇到词表里没有的字时逐个字节输出，形如 `<0xE7><0x9A><0x84>`，翻译库把它们原样拼进了译文。
+/// 这里拼回字符，拼不成合法字符的字节丢掉。
+///
+/// 同时返回原文每个 UTF-16 位置在新文字里的位置，长度是原文的 UTF-16 长度加一。
+fn merge_byte_pieces(text: &str) -> (String, Vec<usize>) {
+    let mut out = String::with_capacity(text.len());
+    let mut map = Vec::with_capacity(text.len() + 1);
+    let mut at = 0;
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        let (bytes, len) = byte_run(rest);
+        if len == 0 {
+            for k in 0..c.len_utf16() {
+                map.push(at + k);
+            }
+            out.push(c);
+            at += c.len_utf16();
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        let decoded: String = bytes.utf8_chunks().map(|chunk| chunk.valid()).collect();
+        let next = at + utf16_len(&decoded);
+        // 落在这串字节中间的位置，算到它解出来的字的后面
+        map.push(at);
+        map.extend(std::iter::repeat_n(next, len - 1));
+        out.push_str(&decoded);
+        at = next;
+        rest = &rest[len..];
+    }
+    map.push(at);
+    (out, map)
+}
+
+/// 开头连续的 `<0xNN>` 有几个字节，以及它们占了多少个字符。
+fn byte_run(s: &str) -> (Vec<u8>, usize) {
+    const PIECE: usize = "<0x00>".len();
+    let mut bytes = Vec::new();
+    let mut rest = s.as_bytes();
+    while let [b'<', b'0', b'x', hi, lo, b'>', ..] = rest {
+        let hex = |b: u8| (b as char).to_digit(16);
+        let (Some(hi), Some(lo)) = (hex(*hi), hex(*lo)) else {
+            break;
+        };
+        bytes.push((hi * 16 + lo) as u8);
+        rest = &rest[PIECE..];
+    }
+    let len = bytes.len() * PIECE;
+    (bytes, len)
 }
 
 /// 去掉范围两头的空白。全是空白时返回 `None`。
@@ -276,7 +342,8 @@ fn utf16_len(s: &str) -> usize {
 }
 
 /// 这一段需要交给模型吗。从中文翻出去时，一个汉字都没有的段落（英文签名、网址）原样保留；
-/// 翻成中文时，已经全是中文的段落也不动。只有数字和符号的段落都不翻。
+/// 翻成中文时，汉字比外文单词还多的段落已经是中文了（「Microsoft 帐户安全信息」），也不动：
+/// 交给英译中的模型，它只会把汉字拆成字节吐回来。只有数字和符号的段落都不翻。
 pub fn needs_translation(text: &str, from: &str, to: &str) -> bool {
     let letters = text.chars().filter(|c| c.is_alphabetic());
     let (mut cjk, mut other) = (0, 0);
@@ -294,10 +361,17 @@ pub fn needs_translation(text: &str, from: &str, to: &str) -> bool {
     if cjk_source && cjk == 0 {
         return false;
     }
-    if is_cjk_lang(to) && !cjk_source && other == 0 {
+    if is_cjk_lang(to) && !cjk_source && cjk > foreign_words(text) {
         return false;
     }
     true
+}
+
+/// 汉字、假名以外的单词有几个。
+fn foreign_words(text: &str) -> usize {
+    text.split(|c: char| !c.is_alphabetic() || is_cjk_char(c))
+        .filter(|w| !w.is_empty())
+        .count()
 }
 
 #[cfg(test)]
@@ -353,6 +427,28 @@ mod tests {
         assert_eq!(&original[map[3]..map[7]], "  Mia");
         assert_eq!(&original[map[12]..map[15]], " Q4");
         assert_eq!(map[0], 0);
+    }
+
+    #[test]
+    fn byte_pieces_become_characters() {
+        let (text, map) = merge_byte_pieces("微软 <0xE6><0x88><0xB7>拉<0x90>!");
+        assert_eq!(text, "微软 户拉!");
+        // 「拉」原来在第 21 个位置，现在在第 4 个
+        assert_eq!(map[21], 4);
+        assert_eq!(*map.last().unwrap(), utf16_len(&text));
+        assert_eq!(merge_byte_pieces("a <0xZZ> b").0, "a <0xZZ> b");
+    }
+
+    #[test]
+    fn chinese_titles_are_not_sent_to_an_english_model() {
+        assert!(!needs_translation("Microsoft 帐户安全信息", "en", "zh"));
+        assert!(!needs_translation("ada@example.com 的安全提醒", "en", "zh"));
+        assert!(needs_translation(
+            "Your order from 京东 has shipped",
+            "en",
+            "zh"
+        ));
+        assert!(needs_translation("Meeting about 東京", "en", "ja"));
     }
 
     #[test]

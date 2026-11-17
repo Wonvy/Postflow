@@ -570,4 +570,56 @@ impl Store {
         )?;
         Ok(())
     }
+
+    /// 列表里解码失败（带替换字符）的邮件，用本机存着的原文重新算标题、摘要和发件人。
+    /// `summarize` 给出这三样。每份索引只做一次，返回改了几封。
+    ///
+    /// 0.1.8 之前不认识 GBK、Big5 这些字符集，那时同步下来的中文邮件在列表里是乱码。
+    pub fn repair_mail_text(
+        &self,
+        summarize: impl Fn(&[u8]) -> (String, String, Option<String>),
+    ) -> Result<usize> {
+        const KEY: &str = "mail_text_repaired";
+        let mut guard = self.lock();
+        let tx = guard.conn.transaction()?;
+        let done: Option<String> = tx
+            .query_row("SELECT value FROM meta WHERE key = ?1", [KEY], |r| r.get(0))
+            .optional()?;
+        if done.is_some() {
+            return Ok(0);
+        }
+        let garbled: Vec<(String, Vec<u8>)> = {
+            let mut stmt = tx.prepare(
+                "SELECT i.id, b.raw FROM items i JOIN mail_body b ON b.id = i.id \
+                 WHERE i.kind = 'mail' AND (instr(i.title, ?1) > 0 OR instr(i.summary, ?1) > 0 \
+                     OR instr(COALESCE(i.author, ''), ?1) > 0)",
+            )?;
+            stmt.query_map(["\u{fffd}"], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()?
+        };
+        for (id, raw) in &garbled {
+            let (subject, snippet, from_name) = summarize(raw);
+            tx.execute(
+                "UPDATE items SET title = ?2, summary = ?3, \
+                     author = COALESCE(?4, (SELECT from_address FROM mail_meta WHERE id = ?1), author) \
+                 WHERE id = ?1",
+                params![id, subject, snippet, from_name],
+            )?;
+            tx.execute(
+                "UPDATE mail_meta SET from_name = ?2 WHERE id = ?1",
+                params![id, from_name],
+            )?;
+        }
+        // 之前离线翻译的列表译文也作废了，换了缓存名，旧的删掉
+        tx.execute(
+            "DELETE FROM ai_results WHERE task = 'list_translation_offline'",
+            [],
+        )?;
+        tx.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, '1')",
+            [KEY],
+        )?;
+        tx.commit()?;
+        Ok(garbled.len())
+    }
 }

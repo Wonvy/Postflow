@@ -16,11 +16,13 @@ use crate::rpc::{RpcError, parse, reply};
 use crate::{Core, Session};
 
 /// 缓存的任务名，两种翻译方式各存各的：换了方式就重新翻。
+///
+/// 离线的缓存在 0.1.8 换了名字：之前的译文里可能夹着 `<0xE7>` 这样没拼回去的字节。
 fn task(engine: &str) -> &'static str {
     if engine == "ai" {
         "list_translation_ai"
     } else {
-        "list_translation_offline"
+        "list_translation_offline_2"
     }
 }
 /// 一次最多处理这么多条。

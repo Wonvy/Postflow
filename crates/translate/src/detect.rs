@@ -11,6 +11,9 @@ pub fn detect(text: &str) -> Option<String> {
         .nth(SAMPLE_CHARS)
         .map_or(text.len(), |(i, _)| i);
     let sample = &text[..end];
+    if garbled(sample) {
+        return None;
+    }
     let info = whatlang::detect(sample)?;
     let code = match info.lang() {
         Lang::Cmn => {
@@ -33,6 +36,18 @@ pub fn detect(text: &str) -> Option<String> {
         lang => to_code(lang)?,
     };
     Some(code.to_string())
+}
+
+/// 解码失败的乱码：一串替换字符夹着零星的怪字，会被认成越南语之类，让人白白去下载语言包。
+fn garbled(text: &str) -> bool {
+    let (mut bad, mut total) = (0, 0);
+    for c in text.chars().filter(|c| !c.is_whitespace()) {
+        total += 1;
+        if c == '\u{fffd}' {
+            bad += 1;
+        }
+    }
+    bad >= 3 && bad * 10 >= total
 }
 
 /// 英语里最常见的虚词占了足够多的比例。
@@ -236,5 +251,9 @@ mod tests {
     #[test]
     fn nothing_to_detect() {
         assert_eq!(detect("1234 5678"), None);
+        assert_eq!(
+            detect("\u{fffd}\u{fffd}ǵ\u{fffd}\u{fffd}--\u{fffd}\u{fffd}ȹ\u{fffd}\u{fffd}"),
+            None
+        );
     }
 }

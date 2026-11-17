@@ -178,6 +178,26 @@ impl Core {
         drop(old);
     }
 
+    /// 用现在的解码重新整理以前同步下来、列表里是乱码的邮件。每份索引只做一次。
+    pub(crate) async fn repair_mail_text(self: &Arc<Self>, session: &Arc<Session>) {
+        let fixed = session
+            .db(|s| {
+                s.repair_mail_text(|raw| {
+                    let summary = postflow_mail::summarize(raw);
+                    (summary.subject, summary.snippet, summary.from.name)
+                })
+            })
+            .await;
+        match fixed {
+            Ok(0) => {}
+            Ok(count) => {
+                tracing::info!(count, "mail: repaired garbled text");
+                self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+            }
+            Err(e) => tracing::warn!("mail: could not repair garbled text: {}", e.message),
+        }
+    }
+
     pub(crate) fn stop_worker(&self, session: &Session, account_id: &str) {
         let worker = session.workers().remove(account_id);
         drop(worker);

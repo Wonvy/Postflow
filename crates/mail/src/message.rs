@@ -78,6 +78,73 @@ fn parse(raw: &[u8]) -> Option<Message<'_>> {
     MessageParser::default().parse(raw)
 }
 
+/// 信头本该只有 ASCII，别的字要按 RFC 2047 编码。有些老系统直接把 GBK 之类的字节写进信头，
+/// 解析库只当 UTF-8 读，读出来是乱码。先把这样的信头行按邮件声明的字符集转成 UTF-8。
+fn utf8_headers(raw: &[u8]) -> Cow<'_, [u8]> {
+    let end = header_end(raw);
+    let head = &raw[..end];
+    if std::str::from_utf8(head).is_ok() {
+        return Cow::Borrowed(raw);
+    }
+    let declared = declared_charset(raw);
+    let mut out = Vec::with_capacity(raw.len() + end / 2);
+    for line in head.split_inclusive(|&b| b == b'\n') {
+        match std::str::from_utf8(line) {
+            Ok(_) => out.extend_from_slice(line),
+            Err(_) => out.extend_from_slice(decode_line(line, declared).as_bytes()),
+        }
+    }
+    out.extend_from_slice(&raw[end..]);
+    Cow::Owned(out)
+}
+
+/// 第一个空行从哪里开始，之前是信头。
+fn header_end(raw: &[u8]) -> usize {
+    let mut at = 0;
+    for line in raw.split_inclusive(|&b| b == b'\n') {
+        if line == b"\r\n" || line == b"\n" {
+            return at;
+        }
+        at += line.len();
+    }
+    raw.len()
+}
+
+/// 邮件里第一处 `charset=` 声明的字符集。信头里的原始字节一般和正文用同一种。
+fn declared_charset(raw: &[u8]) -> Option<&'static encoding_rs::Encoding> {
+    const KEY: &[u8] = b"charset=";
+    let scan = &raw[..raw.len().min(64 * 1024)];
+    let at = scan
+        .windows(KEY.len())
+        .position(|w| w.eq_ignore_ascii_case(KEY))?;
+    let value: Vec<u8> = scan[at + KEY.len()..]
+        .iter()
+        .copied()
+        .skip_while(|&b| b == b'"' || b == b'\'')
+        .take_while(|&b| {
+            !matches!(
+                b,
+                b'"' | b'\'' | b';' | b' ' | b'\t' | b'\r' | b'\n' | b'>' | b'/'
+            )
+        })
+        .collect();
+    encoding_rs::Encoding::for_label(&value)
+}
+
+/// 先试声明的字符集，再试 GB18030（国内邮件最常见，也兼容 GBK 和 GB2312）。都不对就原样当 UTF-8。
+fn decode_line(line: &[u8], declared: Option<&'static encoding_rs::Encoding>) -> String {
+    for encoding in declared.into_iter().chain([encoding_rs::GB18030]) {
+        if encoding == encoding_rs::UTF_8 {
+            continue;
+        }
+        let (text, had_errors) = encoding.decode_without_bom_handling(line);
+        if !had_errors {
+            return text.into_owned();
+        }
+    }
+    String::from_utf8_lossy(line).into_owned()
+}
+
 fn mailboxes(addr: Option<&Address<'_>>) -> Vec<Mailbox> {
     let Some(addr) = addr else { return Vec::new() };
     addr.iter()
@@ -117,7 +184,8 @@ fn truncate(s: &str, max: usize) -> String {
 
 /// 解析列表需要的信息。只有信头时也能用，这时摘要为空。
 pub fn summarize(raw: &[u8]) -> Summary {
-    let Some(msg) = parse(raw) else {
+    let raw = utf8_headers(raw);
+    let Some(msg) = parse(&raw) else {
         return Summary::default();
     };
     // 只有 HTML 正文时自己取文字：库自带的预览会把相邻段落的字粘在一起
@@ -215,7 +283,8 @@ pub fn base64(data: &[u8]) -> String {
 
 /// 把邮件渲染成可以安全展示的正文。
 pub fn render(raw: &[u8], opts: RenderOptions) -> Option<Rendered> {
-    let msg = parse(raw)?;
+    let raw = utf8_headers(raw);
+    let msg = parse(&raw)?;
 
     // 正文里用 cid: 引用的内嵌图片，换成 data URI
     let mut inline: HashMap<String, (u32, String)> = HashMap::new();
@@ -282,7 +351,8 @@ pub fn render(raw: &[u8], opts: RenderOptions) -> Option<Rendered> {
 
 /// 取出一个附件：文件名、类型、内容。
 pub fn attachment(raw: &[u8], index: u32) -> Option<(String, String, Vec<u8>)> {
-    let msg = parse(raw)?;
+    let raw = utf8_headers(raw);
+    let msg = parse(&raw)?;
     let part = msg.attachment(index)?;
     let bytes = match &part.body {
         // 转发的整封邮件，按原文保存成 .eml
@@ -699,6 +769,44 @@ See https://example.com/a?b=1&c=2. Thanks!\r\n\
             summarize(raw.as_bytes()).snippet,
             "Issue 48 Making the inbox a tool again Fish & chips"
         );
+    }
+
+    /// 国内很多服务（微博、银行、旧版邮箱）还在用 GB2312/GBK 发信。
+    const GB2312_MAIL: &str = "From: =?gb2312?B?zqKyqQ==?= <noreply@service.weibo.com>\r\n\
+Subject: =?gb2312?B?zqKyqbCyyKvM4dDR?=\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: text/html; charset=gb2312\r\n\
+Content-Transfer-Encoding: base64\r\n\
+\r\n\
+PGh0bWw+PGJvZHk+PHA+x9ewrrXE08O7p6OsxOO1xNXLusXU2tDCyeixuMnPtcfCvKGjPC9wPjxwPsjnt8exvsjLstnX96Osx+u8sMqx0N64xMPcwuuhozwvcD48L2JvZHk+PC9odG1sPg==\r\n";
+
+    #[test]
+    fn gb2312_mail_is_decoded() {
+        let s = summarize(GB2312_MAIL.as_bytes());
+        assert_eq!(s.subject, "微博安全提醒");
+        assert_eq!(s.from.name.as_deref(), Some("微博"));
+        assert!(s.snippet.starts_with("亲爱的用户"), "{}", s.snippet);
+        let r = render(GB2312_MAIL.as_bytes(), RenderOptions::default()).unwrap();
+        assert!(r.body.contains("如非本人操作"));
+    }
+
+    #[test]
+    fn raw_gbk_headers_are_decoded() {
+        let mut raw = b"From: a@example.com\r\nSubject: ".to_vec();
+        raw.extend_from_slice(b"\xd0\xc2\xc9\xe8\xb1\xb8\xb5\xc7\xc2\xbc\xcc\xe1\xd0\xd1");
+        raw.extend_from_slice(b"\r\nContent-Type: text/plain; charset=gbk\r\n\r\nhi\r\n");
+        assert_eq!(summarize(&raw).subject, "新设备登录提醒");
+
+        // 声明的是 UTF-8，信头却是 GBK：退回 GB18030
+        let mut raw = b"From: ".to_vec();
+        raw.extend_from_slice(b"\xce\xa2\xb2\xa9");
+        raw.extend_from_slice(b" <a@example.com>\r\nSubject: ok\r\n");
+        raw.extend_from_slice(
+            b"Content-Type: text/plain; charset=\"utf-8\"\r\n\r\n\xe4\xbd\xa0\xe5\xa5\xbd\r\n",
+        );
+        let s = summarize(&raw);
+        assert_eq!(s.from.name.as_deref(), Some("微博"));
+        assert_eq!(s.snippet, "你好");
     }
 
     #[test]

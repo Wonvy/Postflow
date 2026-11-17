@@ -356,3 +356,36 @@ fn uidvalidity_reset_drops_stale_uids() {
         1
     );
 }
+
+#[test]
+fn garbled_mail_text_is_repaired_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");
+    let acc = store.put_account(account("me@example.com")).unwrap().id;
+    let mut s = sync(7, 0);
+    s.new = vec![mail(&acc, 1, 1_000), mail(&acc, 2, 2_000)];
+    s.new[0].subject = "\u{fffd}\u{fffd}\u{fffd}".into();
+    s.new[0].from_name = Some("\u{fffd}\u{fffd}".into());
+    store.apply_mail_sync(&acc, s).unwrap();
+
+    let fixed = store
+        .repair_mail_text(|raw| {
+            assert!(raw.starts_with(b"Subject: Subject 1"));
+            ("微博安全提醒".into(), "你好".into(), Some("微博".into()))
+        })
+        .unwrap();
+    assert_eq!(fixed, 1);
+    let items = store.items(&ItemFilter::default(), None, 10).unwrap();
+    let one = items
+        .iter()
+        .find(|i| i.id == ids::mail_id(&acc, "m1@example.com"))
+        .unwrap();
+    assert_eq!(one.title, "微博安全提醒");
+    assert_eq!(one.summary, "你好");
+    assert_eq!(one.author.as_deref(), Some("微博"));
+    // 另一封没动
+    assert!(items.iter().any(|i| i.title == "Subject 2"));
+
+    // 只做一次
+    assert_eq!(store.repair_mail_text(|_| unreachable!()).unwrap(), 0);
+}
