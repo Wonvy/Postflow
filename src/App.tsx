@@ -8,6 +8,7 @@ import { Reader } from "./components/Reader";
 import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
+import { ToolbarsDialog } from "./components/Toolbars";
 import { WindowControls } from "./components/WindowControls";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
@@ -140,6 +141,7 @@ function Shell() {
       <UpdateDialog />
       <UpdateNotice />
       <SettingsDialog />
+      <ToolbarsDialog />
       <ComposeDialog />
       <Toaster />
     </div>

@@ -27,7 +27,16 @@ import {
   X,
 } from "lucide-react";
 import type { Item } from "../lib/api";
-import { type CSSProperties, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
@@ -37,6 +46,7 @@ import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
 import { useReaderStyle, useUi } from "../lib/store";
 import { fullTime } from "../lib/time";
+import { readingMinutes, totalWords, wordCount } from "../lib/wordCount";
 import {
   languageName,
   type TranslateSource,
@@ -46,6 +56,7 @@ import {
 import { isTauri } from "../lib/transport";
 import { isWebUrl } from "../lib/webDevice";
 import { AiPanel } from "./AiPanel";
+import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import { useWindowControlsGap } from "./WindowControls";
 import { ItemMenuItems, useSetLabel } from "./ItemMenu";
 import { ReaderStyleMenu } from "./ReaderStyleMenu";
@@ -85,6 +96,7 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
   // 阅读区的顶栏总在窗口最右上角（AI 栏在它下面），窗口按钮的位置由它留
   const gap = useWindowControlsGap(true);
   return (
+    <ToolbarMenu toolbar="reader">
     <header
       data-tauri-drag-region
       className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2"
@@ -95,6 +107,7 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
       </div>
       {children}
     </header>
+    </ToolbarMenu>
   );
 }
 
@@ -325,120 +338,133 @@ function Article({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, readerFullText]);
 
+
+  /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。用不上的是 null。 */
+  const targets = summary ? (group.length > 0 ? group : [summary]) : [];
+  const tools = !summary
+    ? {}
+    : {
+        editDraft: summary.draft ? (
+          <IconButton label={t("compose.editDraft")} onClick={() => compose("draft", summary)}>
+            <FilePen {...ICON} />
+          </IconButton>
+        ) : null,
+        deleteDraft: summary.draft ? (
+          <IconButton label={t("compose.deleteDraft")} onClick={() => deleteDrafts([summary])}>
+            <Trash2 {...ICON} />
+          </IconButton>
+        ) : null,
+        reply:
+          isMail && !summary.draft ? (
+            <IconButton label={t("compose.reply")} shortcut={MOD + "R"} onClick={() => compose("reply", summary)}>
+              <Reply {...ICON} />
+            </IconButton>
+          ) : null,
+        replyAll:
+          isMail && !summary.draft ? (
+            <IconButton
+              label={t("compose.replyAll")}
+              shortcut={(isMac ? "⇧⌘" : "Ctrl+Shift+") + "R"}
+              onClick={() => compose("reply-all", summary)}
+            >
+              <ReplyAll {...ICON} />
+            </IconButton>
+          ) : null,
+        forward:
+          isMail && !summary.draft ? (
+            <IconButton
+              label={t("compose.forward")}
+              shortcut={(isMac ? "⇧⌘" : "Ctrl+Shift+") + "F"}
+              onClick={() => compose("forward", summary)}
+            >
+              <Forward {...ICON} />
+            </IconButton>
+          ) : null,
+        style: !webShown ? <ReaderStyleMenu /> : null,
+        fullText:
+          !isMail && summary.url && !webShown ? (
+            <IconButton
+              label={readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
+              active={readerFullText || mode === "full"}
+              disabled={loadingFull || !item}
+              onClick={toggleFullText}
+            >
+              {loadingFull ? <Spinner size={15} /> : mode === "full" ? <Newspaper {...ICON} /> : <BookOpenText {...ICON} />}
+            </IconButton>
+          ) : null,
+        web: (
+          <IconButton
+            label={readerWeb ? (webUrl ? t("web.toggleOff") : t("web.noLink")) : t("web.toggleOn")}
+            shortcut="W"
+            active={readerWeb}
+            onClick={() => setReaderWeb(!readerWeb)}
+          >
+            <Globe {...ICON} />
+          </IconButton>
+        ),
+        label: <LabelMenu ids={targets.map((i) => i.id)} current={summary.label} />,
+        ai: (
+          <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
+            <Sparkles {...ICON} />
+          </IconButton>
+        ),
+        translate: !webShown ? (
+          <IconButton
+            label={readerTranslate ? t("action.translateOff") : t("action.translateOn")}
+            shortcut="T"
+            active={readerTranslate || phase.kind === "on"}
+            disabled={!item}
+            onClick={toggleTranslate}
+          >
+            {phase.kind === "checking" || phase.kind === "translating" || phase.kind === "downloading" ? (
+              <Spinner size={15} />
+            ) : (
+              <Languages {...ICON} />
+            )}
+          </IconButton>
+        ) : null,
+        read: (
+          <IconButton
+            label={all("read") ? t("action.markUnread") : t("action.markRead")}
+            shortcut="U"
+            onClick={() => toggle("read", targets)}
+          >
+            {all("read") ? <Mail {...ICON} /> : <MailOpen {...ICON} />}
+          </IconButton>
+        ),
+        star: (
+          <IconButton
+            label={all("starred") ? t("action.unstar") : t("action.star")}
+            shortcut="S"
+            // 星标自己有黄色的实心样式，不再加强调色底
+            aria-pressed={all("starred")}
+            onClick={() => toggle("starred", targets)}
+          >
+            <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
+          </IconButton>
+        ),
+        archive:
+          !summary.draft && !summary.sent ? (
+            <IconButton
+              label={all("archived") ? t("action.unarchive") : t("action.archive")}
+              shortcut="E"
+              onClick={() => toggle("archived", targets)}
+            >
+              {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
+            </IconButton>
+          ) : null,
+        original:
+          !isMail && summary.url ? (
+            <IconButton label={t("action.openOriginal")} shortcut="V" onClick={openOriginal}>
+              <ExternalLink {...ICON} />
+            </IconButton>
+          ) : null,
+      };
+
   return (
     <>
       <Toolbar leading={summary && <SourceChip item={summary} />}>
-        {summary && (
-          <>
-            {summary.draft && (
-              <>
-                <IconButton label={t("compose.editDraft")} onClick={() => compose("draft", summary)}>
-                  <FilePen {...ICON} />
-                </IconButton>
-                <IconButton label={t("compose.deleteDraft")} onClick={() => deleteDrafts([summary])}>
-                  <Trash2 {...ICON} />
-                </IconButton>
-                <span aria-hidden className="mx-1 h-4 w-px bg-line" />
-              </>
-            )}
-            {isMail && !summary.draft && (
-              <>
-                <IconButton label={t("compose.reply")} shortcut={MOD + "R"} onClick={() => compose("reply", summary)}>
-                  <Reply {...ICON} />
-                </IconButton>
-                <IconButton
-                  label={t("compose.replyAll")}
-                  shortcut={(isMac ? "⇧⌘" : "Ctrl+Shift+") + "R"}
-                  onClick={() => compose("reply-all", summary)}
-                >
-                  <ReplyAll {...ICON} />
-                </IconButton>
-                <IconButton
-                  label={t("compose.forward")}
-                  shortcut={(isMac ? "⇧⌘" : "Ctrl+Shift+") + "F"}
-                  onClick={() => compose("forward", summary)}
-                >
-                  <Forward {...ICON} />
-                </IconButton>
-                <span aria-hidden className="mx-1 h-4 w-px bg-line" />
-              </>
-            )}
-            {!webShown && <ReaderStyleMenu />}
-            {!isMail && summary.url && !webShown && (
-              <IconButton
-                label={readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
-                active={readerFullText || mode === "full"}
-                disabled={loadingFull || !item}
-                onClick={toggleFullText}
-              >
-                {loadingFull ? (
-                  <Spinner size={15} />
-                ) : mode === "full" ? (
-                  <Newspaper {...ICON} />
-                ) : (
-                  <BookOpenText {...ICON} />
-                )}
-              </IconButton>
-            )}
-            <IconButton
-              label={readerWeb ? (webUrl ? t("web.toggleOff") : t("web.noLink")) : t("web.toggleOn")}
-              shortcut="W"
-              active={readerWeb}
-              onClick={() => setReaderWeb(!readerWeb)}
-            >
-              <Globe {...ICON} />
-            </IconButton>
-            <LabelMenu ids={group.length > 0 ? group.map((i) => i.id) : [summary.id]} current={summary.label} />
-            <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
-              <Sparkles {...ICON} />
-            </IconButton>
-            {!webShown && (
-              <IconButton
-                label={readerTranslate ? t("action.translateOff") : t("action.translateOn")}
-                shortcut="T"
-                active={readerTranslate || phase.kind === "on"}
-                disabled={!item}
-                onClick={toggleTranslate}
-              >
-                {phase.kind === "checking" || phase.kind === "translating" || phase.kind === "downloading" ? (
-                  <Spinner size={15} />
-                ) : (
-                  <Languages {...ICON} />
-                )}
-              </IconButton>
-            )}
-            <IconButton
-              label={all("read") ? t("action.markUnread") : t("action.markRead")}
-              shortcut="U"
-              onClick={() => toggle("read", group.length > 0 ? group : [summary])}
-            >
-              {all("read") ? <Mail {...ICON} /> : <MailOpen {...ICON} />}
-            </IconButton>
-            <IconButton
-              label={all("starred") ? t("action.unstar") : t("action.star")}
-              shortcut="S"
-              // 星标自己有黄色的实心样式，不再加强调色底
-              aria-pressed={all("starred")}
-              onClick={() => toggle("starred", group.length > 0 ? group : [summary])}
-            >
-              <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
-            </IconButton>
-            {!summary.draft && !summary.sent && (
-              <IconButton
-                label={all("archived") ? t("action.unarchive") : t("action.archive")}
-                shortcut="E"
-                onClick={() => toggle("archived", group.length > 0 ? group : [summary])}
-              >
-                {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
-              </IconButton>
-            )}
-            {!isMail && summary.url && (
-              <IconButton label={t("action.openOriginal")} shortcut="V" onClick={openOriginal}>
-                <ExternalLink {...ICON} />
-              </IconButton>
-            )}
-          </>
-        )}
+        <Tools toolbar="reader" place="top" tools={tools} />
       </Toolbar>
 
       <div className="flex min-h-0 flex-1">
@@ -521,6 +547,60 @@ function Article({ id }: { id: string }) {
       )}
       {aiPanel && item && <AiPanel item={item} autoRun={aiPanelFor === item.id} />}
       </div>
+      <StatusBar toolbar="reader" tools={tools} info={summary && <ReaderInfo summary={summary} item={item} mode={mode} scrollRef={scrollRef} />} />
+    </>
+  );
+}
+
+/** 阅读区状态栏左边：发布时间、字数、预计阅读时间、读到了哪里。 */
+function ReaderInfo({
+  summary,
+  item,
+  mode,
+  scrollRef,
+}: {
+  summary: Item;
+  item: ItemDetail | undefined;
+  mode: "feed" | "full";
+  scrollRef: RefObject<HTMLDivElement | null>;
+}) {
+  const t = useT();
+  const lang = useLang();
+  const count = useMemo(() => {
+    if (!item) return null;
+    // 邮件的正文不论哪种都是 HTML（纯文本邮件也转成了安全的 HTML 片段）
+    const html = item.mail ? item.mail.body : mode === "full" && item.full_text ? item.full_text : item.content;
+    const text = html ? (new DOMParser().parseFromString(html, "text/html").body.textContent ?? "") : "";
+    return wordCount(text);
+  }, [item, mode]);
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollHeight - el.clientHeight;
+      setProgress(max <= 0 ? 100 : Math.min(100, Math.round((el.scrollTop / max) * 100)));
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [scrollRef, item]);
+
+  const words = count ? totalWords(count) : 0;
+  return (
+    <>
+      <span className="truncate">{fullTime(summary.published_at, lang)}</span>
+      {words > 0 && count && (
+        <span className="truncate">
+          {t("status.words", { n: words.toLocaleString() })} · {t("status.minutes", { n: readingMinutes(count) })}
+        </span>
+      )}
+      {item && <span>{t("status.progress", { n: progress })}</span>}
     </>
   );
 }

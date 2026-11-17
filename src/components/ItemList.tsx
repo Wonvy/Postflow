@@ -7,6 +7,7 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Inbox,
   Languages,
@@ -33,6 +34,7 @@ import {
   type DragEvent,
   type MouseEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -82,6 +84,7 @@ import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
 import { ItemMenuItems } from "./ItemMenu";
 import { SenderIcon, useMixedAccounts } from "./SourceIcon";
+import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import {
   Button,
   ContextMenu,
@@ -195,6 +198,8 @@ function ViewControl() {
   const setDensity = useUi((s) => s.setDensity);
   const style = useListStyle();
   const set = useUi((s) => s.setListStyle);
+  const paging = useUi((s) => s.listPaging);
+  const setPaging = useUi((s) => s.setListPaging);
   const Icon = VIEW_OPTIONS.find((o) => o.value === view)?.icon ?? List;
   // 单行的列表只有标题，没有摘要可调
   const oneLine = view === "list" && density === "compact";
@@ -260,6 +265,16 @@ function ViewControl() {
               />
             </StyleLine>
           )}
+          <StyleLine label={t("listStyle.paging")}>
+            <Segmented<"scroll" | "pages">
+              value={paging}
+              onChange={setPaging}
+              options={[
+                { value: "scroll", label: t("listStyle.pagingScroll") },
+                { value: "pages", label: t("listStyle.pagingPages") },
+              ]}
+            />
+          </StyleLine>
           {view === "cards" && (
             <div>
               <StyleLine label={t("view.cardSize")}>
@@ -602,6 +617,88 @@ export function ItemList({ width }: { width: number }) {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // 分页视图：滚轮一下翻一页，每页从一整行开始，不出现被切掉一半的行
+  const paging = useUi((s) => s.listPaging);
+  const pagingRef = useRef(paging);
+  pagingRef.current = paging;
+  const flipPage = useCallback(
+    (dir: 1 | -1) => {
+      const el = scroller.current;
+      if (!el) return;
+      const items = virtualizer.measurementsCache;
+      const top = el.scrollTop;
+      const height = el.clientHeight;
+      // 列表外面有 6px 的边距（my-1.5）
+      const pad = 6;
+      let target: number;
+      if (dir === 1) {
+        // 第一行没有完整露出来的，成为下一页的第一行
+        const next = items.find((v) => v.end + pad > top + height + 1);
+        if (!next) return;
+        target = next.start;
+      } else {
+        // 往上数，放得下一整页的最早那一行
+        const from = top - height + pad;
+        const prev = items.find((v) => v.start >= from - 1);
+        target = prev && prev.start < top ? prev.start : Math.max(0, top - height);
+      }
+      el.scrollTo({ top: Math.max(0, target) });
+    },
+    [virtualizer],
+  );
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    let sum = 0;
+    let lockedUntil = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (pagingRef.current !== "pages" || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      // 触控板一次滑动会连着来很多小的滚动事件，攒够了才翻，翻完歇一会儿
+      const now = performance.now();
+      if (now < lockedUntil) return;
+      sum += e.deltaY;
+      if (Math.abs(sum) < 30) return;
+      flipPage(sum > 0 ? 1 : -1);
+      sum = 0;
+      lockedUntil = now + 220;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [flipPage]);
+
+  // 分页视图状态栏上的「第几页」：按翻页的规则从头数一遍每页从哪一行开始
+  const [pageInfo, setPageInfo] = useState({ page: 1, pages: 1, height: 0 });
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || paging !== "pages") return;
+    const update = () => {
+      const height = Math.max(1, el.clientHeight);
+      const items = virtualizer.measurementsCache;
+      const starts = [0];
+      let start = 0;
+      for (;;) {
+        const next = items.find((v) => v.end + 6 > start + height + 1);
+        if (!next || next.start <= start) break;
+        start = next.start;
+        starts.push(start);
+      }
+      const pages = starts.length;
+      const page = Math.max(1, starts.filter((s) => s <= el.scrollTop + 1).length);
+      setPageInfo((old) =>
+        old.page === page && old.pages === pages && old.height === height ? old : { page, pages, height },
+      );
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [paging, lines.length, virtualizer]);
+
   // 卡片换了列数时，让原来最上面的那张还在最上面
   const topId = useRef<string | null>(null);
   const shownColumns = useRef(columns);
@@ -718,40 +815,62 @@ export function ItemList({ width }: { width: number }) {
       feeds?.find((f) => f.id === id)?.title ??
       accounts?.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean),
   );
-  const hasUnread = items.some((i) => !i.read);
+  const unreadCount = items.filter((i) => !i.read).length;
+  const hasUnread = unreadCount > 0;
+
+  /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。 */
+  const tools = {
+    kindFilter: scope.kind === "view" && layout !== "tabs" ? <KindFilter /> : null,
+    search: (
+      <IconButton
+        label={t("search.label")}
+        shortcut="/"
+        active={searchOpen}
+        onClick={() => (searchOpen ? closeSearch() : openSearch())}
+      >
+        <Search {...ICON} />
+      </IconButton>
+    ),
+    translate: (
+      <IconButton label={t("list.translate")} active={listTranslate} onClick={toggleListTranslate}>
+        <Languages {...ICON} />
+      </IconButton>
+    ),
+    view: <ViewControl />,
+    group: <GroupControl />,
+    markAllRead: (
+      <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={confirmMarkAllRead}>
+        <CheckCheck {...ICON} />
+      </IconButton>
+    ),
+    refresh: (
+      <IconButton label={t("action.refresh")} onClick={refresh}>
+        <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
+      </IconButton>
+    ),
+  };
 
   return (
     <section className="relative flex h-full shrink-0 flex-col border-l border-line bg-bg" style={{ width }}>
-      <header data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line pl-4 pr-2">
-        <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-          {title}
-        </h1>
-        {scope.kind === "view" && layout !== "tabs" && <KindFilter />}
-        <IconButton
-          label={t("search.label")}
-          shortcut="/"
-          active={searchOpen}
-          onClick={() => (searchOpen ? closeSearch() : openSearch())}
-        >
-          <Search {...ICON} />
-        </IconButton>
-        <IconButton label={t("list.translate")} active={listTranslate} onClick={toggleListTranslate}>
-          <Languages {...ICON} />
-        </IconButton>
-        <ViewControl />
-        <GroupControl />
-        <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={confirmMarkAllRead}>
-          <CheckCheck {...ICON} />
-        </IconButton>
-        <IconButton label={t("action.refresh")} onClick={refresh}>
-          <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
-        </IconButton>
-      </header>
+      <ToolbarMenu toolbar="list">
+        <header data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line pl-4 pr-2">
+          <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+            {title}
+          </h1>
+          <Tools toolbar="list" place="top" tools={tools} />
+        </header>
+      </ToolbarMenu>
 
       {searchOpen && <SearchBar scopeName={title} fetching={query.isFetching} firstId={stops[0]?.id} />}
       {listTranslate && engine === "offline" && <ModelPrompt />}
 
-      <div ref={scroller} role="listbox" aria-label={title} aria-multiselectable className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scroller}
+        role="listbox"
+        aria-label={title}
+        aria-multiselectable
+        className={cx("min-h-0 flex-1", paging === "pages" ? "overflow-y-hidden" : "overflow-y-auto")}
+      >
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-fg-3">
             <Spinner size={16} />
@@ -945,10 +1064,47 @@ export function ItemList({ width }: { width: number }) {
         {!isLoading && !hasNextPage && olderTarget(scope) && (
           <LoadOlder key={scopeKey(scope)} target={olderTarget(scope)!} />
         )}
+        {/* 分页时最后一页也要能从一整行开始，后面补一页的空白 */}
+        {paging === "pages" && items.length > 0 && <div style={{ height: pageInfo.height }} />}
         {/* 给底部的操作条留出位置，最后几行不被它挡住 */}
         {selection.length > 0 && <div className="h-14" />}
       </div>
       {selection.length > 0 && <SelectionBar count={selection.length} />}
+      <StatusBar
+        toolbar="list"
+        tools={tools}
+        info={
+          <>
+            <span>
+              {t("status.items", { n: items.length + (hasNextPage ? "+" : "") })}
+              {unreadCount > 0 && ` · ${t("status.unread", { n: unreadCount })}`}
+            </span>
+            {selection.length > 0 && <span className="text-accent">{t("status.selected", { n: selection.length })}</span>}
+            {paging === "pages" && items.length > 0 && (
+              <span className="flex items-center gap-0.5">
+                <IconButton label={t("status.prevPage")} className="size-6" disabled={pageInfo.page <= 1} onClick={() => flipPage(-1)}>
+                  <ChevronUp size={14} />
+                </IconButton>
+                <span>{t("status.page", { page: pageInfo.page, pages: pageInfo.pages })}</span>
+                <IconButton
+                  label={t("status.nextPage")}
+                  className="size-6"
+                  disabled={pageInfo.page >= pageInfo.pages && !hasNextPage}
+                  onClick={() => flipPage(1)}
+                >
+                  <ChevronDown size={14} />
+                </IconButton>
+              </span>
+            )}
+            {refreshing > 0 && (
+              <span className="flex items-center gap-1.5">
+                <Spinner size={11} />
+                {t("status.refreshing", { n: refreshing })}
+              </span>
+            )}
+          </>
+        }
+      />
     </section>
   );
 }
@@ -1211,7 +1367,7 @@ function SelectionBar({ count }: { count: number }) {
   const all = (flag: "read" | "starred" | "archived") => list.length > 0 && list.every((i) => i[flag]);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
+    <div className="pointer-events-none absolute inset-x-0 bottom-12 flex justify-center px-3">
       <div
         role="toolbar"
         className="anim-pop pointer-events-auto flex h-9 items-center gap-0.5 rounded-lg bg-surface pl-3 pr-1 shadow-pop"

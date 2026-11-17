@@ -6,6 +6,7 @@ import type { ComposeMode } from "./compose";
 import type { GroupMode } from "./grouping";
 import { LIST_STYLE_DEFAULT, type ListStyle, normalizeListStyle } from "./listStyle";
 import { normalizeReaderStyle, READER_DEFAULT, type ReaderStyle } from "./readerStyle";
+import { normalizeLayout, type ToolbarId, type ToolbarLayout } from "./toolbars";
 import { startOfToday } from "./time";
 import { devicePreset, type WebDevice } from "./webDevice";
 
@@ -60,6 +61,8 @@ export type Dialog =
   /** 新建文件夹，或者给 `folder` 改名。 */
   | { type: "folder"; folder?: string }
   /** 确认把当前列表全部标为已读。 */
+  /** 自定义工具栏，打开时停在 `toolbar` 那一套。 */
+  | { type: "toolbars"; toolbar?: ToolbarId }
   /** `scope` 省略时是当前打开的列表；侧栏右键菜单会指定别的列表。 */
   | { type: "mark-all-read"; scope?: ListScope }
   /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
@@ -139,6 +142,10 @@ interface UiState {
   badgeUnread: boolean;
   /** 发件人头像用发件人所在网站的图标，没有时显示首字母。 */
   senderLogos: boolean;
+  /** 列表和阅读区的工具栏布局（按钮放顶部、状态栏还是隐藏，以及顺序）。读的时候用 `useToolbarLayout`。 */
+  toolbars: Partial<Record<ToolbarId, ToolbarLayout>>;
+  /** 中间列表是滚动还是一页一页翻。 */
+  listPaging: "scroll" | "pages";
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
   mainView: "list" | "stats";
   /** 阅读面板右侧的 AI 栏开着。 */
@@ -181,6 +188,8 @@ interface UiState {
   setNotifyMail: (on: boolean) => void;
   setBadgeUnread: (on: boolean) => void;
   setSenderLogos: (on: boolean) => void;
+  setToolbar: (id: ToolbarId, layout: ToolbarLayout | null) => void;
+  setListPaging: (mode: "scroll" | "pages") => void;
   requestTranslate: () => void;
   openSearch: () => void;
   closeSearch: () => void;
@@ -248,6 +257,8 @@ export const useUi = create<UiState>()(
       notifyMail: true,
       badgeUnread: true,
       senderLogos: true,
+      toolbars: {},
+      listPaging: "scroll",
 
       // 换列表时收起搜索
       setScope: (scope) =>
@@ -328,6 +339,14 @@ export const useUi = create<UiState>()(
       setNotifyMail: (notifyMail) => set({ notifyMail }),
       setBadgeUnread: (badgeUnread) => set({ badgeUnread }),
       setSenderLogos: (senderLogos) => set({ senderLogos }),
+      setToolbar: (id, layout) =>
+        set((s) => {
+          const toolbars = { ...s.toolbars };
+          if (layout) toolbars[id] = layout;
+          else delete toolbars[id];
+          return { toolbars };
+        }),
+      setListPaging: (listPaging) => set({ listPaging }),
       rememberFolder: (folder) =>
         set((s) => {
           const name = folder.trim();
@@ -395,6 +414,8 @@ export const useUi = create<UiState>()(
         notifyMail: s.notifyMail,
         badgeUnread: s.badgeUnread,
         senderLogos: s.senderLogos,
+        toolbars: s.toolbars,
+        listPaging: s.listPaging,
       }),
     },
   ),
@@ -495,4 +516,10 @@ export function useListStyle(): ListStyle {
 export function useReaderStyle(): ReaderStyle {
   const raw = useUi((s) => s.readerStyle);
   return useMemo(() => normalizeReaderStyle(raw), [raw]);
+}
+
+/** 一套工具栏的布局，补齐旧版本缺的按钮。 */
+export function useToolbarLayout(id: ToolbarId): ToolbarLayout {
+  const raw = useUi((s) => s.toolbars[id]);
+  return useMemo(() => normalizeLayout(id, raw), [id, raw]);
 }
