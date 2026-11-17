@@ -7,6 +7,9 @@ use serde_json::Value;
 use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
+#[cfg(desktop)]
+mod web_page;
+
 /// 核心事件在界面一侧的事件名。
 const EVENT_NAME: &str = "postflow:event";
 
@@ -44,6 +47,24 @@ fn updater_supported() -> bool {
     }
 }
 
+/// 界面能调用的命令。原网页模式的网页视图只有桌面端有，手机上界面改用 iframe。
+#[cfg(desktop)]
+fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        rpc,
+        updater_supported,
+        web_page::web_show,
+        web_page::web_frame,
+        web_page::web_hide,
+        web_page::web_reload
+    ]
+}
+
+#[cfg(mobile)]
+fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![rpc, updater_supported]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -53,7 +74,8 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .manage(web_page::WebPageState::default());
 
     builder
         .setup(|app| {
@@ -89,7 +111,7 @@ pub fn run() {
             app.manage(AppState { core });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc, updater_supported])
+        .invoke_handler(handlers())
         .build(tauri::generate_context!())
         .expect("error while building Postflow")
         .run(|app, event| {
