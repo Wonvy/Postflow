@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useActions } from "./actions";
 import { normalizeReaderStyle, READER_DEFAULT } from "./readerStyle";
 import { useUi } from "./store";
+import { setFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -72,6 +73,11 @@ export function useShortcuts() {
           e.preventDefault();
           a.confirmMarkAllRead();
         }
+        if (key === "f") {
+          // 全屏（阅读区同时最大化）
+          e.preventDefault();
+          void toggleFullscreen();
+        }
         return;
       }
 
@@ -129,8 +135,16 @@ export function useShortcuts() {
         case "ArrowLeft":
           a.collapseOpen();
           break;
+        case "f":
+          // 阅读区最大化：藏起侧栏和列表
+          if (useFullscreen.getState().ours) return;
+          ui.setReaderMaximized(!ui.readerMaximized);
+          break;
         case "Escape":
-          if (ui.selection.length > 0) ui.setSelection([]);
+          // 先退出全屏，再退出最大化，最后才是取消选择、关掉条目
+          if (useFullscreen.getState().on) void setFullscreen(false);
+          else if (ui.readerMaximized) ui.setReaderMaximized(false);
+          else if (ui.selection.length > 0) ui.setSelection([]);
           else if (ui.openId) ui.open(null);
           else return;
           break;

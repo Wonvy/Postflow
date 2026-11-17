@@ -139,6 +139,8 @@ interface UiState {
   toolbars: Partial<Record<ToolbarId, ToolbarLayout>>;
   /** 中间列表是滚动还是一页一页翻。 */
   listPaging: "scroll" | "pages";
+  /** 阅读区最大化：藏起侧栏和列表，阅读区占满整个窗口（看视频、长文章）。不保存。 */
+  readerMaximized: boolean;
   /** 在这台设备上启用的插件 ID。插件只有手动启用才会加载。 */
   enabledPlugins: string[];
   /** 变一下就重新扫描插件目录、重新加载插件。不保存。 */
@@ -185,6 +187,7 @@ interface UiState {
   setSenderLogos: (on: boolean) => void;
   setToolbar: (id: ToolbarId, layout: ToolbarLayout | null) => void;
   setListPaging: (mode: "scroll" | "pages") => void;
+  setReaderMaximized: (on: boolean) => void;
   setPluginEnabled: (id: string, on: boolean) => void;
   reloadPlugins: () => void;
   requestTranslate: () => void;
@@ -253,6 +256,7 @@ export const useUi = create<UiState>()(
       senderLogos: true,
       toolbars: {},
       listPaging: "scroll",
+      readerMaximized: false,
       enabledPlugins: [],
       pluginReload: 0,
 
@@ -326,6 +330,7 @@ export const useUi = create<UiState>()(
           return { toolbars };
         }),
       setListPaging: (listPaging) => set({ listPaging }),
+      setReaderMaximized: (readerMaximized) => set({ readerMaximized }),
       setPluginEnabled: (id, on) =>
         set((s) => ({
           enabledPlugins: on ? [...new Set([...s.enabledPlugins, id])] : s.enabledPlugins.filter((p) => p !== id),

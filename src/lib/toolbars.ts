@@ -38,6 +38,8 @@ export const TOOL_DEFAULTS: Record<ToolbarId, ToolbarLayout> = {
     { id: "star", place: "top" },
     { id: "archive", place: "top" },
     { id: "original", place: "top" },
+    { id: "maximize", place: "top" },
+    { id: "fullscreen", place: "top" },
     { id: "style", place: "status" },
     { id: "fullText", place: "status" },
     { id: "web", place: "status" },

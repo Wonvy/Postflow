@@ -25,6 +25,10 @@ that heading into the version number and date.
   sooner. These expected reconnects are no longer logged as warnings or shown as mailbox errors.
 - The sidebar's tabs layout (All / Mail / Feeds tabs, its toggle button, the setting, and keys 1–3) is gone; the
   sidebar always shows every section. To see only mail or only feeds, use the filter at the top of the list.
+- Maximize the reader: the button in the reader toolbar (or `F`) hides the sidebar and list so an article, a video
+  page in web-page view or a long message fills the window. Full screen (button or `Shift+F`) does that and makes
+  the whole window full screen, without the window buttons on Windows. `Esc` steps back out. Making the window full
+  screen the system's way (like macOS's green button) leaves the layout as it is.
 
 ### 中文
 - 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
@@ -40,6 +44,9 @@ that heading into the version number and date.
   以后提前说话。这类正常的重连不再记成警告，也不会让邮箱显示出错。
 - 去掉了侧栏的「选项卡」模式（全部 / 邮件 / 订阅选项卡、切换按钮、设置项和 1–3 快捷键），侧栏总是显示所有分组。
   只想看邮件或只看订阅，用列表顶部的筛选。
+- 阅读区可以最大化：阅读区工具栏上的按钮（或按 `F`）把侧栏和列表藏起来，文章、原网页里的视频、长邮件占满整个窗口。
+  全屏（按钮或 `Shift+F`）在此基础上让整个窗口全屏，Windows 上也不显示窗口按钮。按 `Esc` 逐级退出。
+  用系统的方式全屏（比如 macOS 的绿色按钮）时布局不变。
 
 ## 0.1.14 — 2026-11-17
 

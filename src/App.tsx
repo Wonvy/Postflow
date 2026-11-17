@@ -9,6 +9,7 @@ import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
 import { ToolbarsDialog } from "./components/Toolbars";
+import { watchFullscreen } from "./lib/fullscreen";
 import { usePluginLoader } from "./lib/plugins";
 import { WindowControls } from "./components/WindowControls";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
@@ -104,6 +105,7 @@ function Shell() {
   useMailCatchUp();
   useUnreadBadge(useNav().data?.counts.unread_mail);
   useEffect(() => startUpdateChecks(), []);
+  useEffect(() => watchFullscreen(), []);
   usePluginLoader();
   const sidebarWidth = useUi((s) => s.sidebarWidth);
   const listWidth = useUi((s) => s.listWidth);
@@ -121,16 +123,27 @@ function Shell() {
   const listMax = Math.max(LIST_MIN, viewport - sidebarWidth - READER_MIN);
   const listShown = Math.min(listWidth, listMax);
 
+  // 阅读区最大化（或全屏）时只留阅读区
+  const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats";
+
   return (
     <div className="flex h-full">
-      <Sidebar width={sidebarWidth} />
-      <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
+      {!maximized && (
+        <>
+          <Sidebar width={sidebarWidth} />
+          <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
+        </>
+      )}
       {mainView === "stats" ? (
         <StatsPage />
       ) : (
         <>
-          <ItemList width={listShown} />
-          <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
+          {!maximized && (
+            <>
+              <ItemList width={listShown} />
+              <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
+            </>
+          )}
           <Reader />
         </>
       )}

@@ -29,6 +29,8 @@ import {
   Type,
   LayoutList,
   Puzzle,
+  Maximize2,
+  Expand,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, type ReactElement, type ReactNode, useState } from "react";
@@ -70,6 +72,8 @@ const TOOL_META: Record<ToolbarId, Record<string, { label: MessageKey; icon: Luc
     star: { label: "tool.star", icon: Star },
     archive: { label: "tool.archive", icon: Archive },
     original: { label: "tool.original", icon: ExternalLink },
+    maximize: { label: "tool.maximize", icon: Maximize2 },
+    fullscreen: { label: "tool.fullscreen", icon: Expand },
     style: { label: "tool.readerStyle", icon: Type },
     fullText: { label: "tool.fullText", icon: BookOpenText },
     web: { label: "tool.web", icon: Globe },

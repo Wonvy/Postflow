@@ -184,6 +184,8 @@ download page instead.
 | `Shift` + `A` | Mark everything in the list as read (asks first) |
 | `T` | Auto-translate on / off |
 | `W` | Web page view on / off |
+| `F` | Maximize the reader (hide the sidebar and list); `Esc` restores |
+| `Shift+F` | Full screen, with the reader maximized; `Esc` leaves |
 | `/` or `⌘F` / `Ctrl+F` | Search |
 | `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |

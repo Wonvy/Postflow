@@ -25,6 +25,10 @@ import {
   Trash2,
   TriangleAlert,
   X,
+  Expand,
+  Maximize2,
+  Minimize2,
+  Shrink,
 } from "lucide-react";
 import type { Item } from "../lib/api";
 import {
@@ -40,7 +44,7 @@ import {
 import { useActions } from "../lib/actions";
 import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { copyText, formatSize, isMac, openExternal, saveAttachment } from "../lib/platform";
+import { copyText, formatSize, hasInsetTitlebar, isMac, openExternal, saveAttachment } from "../lib/platform";
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
@@ -56,6 +60,7 @@ import {
 import { isTauri } from "../lib/transport";
 import { isWebUrl } from "../lib/webDevice";
 import { AiPanel } from "./AiPanel";
+import { setFullscreen, useFullscreen } from "../lib/fullscreen";
 import { PluginSections } from "./PluginSections";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import { useWindowControlsGap } from "./WindowControls";
@@ -96,12 +101,16 @@ export function Reader() {
 function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactNode }) {
   // 阅读区的顶栏总在窗口最右上角（AI 栏在它下面），窗口按钮的位置由它留
   const gap = useWindowControlsGap(true);
+  // 最大化时侧栏没了，macOS 的红绿灯落在阅读区顶栏上，左边要给它们留位置（全屏时没有红绿灯）
+  const maximized = useUi((s) => s.readerMaximized);
+  const fullscreen = useFullscreen((s) => s.on);
+  const inset = maximized && !fullscreen && hasInsetTitlebar ? 78 : 0;
   return (
     <ToolbarMenu toolbar="reader">
     <header
       data-tauri-drag-region
       className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2"
-      style={gap ? { paddingRight: gap + 8 } : undefined}
+      style={{ ...(gap ? { paddingRight: gap + 8 } : {}), ...(inset ? { paddingLeft: inset } : {}) }}
     >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center pr-2">
         {leading}
@@ -460,6 +469,8 @@ function Article({ id }: { id: string }) {
               <ExternalLink {...ICON} />
             </IconButton>
           ) : null,
+        maximize: <MaximizeButton />,
+        fullscreen: <FullscreenButton />,
       };
 
   return (
@@ -1175,10 +1186,64 @@ function Attachments({ itemId, mail }: { itemId: string; mail: MailDetail }) {
   );
 }
 
+/** 阅读区最大化：藏起侧栏和列表。快捷键 F，Esc 退出。 */
+function MaximizeButton() {
+  const t = useT();
+  const maximized = useUi((s) => s.readerMaximized);
+  const setMaximized = useUi((s) => s.setReaderMaximized);
+  // Postflow 自己开的全屏里阅读区一直是最大化的，这个按钮没用
+  const ownFullscreen = useFullscreen((s) => s.on && s.ours);
+  if (ownFullscreen) return null;
+  return (
+    <IconButton
+      label={maximized ? t("reader.restore") : t("reader.maximize")}
+      shortcut="F"
+      active={maximized}
+      onClick={() => setMaximized(!maximized)}
+    >
+      {maximized ? <Minimize2 {...ICON} /> : <Maximize2 {...ICON} />}
+    </IconButton>
+  );
+}
+
+/** 全屏：整个窗口（浏览器里是整个页面）全屏，阅读区同时最大化。快捷键 Shift+F，Esc 退出。 */
+function FullscreenButton() {
+  const t = useT();
+  const on = useFullscreen((s) => s.on);
+  return (
+    <IconButton
+      label={on ? t("reader.exitFullscreen") : t("reader.fullscreen")}
+      shortcut="⇧F"
+      active={on}
+      onClick={() => void setFullscreen(!on)}
+    >
+      {on ? <Shrink {...ICON} /> : <Expand {...ICON} />}
+    </IconButton>
+  );
+}
+
+/** 最大化时关掉了正在看的条目，阅读区是空的：给一个回到原来布局的按钮。 */
+function RestoreButton() {
+  const t = useT();
+  const maximized = useUi((s) => s.readerMaximized);
+  const fullscreen = useFullscreen((s) => s.on);
+  const setMaximized = useUi((s) => s.setReaderMaximized);
+  if (!maximized && !fullscreen) return null;
+  return (
+    <IconButton
+      label={t("reader.restore")}
+      onClick={() => (fullscreen ? void setFullscreen(false) : setMaximized(false))}
+    >
+      <Minimize2 {...ICON} />
+    </IconButton>
+  );
+}
+
 function Empty() {
   const t = useT();
   const hints: [string[], string][] = [
     [["J", "K"], t("reader.hintMove")],
+    [["F", "⇧F"], t("reader.hintMaximize")],
     [["E"], t("reader.hintArchive")],
     [["S"], t("reader.hintStar")],
     [["U"], t("reader.hintRead")],
@@ -1195,7 +1260,9 @@ function Empty() {
   ];
   return (
     <>
-      <Toolbar />
+      <Toolbar>
+        <RestoreButton />
+      </Toolbar>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6">
         <p className="text-fg-3">{t("reader.empty")}</p>
         <dl className="grid grid-cols-[auto_auto] items-center gap-x-4 gap-y-2 text-[12px] text-fg-3">

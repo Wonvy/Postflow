@@ -4,6 +4,7 @@
 // 按钮下面那一栏的顶栏用 useWindowControlsGap 给它们留位置。
 
 import { useEffect, useState } from "react";
+import { useFullscreen } from "../lib/fullscreen";
 import { useT } from "../lib/i18n";
 import { hasWindowControls, WINDOW_CONTROLS_WIDTH } from "../lib/platform";
 import { isTauri } from "../lib/transport";
@@ -17,6 +18,7 @@ async function currentWindow() {
 export function WindowControls() {
   const t = useT();
   const [maximized, setMaximized] = useState(false);
+  const fullscreen = useFullscreen((s) => s.on);
 
   useEffect(() => {
     if (!hasWindowControls || !isTauri) return;
@@ -35,7 +37,8 @@ export function WindowControls() {
     };
   }, []);
 
-  if (!hasWindowControls) return null;
+  // 全屏时整个屏幕都给内容，窗口按钮不显示（Esc 或全屏按钮退出）
+  if (!hasWindowControls || fullscreen) return null;
 
   const run = (action: "minimize" | "toggleMaximize" | "close") => {
     if (!isTauri) return;
