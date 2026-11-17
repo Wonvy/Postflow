@@ -76,8 +76,12 @@ interface UiState {
   tab: SidebarTab;
   /** 每个选项卡上次停在的列表，切回来时回到那里。 */
   tabScopes: Partial<Record<SidebarTab, ListScope>>;
-  /** 翻译模式：列表里显示译文，打开的条目自动翻译。 */
+  /** 列表里显示译文。 */
   listTranslate: boolean;
+  /** 阅读面板的翻译开关：开着时打开的每一条都自动翻译，直到关掉。 */
+  readerTranslate: boolean;
+  /** 阅读面板的全文开关：开着时打开的每篇文章都自动抓取原网页全文，直到关掉。 */
+  readerFullText: boolean;
   /** 阅读面板右侧的 AI 栏开着。 */
   aiPanel: boolean;
   /** 用户是在哪一条上打开 AI 栏的。只有这一条会自动开始总结。 */
@@ -105,6 +109,8 @@ interface UiState {
   setTab: (tab: SidebarTab) => void;
   toggleAiPanel: () => void;
   toggleListTranslate: () => void;
+  setReaderTranslate: (on: boolean) => void;
+  setReaderFullText: (on: boolean) => void;
   requestTranslate: () => void;
 }
 
@@ -146,6 +152,8 @@ export const useUi = create<UiState>()(
       aiPanel: false,
       aiPanelFor: null,
       listTranslate: false,
+      readerTranslate: false,
+      readerFullText: false,
 
       setScope: (scope) => set({ scope, openId: null, selection: [], expandedGroups: [] }),
       open: (id) => set({ openId: id }),
@@ -195,6 +203,8 @@ export const useUi = create<UiState>()(
           };
         }),
       toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
+      setReaderTranslate: (readerTranslate) => set({ readerTranslate }),
+      setReaderFullText: (readerFullText) => set({ readerFullText }),
       toggleAiPanel: () => set((s) => ({ aiPanel: !s.aiPanel, aiPanelFor: s.aiPanel ? null : s.openId })),
       toggleSection: (section) =>
         set((s) => ({
@@ -238,6 +248,8 @@ export const useUi = create<UiState>()(
         tab: s.tab,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
+        readerTranslate: s.readerTranslate,
+        readerFullText: s.readerFullText,
       }),
     },
   ),

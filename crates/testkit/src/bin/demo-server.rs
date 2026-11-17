@@ -433,7 +433,29 @@ fn cover(colors: [&str; 2], seed: usize) -> String {
     )
 }
 
+/// 文章的网页：订阅里只有开头，这里多几段，「抓取全文」时能看出区别。
+fn page(post: &Post) -> String {
+    let more = "<p>This is the full article from the website. The feed only carries the opening, so \
+                fetching the page brings in the rest: background, details and the conclusion.</p>\
+                <p>Readers that keep everything on your own device can still fetch the original page when \
+                you ask for it, and keep a copy so it opens instantly the next time.</p>\
+                <p>That is the end of the article. Thanks for reading.</p>";
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{t}</title></head>\
+         <body><nav><a href=\"/\">Home</a></nav><main><article><h1>{t}</h1>{html}{more}</article></main>\
+         <footer>Demo site</footer></body></html>",
+        t = escape(post.title),
+        html = post.html,
+    )
+}
+
 fn route(path: &str) -> Option<(&'static str, String)> {
+    let all = || FIELD_NOTES.iter().chain(WEEKLY).chain(CN_WEEKLY);
+    if let Some((_, slug)) = path.trim_start_matches('/').split_once('/')
+        && let Some(post) = all().find(|p| p.slug == slug)
+    {
+        return Some(("text/html; charset=utf-8", page(post)));
+    }
     if let Some(slug) = path
         .strip_prefix("/covers/")
         .and_then(|p| p.strip_suffix(".svg"))

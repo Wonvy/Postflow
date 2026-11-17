@@ -86,14 +86,27 @@ function Article({ id }: { id: string }) {
     return { id: item.id, title: item.title, html, document: false };
   }, [item, mode]);
   const translation = useTranslation(source);
-  // 翻译模式下，打开的条目自动翻译；原文已经是目标语言时什么都不显示
-  const listTranslate = useUi((s) => s.listTranslate);
+  // 翻译开关开着：打开的每一条都自动翻译；原文已经是目标语言时什么都不显示
+  const readerTranslate = useUi((s) => s.readerTranslate);
+  const setReaderTranslate = useUi((s) => s.setReaderTranslate);
   const autoTranslated = useRef(false);
   useEffect(() => {
-    if (!listTranslate || !source || autoTranslated.current || translation.phase.kind !== "off") return;
+    if (!readerTranslate || !source || autoTranslated.current || translation.phase.kind !== "off") return;
     autoTranslated.current = true;
     translation.auto();
-  }, [listTranslate, source, translation]);
+  }, [readerTranslate, source, translation]);
+
+  /** 翻译按钮和 T 键：切换开关。打开时这一条马上翻译，关上时回到原文。 */
+  const toggleTranslate = () => {
+    if (readerTranslate || translation.phase.kind !== "off") {
+      setReaderTranslate(false);
+      translation.off();
+    } else {
+      setReaderTranslate(true);
+      autoTranslated.current = true;
+      translation.toggle();
+    }
+  };
   const aiPanel = useUi((s) => s.aiPanel);
   const aiPanelFor = useUi((s) => s.aiPanelFor);
   const toggleAiPanel = useUi((s) => s.toggleAiPanel);
@@ -106,8 +119,9 @@ function Article({ id }: { id: string }) {
   useEffect(() => {
     if (translateRequest === seenRequest.current) return;
     seenRequest.current = translateRequest;
-    translation.toggle();
-  }, [translateRequest, translation]);
+    toggleTranslate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [translateRequest]);
 
   // 打开即视为已读。每条只自动标一次，之后手动改回未读不会被再次覆盖。
   // 用列表里已有的数据判断，不等正文加载完：用键盘快速翻过的条目也要算读过。
@@ -126,12 +140,12 @@ function Article({ id }: { id: string }) {
   const all = (flag: "read" | "starred" | "archived") =>
     group.length > 0 ? group.every((i) => i[flag]) : Boolean(summary?.[flag]);
 
-  const toggleFullText = async () => {
+  const readerFullText = useUi((s) => s.readerFullText);
+  const setReaderFullText = useUi((s) => s.setReaderFullText);
+
+  /** 显示全文：抓过的直接用，没抓过的去原网页抓。 */
+  const showFullText = async () => {
     if (!item) return;
-    if (mode === "full") {
-      setMode("feed");
-      return;
-    }
     if (item.full_text) {
       setMode("full");
       return;
@@ -149,6 +163,26 @@ function Article({ id }: { id: string }) {
     }
   };
 
+  /** 全文按钮：切换开关。开着时之后打开的每篇文章都直接显示全文。 */
+  const toggleFullText = () => {
+    if (readerFullText || mode === "full") {
+      setReaderFullText(false);
+      setMode("feed");
+    } else {
+      setReaderFullText(true);
+      void showFullText();
+    }
+  };
+
+  // 全文开关开着：文章一打开就显示全文
+  const autoFull = useRef(false);
+  useEffect(() => {
+    if (!readerFullText || autoFull.current || !item || item.mail || !item.url) return;
+    autoFull.current = true;
+    void showFullText();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, readerFullText]);
+
   return (
     <>
       <Toolbar>
@@ -156,10 +190,10 @@ function Article({ id }: { id: string }) {
           <>
             {!isMail && summary.url && (
               <IconButton
-                label={mode === "full" ? t("action.feedContent") : t("action.fullText")}
-                active={mode === "full"}
+                label={readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
+                active={readerFullText || mode === "full"}
                 disabled={loadingFull || !item}
-                onClick={() => void toggleFullText()}
+                onClick={toggleFullText}
               >
                 {loadingFull ? (
                   <Spinner size={15} />
@@ -175,11 +209,11 @@ function Article({ id }: { id: string }) {
               <Sparkles {...ICON} />
             </IconButton>
             <IconButton
-              label={phase.kind === "on" ? t("action.showOriginal") : t("action.translate")}
+              label={readerTranslate ? t("action.translateOff") : t("action.translateOn")}
               shortcut="T"
-              active={phase.kind === "on"}
+              active={readerTranslate || phase.kind === "on"}
               disabled={!item}
-              onClick={translation.toggle}
+              onClick={toggleTranslate}
             >
               {phase.kind === "checking" || phase.kind === "translating" || phase.kind === "downloading" ? (
                 <Spinner size={15} />

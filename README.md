@@ -52,7 +52,8 @@ click **More info → Run anyway**.
 - Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them, drop them on a folder to
   move them in, or on the Feeds heading to move them out. Mailboxes and folders can be dragged into order too, and
   the order syncs to your other devices.
-- Load the full article from the original page for feeds that only publish a summary.
+- Load the full article from the original page for feeds that only publish a summary. The full-text button in the
+  reader is a switch: while it is on, every article you open loads in full.
 
 **One inbox**
 
@@ -66,12 +67,12 @@ click **More info → Run anyway**.
 - Three ways to show a list: compact rows, a summary with an excerpt and thumbnail, or a grid of cards with cover
   images. Each list remembers its own choice. Hold Ctrl (⌘ on a Mac) and scroll, or pinch on a trackpad, to resize
   the cards.
-- Offline translation for mail and articles. Press `T` and the message is translated on your device, keeping its
-  layout and links; press it again for the original. The language is detected for you, and models for more than 50
-  languages download once (about 40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read
-  is sent anywhere.
-- Translation mode (the translate button in the list toolbar): titles and summaries in the list show in your
-  language, and whatever you open is translated as it opens. Items already in your language are left alone.
+- Offline translation for mail and articles. The translate button in the reader (or `T`) is a switch: while it is on,
+  every message and article you open is translated on your device as it opens, keeping its layout and links; turn it
+  off for the original. The language is detected for you, and models for more than 50 languages download once (about
+  40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read is sent anywhere.
+- List translation (the translate button in the list toolbar): titles and summaries in the list show in your
+  language. Items already in your language are left alone, in the list and in the reader.
 - The sidebar's Mail and Feeds sections fold away, or switch to tabs (All / Mail / Feeds, keys `1` `2` `3`): each tab
   is its own workspace with its own views, last list and display mode.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
@@ -109,7 +110,7 @@ download page instead.
 | `X` | Select the current item for a bulk action |
 | `→` / `←` | Expand / collapse a group |
 | `Shift` + `A` | Mark everything in the list as read |
-| `T` | Translate / show the original |
+| `T` | Auto-translate on / off |
 | `A` | AI panel: summary and questions |
 | `1` `2` `3` | Switch sidebar tab (in the tabs layout) |
 | `R` | Refresh all feeds and mail |
