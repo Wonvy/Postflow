@@ -8,7 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+- Signatures: each mailbox can have one (in its settings). It's added below new messages and above the quote in
+  replies, and switches when you change the mailbox you send from.
+
 ### 中文
+
+- 签名：每个邮箱可以设一个（在邮箱设置里）。写新邮件时加在正文后面，回复时在引文上面；换发信的邮箱时签名跟着换。
 
 ## 0.1.11 — 2026-11-17
 

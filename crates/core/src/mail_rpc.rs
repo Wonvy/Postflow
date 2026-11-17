@@ -59,6 +59,7 @@ struct UpdateAccount {
     smtp_security: Option<String>,
     /// 发信时收件人看到的名字。
     sender_name: Option<String>,
+    signature: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -348,6 +349,7 @@ impl Core {
             smtp_port: p.smtp_port,
             smtp_security: p.smtp_security,
             sender_name: p.sender_name,
+            signature: p.signature,
         };
         let id = account.id.clone();
         session.db(move |s| s.update_account(&id, patch)).await?;

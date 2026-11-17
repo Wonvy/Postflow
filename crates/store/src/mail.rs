@@ -22,7 +22,7 @@ const ACCOUNT_SQL: &str = "SELECT a.id, a.email, a.name, a.imap_host, a.imap_por
             (SELECT COUNT(*) FROM items i \
               WHERE i.kind = 'mail' AND i.source_id = a.id AND i.read = 0 AND i.archived = 0), \
             s.last_sync_at, s.error, s.error_code, a.smtp_host, a.smtp_port, a.smtp_security, \
-            a.sender_name \
+            a.sender_name, a.signature \
      FROM accounts a LEFT JOIN mail_state s ON s.account_id = a.id";
 
 fn account_from_row(r: &Row<'_>) -> rusqlite::Result<Account> {
@@ -38,6 +38,7 @@ fn account_from_row(r: &Row<'_>) -> rusqlite::Result<Account> {
         smtp_port: r.get(13)?,
         smtp_security: r.get(14)?,
         sender_name: r.get(15)?,
+        signature: r.get(16)?,
         added_at: r.get(7)?,
         unread: r.get(8)?,
         last_sync_at: r.get(9)?,
@@ -72,8 +73,8 @@ pub(crate) fn materialize_account(conn: &Connection, id: &str) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO accounts \
          (id, email, name, imap_host, imap_port, imap_security, username, deleted, added_at, position, \
-          smtp_host, smtp_port, smtp_security, sender_name) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+          smtp_host, smtp_port, smtp_security, sender_name, signature) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             id,
             email,
@@ -97,6 +98,7 @@ pub(crate) fn materialize_account(conn: &Connection, id: &str) -> Result<()> {
                 .and_then(|_| fields.get("smtp_port").and_then(Value::as_i64)),
             smtp_host.as_ref().and_then(|_| text("smtp_security")),
             text("sender_name").unwrap_or_default(),
+            text("signature").unwrap_or_default(),
         ],
     )?;
     // 别的设备移除了这个邮箱：本机同步下来的邮件也清掉
@@ -239,6 +241,10 @@ impl Store {
         }
         if let Some(name) = patch.sender_name {
             set.insert("sender_name".into(), json!(name.trim()));
+        }
+        if let Some(signature) = patch.signature {
+            // 只去掉末尾的空白，开头的空行和缩进是用户自己排的
+            set.insert("signature".into(), json!(signature.trim_end()));
         }
         self.set_fields("account", &[id.to_string()], set)
     }

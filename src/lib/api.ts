@@ -66,6 +66,8 @@ export interface Account {
   smtp_security: Security | null;
   /** 发信时收件人看到的名字。`name` 只是侧栏里的邮箱名。 */
   sender_name: string;
+  /** 签名，写信时自动加在正文后面。 */
+  signature: string;
   added_at: number;
   unread: number;
   last_sync_at: number | null;
@@ -200,6 +202,7 @@ export interface AccountChanges {
   smtp_port?: number;
   smtp_security?: Security;
   sender_name?: string;
+  signature?: string;
 }
 
 /** 回复时接上同一个讨论用的两个信头。 */

@@ -297,6 +297,8 @@ pub struct AccountPatch {
     pub smtp_security: Option<String>,
     /// 发信时收件人看到的名字。
     pub sender_name: Option<String>,
+    /// 签名，写信时自动加在正文后面。
+    pub signature: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -314,6 +316,8 @@ pub struct Account {
     pub smtp_security: Option<String>,
     /// 发信时收件人看到的名字。`name` 只是这个邮箱在侧栏里的名字（比如「工作」），不拿来发信。
     pub sender_name: String,
+    /// 签名，写信时自动加在正文后面。会同步到其他设备。
+    pub signature: String,
     pub added_at: i64,
     pub unread: i64,
     pub last_sync_at: Option<i64>,

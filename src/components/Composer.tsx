@@ -20,7 +20,15 @@ import {
   useState,
 } from "react";
 import { api, type Contact, type Outgoing, type Thread } from "../lib/api";
-import { addressOf, type ComposeMode, isValidAddress, prefill, splitAddresses } from "../lib/compose";
+import {
+  addSignature,
+  addressOf,
+  type ComposeMode,
+  isValidAddress,
+  prefill,
+  splitAddresses,
+  swapSignature,
+} from "../lib/compose";
 import { errorDetail, errorText, useLang, useT } from "../lib/i18n";
 import { formatSize, isMac } from "../lib/platform";
 import { keys, useNav } from "../lib/queries";
@@ -141,6 +149,9 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const [from, setFrom] = useState<string | null>(null);
   const fromId = from ?? defaultAccount;
   const fromAccount = accounts.find((a) => a.id === fromId);
+  /** 正文里现在放的是哪个签名，以及预先填好的引文（签名放在它上面）。换邮箱时换签名用。 */
+  const signature = useRef("");
+  const quoteTail = useRef("");
   // 这个邮箱还没填过发件人名字：在这里顺手填，发送时记进邮箱设置
   const [senderName, setSenderName] = useState("");
   const [to, setTo] = useState<Recipients>(EMPTY);
@@ -181,6 +192,8 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     const d = saved.data;
     if (mode === "draft" && d) {
       setFrom(d.account_id);
+      // 草稿里多半已经有这个邮箱的签名
+      signature.current = accounts.find((a) => a.id === d.account_id)?.signature ?? "";
       setTo({ list: d.to, draft: "" });
       setCc({ list: d.cc, draft: "" });
       setBcc({ list: d.bcc, draft: "" });
@@ -200,7 +213,10 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
       setCc({ list: p.cc, draft: "" });
       setShowCc(p.cc.length > 0);
       setSubject(p.subject);
-      setText(p.text);
+      const sig = accounts.find((a) => a.id === defaultAccount)?.signature ?? "";
+      signature.current = sig;
+      quoteTail.current = p.text;
+      setText(addSignature(p.text, sig, p.text));
       if (ctx && mode !== "forward") setThread(ctx.thread);
       if (ctx && mode === "forward") {
         setFiles(ctx.attachments.map((a) => ({ ...a, key: nextKey.current++, failed: false })));
@@ -215,7 +231,15 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
         toField.current?.focus();
       }
     });
-  }, [accounts, context.data, saved.data, lang, mode, ready]);
+  }, [accounts, context.data, saved.data, lang, mode, ready, defaultAccount]);
+
+  /** 换发信的邮箱：签名跟着换。 */
+  const changeFrom = (id: string) => {
+    const next = accounts.find((a) => a.id === id)?.signature ?? "";
+    setText((current) => swapSignature(current, signature.current, next, quoteTail.current));
+    signature.current = next;
+    setFrom(id);
+  };
 
   const tokens = files.flatMap((f) => (f.token ? [f.token] : []));
   const uploading = files.some((f) => !f.token && !f.failed);
@@ -488,7 +512,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
                     {accounts.length > 1 ? (
                       <Select
                         value={fromId}
-                        onChange={(e) => setFrom(e.target.value)}
+                        onChange={(e) => changeFrom(e.target.value)}
                         // 只占内容那么宽，不拉满整行
                         style={{ width: "auto" }}
                         className="h-7 max-w-full border-transparent bg-transparent px-1 focus:border-accent"

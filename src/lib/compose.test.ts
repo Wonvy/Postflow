@@ -13,7 +13,10 @@ import {
   quote,
   replyRecipients,
   replySubject,
+  addSignature,
+  signatureBlock,
   splitAddresses,
+  swapSignature,
   type ReplyContext,
 } from "./compose.ts";
 
@@ -131,4 +134,20 @@ test("attribution and forward header work without a date or name", () => {
   assert.equal(attribution(bare, "en"), "Original message:");
   assert.equal(attribution(bare, "zh"), "原信：");
   assert.ok(!forwardHeader(bare, "zh").includes("发件人"));
+});
+
+test("signatures go after new text and above quotes, and follow the sending mailbox", () => {
+  assert.equal(signatureBlock("  \n"), "");
+  assert.equal(addSignature("", "Sam\nNorthwind\n", ""), "\n\n-- \nSam\nNorthwind");
+  const tail = "\n\nOn Monday, Ada wrote:\n> hi";
+  const reply = addSignature(tail, "Sam", tail);
+  assert.equal(reply, "\n\n-- \nSam" + tail);
+  // 换邮箱：签名跟着换，引文不动
+  assert.equal(swapSignature("Hello" + reply.slice(0), "Sam", "Samuel", tail), "Hello\n\n-- \nSamuel" + tail);
+  // 新邮箱没有签名：去掉
+  assert.equal(swapSignature("Hi\n\n-- \nSam", "Sam", "", ""), "Hi");
+  // 原来没有签名：加上
+  assert.equal(swapSignature("Hi", "", "Sam", ""), "Hi\n\n-- \nSam");
+  // 用户改过签名：不碰
+  assert.equal(swapSignature("Hi\n\n-- \nSam (edited)", "Sam!", "Samuel", ""), "Hi\n\n-- \nSam (edited)");
 });

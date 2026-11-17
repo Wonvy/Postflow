@@ -123,6 +123,18 @@ fn send_server_is_automatic_until_set_and_syncs() {
         ),
         (None, None, None)
     );
+
+    // 签名同步到其他设备，末尾的空白去掉
+    a.update_account(
+        &id,
+        AccountPatch {
+            signature: Some("Sam\n  Northwind  \n\n".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let c = open(tmp.path(), &data, "cccccccccccc");
+    assert_eq!(c.accounts().unwrap()[0].signature, "Sam\n  Northwind");
 }
 
 #[test]

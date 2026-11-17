@@ -215,3 +215,33 @@ export function prefill(mode: ComposeMode, ctx: ReplyContext | null, self: strin
     text: `\n\n${attribution(ctx, lang)}${quoted}`,
   };
 }
+
+/** 签名加在正文里的样子：常见的「-- 」分隔线，下面是签名。没有签名时什么都不加。 */
+export function signatureBlock(signature: string): string {
+  const sig = signature.replace(/\s+$/, "");
+  return sig ? `\n\n-- \n${sig}` : "";
+}
+
+/**
+ * 正文里放进签名：写新邮件时在最后，回复、转发时在引文上面（`tail` 是预先填好的引文那一段）。
+ */
+export function addSignature(text: string, signature: string, tail: string): string {
+  const block = signatureBlock(signature);
+  if (!block) return text;
+  if (tail && text.endsWith(tail)) return text.slice(0, text.length - tail.length) + block + tail;
+  return text + block;
+}
+
+/**
+ * 换了发信的邮箱：把正文里旧邮箱的签名换成新邮箱的。旧签名被改动过就不碰它，免得改掉用户写的字；
+ * 原来没有签名时，按 `addSignature` 的位置加上。
+ */
+export function swapSignature(text: string, from: string, to: string, tail: string): string {
+  const old = signatureBlock(from);
+  const next = signatureBlock(to);
+  if (old === next) return text;
+  if (!old) return addSignature(text, to, tail);
+  const at = text.lastIndexOf(old, tail && text.endsWith(tail) ? text.length - tail.length : undefined);
+  if (at < 0) return text;
+  return text.slice(0, at) + next + text.slice(at + old.length);
+}

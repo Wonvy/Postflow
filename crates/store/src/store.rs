@@ -86,7 +86,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     smtp_port     INTEGER,
     smtp_security TEXT,
     -- 发信时收件人看到的名字
-    sender_name   TEXT NOT NULL DEFAULT ''
+    sender_name   TEXT NOT NULL DEFAULT '',
+    -- 签名
+    signature     TEXT NOT NULL DEFAULT ''
 ) WITHOUT ROWID;
 
 -- 信息流里的每一条：订阅文章（kind = article）或邮件（kind = mail）。
@@ -864,6 +866,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     add_column(conn, "accounts", "smtp_port", "INTEGER")?;
     add_column(conn, "accounts", "smtp_security", "TEXT")?;
     add_column(conn, "accounts", "sender_name", "TEXT NOT NULL DEFAULT ''")?;
+    add_column(conn, "accounts", "signature", "TEXT NOT NULL DEFAULT ''")?;
     add_column(conn, "mail_meta", "recipients", "TEXT")?;
     if add_column(conn, "items", "image", "TEXT")? {
         backfill_images(conn)?;

@@ -890,6 +890,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
 
   const [name, setName] = useState(account.name);
   const [senderName, setSenderName] = useState(account.sender_name);
+  const [signature, setSignature] = useState(account.signature);
   const [password, setPassword] = useState("");
   const initial: Server = {
     host: account.imap_host,
@@ -928,6 +929,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
     const changes: AccountChanges = {};
     if (name.trim() !== account.name) changes.name = name.trim();
     if (senderName.trim() !== account.sender_name) changes.sender_name = senderName.trim();
+    if (signature.trimEnd() !== account.signature) changes.signature = signature;
     if (password) changes.password = password;
     if (server.host.trim() !== account.imap_host) changes.imap_host = server.host.trim();
     if (Number(server.port) !== account.imap_port) changes.imap_port = Number(server.port);
@@ -997,6 +999,15 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
           value={senderName}
           onChange={(e) => setSenderName(e.target.value)}
           placeholder={t("account.senderNamePlaceholder")}
+        />
+      </Field>
+      <Field label={t("account.signature")} hint={t("account.signatureHint")}>
+        <textarea
+          value={signature}
+          onChange={(e) => setSignature(e.target.value)}
+          rows={3}
+          placeholder={t("account.signaturePlaceholder")}
+          className="w-full resize-y rounded-md border border-line-strong bg-bg px-2.5 py-1.5 text-[13px] leading-relaxed text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </Field>
       {oauth ? (
