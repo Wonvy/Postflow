@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.10 — 2026-11-17
+
+### English
+
 - When a feed moves, change its address in the feed's Edit dialog. Postflow checks the new address first and keeps
   the same feed, with its read and starred states and earlier items. The warning sign next to a feed means its last
   refresh failed.
