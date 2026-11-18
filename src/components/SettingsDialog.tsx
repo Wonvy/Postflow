@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  Check,
   Database,
   Globe,
   HardDrive,
@@ -10,6 +11,7 @@ import {
   Languages,
   type LucideIcon,
   Palette,
+  Plus,
   Rss,
   SlidersHorizontal,
   Sparkles,
@@ -20,6 +22,7 @@ import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useMem
 import CHANGELOG from "../../CHANGELOG.md?raw";
 import { api, type View } from "../lib/api";
 import { compareVersions, parseChangelog } from "../lib/changelog";
+import { ACCENT_PRESETS, accentKind, accentVars } from "../lib/accent";
 import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
@@ -32,7 +35,7 @@ import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
 import { SettingRow, SettingsHeading } from "./SettingsParts";
 import { NotesSection } from "./UpdateDialog";
-import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
+import { Button, cx, Modal, Segmented, Select, Switch, TextInput, Tip } from "./ui";
 import { StorageSettings } from "./StorageSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { RulesSettings } from "./RulesSettings";
@@ -184,6 +187,9 @@ export function SettingsDialog() {
               { value: "light", label: t("settings.themeLight") },
             ]}
           />
+        </SettingRow>
+        <SettingRow label={t("settings.accent")} hint={t("settings.accentHint")}>
+          <AccentPicker />
         </SettingRow>
         <SettingRow label={t("settings.density")}>
           <Segmented<Density>
@@ -732,5 +738,66 @@ function ShownViews({ space }: { space: Space }) {
         })}
       </div>
     </SettingRow>
+  );
+}
+
+/** 主题色：几种预设的色块，最后一个是自己挑颜色。 */
+function AccentPicker() {
+  const t = useT();
+  const choice = useUi((s) => s.accentColor);
+  const setChoice = useUi((s) => s.setAccentColor);
+  const theme = useUi((s) => s.theme);
+  // 色块用现在界面主题下的那个深浅，看到的就是用上以后的样子
+  const dark =
+    theme === "dark" || (theme === "system" && typeof matchMedia === "function" && !matchMedia("(prefers-color-scheme: light)").matches);
+  const kind = accentKind(choice);
+  const custom = kind === "custom" ? choice : "#7533e8";
+  const swatch = (selected: boolean) =>
+    cx(
+      "relative flex size-6 shrink-0 items-center justify-center rounded-full ring-offset-2 ring-offset-surface transition-shadow touch:size-9",
+      selected ? "ring-2 ring-fg-2" : "hover:ring-2 hover:ring-line-strong",
+    );
+  return (
+    <div role="radiogroup" aria-label={t("settings.accent")} className="flex max-w-[300px] flex-wrap justify-end gap-1.5">
+      {ACCENT_PRESETS.map((p) => {
+        const color = dark ? p.dark : p.light;
+        const selected = kind === p.id;
+        return (
+          <Tip key={p.id} label={t(`accent.${p.id}` as MessageKey)} side="top">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={t(`accent.${p.id}` as MessageKey)}
+              onClick={() => setChoice(p.id)}
+              className={swatch(selected)}
+              style={{ background: color }}
+            >
+              {selected && <Check size={13} strokeWidth={3} className="text-white" />}
+            </button>
+          </Tip>
+        );
+      })}
+      <Tip label={t("accent.custom")} side="top">
+        <label
+          className={cx(swatch(kind === "custom"), "cursor-pointer overflow-hidden")}
+          style={{
+            background:
+              kind === "custom"
+                ? accentVars(choice, dark ? "dark" : "light").accent
+                : "conic-gradient(#f87171, #fb923c, #facc15, #4ade80, #2dd4bf, #60a5fa, #a25bff, #f472b6, #f87171)",
+          }}
+        >
+          {kind === "custom" ? <Check size={13} strokeWidth={3} className="text-white" /> : <Plus size={13} strokeWidth={3} className="text-white" />}
+          <input
+            type="color"
+            aria-label={t("accent.custom")}
+            value={custom}
+            onChange={(e) => setChoice(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
+      </Tip>
+    </div>
   );
 }

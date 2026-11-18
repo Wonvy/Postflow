@@ -148,6 +148,9 @@ interface UiState {
 
   // 以下是这台设备上的界面偏好，存在浏览器本地
   theme: ThemePref;
+  /** 主题色：预设的 ID（见 accent.ts），或者自己挑的 #rrggbb。只存在这台设备上。 */
+  accentColor: string;
+  setAccentColor: (color: string) => void;
   density: Density;
   lang: LangPref;
   sidebarWidth: number;
@@ -389,6 +392,7 @@ export const useUi = create<UiState>()(
       searchFocus: 0,
 
       theme: "system",
+      accentColor: "postflow",
       density: "compact",
       lang: "system",
       sidebarWidth: 244,
@@ -571,6 +575,7 @@ export const useUi = create<UiState>()(
             : s.expandedGroups.filter((k) => k !== key),
         })),
       setTheme: (theme) => set({ theme }),
+      setAccentColor: (accentColor) => set({ accentColor }),
       setDensity: (density) => set({ density }),
       setLang: (lang) => set({ lang }),
       setSidebarWidth: (w) => set({ sidebarWidth: clamp(w, SIDEBAR_MIN, SIDEBAR_MAX) }),
@@ -685,6 +690,7 @@ export const useUi = create<UiState>()(
       },
       partialize: (s) => ({
         theme: s.theme,
+        accentColor: s.accentColor,
         density: s.density,
         lang: s.lang,
         sidebarWidth: s.sidebarWidth,

@@ -4,6 +4,7 @@ import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
 import { PlayerBridge } from "./components/Player";
 import { DownloadsBridge } from "./lib/episodes";
+import { accentVars } from "./lib/accent";
 import { useCanHover, useLayout, useReaderOverlay } from "./lib/mobile";
 import { Unplug } from "lucide-react";
 import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
@@ -62,18 +63,25 @@ function useMailCatchUp() {
 /** 把主题和语言写到 <html> 上，跟随系统时监听系统设置的变化。 */
 function useAppearance() {
   const theme = useUi((s) => s.theme);
+  const accent = useUi((s) => s.accentColor);
   const lang = useUi((s) => s.lang);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: light)");
     const apply = () => {
       const resolved = theme === "system" ? (media.matches ? "light" : "dark") : theme;
-      document.documentElement.dataset.theme = resolved;
+      const root = document.documentElement;
+      root.dataset.theme = resolved;
+      // 主题色：浅色、深色界面各用一个深浅，盖掉 styles.css 里的默认
+      const vars = accentVars(accent, resolved);
+      root.style.setProperty("--accent", vars.accent);
+      root.style.setProperty("--accent-strong", vars.strong);
+      root.style.setProperty("--accent-soft", vars.soft);
     };
     apply();
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
-  }, [theme]);
+  }, [theme, accent]);
 
   useEffect(() => {
     document.documentElement.lang = resolveLang(lang) === "zh" ? "zh-CN" : "en";
