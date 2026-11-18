@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.21 — 2026-11-18
+
+### English
 - Discover in Add feed shows feeds as a grid of icons by default; switch to the list with the buttons next to the language menu. The choice is kept on this device.
 - The recommended feeds update online: the list and its icons are one file, and the app checks GitHub (through jsDelivr) for a newer version at most once a day, falling back to the list it came with. Turn it off or check now in Settings → Feeds.
 - Offline translation recognises plain French, German and similar sentences again; since 0.1.18 they were sometimes left untranslated.
