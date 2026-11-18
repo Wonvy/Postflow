@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.24 — 2026-11-18
+
+### English
 - Unread counts next to feeds, mailboxes and categories no longer include snoozed items.
 - Snoozed items that come back are pinned to the top of the mailbox, feed, folder or category they belong to, not only the inbox.
 - Phones: add Postflow to the home screen to open it full screen like an app. If a phone opens it without the access key, Postflow asks you to paste the link from the desktop app instead of showing an error. On phones, swipe a row left to archive or right to mark it read or unread.
