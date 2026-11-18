@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.29 — 2026-11-18
+
+### English
 - Podcasts: search for a show by name under Add feed → Podcasts, or pick one from the new Podcasts category in Discover. Episodes play in the reader and keep playing in a small player under the list: back 15 s, forward 30 s, 0.8×–3× speed, and each episode remembers where you stopped. Finished episodes are marked read, and "Play the next episode when done" keeps going. Video attachments play in the reader.
 - Feeds are now sorted into articles, videos and podcasts. Once you have more than one type, a row of icons at the top of Feeds shows one type at a time, with a dot when a type has unread items. Change a feed's type in its Edit dialog if the automatic choice is wrong.
 - A tidier Feeds sidebar: the views sit under a Views header that you can collapse, and right-clicking it chooses which views to show. Feeds shows only Today and Starred by default; with nothing selected you see all articles, and clicking the selected feed, folder or view again (or the Feeds tab) goes back there. Mail keeps all its views.
