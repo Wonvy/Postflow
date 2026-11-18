@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.28 — 2026-11-18
+
+### English
 - Feeds without an icon now get their website's real icon: after each refresh, Postflow looks up the icon the site declares (a large touch icon when there is one, otherwise a favicon it has checked exists) and uses it from then on. Icons that feeds bring themselves are left alone.
 - New option in Settings → Appearance → Reader: Pop-up. The window then has two columns, the sidebar and a full-width list; opening an item shows the reader in a large panel on top. J/K move between items, F fills the window, Esc or a click outside closes it. Beside the list stays the default; phones are unchanged.
 
