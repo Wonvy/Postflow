@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.22 — 2026-11-18
+
+### English
 - Snooze: send mail or articles away until later today, this evening, tomorrow, the weekend, next week or a time you pick. They wait under Snoozed and come back unread at the top of the inbox with a notification. Snoozes sync between devices.
 - Undo send (5 seconds by default, Settings → Appearance) and schedule send (the clock next to Send). Scheduled mail is listed under Scheduled in the Mail sidebar; Postflow sends it when it's running at that time, or as soon as it opens.
 - Command palette: ⌘K / Ctrl+K (or the button at the bottom of the sidebar) to jump anywhere or run a command.
