@@ -1,22 +1,22 @@
-// 「添加订阅 → 播客」：按节目名搜索（苹果播客目录的公开接口，由核心去请求），一键订阅节目自己的 RSS。
-// 中文界面在中国区目录里搜，中文节目多；其他语言在美国区搜。
+// 「添加订阅 → 播客」搜索时，目录里的播客下面接着列出苹果播客目录里搜到的节目（公开接口，由核心去请求），
+// 一键订阅节目自己的 RSS。中文界面在中国区目录里搜，中文节目多；其他语言在美国区搜。目录里已经列出来的不重复。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Headphones, Plus, Search } from "lucide-react";
+import { Check, Headphones, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, type PodcastResult } from "../lib/api";
 import { feedKey } from "../lib/catalog";
 import { errorText, useLang, useT } from "../lib/i18n";
 import { keys, useNav } from "../lib/queries";
 import { toast } from "./Toast";
-import { Button, cx, Spinner, TextInput } from "./ui";
+import { Button, Spinner } from "./ui";
 
 function Artwork({ src }: { src: string | null }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) {
     return (
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-hover text-fg-3">
-        <Headphones size={20} strokeWidth={1.5} />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-hover text-fg-3">
+        <Headphones size={16} strokeWidth={1.5} />
       </span>
     );
   }
@@ -27,25 +27,33 @@ function Artwork({ src }: { src: string | null }) {
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className="size-12 shrink-0 rounded-md bg-hover object-cover ring-1 ring-line"
+      className="size-8 shrink-0 rounded-md bg-hover object-cover ring-1 ring-line"
     />
   );
 }
 
-export function PodcastSearch({ folder, onDone }: { folder: string; onDone: () => void }) {
+export function ApplePodcastResults({
+  search,
+  folder,
+  listed,
+}: {
+  /** 搜索框里的字，停笔 400 毫秒再搜。 */
+  search: string;
+  folder: string;
+  /** 上面目录里已经列出来的订阅地址（feedKey），这里不再重复。 */
+  listed: ReadonlySet<string>;
+}) {
   const t = useT();
   const lang = useLang();
   const qc = useQueryClient();
   const feeds = useNav().data?.feeds;
-  const [text, setText] = useState("");
   const [term, setTerm] = useState("");
   const [adding, setAdding] = useState<Set<string>>(new Set());
 
-  // 停笔 400 毫秒再搜
   useEffect(() => {
-    const timer = setTimeout(() => setTerm(text.trim()), 400);
+    const timer = setTimeout(() => setTerm(search.trim()), 400);
     return () => clearTimeout(timer);
-  }, [text]);
+  }, [search]);
 
   const country = lang === "zh" ? "cn" : "us";
   const results = useQuery({
@@ -75,68 +83,50 @@ export function PodcastSearch({ folder, onDone }: { folder: string; onDone: () =
     }
   };
 
-  const list = results.data ?? [];
+  if (!term) return null;
+  const list = (results.data ?? []).filter((show) => !listed.has(feedKey(show.feed_url)));
   return (
-    <div className="flex flex-col gap-3 px-4 pb-4">
-      <div className="relative">
-        <Search size={14} strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3" />
-        <TextInput
-          autoFocus
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={t("podcast.searchPlaceholder")}
-          aria-label={t("podcast.searchPlaceholder")}
-          className="w-full pl-8"
-        />
-      </div>
-      <div className="h-[360px] overflow-y-auto">
-        {!term ? (
-          <p className="px-1 pt-2 text-[12px] leading-relaxed text-fg-3">{t("podcast.hint")}</p>
-        ) : results.isFetching && list.length === 0 ? (
-          <div className="flex justify-center py-10 text-fg-3">
-            <Spinner size={16} />
-          </div>
-        ) : results.error ? (
-          <p className="px-1 pt-2 text-[12px] text-danger">{errorText(t, results.error)}</p>
-        ) : list.length === 0 ? (
-          <p className="px-1 pt-2 text-[12px] text-fg-3">{t("podcast.none")}</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {list.map((show) => {
-              const subscribed = have.has(feedKey(show.feed_url));
-              const busy = adding.has(show.feed_url);
-              return (
-                <li key={show.feed_url} className="flex items-center gap-3 rounded-md px-1.5 py-1.5 hover:bg-hover">
-                  <Artwork src={show.artwork} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-fg">{show.title}</div>
-                    <div className="truncate text-[12px] text-fg-3">
-                      {[show.author, show.genre, show.episodes ? t("podcast.episodes", { n: show.episodes }) : null]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
+    <section className="mt-3">
+      <h3 className="mb-1 flex items-center gap-2 px-2 text-[12px] font-medium text-fg-3">
+        {t("podcast.fromApple")}
+        {results.isFetching && <Spinner size={11} />}
+      </h3>
+      {results.error ? (
+        <p className="px-2 py-2 text-[12px] text-danger">{errorText(t, results.error)}</p>
+      ) : !results.isFetching && list.length === 0 ? (
+        <p className="px-2 py-2 text-[12px] text-fg-3">{t("podcast.none")}</p>
+      ) : (
+        <ul className="flex flex-col gap-px">
+          {list.map((show) => {
+            const subscribed = have.has(feedKey(show.feed_url));
+            const busy = adding.has(show.feed_url);
+            return (
+              <li key={show.feed_url} className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-hover">
+                <Artwork src={show.artwork} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-fg">{show.title}</div>
+                  <div className="truncate text-[12px] text-fg-3">
+                    {[show.author, show.genre, show.episodes ? t("podcast.episodes", { n: show.episodes }) : null]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </div>
-                  <Button
-                    variant={subscribed ? "ghost" : "secondary"}
-                    disabled={subscribed || busy}
-                    onClick={() => void subscribe(show)}
-                    className={cx("shrink-0", subscribed && "text-fg-3")}
-                  >
-                    {busy ? <Spinner size={12} /> : subscribed ? <Check size={13} /> : <Plus size={13} />}
-                    {subscribed ? t("podcast.subscribed") : t("podcast.subscribe")}
+                </div>
+                {subscribed ? (
+                  <span className="flex h-7 shrink-0 items-center gap-1 px-2 text-[12px] text-fg-3">
+                    <Check size={13} strokeWidth={2} />
+                    {t("podcast.subscribed")}
+                  </span>
+                ) : (
+                  <Button className="h-7 shrink-0 px-2.5" disabled={busy} onClick={() => void subscribe(show)}>
+                    {busy ? <Spinner size={12} /> : <Plus size={13} strokeWidth={2} />}
+                    {t("podcast.subscribe")}
                   </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-fg-4">{t("podcast.source")}</span>
-        <Button variant="ghost" onClick={onDone}>
-          {t("catalog.done")}
-        </Button>
-      </div>
-    </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

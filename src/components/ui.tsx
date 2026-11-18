@@ -41,16 +41,28 @@ export function Tip({
   label,
   shortcut,
   side = "bottom",
+  menu,
   children,
 }: {
   label: string;
   shortcut?: string;
   side?: "top" | "bottom" | "left" | "right";
+  /**
+   * 同一个元素上还要右键菜单时传这里。把 Tip 套在 ContextMenu 里或者反过来都不行：两边都要直接接到按钮上。
+   */
+  menu?: ReactNode;
   children: ReactNode;
 }) {
+  const trigger = <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>;
   return (
     <Tooltip.Root>
-      <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+      {menu ? (
+        <ContextMenu bare items={menu}>
+          {trigger}
+        </ContextMenu>
+      ) : (
+        trigger
+      )}
       <Tooltip.Portal>
         <Tooltip.Content
           side={side}

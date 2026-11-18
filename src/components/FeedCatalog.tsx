@@ -6,6 +6,7 @@ import { ArrowRight, Check, LayoutGrid, List, Plus, Search } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import {
+  feedKey,
   groupCounts,
   PODCAST_GROUPS,
   type PodcastGroup,
@@ -23,6 +24,7 @@ import { type CheckResult, checkCatalog, useCatalog } from "../lib/catalogRemote
 import { errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
+import { ApplePodcastResults } from "./PodcastSearch";
 import { SettingRow } from "./SettingsParts";
 import { toast } from "./Toast";
 import { Avatar, Button, cx, IconButton, Select, Spinner, Switch } from "./ui";
@@ -102,12 +104,18 @@ export function DiscoverPane({
   startFolder,
   onUrl,
   onDone,
+  podcasts = false,
 }: {
   /** 从文件夹的菜单打开时，都放进这个文件夹。 */
   startFolder: string;
   /** 输入或粘贴的是网址：换到「网址」页订阅。 */
   onUrl: (url: string) => void;
   onDone: () => void;
+  /**
+   * 「添加订阅 → 播客」：只看目录里的播客，左边是「推荐」和播客的小类（新闻、科技……）；
+   * 搜索时目录里的在前，后面接着是苹果播客目录里搜到的。
+   */
+  podcasts?: boolean;
 }) {
   const t = useT();
   const lang = useLang();
@@ -124,17 +132,41 @@ export function DiscoverPane({
   const setView = useUi((s) => s.setCatalogView);
 
   const search = query.trim();
-  const counts = sectionCounts(langFilter, catalog.feeds);
-  const sections = (["featured", ...CATALOG_CATEGORIES] as CatalogSection[]).filter((s) => (counts[s] ?? 0) > 0);
-  const current = sections.includes(section) ? section : (sections[0] ?? "featured");
-  const groups = groupCounts(langFilter, catalog.feeds);
+  // 播客页只看目录里的播客
+  const pool = useMemo(
+    () => (podcasts ? catalog.feeds.filter((f) => f.category === "podcasts") : catalog.feeds),
+    [podcasts, catalog.feeds],
+  );
+  const counts = sectionCounts(langFilter, pool);
+  const groups = groupCounts(langFilter, pool);
   const shownGroups = PODCAST_GROUPS.filter((g) => (groups[g] ?? 0) > 0);
-  const showGroups = current === "podcasts" && !search && shownGroups.length > 1;
+  // 左边那一列：发现页是「推荐」和各个分类，播客页是「推荐」和播客的小类
+  const nav: { key: string; label: string; count: number }[] = podcasts
+    ? [
+        { key: "featured", label: t("catalog.featured"), count: counts.featured ?? 0 },
+        ...shownGroups.map((g) => ({ key: g, label: t(`catalog.group.${g}`), count: groups[g] ?? 0 })),
+      ].filter((n) => n.count > 0)
+    : (["featured", ...CATALOG_CATEGORIES] as CatalogSection[])
+        .filter((s) => (counts[s] ?? 0) > 0)
+        .map((s) => ({
+          key: s,
+          label: s === "featured" ? t("catalog.featured") : categoryName(t, s),
+          count: counts[s] ?? 0,
+        }));
+  const picked = podcasts ? (group ?? "featured") : section;
+  const current = nav.some((n) => n.key === picked) ? picked : (nav[0]?.key ?? "featured");
+  const showGroups = !podcasts && current === "podcasts" && !search && shownGroups.length > 1;
   const activeGroup = showGroups && group && shownGroups.includes(group) ? group : undefined;
-  const list = browseCatalog({ section: current, prefer, langFilter, search, group: activeGroup }, catalog.feeds);
+  const list = podcasts
+    ? browseCatalog(
+        current === "featured" || search
+          ? { section: search ? "podcasts" : "featured", prefer, langFilter, search }
+          : { section: "podcasts", prefer, langFilter, group: current as PodcastGroup },
+        pool,
+      )
+    : browseCatalog({ section: current as CatalogSection, prefer, langFilter, search, group: activeGroup }, pool);
   const left = list.filter((f) => !subscribed.has(f.id) && !adding.has(f.id));
   const folderOf = (feed: CatalogFeed) => startFolder || (byCategory ? categoryName(t, feed.category) : "");
-  const sectionLabel = (s: CatalogSection) => (s === "featured" ? t("catalog.featured") : categoryName(t, s));
   const desc = (feed: CatalogFeed) => (prefer === "zh" ? feed.desc.zh : feed.desc.en);
   const langBadge = (feed: CatalogFeed) => (
     <span className="shrink-0 rounded border border-line px-1 text-[10px] leading-[14px] text-fg-3">
@@ -167,8 +199,8 @@ export function DiscoverPane({
                 onUrl(search);
               }
             }}
-            placeholder={t("catalog.search")}
-            aria-label={t("catalog.search")}
+            placeholder={podcasts ? t("podcast.searchPlaceholder") : t("catalog.search")}
+            aria-label={podcasts ? t("podcast.searchPlaceholder") : t("catalog.search")}
             autoComplete="off"
             spellCheck={false}
             className="h-9 w-full rounded-md border border-line-strong bg-bg pl-8 pr-2.5 text-[13px] text-fg outline-none placeholder:text-fg-3 focus:border-accent focus:ring-1 focus:ring-accent"
@@ -202,23 +234,27 @@ export function DiscoverPane({
           aria-label={t("catalog.categories")}
           className="w-[152px] shrink-0 overflow-y-auto border-r border-line p-1.5 no-scrollbar max-md:flex max-md:w-auto max-md:gap-1 max-md:overflow-x-auto max-md:overflow-y-hidden max-md:border-b max-md:border-r-0"
         >
-          {sections.map((s) => (
+          {nav.map((n) => (
             <button
-              key={s}
+              key={n.key}
               type="button"
-              aria-current={!search && s === current ? "true" : undefined}
+              aria-current={!search && n.key === current ? "true" : undefined}
               onClick={() => {
-                setSection(s);
-                setGroup(null);
+                if (podcasts) {
+                  setGroup(n.key === "featured" ? null : (n.key as PodcastGroup));
+                } else {
+                  setSection(n.key as CatalogSection);
+                  setGroup(null);
+                }
                 setQuery("");
               }}
               className={cx(
-                "flex h-7 w-full shrink-0 items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] transition-colors max-md:w-auto",
-                !search && s === current ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
+                "flex h-7 w-full shrink-0 items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] transition-colors max-md:w-auto touch:h-10",
+                !search && n.key === current ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
               )}
             >
-              <span className="truncate">{sectionLabel(s)}</span>
-              <span className="tabular shrink-0 text-[11px] text-fg-3">{counts[s]}</span>
+              <span className="truncate">{n.label}</span>
+              <span className="tabular shrink-0 text-[11px] text-fg-3">{n.count}</span>
             </button>
           ))}
         </nav>
@@ -262,7 +298,10 @@ export function DiscoverPane({
               <Spinner size={16} />
             </div>
           ) : list.length === 0 ? (
-            <p className="px-3 py-8 text-center text-[13px] leading-relaxed text-fg-3">{t("catalog.empty")}</p>
+            // 播客页搜索时，目录里没有的还会去苹果播客目录里找，不用先说「没有」
+            podcasts && search ? null : (
+              <p className="px-3 py-8 text-center text-[13px] leading-relaxed text-fg-3">{t("catalog.empty")}</p>
+            )
           ) : view === "grid" ? (
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-1.5 p-0.5">
               {list.map((feed) => (
@@ -303,6 +342,13 @@ export function DiscoverPane({
                 );
               })}
             </ul>
+          )}
+          {podcasts && search && !looksLikeUrl(search) && (
+            <ApplePodcastResults
+              search={search}
+              folder={startFolder || (byCategory ? categoryName(t, "podcasts") : "")}
+              listed={new Set(pool.map((f) => feedKey(f.url)))}
+            />
           )}
         </div>
       </div>

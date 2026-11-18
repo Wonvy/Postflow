@@ -183,6 +183,9 @@ interface UiState {
   /** 侧栏里每一边不显示的内置视图（收件箱、今天、未读、星标、稍后提醒、归档）。右键视图那一组可以改。 */
   hiddenViews: Record<Space, View[]>;
   toggleViewShown: (space: Space, view: View) => void;
+  /** 侧栏里每一边的视图排成一列（带名字），还是一行图标（悬停看名字）。右键视图切换。 */
+  viewsStyle: Record<Space, "rows" | "icons">;
+  toggleViewsStyle: (space: Space) => void;
   /** 订阅里只看哪一类源：全部、文章、视频、播客。 */
   feedKind: ContentKind | "all";
   setFeedKind: (kind: ContentKind | "all") => void;
@@ -408,6 +411,7 @@ export const useUi = create<UiState>()(
       readerLayout: "pane",
       feedKind: "all",
       hiddenViews: DEFAULT_HIDDEN_VIEWS,
+      viewsStyle: { mail: "rows", feeds: "icons" },
       toggleViewLock: (media) =>
         set((s) => {
           const key = listKey(s.scope, s.space);
@@ -428,6 +432,10 @@ export const useUi = create<UiState>()(
       setMarkReadOnScroll: (markReadOnScroll) => set({ markReadOnScroll }),
       setEpisodesKeep: (episodesKeep) => set({ episodesKeep }),
       setReaderLayout: (readerLayout) => set({ readerLayout }),
+      toggleViewsStyle: (space) =>
+        set((s) => ({
+          viewsStyle: { ...s.viewsStyle, [space]: (s.viewsStyle?.[space] ?? (space === "mail" ? "rows" : "icons")) === "rows" ? "icons" : "rows" },
+        })),
       toggleViewShown: (space, view) =>
         set((s) => {
           const hidden = s.hiddenViews[space] ?? [];
@@ -699,6 +707,7 @@ export const useUi = create<UiState>()(
         readerLayout: s.readerLayout,
         feedKind: s.feedKind,
         hiddenViews: s.hiddenViews,
+        viewsStyle: s.viewsStyle,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,

@@ -18,7 +18,6 @@ import { DiscoverPane } from "./FeedCatalog";
 import { QuickForm, QuickGrid } from "./QuickSources";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { RsshubStatus } from "./RsshubServer";
-import { PodcastSearch } from "./PodcastSearch";
 import { FEED_KIND_LABEL, FEED_KINDS } from "../lib/feedKinds";
 import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, Switch, TextInput } from "./ui";
 
@@ -420,10 +419,10 @@ export function AddFeedDialog() {
           ]}
         />
       </div>
-      {mode === "podcast" ? (
-        <PodcastSearch folder={startFolder} onDone={() => setDialog(null)} />
-      ) : mode === "discover" ? (
+      {mode === "podcast" || mode === "discover" ? (
         <DiscoverPane
+          key={mode}
+          podcasts={mode === "podcast"}
           startFolder={startFolder}
           onUrl={(target) => {
             // 搜索框里输入或粘贴的是网址：换到「网址」页，照常预览、订阅

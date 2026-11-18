@@ -1,6 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlarmClock,
+  List,
+  LayoutGrid,
+  ChevronUp,
+  ChevronDown,
   Archive,
   ChartColumn,
   Check,
@@ -612,12 +616,12 @@ function SectionHeader({
   );
 }
 
-/** 侧栏顶部「邮件 | 订阅」的切换条。不在的那一边显示未读数；右键可以隐藏订阅。 */
 /**
- * 订阅那边顶上的一排图标：全部、文章、视频、播客、Newsletter。只显示图标，悬停看名字；没选中的那一类有未读时
- * 右上角一个小点。只有一类时不显示。
+ * 订阅那边的类型：全部、文章、视频、播客、Newsletter（只列出有的那几类）。和「今天」「星标」一样，
+ * 跟着右键选的样子排成一行图标（悬停看名字，没选中的那一类有未读时右上角一个小点）或者一列（带名字和未读数）。
+ * 只有一类时不显示。
  */
-function FeedKindBar({ feeds }: { feeds: readonly Feed[] }) {
+function FeedKinds({ feeds, rows, menu }: { feeds: readonly Feed[]; rows: boolean; menu: ReactNode }) {
   const t = useT();
   const chosen = useFeedKind();
   const setFeedKind = useUi((s) => s.setFeedKind);
@@ -625,19 +629,40 @@ function FeedKindBar({ feeds }: { feeds: readonly Feed[] }) {
   const present = kindsIn(feeds, newsletters);
   if (present.length < 2) return null;
   const options: (ContentKind | "all")[] = ["all", ...present];
+  const unreadOf = (kind: ContentKind | "all") =>
+    kind === "all"
+      ? 0
+      : kind === "newsletter"
+        ? newsletters.reduce((sum, n) => sum + n.unread, 0)
+        : feeds.reduce((sum, f) => (f.kind === kind ? sum + f.unread : sum), 0);
+  if (rows) {
+    return (
+      <div role="tablist" aria-label={t("feedKind.bar")} className="mb-1 flex flex-col gap-px">
+        {options.map((kind) => {
+          const Icon = FEED_KIND_ICON[kind];
+          return (
+            <ContextMenu key={kind} items={menu}>
+              <Row
+                active={chosen === kind}
+                onClick={() => setFeedKind(kind)}
+                leading={<Icon {...ICON} />}
+                label={t(FEED_KIND_LABEL[kind])}
+                trailing={<Count n={unreadOf(kind)} />}
+              />
+            </ContextMenu>
+          );
+        })}
+      </div>
+    );
+  }
   return (
-    <div role="tablist" aria-label={t("feedKind.bar")} className="mb-2 flex gap-0.5">
+    <div role="tablist" aria-label={t("feedKind.bar")} className="flex items-center gap-0.5">
       {options.map((kind) => {
         const Icon = FEED_KIND_ICON[kind];
         const label = t(FEED_KIND_LABEL[kind]);
-        const unread =
-          kind === "all"
-            ? 0
-            : kind === "newsletter"
-              ? newsletters.reduce((sum, n) => sum + n.unread, 0)
-              : feeds.reduce((sum, f) => (f.kind === kind ? sum + f.unread : sum), 0);
+        const unread = unreadOf(kind);
         return (
-          <Tip key={kind} label={label} side="bottom">
+          <Tip key={kind} label={label} side="bottom" menu={menu}>
             <button
               type="button"
               role="tab"
@@ -645,13 +670,13 @@ function FeedKindBar({ feeds }: { feeds: readonly Feed[] }) {
               aria-label={label}
               onClick={() => setFeedKind(kind)}
               className={cx(
-                "relative flex h-7 min-w-0 flex-1 items-center justify-center rounded-md transition-colors touch:h-10",
+                "relative flex size-7 items-center justify-center rounded-md transition-colors touch:size-10",
                 chosen === kind ? "bg-active text-fg" : "text-fg-3 hover:bg-hover hover:text-fg-2",
               )}
             >
-              <Icon size={15} strokeWidth={1.75} />
+              <Icon {...ICON} />
               {chosen !== kind && unread > 0 && (
-                <span aria-hidden className="absolute left-[calc(50%+6px)] top-1 size-1.5 rounded-full bg-accent" />
+                <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />
               )}
             </button>
           </Tip>
@@ -661,6 +686,7 @@ function FeedKindBar({ feeds }: { feeds: readonly Feed[] }) {
   );
 }
 
+/** 侧栏顶部「邮件 | 订阅」的切换条。不在的那一边显示未读数；右键可以隐藏订阅。 */
 function SpaceSwitch({
   space,
   onSpace,
@@ -765,6 +791,8 @@ export function Sidebar({ width }: { width: number }) {
     [allFeeds, feedKind],
   );
   const accounts = nav.data?.accounts;
+  // 订阅那边有不止一类（有类型图标）时，视图靠右
+  const hasKinds = kindsIn(allFeeds ?? [], nav.data?.newsletters ?? []).length > 1;
   const counts = nav.data?.counts;
   const categories = useCategories();
   const labelColor = useLabelColor();
@@ -966,6 +994,70 @@ export function Sidebar({ width }: { width: number }) {
     return 0;
   };
 
+  // 视图排成一列还是一行图标，收起没有
+  const viewsStyle = useUi((s) => s.viewsStyle?.[space] ?? (space === "mail" ? "rows" : "icons"));
+  const toggleViewsStyle = useUi((s) => s.toggleViewsStyle);
+  const viewsCollapsed = isCollapsed(viewsSection);
+  // 右键视图（或者下面那个小箭头）的菜单：显示哪几个、排成一列还是一行图标、收起
+  const viewsMenu = (
+    <>
+      {viewChoices}
+      <MenuSeparator />
+      <MenuItem
+        icon={viewsStyle === "rows" ? <LayoutGrid size={14} /> : <List size={14} />}
+        onSelect={() => toggleViewsStyle(space)}
+      >
+        {viewsStyle === "rows" ? t("views.asIcons") : t("views.asRows")}
+      </MenuItem>
+      <MenuItem icon={<ChevronsDownUp size={14} />} onSelect={() => toggleSection(viewsSection)}>
+        {viewsCollapsed ? t("views.expand") : t("views.collapse")}
+      </MenuItem>
+    </>
+  );
+  const viewMenu = (view: View) => (
+    <>
+      <MarkAllReadItem scope={{ kind: "view", view }} />
+      <MenuSeparator />
+      {viewsMenu}
+    </>
+  );
+  const viewIcon = ({ view, icon: Icon }: (typeof VIEWS)[number]) => {
+    const label = t(viewLabelKey(view, space));
+    const active = isActive({ kind: "view", view });
+    return (
+      <Tip key={view} label={label} side="bottom" menu={viewMenu(view)}>
+          <button
+            type="button"
+            aria-label={label}
+            aria-current={active ? "page" : undefined}
+            onClick={() => choose({ kind: "view", view })}
+            {...viewTarget(view)}
+            className={cx(
+              "flex h-7 min-w-7 items-center justify-center gap-1 rounded-md px-1.5 text-[13px] transition-colors touch:h-10 touch:min-w-10",
+              active ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
+              dropAt(`view:${view}`) && "ring-1 ring-inset ring-accent",
+            )}
+          >
+            <Icon {...ICON} className="shrink-0" />
+            <Count n={countFor(view)} />
+          </button>
+      </Tip>
+    );
+  };
+  const viewRow = ({ view, icon: Icon }: (typeof VIEWS)[number]) => (
+    <ContextMenu key={view} items={viewMenu(view)}>
+      <Row
+        active={isActive({ kind: "view", view })}
+        onClick={() => choose({ kind: "view", view })}
+        drag={viewTarget(view)}
+        drop={dropAt(`view:${view}`)}
+        leading={<Icon {...ICON} />}
+        label={t(viewLabelKey(view, space))}
+        trailing={<Count n={countFor(view)} />}
+      />
+    </ContextMenu>
+  );
+
   // 分类：定义两边共用，数字只算这一边的。这一边没有条目的分类不显示；
   // 拖着条目时全部显示出来，好拖进去
   const labelCountIn = (label: string) => {
@@ -1017,6 +1109,56 @@ export function Sidebar({ width }: { width: number }) {
       <MenuItem icon={<EyeOff size={14} />} onSelect={() => setShowFeeds(false)}>
         {t("space.hideFeeds")}
       </MenuItem>
+    </>
+  );
+
+  // 分类：邮件那边在顶上视图下面，订阅那边在列表最后（顶上只留切换条和一行工具）
+  const labelsBlock = shownLabels.length > 0 && (
+    <>
+      <SectionHeader
+        label={t("nav.labels")}
+        addLabel={t("label.edit")}
+        onAdd={() => setDialog({ type: "settings", page: "categories" })}
+        collapsed={isCollapsed("labels")}
+        onToggle={() => toggleSection("labels")}
+        unread={shownLabels.reduce((n, l) => n + labelCountIn(l).unread, 0)}
+        menu={
+          <MenuItem icon={<Tags size={14} />} onSelect={() => setDialog({ type: "settings", page: "categories" })}>
+            {t("label.edit")}
+          </MenuItem>
+        }
+      />
+      {!isCollapsed("labels") && (
+        <div className="flex flex-col gap-px">
+          {shownLabels.map((label) => (
+            <ContextMenu
+              key={label}
+              items={
+                <>
+                  <MarkAllReadItem scope={{ kind: "label", label }} />
+                  <MenuSeparator />
+                  <MenuItem
+                    icon={<Tags size={14} />}
+                    onSelect={() => setDialog({ type: "settings", page: "categories" })}
+                  >
+                    {t("label.edit")}
+                  </MenuItem>
+                </>
+              }
+            >
+              <Row
+                active={isActive({ kind: "label", label })}
+                onClick={() => choose({ kind: "label", label })}
+                drag={labelTarget(label)}
+                drop={dropAt(`label:${label}`)}
+                leading={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(label) }} />}
+                label={label}
+                trailing={<Count n={labelCountIn(label).unread} />}
+              />
+            </ContextMenu>
+          ))}
+        </div>
+      )}
     </>
   );
 
@@ -1073,138 +1215,43 @@ export function Sidebar({ width }: { width: number }) {
             feedsUnread={counts?.unread_article ?? 0}
           />
         )}
-        {!mail && <FeedKindBar feeds={allFeeds ?? []} />}
-
-        {/* 内置视图。订阅那边只有一两个（默认今天、星标），并排放在一行，不单独成组；
-            邮件那边放在可以收起的「视图」标题下。右键选显示哪几个 */}
-        {!mail ? (
-          shownViews.length > 0 && (
-            <div className="flex gap-1">
-              {shownViews.map(({ view, icon: Icon }) => {
-                const label = t(viewLabelKey(view, space));
-                // 视图多了放不下名字，只留图标，悬停看名字
-                const iconOnly = shownViews.length > 3;
-                const active = isActive({ kind: "view", view });
-                const button = (
-                  <button
-                    type="button"
-                    aria-label={label}
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => choose({ kind: "view", view })}
-                    {...viewTarget(view)}
-                    className={cx(
-                      "flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[13px] transition-colors touch:h-11 touch:text-[15px]",
-                      active ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
-                      dropAt(`view:${view}`) && "ring-1 ring-inset ring-accent",
-                    )}
-                  >
-                    <Icon {...ICON} className="shrink-0" />
-                    {!iconOnly && <span className="truncate">{label}</span>}
-                    <Count n={countFor(view)} />
-                  </button>
-                );
-                return (
-                  <ContextMenu
-                    key={view}
-                    bare
-                    items={
-                      <>
-                        <MarkAllReadItem scope={{ kind: "view", view }} />
-                        <MenuSeparator />
-                        {viewChoices}
-                      </>
-                    }
-                  >
-                    {iconOnly ? (
-                      <Tip label={label} side="bottom">
-                        {button}
-                      </Tip>
-                    ) : (
-                      button
-                    )}
-                  </ContextMenu>
-                );
-              })}
+        {/* 内置视图：每一边可以排成一列（带名字），或者一行图标（悬停看名字），右键切换、选显示哪几个。
+            下面正中一个小箭头收起、展开。订阅那边的类型（全部、文章、播客……）跟着一起：排成一行时和视图在同一行，
+            排成一列时在视图上面，收起时一起收起 */}
+        {!mail && !viewsCollapsed && viewsStyle === "icons" && (hasKinds || shownViews.length > 0) && (
+          <div className="mb-1 flex items-center gap-1">
+            <FeedKinds feeds={allFeeds ?? []} rows={false} menu={viewsMenu} />
+            <div className={cx("flex min-w-0 items-center gap-0.5", hasKinds && "ml-auto")}>
+              {shownViews.map(viewIcon)}
             </div>
-          )
-        ) : (
-        <>
-        <SectionHeader
-          first
-          label={t("nav.views")}
-          collapsed={isCollapsed(viewsSection)}
-          onToggle={() => toggleSection(viewsSection)}
-          unread={shownViews.some((v) => v.view === "inbox") ? countFor("inbox") : 0}
-          menu={viewChoices}
-        />
-        {!isCollapsed(viewsSection) && (
-          <div className="flex flex-col gap-px">
-            {shownViews.map(({ view, icon: Icon }) => (
-              <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
-                <Row
-                  active={isActive({ kind: "view", view })}
-                  onClick={() => choose({ kind: "view", view })}
-                  drag={viewTarget(view)}
-                  drop={dropAt(`view:${view}`)}
-                  leading={<Icon {...ICON} />}
-                  label={t(viewLabelKey(view, space))}
-                  trailing={<Count n={countFor(view)} />}
-                />
-              </ContextMenu>
-            ))}
           </div>
         )}
-        </>
+        {!mail && !viewsCollapsed && viewsStyle === "rows" && (
+          <FeedKinds feeds={allFeeds ?? []} rows menu={viewsMenu} />
+        )}
+        {mail && viewsStyle === "icons" && !viewsCollapsed && (
+          <div className="mb-1 flex flex-wrap items-center gap-0.5">{shownViews.map(viewIcon)}</div>
+        )}
+        {viewsStyle === "rows" && !viewsCollapsed && (
+          <div className="flex flex-col gap-px">{shownViews.map(viewRow)}</div>
+        )}
+        {(shownViews.length > 0 || (!mail && hasKinds)) && (
+          <div className="flex justify-center">
+              <Tip label={viewsCollapsed ? t("views.expand") : t("views.collapse")} side="right" menu={viewsMenu}>
+                <button
+                  type="button"
+                  aria-expanded={!viewsCollapsed}
+                  aria-label={viewsCollapsed ? t("views.expand") : t("views.collapse")}
+                  onClick={() => toggleSection(viewsSection)}
+                  className="flex h-4 w-10 items-center justify-center rounded text-fg-4 transition-colors hover:bg-hover hover:text-fg-2 touch:h-7"
+                >
+                  {viewsCollapsed ? <ChevronDown size={12} strokeWidth={2.25} /> : <ChevronUp size={12} strokeWidth={2.25} />}
+                </button>
+              </Tip>
+          </div>
         )}
 
-        {shownLabels.length > 0 && (
-          <>
-            <SectionHeader
-              label={t("nav.labels")}
-              addLabel={t("label.edit")}
-              onAdd={() => setDialog({ type: "settings", page: "categories" })}
-              collapsed={isCollapsed("labels")}
-              onToggle={() => toggleSection("labels")}
-              unread={shownLabels.reduce((n, l) => n + labelCountIn(l).unread, 0)}
-              menu={
-                <MenuItem icon={<Tags size={14} />} onSelect={() => setDialog({ type: "settings", page: "categories" })}>
-                  {t("label.edit")}
-                </MenuItem>
-              }
-            />
-            {!isCollapsed("labels") && (
-              <div className="flex flex-col gap-px">
-                {shownLabels.map((label) => (
-                  <ContextMenu
-                    key={label}
-                    items={
-                      <>
-                        <MarkAllReadItem scope={{ kind: "label", label }} />
-                        <MenuSeparator />
-                        <MenuItem
-                          icon={<Tags size={14} />}
-                          onSelect={() => setDialog({ type: "settings", page: "categories" })}
-                        >
-                          {t("label.edit")}
-                        </MenuItem>
-                      </>
-                    }
-                  >
-                    <Row
-                      active={isActive({ kind: "label", label })}
-                      onClick={() => choose({ kind: "label", label })}
-                      drag={labelTarget(label)}
-                      drop={dropAt(`label:${label}`)}
-                      leading={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(label) }} />}
-                      label={label}
-                      trailing={<Count n={labelCountIn(label).unread} />}
-                    />
-                  </ContextMenu>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        {mail && labelsBlock}
       </div>
 
       {/* 空白处右键：这一边的菜单（添加订阅、新建文件夹……）。行上右键是那一行自己的菜单 */}
@@ -1271,9 +1318,21 @@ export function Sidebar({ width }: { width: number }) {
           </>
         ) : (
           <>
+            {/* 订阅源：可以收起来，右键是添加订阅、新建文件夹那些 */}
+            {(feeds?.length ?? 0) > 0 && (
+              <SectionHeader
+                first
+                label={t("nav.feedList")}
+                addLabel={t("action.addFeed")}
+                onAdd={() => setDialog({ type: "add-feed" })}
+                collapsed={isCollapsed("feeds")}
+                onToggle={() => toggleSection("feeds")}
+                unread={(feeds ?? []).reduce((sum, f) => sum + f.unread, 0)}
+              />
+            )}
             {(
               <div className="flex flex-col gap-px">
-                {top.map((entry) => {
+                {!isCollapsed("feeds") && top.map((entry) => {
                   if (entry.kind === "feed") {
                     const feed = feedById.get(entry.id);
                     if (!feed) return null;
@@ -1341,7 +1400,7 @@ export function Sidebar({ width }: { width: number }) {
                     </div>
                   );
                 })}
-                {(dragging?.kind === "feed" || dragging?.kind === "folder") && (
+                {!isCollapsed("feeds") && (dragging?.kind === "feed" || dragging?.kind === "folder") && (
                   <div {...feedsEndTarget} className="relative h-7">
                     {dropAt("end:feeds") && (
                       <span aria-hidden className="pointer-events-none absolute left-2 right-1 top-0 h-0.5 rounded-full bg-accent" />
@@ -1349,6 +1408,7 @@ export function Sidebar({ width }: { width: number }) {
                   </div>
                 )}
                 {(feedKind === "all" || feedKind === "newsletter") && <NewsletterSection />}
+                {labelsBlock}
                 {allFeeds && allFeeds.length === 0 && (
                   <button
                     type="button"

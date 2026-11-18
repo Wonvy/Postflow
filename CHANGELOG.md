@@ -8,9 +8,15 @@ that heading into the version number and date.
 
 ### English
 - Discover → Podcasts gains 56 popular Chinese shows, picked from Apple Podcasts' China charts with 声链 (shenglianfm.com) as a guide, and podcasts are now sorted into news, tech, business, education, health, stories, arts, sports, entertainment and society; pick one at the top of the list. Every feed was checked to work in Postflow.
+- A calmer Feeds sidebar: under the Mail/Feeds switch there's one row of icons, the feed types on the left (everything, articles, videos, podcasts, newsletters; hover for the name, a dot means unread) and Today and Starred on the right; the feed list has a Feeds heading you can collapse, and categories sit at the end of the list.
+- Add feed → Podcasts now looks like Discover: Featured and the podcast categories on the left, the shows as a grid or list on the right. Searching lists matching built-in shows first, then more from Apple Podcasts.
+- The sidebar's views no longer have a Views heading: a small arrow centred under them hides or shows them. Right-click a view to show it as a list or as one row of icons (hover for names), separately for Mail and Feeds, and to choose which views appear. In Feeds the type buttons (everything, articles, podcasts…) follow the same choice and collapse with the views. Right-clicking icon buttons that have a tooltip works again.
 
 ### 中文
 - 「发现 → 播客」新增 56 个热门中文播客，参考「声链」（shenglianfm.com）的分类，按 Apple 播客中国区各分类榜单挑选；播客按新闻、科技、商业、教育、健康、故事、艺术、体育、娱乐、社会文化分类，在列表顶上选。每个源都确认过能在 Postflow 里正常订阅。
+- 订阅侧栏更整齐：切换条下面只有一行图标，左边是类型（全部、文章、视频、播客、Newsletter，悬停显示名字，有未读时带小点），右边是「今天」「星标」；订阅源列表有可以收起的「订阅源」标题，分类放到列表最后。
+- 「添加订阅 → 播客」和「发现」一样排：左边是推荐和播客分类，右边是节目（图标或列表）。搜索时先列出目录里的，下面接着是苹果播客目录里搜到的。
+- 侧栏的视图不再有「视图」标题，下面正中一个小箭头收起、展开。右键视图可以切换排成一列或一行图标（悬停看名字），邮件和订阅各自设，也可以选显示哪几个。订阅里的类型（全部、文章、播客……）也跟着一起：排成一列时带名字和未读数，收起时一起收起。带提示的图标按钮右键菜单恢复正常。
 
 ## 0.1.29 — 2026-11-18
 
