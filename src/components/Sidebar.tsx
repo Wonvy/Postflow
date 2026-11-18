@@ -871,15 +871,6 @@ export function Sidebar({ width }: { width: number }) {
     (label) => draggingItems || labelCountIn(label).total > 0 || isActive({ kind: "label", label }),
   );
 
-  const statsButton = (
-    <IconButton
-      label={t("stats.title")}
-      active={mainView === "stats"}
-      onClick={() => setMainView(mainView === "stats" ? "list" : "stats")}
-    >
-      <ChartColumn {...ICON} />
-    </IconButton>
-  );
 
   // 每一边的右键菜单，挂在那一边的标题上
   const mailMenu = (
@@ -953,7 +944,7 @@ export function Sidebar({ width }: { width: number }) {
           </>
         ) : (
           <>
-            {statsButton}
+            {/* 订阅统计在空白处的右键菜单和 ⌘K 里 */}
             <IconButton label={t("action.refreshAll")} shortcut="R" onClick={() => refreshSpace("feeds")}>
               <RefreshCw {...ICON} className={cx(refreshing - refreshingMail > 0 && "animate-spin")} />
             </IconButton>

@@ -67,6 +67,7 @@ export type LangPref = "system" | "zh" | "en" | `pack:${string}`;
 
 /** 设置面板的各页。 */
 export type SettingsPage =
+  | "general"
   | "appearance"
   | "feeds"
   | "translation"
@@ -98,6 +99,8 @@ export type Dialog =
   | { type: "mark-all-read"; scope?: ListScope }
   /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
   | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string }
+  /** 全部快捷键一览（按 ?）。 */
+  | { type: "shortcuts" }
   /** ⌘K 命令面板。 */
   | { type: "commands" }
   /** 定时发送里等着发的邮件。 */

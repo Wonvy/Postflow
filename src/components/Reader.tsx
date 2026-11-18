@@ -27,7 +27,10 @@ import {
   Trash2,
   TriangleAlert,
   X,
+  ChevronDown,
+  Ellipsis,
   Expand,
+  FileCode,
   Maximize2,
   Minimize2,
   Shrink,
@@ -231,6 +234,7 @@ function Article({ id }: { id: string }) {
   const [allowRemote, setAllowRemote] = useState(false);
   const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote);
   const { items, apply, toggle, openOriginal, openTargets, compose, deleteDrafts } = useActions();
+  const fullscreenOn = useFullscreen((s) => s.on);
   const autoRead = useRef<string | null>(null);
   const [mode, setMode] = useState<"feed" | "full">("feed");
   const [loadingFull, setLoadingFull] = useState(false);
@@ -381,11 +385,34 @@ function Article({ id }: { id: string }) {
             <Trash2 {...ICON} />
           </IconButton>
         ) : null,
+        // 回复旁边一个小箭头：全部回复、转发
         reply:
           isMail && !summary.draft ? (
-            <IconButton label={t("compose.reply")} shortcut={MOD + "R"} onClick={() => compose("reply", summary)}>
-              <Reply {...ICON} />
-            </IconButton>
+            <span className="inline-flex items-center">
+              <IconButton label={t("compose.reply")} shortcut={MOD + "R"} onClick={() => compose("reply", summary)}>
+                <Reply {...ICON} />
+              </IconButton>
+              <Menu
+                align="end"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={t("reader.replyMore")}
+                    title={t("reader.replyMore")}
+                    className="-ml-1 inline-flex h-7 w-4 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+                  >
+                    <ChevronDown size={12} strokeWidth={2} />
+                  </button>
+                }
+              >
+                <MenuItem icon={<ReplyAll size={14} />} onSelect={() => compose("reply-all", summary)}>
+                  {t("compose.replyAll")}
+                </MenuItem>
+                <MenuItem icon={<Forward size={14} />} onSelect={() => compose("forward", summary)}>
+                  {t("compose.forward")}
+                </MenuItem>
+              </Menu>
+            </span>
           ) : null,
         replyAll:
           isMail && !summary.draft ? (
@@ -489,6 +516,49 @@ function Article({ id }: { id: string }) {
           ) : null,
         maximize: <MaximizeButton />,
         fullscreen: <FullscreenButton />,
+        // 不常用的放这里：标为未读、在浏览器中打开、全文、查看源代码、全屏
+        more: (
+          <Menu
+            align="end"
+            trigger={
+              <button
+                type="button"
+                aria-label={t("tool.more")}
+                title={t("tool.more")}
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+              >
+                <Ellipsis {...ICON} />
+              </button>
+            }
+          >
+            <MenuItem
+              icon={all("read") ? <Mail size={14} /> : <MailOpen size={14} />}
+              onSelect={() => toggle("read", targets)}
+            >
+              {all("read") ? t("action.markUnread") : t("action.markRead")}
+            </MenuItem>
+            {summary.url && (
+              <MenuItem icon={<ExternalLink size={14} />} onSelect={openOriginal}>
+                {t("action.openOriginal")}
+              </MenuItem>
+            )}
+            {!isMail && summary.url && !webShown && (
+              <MenuItem icon={<BookOpenText size={14} />} onSelect={toggleFullText}>
+                {readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
+              </MenuItem>
+            )}
+            <MenuItem
+              icon={<FileCode size={14} />}
+              onSelect={() => useUi.getState().setDialog({ type: "source", itemId: summary.id, title: summary.title })}
+            >
+              {isMail ? t("source.mail") : t("source.xml")}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem icon={<Expand size={14} />} onSelect={() => void setFullscreen(!fullscreenOn)}>
+              {fullscreenOn ? t("reader.exitFullscreen") : t("reader.fullscreen")}
+            </MenuItem>
+          </Menu>
+        ),
       };
 
   return (
@@ -1212,13 +1282,21 @@ function MaximizeButton() {
   const setMaximized = useUi((s) => s.setReaderMaximized);
   // Postflow 自己开的全屏里阅读区一直是最大化的，这个按钮没用
   const ownFullscreen = useFullscreen((s) => s.on && s.ours);
-  if (ownFullscreen) return null;
+  // 全屏时这个按钮变成「退出全屏」
+  if (ownFullscreen) {
+    return (
+      <IconButton label={t("reader.exitFullscreen")} shortcut="Esc" active onClick={() => void setFullscreen(false)}>
+        <Shrink {...ICON} />
+      </IconButton>
+    );
+  }
   return (
     <IconButton
-      label={maximized ? t("reader.restore") : t("reader.maximize")}
+      label={maximized ? t("reader.restore") : t("reader.maximizeOrFullscreen")}
       shortcut="F"
       active={maximized}
-      onClick={() => setMaximized(!maximized)}
+      // 按住 Shift 点：全屏（快捷键 ⇧F）
+      onClick={(e) => (e.shiftKey ? void setFullscreen(true) : setMaximized(!maximized))}
     >
       {maximized ? <Minimize2 {...ICON} /> : <Maximize2 {...ICON} />}
     </IconButton>
@@ -1271,6 +1349,7 @@ function Empty() {
     [["T"], t("reader.hintTranslate")],
     [["W"], t("reader.hintWeb")],
     [[MOD + "K"], t("commands.title")],
+    [["?"], t("shortcuts.title")],
     [["/"], t("reader.hintSearch")],
     [["C"], t("reader.hintCompose")],
     [[MOD + "R"], t("reader.hintReply")],

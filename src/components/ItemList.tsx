@@ -6,6 +6,7 @@ import {
   ArchiveRestore,
   Check,
   CheckCheck,
+  Ellipsis,
   ChevronDown,
   ChevronUp,
   ChevronRight,
@@ -104,6 +105,7 @@ import {
   cx,
   ICON,
   IconButton,
+  Menu,
   MenuItem,
   MenuSeparator,
   MenuSub,
@@ -1265,7 +1267,7 @@ export function ItemList({ width }: { width: number }) {
                     title={d.tooltip}
                     {...d.drag}
                     className={cx(
-                      "relative flex h-full rounded-md transition-colors",
+                      "group/row relative flex h-full rounded-md transition-colors",
                       view === "summary"
                         ? "items-center gap-3"
                         : rows === "compact"
@@ -1285,6 +1287,7 @@ export function ItemList({ width }: { width: number }) {
                     ) : (
                       <ComfortableRow {...d.props} />
                     )}
+                    {!mobile && <RowMoreButton id={d.id} />}
                   </div>
                 </ContextMenu>
                 </SwipeRow>
@@ -1428,6 +1431,32 @@ function ListMenu({
  * 列表里一行的右键菜单。点在勾选着的行上作用于所有勾选的，否则只作用于这一行（折叠的组是整组）。
  * 只有菜单打开时才挂载，平时不占资源。
  */
+/**
+ * 列表行右边的「…」：鼠标移上去才出现，菜单和右键的一样。和侧栏行的「…」一个样子。
+ * 手机上不放（会挡住时间），长按、左右滑，或者打开以后用阅读区的「更多」。
+ */
+function RowMoreButton({ id }: { id: string }) {
+  const t = useT();
+  return (
+    <Menu
+      align="end"
+      trigger={
+        <button
+          type="button"
+          aria-label={t("action.more")}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className="absolute right-1.5 top-1/2 hidden size-6 -translate-y-1/2 items-center justify-center rounded-md bg-hover text-fg-3 shadow-[0_0_0_4px_var(--hover)] hover:bg-active hover:text-fg group-hover/row:flex data-[state=open]:flex"
+        >
+          <Ellipsis size={14} strokeWidth={2} />
+        </button>
+      }
+    >
+      <RowMenu id={id} />
+    </Menu>
+  );
+}
+
 function RowMenu({ id }: { id: string }) {
   const t = useT();
   const { membersOf, itemsOf, toggleSelected } = useActions();

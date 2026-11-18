@@ -11,6 +11,7 @@ import {
   type LucideIcon,
   Palette,
   Rss,
+  SlidersHorizontal,
   Sparkles,
   Tags,
 } from "lucide-react";
@@ -29,7 +30,7 @@ import { languageName, useModelDownloads, useTranslateEngine, useTranslateLangua
 import { CatalogOnlineSetting } from "./FeedCatalog";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
-import { SettingRow } from "./SettingsParts";
+import { SettingRow, SettingsHeading } from "./SettingsParts";
 import { NotesSection } from "./UpdateDialog";
 import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
 import { StorageSettings } from "./StorageSettings";
@@ -41,6 +42,7 @@ import { WebAccessSettings } from "./WebAccessSettings";
 
 /** 设置的各页，按组排：常用的、AI、数据和应用本身。「网页访问」只有桌面应用里有。 */
 const ALL_PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
+  { page: "general", icon: SlidersHorizontal, label: "settings.general", group: 0 },
   { page: "appearance", icon: Palette, label: "settings.appearance", group: 0 },
   { page: "feeds", icon: Rss, label: "settings.feeds", group: 0 },
   { page: "translation", icon: Languages, label: "settings.translation", group: 0 },
@@ -185,20 +187,23 @@ export function SettingsDialog() {
             ]}
           />
         </SettingRow>
-        <SettingRow label={t("settings.showFeeds")} hint={t("settings.showFeedsHint")}>
-          <Switch label={t("settings.showFeeds")} checked={showFeeds} onChange={setShowFeeds} />
-        </SettingRow>
         <SettingRow label={t("settings.senderLogos")} hint={t("settings.senderLogosHint")}>
           <Switch label={t("settings.senderLogos")} checked={senderLogos} onChange={setSenderLogos} />
+        </SettingRow>
+        <LanguageSettings />
+      </>
+    ),
+    // 不是外观的那些开关：侧栏和列表怎么用、邮件、应用自己
+    general: () => (
+      <>
+        <SettingsHeading>{t("settings.groupLists")}</SettingsHeading>
+        <SettingRow label={t("settings.showFeeds")} hint={t("settings.showFeedsHint")}>
+          <Switch label={t("settings.showFeeds")} checked={showFeeds} onChange={setShowFeeds} />
         </SettingRow>
         <SettingRow label={t("settings.rememberViews")} hint={t("settings.rememberViewsHint")}>
           <Switch label={t("settings.rememberViews")} checked={rememberViews} onChange={setRememberViews} />
         </SettingRow>
-        {isTauri && (
-          <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>
-            <Switch label={t("settings.keepRunning")} checked={keepRunning} onChange={setKeepRunning} />
-          </SettingRow>
-        )}
+        <SettingsHeading>{t("settings.groupMail")}</SettingsHeading>
         <SettingRow label={t("settings.undoSend")} hint={t("settings.undoSendHint")}>
           <Select
             className="w-28"
@@ -217,10 +222,15 @@ export function SettingsDialog() {
         <SettingRow label={t("settings.notifyMail")} hint={t("settings.notifyMailHint")}>
           <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />
         </SettingRow>
+        <SettingsHeading>{t("settings.groupApp")}</SettingsHeading>
+        {isTauri && (
+          <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>
+            <Switch label={t("settings.keepRunning")} checked={keepRunning} onChange={setKeepRunning} />
+          </SettingRow>
+        )}
         <SettingRow label={t("settings.badge")} hint={t("settings.badgeHint")}>
           <Switch label={t("settings.badge")} checked={badgeUnread} onChange={setBadgeUnread} />
         </SettingRow>
-        <LanguageSettings />
       </>
     ),
     feeds: () => (

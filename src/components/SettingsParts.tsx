@@ -12,3 +12,8 @@ export function SettingRow({ label, hint, children }: { label: string; hint?: Re
     </div>
   );
 }
+
+/** 一页设置里的小标题，把同类的几行归在一起。 */
+export function SettingsHeading({ children }: { children: ReactNode }) {
+  return <h3 className="-mb-1 pt-2 text-[12px] font-medium text-fg-3 first:pt-0">{children}</h3>;
+}

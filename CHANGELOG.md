@@ -7,8 +7,18 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Fewer buttons: the reader's top bar keeps Reply (with a small menu for Reply all and Forward), Category, AI, Star, Archive, Snooze, Maximize (Shift-click for full screen) and a new More menu with Mark unread, Open in browser, Full text, View source and Full screen. The list toolbar no longer repeats Refresh, and the Feeds sidebar no longer repeats Stats. Toolbars you customised keep your layout.
+- List rows show a … button on hover with the same menu as right-click.
+- Settings has a new General page for the sidebar, mail and app options; Appearance is just theme, density, sender logos and language.
+- Press ? for all keyboard shortcuts.
+- The command palette finds Chinese names by their pinyin initials, like "ssp" for 少数派.
 
 ### 中文
+- 按钮更少了：阅读区顶部保留回复（旁边的小菜单里有全部回复、转发）、分类、AI、星标、归档、稍后提醒、最大化（按住 Shift 点是全屏），新增的「更多」里有标为未读、在浏览器中打开、全文、查看源代码、全屏。列表顶部不再重复刷新按钮，订阅侧栏顶部不再重复统计按钮。自定义过工具栏的保持原样。
+- 列表行鼠标移上去会出现「…」按钮，菜单和右键的一样。
+- 设置新增「通用」页，放侧栏、邮件和应用相关的开关；「外观」只留主题、密度、发件人图标和语言。
+- 按 ? 查看全部快捷键。
+- 命令面板可以用拼音首字母搜中文名字，比如「ssp」找到少数派。
 
 ## 0.1.24 — 2026-11-18
 

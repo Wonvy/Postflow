@@ -29,6 +29,7 @@ import {
   LayoutList,
   Puzzle,
   Maximize2,
+  Ellipsis,
   Expand,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ const TOOL_META: Record<ToolbarId, Record<string, { label: MessageKey; icon: Luc
     original: { label: "tool.original", icon: ExternalLink },
     maximize: { label: "tool.maximize", icon: Maximize2 },
     fullscreen: { label: "tool.fullscreen", icon: Expand },
+    more: { label: "tool.more", icon: Ellipsis },
     style: { label: "tool.readerStyle", icon: Type },
     fullText: { label: "tool.fullText", icon: BookOpenText },
     web: { label: "tool.web", icon: Globe },

@@ -1,5 +1,7 @@
 // ⌘K 命令面板的搜索：按输入的字给命令排序。这里只有纯函数，方便测试：npm run test:ui
 
+import { initials } from "./pinyin.ts";
+
 export interface Command {
   id: string;
   /** 显示的名字。 */
@@ -20,6 +22,12 @@ function score(command: Command, query: string): number | null {
   if (label.split(/[\s/·:：-]+/).some((w) => w.startsWith(query))) return 1;
   if (label.includes(query)) return 2;
   if ((command.keywords ?? "").toLowerCase().includes(query)) return 3;
+  // 拼音首字母：「ssp」找到「少数派」，「sjx」找到「收件箱」
+  if (/^[a-z0-9]+$/.test(query)) {
+    const letters = initials(command.label);
+    if (letters.startsWith(query)) return 3;
+    if (letters.includes(query)) return 3.5;
+  }
   let at = 0;
   for (const ch of query) {
     at = label.indexOf(ch, at);

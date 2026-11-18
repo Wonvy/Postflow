@@ -1,3 +1,4 @@
+import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { OutboxDialog } from "./components/Outbox";
 import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
@@ -157,6 +158,7 @@ function Shell() {
       <SourceDialog />
       <WelcomeGuide />
       <CommandPalette />
+      <ShortcutsDialog />
       <SnoozeDialog />
       <OutboxDialog />
       <Toaster />

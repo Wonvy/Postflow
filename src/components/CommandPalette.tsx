@@ -105,6 +105,7 @@ function useCommands(): Command[] {
     { id: "compose", group: act, label: t("compose.new"), shortcut: "C", keywords: "compose write mail 写信", run: () => actions.compose("new") },
     { id: "refresh", group: act, label: t("action.refresh"), shortcut: "R", keywords: "refresh sync 刷新 收信", run: actions.refreshAll },
     { id: "search", group: act, label: t("search.label"), shortcut: "/", keywords: "search find 搜索", run: ui.openSearch },
+    { id: "shortcuts", group: act, label: t("shortcuts.title"), shortcut: "?", keywords: "keyboard shortcuts 快捷键", run: () => ui.setDialog({ type: "shortcuts" }) },
     { id: "markAll", group: act, label: t("action.markAllRead"), shortcut: "⇧A", run: actions.confirmMarkAllRead },
     { id: "space:mail", group: act, label: t("commands.switchTo", { name: spaceName("mail") }), keywords: "mail", run: () => ui.setSpace("mail") },
   );

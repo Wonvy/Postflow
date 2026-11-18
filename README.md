@@ -47,7 +47,7 @@ click **More info → Run anyway**.
   open a message, stay blocked until you allow them for one message or for a sender.
 - Read, starred and archived states are written back to the server, so your phone and webmail stay in step.
 - New mail shows a system notification while Postflow is in the background, and the Dock or taskbar icon shows how
-  many inbox messages are unread (the tab title does in a browser). Both can be turned off in Settings → Appearance.
+  many inbox messages are unread (the tab title does in a browser). Both can be turned off in Settings → General.
 - Newsletters and mailing lists get an Unsubscribe link in the message header. Lists that support one-click
   unsubscribe are unsubscribed right away; otherwise their unsubscribe page or an unsubscribe email opens.
 - Write, reply, reply all and forward, formatted (bold, italic, underline, strikethrough, links, lists, quotes) or
@@ -122,12 +122,12 @@ click **More info → Run anyway**.
 - Mail and Feeds are two separate spaces: switch between them at the top of the sidebar. Each side has its own
   views, buttons and right-click menus, shows only its own items, and remembers the list you were on. Look at a
   single account, mail folder, feed or feed folder from the side it belongs to.
-- Feeds are optional: turn off Settings → Appearance → Show Feeds (or right-click the switch) for a mail-only
+- Feeds are optional: turn off Settings → General → Show Feeds (or right-click the switch) for a mail-only
   sidebar. Feeds keep updating in the background.
 - Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
   source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
   All lists share one display mode and grouping; lock a list (bottom of the list) to give it its own, or turn on
-  Settings → Appearance → Remember each list's view so every list keeps its own, like folders in a file manager.
+  Settings → General → Remember each list's view so every list keeps its own, like folders in a file manager.
 - Inbox, Today, Unread, Starred and Archive views on the Mail side; All articles, Today, Unread, Starred and Archive
   on the Feeds side. Drag items from the list onto Starred or Archive to star or archive them.
 - Spam and Trash under your mailboxes show what your mail server filed there, so a message caught by the spam
@@ -168,7 +168,7 @@ click **More info → Run anyway**.
 - Snooze (the alarm-clock button in the reader, or right-click): later today, this evening, tomorrow morning, this
   weekend, next week, or a time you pick. The item leaves the inbox until then, waits under Snoozed, and comes back
   unread, pinned to the top of the inbox, with a notification. Snoozes sync to your other devices, for mail too.
-- Undo send: after you press Send there are a few seconds to take it back (Settings → Appearance; 5 seconds by
+- Undo send: after you press Send there are a few seconds to take it back (Settings → General; 5 seconds by
   default, or off).
 - Schedule send (the clock next to Send): pick a time and Postflow sends it then. Scheduled mail waits under
   Scheduled in the Mail sidebar, where you can send it now or cancel it back into a draft. Postflow needs to be
@@ -176,7 +176,7 @@ click **More info → Run anyway**.
 - Command palette (`⌘K` / `Ctrl+K`, or the button at the bottom of the sidebar): jump to any view, mailbox, feed,
   folder, category or settings page, or act on the open item.
 - Keeps running in the tray (menu bar) when you close the window, still checking mail, with the unread count on the
-  icon. Turn it off in Settings → Appearance.
+  icon. Turn it off in Settings → General.
 - Works on phones: on a narrow screen Postflow shows one pane at a time, with the sidebar sliding in from the left
   and a back button in the reader. Swipe a row left to archive or right to mark it read or unread. Open it on your
   phone through [browser access](#using-postflow-in-a-browser) and add it to the home screen to use it like an app.
@@ -225,6 +225,7 @@ download page instead.
 | `⇧⌘F` / `Ctrl+Shift+F` | Forward |
 | `⌘↩` / `Ctrl+Enter` | Send (while writing) |
 | `R` | Refresh the current side: sync all mail, or refresh all feeds |
+| `?` | Show all keyboard shortcuts |
 | `Esc` | Clear the selection, or close the reader |
 
 ## Outlook.com and Microsoft 365

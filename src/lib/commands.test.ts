@@ -26,6 +26,13 @@ test("names that start with the query come first, then words, contains, keywords
   assert.deepEqual(rankCommands(list, "zzz"), []);
 });
 
+test("Chinese names are found by their pinyin initials", () => {
+  const zh = [cmd("sspai", "少数派"), cmd("inbox", "收件箱"), cmd("settings", "设置 · 外观")];
+  assert.deepEqual(rankCommands(zh, "ssp").map((c) => c.id), ["sspai"]);
+  assert.deepEqual(rankCommands(zh, "sjx").map((c) => c.id), ["inbox"]);
+  assert.deepEqual(rankCommands(zh, "wg").map((c) => c.id), ["settings"], "inside the name too");
+});
+
 test("the case of the query doesn't matter", () => {
   assert.deepEqual(rankCommands(list, "RUST b").map((c) => c.id), ["feed"]);
 });

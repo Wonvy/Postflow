@@ -83,6 +83,12 @@ export function useShortcuts() {
       }
 
       if (e.shiftKey) {
+        // ?（Shift+/）：全部快捷键。有的键盘布局和浏览器报的是 Shift 加「/」
+        if (key === "?" || key === "/") {
+          e.preventDefault();
+          ui.setDialog({ type: "shortcuts" });
+          return;
+        }
         if (key === "a") {
           e.preventDefault();
           a.confirmMarkAllRead();
