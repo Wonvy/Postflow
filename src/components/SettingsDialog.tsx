@@ -25,6 +25,7 @@ import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type SettingsPage, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
+import { CatalogOnlineSetting } from "./FeedCatalog";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
 import { SettingRow } from "./SettingsParts";
@@ -206,6 +207,7 @@ export function SettingsDialog() {
             ))}
           </Select>
         </SettingRow>
+        <CatalogOnlineSetting />
         <SettingRow label={t("settings.opml")} hint={t("settings.opmlHint")}>
           <input
             ref={fileInput}

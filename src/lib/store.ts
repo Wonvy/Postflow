@@ -155,6 +155,9 @@ interface UiState {
   /** 「添加订阅 → 发现」里的目录显示成图标网格还是列表。 */
   catalogView: "grid" | "list";
   setCatalogView: (view: "grid" | "list") => void;
+  /** 推荐订阅源的目录每天在线检查一次更新。 */
+  catalogOnline: boolean;
+  setCatalogOnline: (on: boolean) => void;
   /** 列表里显示译文。 */
   listTranslate: boolean;
   /** 阅读面板的翻译开关：开着时打开的每一条都自动翻译，直到关掉。 */
@@ -303,6 +306,8 @@ export const useUi = create<UiState>()(
       showFeeds: true,
       catalogView: "grid",
       setCatalogView: (catalogView) => set({ catalogView }),
+      catalogOnline: true,
+      setCatalogOnline: (catalogOnline) => set({ catalogOnline }),
       aiPanel: false,
       aiPanelFor: null,
       mainView: "list",
@@ -508,6 +513,7 @@ export const useUi = create<UiState>()(
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,
         catalogView: s.catalogView,
+        catalogOnline: s.catalogOnline,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,

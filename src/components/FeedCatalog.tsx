@@ -11,15 +11,16 @@ import {
   type CatalogCategory,
   type CatalogFeed,
   type CatalogSection,
-  catalogIcon,
   catalogLang,
   type LangFilter,
   sectionCounts,
   subscribedIds,
 } from "../lib/catalog";
+import { type CheckResult, checkCatalog, useCatalog } from "../lib/catalogRemote";
 import { errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
+import { SettingRow } from "./SettingsParts";
 import { toast } from "./Toast";
 import { Avatar, Button, cx, IconButton, Select, Spinner, Switch } from "./ui";
 
@@ -28,13 +29,13 @@ export function categoryName(t: Translate, category: CatalogCategory): string {
   return t(`catalog.cat.${category}` as MessageKey);
 }
 
-/** 目录源的图标：随应用发布的图片，没有的显示首字母。 */
+/** 目录源的图标：目录文件里带的图片，没有的显示首字母。 */
 export function CatalogIcon({ feed, size = 28 }: { feed: CatalogFeed; size?: number }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <Avatar name={feed.name} seed={feed.id} size={size} />;
+  if (failed || !feed.icon) return <Avatar name={feed.name} seed={feed.id} size={size} />;
   return (
     <img
-      src={catalogIcon(feed)}
+      src={feed.icon}
       alt=""
       width={size}
       height={size}
@@ -50,11 +51,11 @@ export function CatalogIcon({ feed, size = 28 }: { feed: CatalogFeed; size?: num
  * 订阅目录里的源：可以一次订阅好几个（两三个同时进行）。`folderOf` 决定每个源放进哪个文件夹。
  * 订阅过的、正在订阅的都记着，界面据此显示「已订阅」和转圈。
  */
-export function useCatalogSubscribe() {
+export function useCatalogSubscribe(catalog: readonly CatalogFeed[]) {
   const t = useT();
   const qc = useQueryClient();
   const feeds = useNav().data?.feeds;
-  const subscribed = useMemo(() => subscribedIds(feeds ?? []), [feeds]);
+  const subscribed = useMemo(() => subscribedIds(feeds ?? [], catalog), [feeds, catalog]);
   const [adding, setAdding] = useState<Set<string>>(new Set());
 
   const subscribe = async (entries: CatalogFeed[], folderOf: (feed: CatalogFeed) => string) => {
@@ -112,15 +113,16 @@ export function DiscoverPane({
   const [section, setSection] = useState<CatalogSection>("featured");
   const [langFilter, setLangFilter] = useState<LangFilter>("auto");
   const [byCategory, setByCategory] = useState(true);
-  const { subscribed, adding, subscribe } = useCatalogSubscribe();
+  const catalog = useCatalog();
+  const { subscribed, adding, subscribe } = useCatalogSubscribe(catalog.feeds);
   const view = useUi((s) => s.catalogView);
   const setView = useUi((s) => s.setCatalogView);
 
   const search = query.trim();
-  const counts = sectionCounts(langFilter);
+  const counts = sectionCounts(langFilter, catalog.feeds);
   const sections = (["featured", ...CATALOG_CATEGORIES] as CatalogSection[]).filter((s) => (counts[s] ?? 0) > 0);
   const current = sections.includes(section) ? section : (sections[0] ?? "featured");
-  const list = browseCatalog({ section: current, prefer, langFilter, search });
+  const list = browseCatalog({ section: current, prefer, langFilter, search }, catalog.feeds);
   const left = list.filter((f) => !subscribed.has(f.id) && !adding.has(f.id));
   const folderOf = (feed: CatalogFeed) => startFolder || (byCategory ? categoryName(t, feed.category) : "");
   const sectionLabel = (s: CatalogSection) => (s === "featured" ? t("catalog.featured") : categoryName(t, s));
@@ -220,7 +222,11 @@ export function DiscoverPane({
               <ArrowRight size={14} className="shrink-0" />
             </button>
           )}
-          {list.length === 0 ? (
+          {catalog.loading ? (
+            <div className="flex justify-center py-10 text-fg-3">
+              <Spinner size={16} />
+            </div>
+          ) : list.length === 0 ? (
             <p className="px-3 py-8 text-center text-[13px] leading-relaxed text-fg-3">{t("catalog.empty")}</p>
           ) : view === "grid" ? (
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5 p-0.5">
@@ -354,5 +360,48 @@ function GridCard({
         <SubscribeButton done={done} busy={busy} onClick={onSubscribe} wide />
       </div>
     </div>
+  );
+}
+
+/** 设置 → 订阅：推荐订阅源目录的在线更新开关，现在用的版本，以及「立即检查」。 */
+export function CatalogOnlineSetting() {
+  const t = useT();
+  const online = useUi((s) => s.catalogOnline);
+  const setOnline = useUi((s) => s.setCatalogOnline);
+  const catalog = useCatalog();
+  const [result, setResult] = useState<CheckResult | null>(null);
+  const status =
+    result === "updated"
+      ? t("catalog.checkUpdated")
+      : result === "current"
+        ? t("catalog.checkCurrent")
+        : result === "failed"
+          ? t("catalog.checkFailed")
+          : null;
+  return (
+    <SettingRow
+      label={t("catalog.online")}
+      hint={
+        <>
+          {t("catalog.onlineHint")}
+          {catalog.updated && (
+            <span className="mt-1 block">
+              {t("catalog.version", { date: catalog.updated, n: catalog.feeds.length })}
+              {status && ` · ${status}`}
+            </span>
+          )}
+        </>
+      }
+    >
+      {online && (
+        <Button
+          busy={catalog.checking}
+          onClick={() => void checkCatalog(catalog.bundled).then(setResult)}
+        >
+          {t("catalog.checkNow")}
+        </Button>
+      )}
+      <Switch label={t("catalog.online")} checked={online} onChange={setOnline} />
+    </SettingRow>
   );
 }

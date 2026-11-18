@@ -1,43 +1,85 @@
-// 内置订阅源目录。用 Node 自带的测试工具运行：npm run test:ui
+// 推荐订阅源目录。用 Node 自带的测试工具运行：npm run test:ui
 
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   browseCatalog,
-  CATALOG,
+  type Catalog,
   CATALOG_CATEGORIES,
   type CatalogFeed,
   catalogLang,
   feedKey,
+  newerCatalog,
+  parseCatalog,
   sectionCounts,
   starterFeeds,
   subscribedIds,
 } from "./catalog.ts";
 
-test("catalog data is well formed", () => {
-  const ids = new Set<string>();
+const FILE = readFileSync(new URL("../../public/catalog/catalog.json", import.meta.url), "utf8");
+const CATALOG = parseCatalog(FILE)?.feeds ?? [];
+
+test("the catalog file reads cleanly, with nothing dropped", () => {
+  const raw = JSON.parse(FILE) as Catalog;
+  assert.equal(raw.schema, 1);
+  assert.match(raw.updated, /^\d{4}-\d{2}-\d{2}$/);
+  // 每个条目都通过了检查：手改文件时写错的条目会在这里被发现
+  assert.equal(CATALOG.length, raw.feeds.length);
   const urls = new Set<string>();
   for (const feed of CATALOG) {
     assert.match(feed.id, /^[a-z0-9-]+$/, feed.id);
-    assert.ok(!ids.has(feed.id), `duplicate id ${feed.id}`);
-    ids.add(feed.id);
     assert.ok(!urls.has(feedKey(feed.url)), `duplicate feed ${feed.url}`);
     urls.add(feedKey(feed.url));
-    assert.match(feed.url, /^https?:\/\//);
-    assert.match(feed.site, /^https?:\/\//);
-    assert.ok(CATALOG_CATEGORIES.includes(feed.category), `${feed.id}: ${feed.category}`);
-    assert.ok(feed.lang === "zh" || feed.lang === "en");
-    assert.ok(feed.name.trim() && feed.desc.zh.trim() && feed.desc.en.trim(), `${feed.id} needs a name and both descriptions`);
   }
-  // 两种语言都有推荐，第一次打开不会是空的
   assert.ok(CATALOG.some((f) => f.featured && f.lang === "zh"));
   assert.ok(CATALOG.some((f) => f.featured && f.lang === "en"));
+  // 大部分源带图标
+  assert.ok(CATALOG.filter((f) => !f.icon).length <= CATALOG.length / 10);
 });
 
-test("most catalog entries ship an icon", () => {
-  const missing = CATALOG.filter((f) => !existsSync(new URL(`../../public/catalog/icons/${f.id}.png`, import.meta.url)));
-  assert.ok(missing.length <= CATALOG.length / 10, `missing icons: ${missing.map((f) => f.id).join(", ")}`);
+test("a downloaded catalog is checked before it's used", () => {
+  const good = (id: string): Record<string, unknown> => ({
+    id,
+    name: id.toUpperCase(),
+    url: `https://${id}.example/feed`,
+    site: `https://${id}.example`,
+    lang: "en",
+    category: "tech",
+    desc: { zh: "介绍", en: "About" },
+  });
+  const file = (feeds: unknown[], extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ schema: 1, updated: "2027-01-01", feeds, ...extra });
+
+  const parsed = parseCatalog(
+    file([
+      good("a"),
+      { ...good("b"), category: "astrology" },
+      { ...good("c"), url: "javascript:alert(1)" },
+      { ...good("d"), icon: "https://tracker.example/pixel.png" },
+      { ...good("e"), icon: "data:image/png;base64,iVBORw0KGgo=" },
+      good("a"),
+      "junk",
+    ]),
+    1,
+  );
+  assert.deepEqual(parsed?.feeds.map((f) => f.id), ["a", "d", "e"]);
+  assert.equal(parsed?.feeds[1]?.icon, undefined, "only embedded images are kept as icons");
+  assert.ok(parsed?.feeds[2]?.icon);
+
+  assert.equal(parseCatalog("not json"), null);
+  assert.equal(parseCatalog(file([good("a")], { schema: 2 }), 1), null, "a newer format is left alone");
+  assert.equal(parseCatalog(file([good("a")])), null, "too few feeds means a broken download");
+});
+
+test("the newer catalog wins, the bundled one on a tie", () => {
+  const local: Catalog = { schema: 1, updated: "2026-11-18", feeds: [] };
+  const newer: Catalog = { schema: 1, updated: "2026-12-01", feeds: [] };
+  const older: Catalog = { schema: 1, updated: "2026-10-01", feeds: [] };
+  assert.equal(newerCatalog(local, newer), newer);
+  assert.equal(newerCatalog(local, older), local);
+  assert.equal(newerCatalog(local, { ...local }), local);
+  assert.equal(newerCatalog(local, null), local);
 });
 
 test("the interface language picks which feeds come first", () => {
@@ -46,12 +88,12 @@ test("the interface language picks which feeds come first", () => {
   assert.equal(catalogLang("en"), "en");
   assert.equal(catalogLang("pack:ja"), "en");
 
-  const zhFirst = browseCatalog({ section: "news", prefer: "zh", langFilter: "auto" });
+  const zhFirst = browseCatalog({ section: "news", prefer: "zh", langFilter: "auto" }, CATALOG);
   const firstEn = zhFirst.findIndex((f) => f.lang === "en");
   assert.ok(firstEn > 0, "Chinese feeds come first");
   assert.ok(zhFirst.slice(firstEn).every((f) => f.lang === "en"), "then the English ones, not mixed in");
 
-  const enOnly = browseCatalog({ section: "news", prefer: "zh", langFilter: "en" });
+  const enOnly = browseCatalog({ section: "news", prefer: "zh", langFilter: "en" }, CATALOG);
   assert.ok(enOnly.length > 0 && enOnly.every((f) => f.lang === "en"));
 });
 
@@ -75,24 +117,24 @@ test("featured feeds lead within a language, and the Featured section has only t
 });
 
 test("search looks across every category by name, description and site", () => {
-  const byName = browseCatalog({ section: "featured", prefer: "zh", langFilter: "auto", search: "少数派" });
+  const byName = browseCatalog({ section: "featured", prefer: "zh", langFilter: "auto", search: "少数派" }, CATALOG);
   assert.equal(byName[0]?.id, "sspai");
-  const byHost = browseCatalog({ section: "news", prefer: "en", langFilter: "auto", search: "github.blog" });
+  const byHost = browseCatalog({ section: "news", prefer: "en", langFilter: "auto", search: "github.blog" }, CATALOG);
   assert.deepEqual(byHost.map((f) => f.id), ["github-blog"]);
-  const byEnglishDesc = browseCatalog({ section: "news", prefer: "en", langFilter: "auto", search: "official rust" });
+  const byEnglishDesc = browseCatalog({ section: "news", prefer: "en", langFilter: "auto", search: "official rust" }, CATALOG);
   assert.deepEqual(byEnglishDesc.map((f) => f.id), ["rust-blog"]);
-  assert.deepEqual(browseCatalog({ section: "news", prefer: "en", langFilter: "auto", search: "zzzz-nothing" }), []);
+  assert.deepEqual(browseCatalog({ section: "news", prefer: "en", langFilter: "auto", search: "zzzz-nothing" }, CATALOG), []);
 });
 
 test("already subscribed feeds are recognised despite small URL differences", () => {
   assert.equal(feedKey("HTTPS://www.Example.com/feed/"), "example.com/feed");
-  const ids = subscribedIds([{ url: "http://sspai.com/feed/" }, { url: "https://unrelated.example/rss" }]);
+  const ids = subscribedIds([{ url: "http://sspai.com/feed/" }, { url: "https://unrelated.example/rss" }], CATALOG);
   assert.ok(ids.has("sspai"));
   assert.equal(ids.size, 1);
 });
 
 test("starter feeds take a few per chosen category, in the interface language when there are any", () => {
-  const zh = starterFeeds(["tech", "design"], "zh", 3);
+  const zh = starterFeeds(["tech", "design"], "zh", CATALOG, 3);
   const tech = zh.filter((f) => f.category === "tech");
   assert.equal(tech.length, 3);
   assert.ok(tech.every((f) => f.lang === "zh"));
@@ -103,4 +145,5 @@ test("starter feeds take a few per chosen category, in the interface language wh
   if (!CATALOG.some((f) => f.category === "design" && f.lang === "zh")) {
     assert.ok(design.every((f) => f.lang === "en"));
   }
+  assert.ok(CATALOG_CATEGORIES.length === 10);
 });

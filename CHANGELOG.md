@@ -8,10 +8,12 @@ that heading into the version number and date.
 
 ### English
 - Discover in Add feed shows feeds as a grid of icons by default; switch to the list with the buttons next to the language menu. The choice is kept on this device.
+- The recommended feeds update online: the list and its icons are one file, and the app checks GitHub (through jsDelivr) for a newer version at most once a day, falling back to the list it came with. Turn it off or check now in Settings → Feeds.
 - Offline translation recognises plain French, German and similar sentences again; since 0.1.18 they were sometimes left untranslated.
 
 ### 中文
 - 「添加订阅 → 发现」默认用图标网格显示，可以用语言菜单旁的按钮切换成列表，这台设备会记住。
+- 推荐订阅源可以在线更新：列表和图标都在一个文件里，应用每天最多一次从 GitHub（经 jsDelivr）检查新版本，检查不到就用自带的。可以在「设置 → 订阅」里关掉或立即检查。
 - 离线翻译又能认出普通的法语、德语等句子了；0.1.18 以来它们有时不会被翻译。
 
 ## 0.1.20 — 2026-11-18

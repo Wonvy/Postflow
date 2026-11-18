@@ -531,6 +531,8 @@ export const api = {
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
+  /** 下载在线的推荐订阅源目录（地址固定，见核心的 `catalog.fetch`）。 */
+  catalogFetch: () => rpc<{ text: string; url: string }>("catalog.fetch"),
   /** 刷新订阅源；不给 `id` 时全部刷新，邮箱也一起收，除非 `feedsOnly`。 */
   refresh: (id?: string, feedsOnly = false) =>
     rpc<{ count: number }>("feeds.refresh", feedsOnly ? { id, feeds_only: true } : { id }),

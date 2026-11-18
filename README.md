@@ -79,6 +79,12 @@ click **More info → Run anyway**.
 
 **Feeds**
 
+- Add feed opens on Discover: about 150 official feeds from well-known sites, with icons, in ten categories, shown as
+  icons or a list. Feeds in your interface language come first, and you can show only Chinese or only English ones.
+  Search, subscribe with one click, or subscribe to a whole category (each into its own folder). The list lives in
+  one file, [`public/catalog/catalog.json`](public/catalog/catalog.json), with the icons inside; the app checks GitHub
+  for a newer version at most once a day (Settings → Feeds can turn that off). See
+  [`scripts/catalog.mjs`](scripts/catalog.mjs) to check the feeds or add icons.
 - Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported. A preview
   appears as soon as you paste: the site's icon, name and description, how often it posts, and its latest items, so
   you can see what you're subscribing to. Sites that offer several feeds let you pick one.

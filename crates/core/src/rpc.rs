@@ -243,6 +243,14 @@ struct Status {
     error: Option<String>,
 }
 
+/// 内置订阅源目录的在线版本：先走 jsDelivr（GitHub 的 CDN，国内更容易打开），不行再直接读 GitHub。
+const CATALOG_URLS: &[&str] = &[
+    "https://cdn.jsdelivr.net/gh/Wonvy/Postflow@main/public/catalog/catalog.json",
+    "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/catalog.json",
+];
+/// 目录再大也不会超过这么多；超过了多半不是目录。
+const MAX_CATALOG: usize = 2 * 1024 * 1024;
+
 impl Core {
     /// 调用一个方法。`client` 标识发起调用的界面实例，会原样带在它引发的变更事件里。
     pub async fn rpc(
@@ -293,6 +301,23 @@ impl Core {
             m if m.starts_with("plugins.") => return self.plugins_rpc(m, params).await,
             // RSSHub 路由：搜索、按网址猜、重新下载目录
             m if m.starts_with("rsshub.") => return self.rsshub_rpc(m, params).await,
+            // 内置订阅源目录的在线版本。地址是固定的，界面不能指定
+            "catalog.fetch" => {
+                let mut last = RpcError::new("network", "no catalog source answered");
+                for url in CATALOG_URLS {
+                    match self.client.fetch_text(url).await {
+                        Ok(text) if text.len() <= MAX_CATALOG => {
+                            return reply(json!({ "text": text, "url": url }));
+                        }
+                        Ok(_) => last = RpcError::new("too_large", "the catalog is too large"),
+                        Err(err) => {
+                            tracing::info!("catalog: {url} failed: {err}");
+                            last = err.into();
+                        }
+                    }
+                }
+                return Err(last);
+            }
             // 发件人头像：发件人所在网站的图标
             "mail.senderIcon" => {
                 let p: DomainParam = parse(params)?;

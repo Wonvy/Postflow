@@ -7,6 +7,7 @@
 import { Check, Keyboard, Languages, LayoutPanelLeft, Mail, MousePointerClick, Puzzle, Rss, Sparkles, Workflow } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { CATALOG_CATEGORIES, type CatalogCategory, catalogLang, starterFeeds } from "../lib/catalog";
+import { useCatalog } from "../lib/catalogRemote";
 import { type MessageKey, useLang, useT } from "../lib/i18n";
 import { useNav } from "../lib/queries";
 import { welcomeOnStart } from "../lib/welcome";
@@ -204,8 +205,9 @@ function FeedsStep() {
   const feeds = useNav().data?.feeds ?? [];
   // 选几个感兴趣的分类，一次订阅每类几个推荐的官方源，放进以分类命名的文件夹
   const [picked, setPicked] = useState<CatalogCategory[]>([]);
-  const { subscribed, adding, subscribe } = useCatalogSubscribe();
-  const starters = starterFeeds(picked, catalogLang(lang)).filter((f) => !subscribed.has(f.id));
+  const catalog = useCatalog();
+  const { subscribed, adding, subscribe } = useCatalogSubscribe(catalog.feeds);
+  const starters = starterFeeds(picked, catalogLang(lang), catalog.feeds).filter((f) => !subscribed.has(f.id));
   const busy = adding.size > 0;
   const toggle = (c: CatalogCategory) =>
     setPicked((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));

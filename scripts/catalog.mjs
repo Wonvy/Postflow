@@ -1,23 +1,33 @@
 #!/usr/bin/env node
-// Maintains the built-in feed catalog (src/lib/catalogData.ts).
+// Maintains the built-in feed catalog: public/catalog/catalog.json, the one file with every feed and its icon.
+// The app ships it, and installed apps download the newest one from GitHub once a day, so editing this file
+// and pushing it to main updates everyone's list.
 //
 //   node scripts/catalog.mjs check            # is every feed still up, and when did it last post?
-//   node scripts/catalog.mjs icons            # download icons that are missing
+//   node scripts/catalog.mjs icons            # add icons for feeds that have none
 //   node scripts/catalog.mjs icons --force    # download all icons again
 //   node scripts/catalog.mjs icons sspai v2ex # only these
+//   node scripts/catalog.mjs touch            # set "updated" to today after editing by hand
 //
-// Icons are saved as 64×64 PNGs in public/catalog/icons/<id>.png and shipped with the app, so browsing the
-// catalog never contacts the sites. Resizing uses `sips`, which comes with macOS.
+// Icons are 64×64 PNGs stored as base64 in the file, so browsing the catalog never contacts the sites.
+// Resizing uses `sips`, which comes with macOS. A feed without an icon shows its first letter.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CATALOG } from "../src/lib/catalogData.ts";
-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ICONS = join(ROOT, "public", "catalog", "icons");
+const FILE = join(ROOT, "public", "catalog", "catalog.json");
+const catalog = JSON.parse(readFileSync(FILE, "utf8"));
+const CATALOG = catalog.feeds;
+
+/** Writes the file back with today's date as "updated", so installed apps pick it up. */
+function save() {
+  catalog.updated = new Date().toISOString().slice(0, 10);
+  writeFileSync(FILE, `${JSON.stringify(catalog, null, 2)}\n`);
+  console.log(`Saved ${FILE} (updated ${catalog.updated}).`);
+}
 // Same as the app, so sites that treat readers differently answer the way they will in Postflow
 const FEED_UA = "Postflow (+https://github.com/Wonvy/Postflow)";
 const PAGE_UA =
@@ -105,7 +115,13 @@ function iconLinks(html, base) {
   return links.sort((a, b) => b.score - a.score).map((l) => l.url);
 }
 
-function toPng(bytes, out, tmp, svg) {
+function toPng(bytes, tmp, svg) {
+  const out = join(tmp, "icon.png");
+  convert(bytes, out, tmp, svg);
+  return `data:image/png;base64,${readFileSync(out).toString("base64")}`;
+}
+
+function convert(bytes, out, tmp, svg) {
   if (svg) {
     // sips can't read svg; QuickLook renders it to a png thumbnail
     const src = join(tmp, "icon.svg");
@@ -120,7 +136,6 @@ function toPng(bytes, out, tmp, svg) {
 }
 
 async function iconFor(feed, tmp) {
-  const out = join(ICONS, `${feed.id}.png`);
   const tries = [];
   try {
     const page = await get(feed.site, PAGE_UA);
@@ -136,7 +151,7 @@ async function iconFor(feed, tmp) {
       if (!res.ok || /text\/html/i.test(type)) continue;
       const bytes = Buffer.from(await res.arrayBuffer());
       if (bytes.length < 100) continue;
-      toPng(bytes, out, tmp, /svg/i.test(type) || /\.svg(\?|$)/i.test(url));
+      feed.icon = toPng(bytes, tmp, /svg/i.test(type) || /\.svg(\?|$)/i.test(url));
       return url;
     } catch {
       // try the next one
@@ -148,10 +163,7 @@ async function iconFor(feed, tmp) {
 async function icons(args) {
   const force = args.includes("--force");
   const only = args.filter((a) => !a.startsWith("--"));
-  mkdirSync(ICONS, { recursive: true });
-  const todo = CATALOG.filter(
-    (f) => (only.length === 0 || only.includes(f.id)) && (force || only.length > 0 || !existsSync(join(ICONS, `${f.id}.png`))),
-  );
+  const todo = CATALOG.filter((f) => (only.length === 0 || only.includes(f.id)) && (force || only.length > 0 || !f.icon));
   const missing = [];
   await pool(todo, 6, async (feed) => {
     const tmp = mkdtempSync(join(tmpdir(), "postflow-icon-"));
@@ -166,12 +178,14 @@ async function icons(args) {
   if (missing.length) {
     console.log(`\nNo icon for: ${missing.join(", ")}. The app shows the first letter for these.`);
   }
+  if (todo.length > missing.length) save();
 }
 
 const [command, ...rest] = process.argv.slice(2);
 if (command === "check") await check();
 else if (command === "icons") await icons(rest);
+else if (command === "touch") save();
 else {
-  console.error("Usage: node scripts/catalog.mjs check | icons [--force] [id…]");
+  console.error("Usage: node scripts/catalog.mjs check | icons [--force] [id…] | touch");
   process.exit(1);
 }
