@@ -25,7 +25,7 @@ import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform"
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
-import { type Density, type SettingsPage, type ThemePref, useUi } from "../lib/store";
+import { type Density, type ReaderLayout, type SettingsPage, type ThemePref, useUi } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
 import { CatalogOnlineSetting } from "./FeedCatalog";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
@@ -82,6 +82,8 @@ export function SettingsDialog() {
   const keepRunning = useUi((s) => s.keepRunning);
   const rememberViews = useUi((s) => s.rememberViews);
   const focusPane = useUi((s) => s.focusPane);
+  const readerLayout = useUi((s) => s.readerLayout);
+  const setReaderLayout = useUi((s) => s.setReaderLayout);
   const setFocusPane = useUi((s) => s.setFocusPane);
   const setRememberViews = useUi((s) => s.setRememberViews);
   const setKeepRunning = useUi((s) => s.setKeepRunning);
@@ -186,6 +188,16 @@ export function SettingsDialog() {
             options={[
               { value: "compact", label: t("settings.compact") },
               { value: "comfortable", label: t("settings.comfortable") },
+            ]}
+          />
+        </SettingRow>
+        <SettingRow label={t("settings.readerLayout")} hint={t("settings.readerLayoutHint")}>
+          <Segmented<ReaderLayout>
+            value={readerLayout}
+            onChange={setReaderLayout}
+            options={[
+              { value: "pane", label: t("settings.readerPane") },
+              { value: "overlay", label: t("settings.readerOverlay") },
             ]}
           />
         </SettingRow>

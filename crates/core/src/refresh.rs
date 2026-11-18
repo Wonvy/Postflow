@@ -60,6 +60,8 @@ impl Core {
         self.emit_changed(&[Scope::Feeds, Scope::Items], None);
         // 新文章按自动规则处理
         self.run_rules_on_new(session).await;
+        // 没有图标的源在后台找一下网站的收藏图标，不耽误这次刷新结束
+        self.spawn_fill_feed_icons(session);
     }
 
     async fn refresh_one(&self, session: &Session, target: &FetchTarget, default_interval: i64) {

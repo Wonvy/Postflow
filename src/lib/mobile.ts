@@ -6,6 +6,7 @@
 
 import { useSyncExternalStore } from "react";
 import { IS_TABLET, type Layout, layoutFor } from "./device";
+import { useUi } from "./store";
 
 function subscribeResize(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
@@ -24,6 +25,13 @@ export function useLayout(): Layout {
 /** 现在是不是手机布局（一次一栏）。 */
 export function useIsMobile(): boolean {
   return useLayout() === "phone";
+}
+
+/** 阅读区是不是弹出来的（设置里选了「弹出」，手机布局除外）。这时窗口里只有侧栏和列表两栏。 */
+export function useReaderOverlay(): boolean {
+  const overlay = useUi((s) => s.readerLayout === "overlay");
+  const layout = useLayout();
+  return overlay && layout !== "phone";
 }
 
 /** 侧栏是不是收成从左边滑出来的抽屉（手机和平板布局）。 */

@@ -2,7 +2,7 @@ import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { OutboxDialog } from "./components/Outbox";
 import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
-import { useCanHover, useLayout } from "./lib/mobile";
+import { useCanHover, useLayout, useReaderOverlay } from "./lib/mobile";
 import { Unplug } from "lucide-react";
 import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
@@ -23,7 +23,7 @@ import { useFirstRunWelcome, WelcomeGuide } from "./components/WelcomeGuide";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
-import { Button, Logo, Spinner, TextInput } from "./components/ui";
+import { Button, cx, Logo, Spinner, TextInput } from "./components/ui";
 import { api } from "./lib/api";
 import { resolveLang, useT } from "./lib/i18n";
 import { useTray, useUnreadBadge } from "./lib/notify";
@@ -140,6 +140,33 @@ function usePaneFocus() {
   };
 }
 
+/**
+ * 「阅读区弹出」时打开的条目：盖在侧栏和列表上面的大面板，四周是半透明的遮罩。
+ * 点遮罩、按 Esc 关掉；最大化（F）时铺满窗口。快捷键照常用，J/K 直接换下一条。
+ * 不用 role=dialog：它不是一个要先关掉才能做别的事的对话框，桌面应用的原网页视图也靠 role=dialog 判断有没有被盖住。
+ */
+function ReaderPopup() {
+  const t = useT();
+  const openId = useUi((s) => s.openId);
+  const open = useUi((s) => s.open);
+  const maximized = useUi((s) => s.readerMaximized);
+  if (!openId) return null;
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+      <div aria-hidden className="anim-fade absolute inset-0 bg-overlay" onClick={() => open(null)} />
+      <section
+        aria-label={t("reader.popup")}
+        className={cx(
+          "anim-pop relative flex overflow-hidden bg-bg shadow-pop [&>main]:border-l-0",
+          maximized ? "h-full w-full" : "h-[calc(100%-48px)] w-[min(1040px,calc(100%-48px))] rounded-xl ring-1 ring-line",
+        )}
+      >
+        <Reader />
+      </section>
+    </div>
+  );
+}
+
 function Shell() {
   useShortcuts();
   useMailCatchUp();
@@ -168,10 +195,16 @@ function Shell() {
   const listShown = Math.min(listWidth, listMax);
 
   // 阅读区最大化（或全屏）时只留阅读区
-  const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats";
   const layout = useLayout();
+  // 阅读区弹出时窗口里只有侧栏和列表，最大化只是把弹出的阅读区铺满
+  const overlay = useReaderOverlay();
+  const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats" && !overlay;
   const focus = usePaneFocus();
-  const shownPanes: PaneId[] = maximized
+  const shownPanes: PaneId[] = overlay
+    ? layout === "tablet"
+      ? ["list"]
+      : ["sidebar", "list"]
+    : maximized
     ? ["reader"]
     : mainView === "stats"
       ? ["sidebar", "list"]
@@ -248,15 +281,22 @@ function Shell() {
           <StatsPage />
         ) : (
           <>
-            {!maximized && (
+            {overlay ? (
+              pane("list", <ItemList width={viewport} />)
+            ) : (
               <>
-                {pane("list", <ItemList width={tabletList} />)}
-                <Resizer width={tabletList} onResize={(w) => setListWidth(Math.min(w, tabletListMax))} />
+                {!maximized && (
+                  <>
+                    {pane("list", <ItemList width={tabletList} />)}
+                    <Resizer width={tabletList} onResize={(w) => setListWidth(Math.min(w, tabletListMax))} />
+                  </>
+                )}
+                {pane("reader", <Reader />)}
               </>
             )}
-            {pane("reader", <Reader />)}
           </>
         )}
+        {overlay && mainView !== "stats" && <ReaderPopup />}
         {drawer}
         {dialogs}
       </div>
@@ -275,15 +315,23 @@ function Shell() {
         pane("list", <StatsPage />)
       ) : (
         <>
-          {!maximized && (
+          {overlay ? (
+            // 两栏：列表占满侧栏右边
+            pane("list", <ItemList width={Math.max(LIST_MIN, viewport - sidebarWidth)} />)
+          ) : (
             <>
-              {pane("list", <ItemList width={listShown} />)}
-              <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
+              {!maximized && (
+                <>
+                  {pane("list", <ItemList width={listShown} />)}
+                  <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
+                </>
+              )}
+              {pane("reader", <Reader />)}
             </>
           )}
-          {pane("reader", <Reader />)}
         </>
       )}
+      {overlay && mainView !== "stats" && <ReaderPopup />}
       {dialogs}
     </div>
   );

@@ -63,7 +63,8 @@ import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
 import { IS_TABLET } from "../lib/device";
-import { useDrawerSidebar, useIsTouch } from "../lib/mobile";
+import { useDrawerSidebar, useIsTouch, useReaderOverlay } from "../lib/mobile";
+import { useWindowControlsGap } from "./WindowControls";
 import {
   isDefaultListStyle,
   listStyleDefault,
@@ -701,6 +702,8 @@ export function ItemList({ width }: { width: number }) {
   const searchOpen = useUi((s) => s.searchOpen);
   // 手机和平板布局里侧栏收起来了，列表左上角有打开它的按钮
   const drawer = useDrawerSidebar();
+  // 阅读区弹出时列表就是最右边一栏，顶栏右边给 Windows 的窗口按钮留位置
+  const rightGap = useWindowControlsGap(useReaderOverlay());
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
   const searchAll = useUi((s) => s.searchAll);
   const openSearch = useUi((s) => s.openSearch);
@@ -1053,6 +1056,7 @@ export function ItemList({ width }: { width: number }) {
         <header
           data-tauri-drag-region
           className={cx("flex h-11 shrink-0 touch:h-13 items-center gap-0.5 border-b border-line pr-2", drawer ? "pl-1" : "pl-4")}
+          style={rightGap ? { paddingRight: rightGap + 8 } : undefined}
         >
           {drawer && (
             <IconButton label={t("mobile.menu")} onClick={() => setDrawerOpen(true)}>

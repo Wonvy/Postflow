@@ -53,7 +53,7 @@ import { copyText, formatSize, hasInsetTitlebar, isMac, openExternal, saveAttach
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
-import { useDrawerSidebar, useIsMobile } from "../lib/mobile";
+import { useDrawerSidebar, useIsMobile, useReaderOverlay } from "../lib/mobile";
 import { SnoozeButton, snoozeTime } from "./Snooze";
 import { useReaderStyle, useToolbarLayout, useUi } from "../lib/store";
 import { toolsAt } from "../lib/toolbars";
@@ -109,7 +109,10 @@ export function Reader() {
 function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactNode }) {
   const t = useT();
   // 阅读区的顶栏总在窗口最右上角（AI 栏在它下面），窗口按钮的位置由它留
-  const gap = useWindowControlsGap(true);
+  // 阅读区弹出来、又没铺满窗口时，右上角是列表的顶栏，不用给窗口按钮留位置
+  const overlay = useReaderOverlay();
+  const popupFull = useUi((s) => s.readerMaximized);
+  const gap = useWindowControlsGap(!overlay || popupFull);
   // 手机上阅读区占满屏幕，左上角返回列表；按钮放不下时左右滑动
   const mobile = useIsMobile();
   // 平板竖屏时阅读区也不宽，按钮放不下时同样左右滑动

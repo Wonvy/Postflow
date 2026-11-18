@@ -171,6 +171,9 @@ interface UiState {
   /** 鼠标停在侧栏、列表、阅读区中的一栏上时，另外两栏变淡。 */
   focusPane: boolean;
   setFocusPane: (on: boolean) => void;
+  /** 阅读区放在列表右边（三栏），还是打开条目时弹出来盖在上面（两栏）。手机上一直是一次一栏。 */
+  readerLayout: ReaderLayout;
+  setReaderLayout: (layout: ReaderLayout) => void;
   /** 锁定或解锁当前列表的视图。锁定时把现在的样子记下来。 */
   toggleViewLock: () => void;
   setRememberViews: (on: boolean) => void;
@@ -295,6 +298,9 @@ interface UiState {
   setSearchAll: (all: boolean) => void;
 }
 
+/** 阅读区的位置：列表右边一栏，或者弹出来。 */
+export type ReaderLayout = "pane" | "overlay";
+
 export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 360;
 export const LIST_MIN = 280;
@@ -344,6 +350,7 @@ export const useUi = create<UiState>()(
       lockedLists: [],
       rememberViews: false,
       focusPane: true,
+      readerLayout: "pane",
       toggleViewLock: () =>
         set((s) => {
           const key = listKey(s.scope, s.space);
@@ -361,6 +368,7 @@ export const useUi = create<UiState>()(
         }),
       setRememberViews: (rememberViews) => set({ rememberViews }),
       setFocusPane: (focusPane) => set({ focusPane }),
+      setReaderLayout: (readerLayout) => set({ readerLayout }),
       cardSize: 260,
       collapsedSections: [],
       showFeeds: true,
@@ -605,6 +613,7 @@ export const useUi = create<UiState>()(
         lockedLists: s.lockedLists,
         rememberViews: s.rememberViews,
         focusPane: s.focusPane,
+        readerLayout: s.readerLayout,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,

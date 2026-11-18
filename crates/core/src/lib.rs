@@ -4,6 +4,7 @@
 
 mod ai_rpc;
 mod compose;
+mod feed_icon;
 mod list_translate;
 pub mod logging;
 mod mail;

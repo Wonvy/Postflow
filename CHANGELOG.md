@@ -7,8 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Feeds without an icon now get their website's real icon: after each refresh, Postflow looks up the icon the site declares (a large touch icon when there is one, otherwise a favicon it has checked exists) and uses it from then on. Icons that feeds bring themselves are left alone.
+- New option in Settings → Appearance → Reader: Pop-up. The window then has two columns, the sidebar and a full-width list; opening an item shows the reader in a large panel on top. J/K move between items, F fills the window, Esc or a click outside closes it. Beside the list stays the default; phones are unchanged.
 
 ### 中文
+- 没有图标的订阅源会自动用上网站真正的收藏图标：每次刷新后找网站声明的图标（有大图标先用大图标，没有就用确认存在的 favicon），找到后就一直用它。订阅源自己带的图标不动。
+- 设置 → 外观 → 阅读区 新增「弹出」：窗口里只有侧栏和占满的列表两栏，打开一条时阅读区以大面板盖在上面。J/K 换条目，F 铺满窗口，按 Esc 或点旁边关掉。默认仍是「列表右边」，手机上不变。
 
 ## 0.1.27 — 2026-11-18
 
