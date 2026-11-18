@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.27 — 2026-11-18
+
+### English
 - No more white flash when moving between items in the web page view: the page stays hidden until it has loaded (at most 2.5 seconds), with a spinner on the theme background meanwhile.
 - Focus mode for the three columns: when the pointer is over the sidebar, the list or the reader, the other columns fade. On by default; turn it off in Settings → Appearance. Only with a mouse or trackpad.
 - The command palette button moved to the right of the sidebar footer, next to the phone icon; both are lighter than Settings, and the phone icon shows a small dot when the phone link is ready.
