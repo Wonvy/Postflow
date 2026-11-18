@@ -256,6 +256,8 @@ const CATALOG_URLS: &[&str] = &[
     "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/catalog.json",
 ];
 /// 目录再大也不会超过这么多；超过了多半不是目录。
+/// 章节、文字稿文件的大小上限。
+const MAX_MEDIA_TEXT: usize = 4 * 1024 * 1024;
 const MAX_CATALOG: usize = 2 * 1024 * 1024;
 
 impl Core {
@@ -309,6 +311,30 @@ impl Core {
             // RSSHub 路由：搜索、按网址猜、重新下载目录
             m if m.starts_with("rsshub.") => return self.rsshub_rpc(m, params).await,
             // 内置订阅源目录的在线版本。地址是固定的，界面不能指定
+            // 离线听：下载、列出、删除下好的单集
+            "episodes.list" => {
+                return reply(json!({
+                    "downloaded": self.episodes.list(),
+                    "downloading": self.episodes.progress(),
+                }));
+            }
+            "episodes.remove" => {
+                let p: IdParam = parse(params)?;
+                self.episodes.remove(&p.id);
+                return reply(json!({}));
+            }
+            // 播客单集的章节、文字稿：由核心去取，网页里直接请求别的网站会被浏览器拦下
+            "media.text" => {
+                let p: UrlParam = parse(params)?;
+                if !(p.url.starts_with("https://") || p.url.starts_with("http://")) {
+                    return Err(RpcError::new("bad_params", "only http and https"));
+                }
+                let text = self.client.fetch_text(&p.url).await?;
+                if text.len() > MAX_MEDIA_TEXT {
+                    return Err(RpcError::new("too_large", "the file is too large"));
+                }
+                return reply(json!({ "text": text }));
+            }
             // 搜索播客：按节目名找订阅地址
             "podcasts.search" => {
                 #[derive(Deserialize)]
@@ -358,21 +384,40 @@ impl Core {
             .ok_or_else(|| RpcError::new("not_configured", "no data directory has been set up"))?;
 
         match method {
+            "episodes.download" => {
+                #[derive(Deserialize)]
+                struct Download {
+                    id: String,
+                    #[serde(default = "default_keep")]
+                    keep: usize,
+                }
+                fn default_keep() -> usize {
+                    10
+                }
+                let p: Download = parse(params)?;
+                self.download_episode(&session, p.id, p.keep).await?;
+                reply(json!({}))
+            }
             "nav.get" => {
                 let p: NavGet = parse(params)?;
-                let (counts, feeds, accounts, labels) = session
+                let (counts, feeds, accounts, labels, newsletters) = session
                     .db(move |s| {
                         Ok((
                             s.counts(p.today_since)?,
                             s.feeds()?,
                             s.accounts()?,
                             s.label_counts()?,
+                            s.newsletters()?,
                         ))
                     })
                     .await?;
-                reply(
-                    json!({ "counts": counts, "feeds": feeds, "accounts": accounts, "labels": labels }),
-                )
+                reply(json!({
+                    "counts": counts,
+                    "feeds": feeds,
+                    "accounts": accounts,
+                    "labels": labels,
+                    "newsletters": newsletters,
+                }))
             }
 
             "feeds.discover" => {

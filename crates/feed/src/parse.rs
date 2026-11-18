@@ -44,6 +44,10 @@ pub struct ParsedMedia {
     pub duration: Option<u64>,
     /// 文件大小，字节。
     pub size: Option<u64>,
+    /// 章节（Podcasting 2.0 的 `<podcast:chapters>`，JSON 文件地址）。
+    pub chapters: Option<String>,
+    /// 文字稿（`<podcast:transcript>`）：地址和类型。有好几种格式时优先 VTT、SRT，再是 JSON、HTML、纯文本。
+    pub transcript: Option<(String, String)>,
 }
 
 impl ParsedMedia {
@@ -76,14 +80,16 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
             }
         }
     }
-    // 播客单集的时长同样从原文补
-    let durations = itunes_durations(&xml);
-    if durations.len() == entries.len() {
-        for (entry, duration) in entries.iter_mut().zip(durations) {
-            if let Some(media) = entry.media.as_mut()
-                && media.duration.is_none()
-            {
-                media.duration = duration;
+    // 播客单集的时长、章节、文字稿从原文补
+    let blocks = entry_blocks(&xml);
+    if blocks.len() == entries.len() {
+        for (entry, block) in entries.iter_mut().zip(blocks) {
+            if let Some(media) = entry.media.as_mut() {
+                if media.duration.is_none() {
+                    media.duration = itunes_duration(block);
+                }
+                media.chapters = podcast_chapters(block);
+                media.transcript = podcast_transcript(block);
             }
         }
     }
@@ -272,16 +278,87 @@ fn entry_blocks(xml: &str) -> Vec<&str> {
     out
 }
 
-/// 每个条目的 `<itunes:duration>`，秒。feed-rs 在条目没有别的 iTunes 信息时会把它丢掉，从原文补。
-fn itunes_durations(xml: &str) -> Vec<Option<u64>> {
-    entry_blocks(xml)
+/// 条目的 `<itunes:duration>`，秒。feed-rs 在条目没有别的 iTunes 信息时会把它丢掉，从原文补。
+fn itunes_duration(block: &str) -> Option<u64> {
+    let start = block.find("<itunes:duration>")? + "<itunes:duration>".len();
+    let text = &block[start..];
+    parse_duration(&text[..text.find('<')?])
+}
+
+/// 一个标签里某个属性的值（`name="..."` 或 `name='...'`），去掉 XML 转义。
+fn attr(tag: &str, name: &str) -> Option<String> {
+    let mut rest = tag;
+    loop {
+        let at = rest.find(name)?;
+        let before = rest[..at].chars().last();
+        let after = &rest[at + name.len()..];
+        rest = after;
+        if !matches!(before, Some(c) if c.is_whitespace()) {
+            continue;
+        }
+        let after = after.trim_start().strip_prefix('=')?.trim_start();
+        let quote = after.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+        let value = after[1..].split(quote).next()?;
+        return Some(
+            value
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .trim()
+                .to_string(),
+        );
+    }
+}
+
+/// 条目里所有某个名字的标签（只要开头那一段）。
+fn tags<'a>(block: &'a str, name: &str) -> Vec<&'a str> {
+    let open = format!("<{name}");
+    let mut out = Vec::new();
+    let mut rest = block;
+    while let Some(at) = rest.find(&open) {
+        let tail = &rest[at..];
+        let end = tail.find('>').unwrap_or(tail.len());
+        if tail[open.len()..].starts_with([' ', '\n', '\r', '\t', '/', '>']) {
+            out.push(&tail[..end]);
+        }
+        rest = &tail[end.min(tail.len())..];
+        if rest.len() == tail.len() {
+            break;
+        }
+    }
+    out
+}
+
+fn web_url(url: String) -> Option<String> {
+    (url.starts_with("https://") || url.starts_with("http://")).then_some(url)
+}
+
+/// `<podcast:chapters url="..." type="application/json+chapters"/>`
+fn podcast_chapters(block: &str) -> Option<String> {
+    tags(block, "podcast:chapters")
         .into_iter()
-        .map(|block| {
-            let start = block.find("<itunes:duration>")? + "<itunes:duration>".len();
-            let text = &block[start..];
-            parse_duration(&text[..text.find('<')?])
+        .find_map(|tag| attr(tag, "url").and_then(web_url))
+}
+
+/// `<podcast:transcript url="..." type="text/vtt"/>`，有好几个时挑能按时间对上的格式。
+fn podcast_transcript(block: &str) -> Option<(String, String)> {
+    let rank = |mime: &str| match mime {
+        "text/vtt" => 0,
+        "application/x-subrip" | "application/srt" | "text/srt" => 1,
+        "application/json" => 2,
+        "text/html" => 3,
+        "text/plain" => 4,
+        _ => 9,
+    };
+    tags(block, "podcast:transcript")
+        .into_iter()
+        .filter_map(|tag| {
+            let url = attr(tag, "url").and_then(web_url)?;
+            let mime = attr(tag, "type").unwrap_or_default().to_ascii_lowercase();
+            (rank(&mime) < 9).then_some((url, mime))
         })
-        .collect()
+        .min_by_key(|(_, mime)| rank(mime))
 }
 
 /// `1:02:03`、`62:03` 或者秒数。
@@ -365,6 +442,8 @@ fn media_attachment(entry: &Entry) -> Option<ParsedMedia> {
                         .or(any_duration)
                         .filter(|s| *s > 0),
                     size: c.size.filter(|s| *s > 0),
+                    chapters: None,
+                    transcript: None,
                 });
             }
         }
@@ -379,6 +458,8 @@ fn media_attachment(entry: &Entry) -> Option<ParsedMedia> {
             mime,
             duration: any_duration.filter(|s| *s > 0),
             size: l.length.filter(|s| *s > 0),
+            chapters: None,
+            transcript: None,
         })
     })
 }
@@ -739,5 +820,37 @@ mod tests {
             feed.entries[0].url.as_deref(),
             Some("https://clips.example.com/1")
         );
+    }
+
+    #[test]
+    fn podcast_chapters_and_transcripts() {
+        let rss = r#"<?xml version="1.0"?>
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+<channel><title>Show</title><link>https://show.example.com/</link>
+<item><title>Ep 1</title><guid>ep1</guid>
+  <enclosure url="https://cdn.example.com/1.mp3" type="audio/mpeg" length="10"/>
+  <podcast:chapters url="https://show.example.com/1/chapters.json" type="application/json+chapters"/>
+  <podcast:transcript url="https://show.example.com/1.html" type="text/html"/>
+  <podcast:transcript url="https://show.example.com/1.vtt?a=1&amp;b=2" type="text/vtt" language="en"/>
+</item>
+<item><title>Ep 0</title><guid>ep0</guid>
+  <enclosure url="https://cdn.example.com/0.mp3" type="audio/mpeg" length="10"/>
+</item>
+</channel></rss>"#;
+        let feed = parse_feed(rss.as_bytes(), "https://show.example.com/feed").unwrap();
+        let ep1 = feed.entries[0].media.clone().unwrap();
+        assert_eq!(
+            ep1.chapters.as_deref(),
+            Some("https://show.example.com/1/chapters.json")
+        );
+        assert_eq!(
+            ep1.transcript,
+            Some((
+                "https://show.example.com/1.vtt?a=1&b=2".into(),
+                "text/vtt".into()
+            ))
+        );
+        let ep0 = feed.entries[1].media.clone().unwrap();
+        assert_eq!((ep0.chapters, ep0.transcript), (None, None));
     }
 }

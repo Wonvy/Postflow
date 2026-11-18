@@ -112,6 +112,7 @@ mod tests {
             icon_url: icon.map(String::from),
             kind: "article".into(),
             kind_set: None,
+            full_text: false,
             folder: String::new(),
             interval_min: None,
             added_at: 0,

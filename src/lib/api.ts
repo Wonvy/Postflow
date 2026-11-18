@@ -42,8 +42,28 @@ export interface PodcastResult {
   episodes: number | null;
 }
 
+/** 下载离线听的单集。 */
+export interface EpisodeList {
+  downloaded: { id: string; file: string; size: number; at: number }[];
+  /** 正在下的：已下载的字节数、总大小、失败的原因。 */
+  downloading: Record<string, { received: number; total: number | null; error: string | null }>;
+}
+
 /** 订阅源的类型：文章、视频、播客。 */
 export type FeedKind = "article" | "video" | "podcast";
+
+/** 订阅那边按类型看：订阅源的几类，加上放到订阅里看的订阅邮件（Newsletter）。 */
+export type ContentKind = FeedKind | "newsletter";
+
+/** 放到订阅里看的一个订阅邮件发件人。 */
+export interface Newsletter {
+  /** 小写的发件人地址。 */
+  address: string;
+  /** 最近一封信里的名字，没有时为空。 */
+  name: string;
+  unread: number;
+  total: number;
+}
 
 /** 条目附带的音频或视频。 */
 export interface Media {
@@ -53,6 +73,10 @@ export interface Media {
   /** 时长，秒。 */
   duration?: number;
   size?: number;
+  /** 章节文件（Podcasting 2.0 JSON）的地址。 */
+  chapters?: string;
+  /** 文字稿的地址和格式。 */
+  transcript?: { url: string; mime: string };
 }
 
 export interface Feed {
@@ -65,6 +89,8 @@ export interface Feed {
   kind: FeedKind;
   /** 用户选的类型；null 表示自动。 */
   kind_set: FeedKind | null;
+  /** 打开这个源的文章时自动取全文。 */
+  full_text: boolean;
   folder: string;
   interval_min: number | null;
   added_at: number;
@@ -123,6 +149,8 @@ export interface Nav {
   accounts: Account[];
   /** 收件箱里每个分类的条数。 */
   labels: LabelCount[];
+  /** 放到订阅里看的订阅邮件发件人。 */
+  newsletters?: Newsletter[];
 }
 
 export type ItemKind = "article" | "mail";
@@ -357,8 +385,10 @@ export interface ItemFilter {
   label?: string;
   /** 全文搜索：标题、发件人、作者和正文里都要有这些词。 */
   query?: string;
-  /** 只看某一类订阅源的文章。 */
-  feed_kind?: FeedKind;
+  /** 只看某一类订阅源的文章；newsletter 是放到订阅里看的订阅邮件。 */
+  feed_kind?: ContentKind;
+  /** 只看这个发件人的邮件。 */
+  sender?: string;
 }
 
 export interface ItemPage {
@@ -582,6 +612,7 @@ export const api = {
       url?: string;
       /** null 表示按内容自动判断。 */
       kind?: FeedKind | null;
+      full_text?: boolean;
     },
   ) => rpc<void>("feeds.update", { id, ...patch }),
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
@@ -589,6 +620,12 @@ export const api = {
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
   /** 下载在线的推荐订阅源目录（地址固定，见核心的 `catalog.fetch`）。 */
   catalogFetch: () => rpc<{ text: string; url: string }>("catalog.fetch"),
+  episodesList: () => rpc<EpisodeList>("episodes.list"),
+  /** 在后台下载这一期，只保留最近下载的 `keep` 期。 */
+  downloadEpisode: (id: string, keep: number) => rpc<void>("episodes.download", { id, keep }),
+  removeEpisode: (id: string) => rpc<void>("episodes.remove", { id }),
+  /** 取播客的章节、文字稿文件（由核心去取）。 */
+  mediaText: (url: string) => rpc<{ text: string }>("media.text", { url }),
   /** 按节目名搜播客（苹果播客目录）。`country` 是两个字母的地区代码。 */
   searchPodcasts: (term: string, country: string) =>
     rpc<PodcastResult[]>("podcasts.search", { term, country }),

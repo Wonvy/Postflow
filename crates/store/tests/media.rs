@@ -46,6 +46,8 @@ fn audio(n: i64) -> Option<Media> {
         mime: "audio/mpeg".into(),
         duration: Some(60 * n as u64),
         size: None,
+        chapters: None,
+        transcript: None,
     })
 }
 
@@ -176,4 +178,72 @@ fn old_episodes_get_their_audio_on_the_next_fetch() {
     assert_eq!(kind_of(&store, &show).0, "podcast");
     let item = store.item(&ids::item_id(&show, "1")).unwrap().unwrap();
     assert_eq!(item.item.media, audio(1));
+}
+
+#[test]
+fn feeds_can_always_open_full_text() {
+    let tmp = TempDir::new().unwrap();
+    let store = open(&tmp);
+    let blog = feed(&store, "https://blog.example.com/feed");
+    let full = |store: &Store| {
+        store
+            .feeds()
+            .unwrap()
+            .into_iter()
+            .find(|f| f.id == blog)
+            .unwrap()
+            .full_text
+    };
+    assert!(!full(&store));
+    store
+        .update_feed(
+            &blog,
+            FeedPatch {
+                full_text: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert!(full(&store));
+    // 同步日志里有，重建索引后还在
+    drop(store);
+    std::fs::remove_file(tmp.path().join("index.db")).unwrap();
+    let store = open(&tmp);
+    assert!(full(&store));
+}
+
+#[test]
+fn chapters_are_added_once_but_new_links_alone_are_not() {
+    let tmp = TempDir::new().unwrap();
+    let store = open(&tmp);
+    let show = feed(&store, "https://show.example.com/podcast.xml");
+    store
+        .add_articles(vec![episode(&show, 1, audio(1))])
+        .unwrap();
+    let item = |store: &Store| {
+        store
+            .item(&ids::item_id(&show, "1"))
+            .unwrap()
+            .unwrap()
+            .item
+            .media
+            .unwrap()
+    };
+
+    // 只是下载地址变了（带签名）：不记
+    let mut signed = audio(1).unwrap();
+    signed.url = "https://cdn.example.com/1.mp3?sig=abc".into();
+    let mut again = episode(&show, 1, Some(signed));
+    store.add_articles(vec![again.clone()]).unwrap();
+    assert_eq!(item(&store).url, "https://cdn.example.com/1.mp3");
+
+    // 这次带了章节：补上
+    if let Some(m) = again.media.as_mut() {
+        m.chapters = Some("https://show.example.com/1.json".into());
+    }
+    store.add_articles(vec![again]).unwrap();
+    assert_eq!(
+        item(&store).chapters.as_deref(),
+        Some("https://show.example.com/1.json")
+    );
 }

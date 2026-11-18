@@ -20,7 +20,7 @@ import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { RsshubStatus } from "./RsshubServer";
 import { PodcastSearch } from "./PodcastSearch";
 import { FEED_KIND_LABEL, FEED_KINDS } from "../lib/feedKinds";
-import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, TextInput } from "./ui";
+import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, Switch, TextInput } from "./ui";
 
 /** 可选的刷新间隔，单位分钟。 */
 export const INTERVALS = [15, 30, 60, 120, 360, 720, 1440];
@@ -708,6 +708,7 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
   const [folder, setFolder] = useState(feed.folder);
   const [interval, setIntervalMin] = useState<number | null>(feed.interval_min);
   const [kind, setKind] = useState<FeedKind | null>(feed.kind_set);
+  const [fullText, setFullText] = useState(feed.full_text);
   const [url, setUrl] = useState(feed.url);
   const urlChanged = url.trim() !== "" && url.trim() !== feed.url;
   const [saving, setSaving] = useState(false);
@@ -731,6 +732,7 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
       }
       if (interval !== feed.interval_min) patch.interval_min = interval;
       if (kind !== feed.kind_set) patch.kind = kind;
+      if (fullText !== feed.full_text) patch.full_text = fullText;
       // 新地址由核心先抓一次，确认能用才换；订阅源本身不变，已读和以前的文章都在
       if (urlChanged) patch.url = url.trim();
       if (Object.keys(patch).length > 0) {
@@ -783,6 +785,13 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
           ))}
         </Select>
       </Field>
+      <label className="flex items-start gap-2.5 text-[13px]">
+        <Switch label={t("edit.fullText")} checked={fullText} onChange={setFullText} />
+        <span>
+          <span className="block text-fg">{t("edit.fullText")}</span>
+          <span className="mt-0.5 block text-[12px] leading-relaxed text-fg-3">{t("edit.fullTextHint")}</span>
+        </span>
+      </label>
       <Field label={t("edit.url")} hint={urlChanged ? t("edit.urlHint") : undefined}>
         <TextInput
           value={url}

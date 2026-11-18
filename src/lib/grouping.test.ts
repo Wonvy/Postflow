@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Item } from "./api.ts";
-import { groupItems, rowsOf, stopOf, threadSubject } from "./grouping.ts";
+import { articleUrlKey, groupItems, rowsOf, stopOf, threadSubject } from "./grouping.ts";
 
 const base = {
   url: null,
@@ -100,4 +100,35 @@ test("collapsed and expanded rows, and where the cursor can stop", () => {
   const header = expanded[2];
   assert.ok(header);
   assert.equal(stopOf(header), null);
+});
+
+test("the same article from several feeds shows once", () => {
+  const post = (id: string, feed: string, url: string | null, title: string): Item => ({
+    ...article(id, feed),
+    url,
+    title,
+  });
+  const list = [
+    post("a", "feedA", "https://www.example.com/2026/story/?utm_source=rss#top", "A story"),
+    post("b", "feedB", "http://example.com/2026/story", "A story (repost)"),
+    post("c", "feedC", null, "一模一样的长标题，转载到了好几个地方"),
+    post("d", "feedD", null, "一模一样的长标题，转载到了好几个地方"),
+    post("e", "feedA", null, "Weekly"),
+    post("f", "feedB", null, "Weekly"),
+    post("g", "feedA", "https://example.com/2026/other", "Another"),
+  ];
+  for (const mode of ["none", "thread", "mailbox"] as const) {
+    assert.deepEqual(
+      groupItems(list, mode).map((g) => g.items.map((i) => i.id)),
+      [["a", "b"], ["c", "d"], ["e"], ["f"], ["g"]],
+      mode,
+    );
+  }
+  // 按来源分组时还是按订阅源
+  assert.deepEqual(
+    groupItems(list, "sender").map((g) => g.items.map((i) => i.id)),
+    [["a", "e", "g"], ["b", "f"], ["c"], ["d"]],
+  );
+  assert.equal(articleUrlKey("https://Example.com/a/?ref=hn&id=3"), "example.com/a?id=3");
+  assert.equal(articleUrlKey("mailto:x@example.com"), null);
 });

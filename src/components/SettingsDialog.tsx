@@ -82,6 +82,10 @@ export function SettingsDialog() {
   const keepRunning = useUi((s) => s.keepRunning);
   const rememberViews = useUi((s) => s.rememberViews);
   const focusPane = useUi((s) => s.focusPane);
+  const markReadOnScroll = useUi((s) => s.markReadOnScroll);
+  const episodesKeep = useUi((s) => s.episodesKeep);
+  const setEpisodesKeep = useUi((s) => s.setEpisodesKeep);
+  const setMarkReadOnScroll = useUi((s) => s.setMarkReadOnScroll);
   const readerLayout = useUi((s) => s.readerLayout);
   const setReaderLayout = useUi((s) => s.setReaderLayout);
   const setFocusPane = useUi((s) => s.setFocusPane);
@@ -222,6 +226,27 @@ export function SettingsDialog() {
         </SettingRow>
         <ShownViews space="mail" />
         {showFeeds && <ShownViews space="feeds" />}
+        {showFeeds && (
+          <SettingRow label={t("settings.episodesKeep")} hint={t("settings.episodesKeepHint")}>
+            <Select
+              className="w-24"
+              value={episodesKeep}
+              aria-label={t("settings.episodesKeep")}
+              onChange={(e) => setEpisodesKeep(Number(e.target.value))}
+            >
+              {[3, 5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </Select>
+          </SettingRow>
+        )}
+        {showFeeds && (
+          <SettingRow label={t("settings.markReadOnScroll")} hint={t("settings.markReadOnScrollHint")}>
+            <Switch label={t("settings.markReadOnScroll")} checked={markReadOnScroll} onChange={setMarkReadOnScroll} />
+          </SettingRow>
+        )}
         <SettingsHeading>{t("settings.groupMail")}</SettingsHeading>
         <SettingRow label={t("settings.undoSend")} hint={t("settings.undoSendHint")}>
           <Select

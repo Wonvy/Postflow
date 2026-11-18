@@ -86,6 +86,21 @@ struct ApiState {
     stop: watch::Receiver<bool>,
 }
 
+/// 下好的一期。文件在核心的本机目录里，ID 由核心检查过只有字母数字。
+async fn episode(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    request: Request,
+) -> Response {
+    let Some(file) = state.core.episode_file(&id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match ServeFile::new(file).try_call(request).await {
+        Ok(resp) => resp.map(Body::new),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 pub fn router(core: Arc<Core>, ui: Ui, access: Access, stop: watch::Receiver<bool>) -> Router {
     let api = Router::new()
         // 写信时附件随请求一起传，默认的 2 MB 不够
@@ -94,6 +109,8 @@ pub fn router(core: Arc<Core>, ui: Ui, access: Access, stop: watch::Receiver<boo
             post(rpc).layer(DefaultBodyLimit::max(RPC_BODY_LIMIT)),
         )
         .route("/api/events", get(events))
+        // 下载下来离线听的播客单集，支持拖动进度（Range）
+        .route("/api/episodes/{id}", get(episode))
         .with_state(ApiState { core, stop });
     let app = match ui {
         Ui::Dir(dir) => {

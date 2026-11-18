@@ -14,9 +14,17 @@ that heading into the version number and date.
 - Podcast episodes in the list show their length (or how much is left) with a play button; click it to play without opening the episode.
 - Video feeds open as cards and podcasts as a list by default; each keeps its own view, separate from articles.
 - Player shortcuts: P plays or pauses (the open episode if nothing is playing), Shift ← / Shift → go back 15 s or forward 30 s. A sleep timer in the speed menu pauses after 15, 30 or 60 minutes, or at the end of the episode.
-- Keys 1–4 switch Feeds between everything, articles, videos and podcasts.
+- Number keys switch the type in Feeds, in the order of the icon row (1 is everything).
 - Settings → General can choose which views Mail and Feeds show, the same as right-clicking the sidebar's Views header.
 - Releases: a version that finishes building late no longer becomes the "latest" release over a newer one, so the in-app update always offers the newest version.
+- Feeds shows its views (Today and Starred by default) side by side in one row, without a Views header.
+- Optional: mark feed articles read as they scroll off the top of the list (Settings → General). Not in the Unread view, and mail is never affected.
+- Per feed "Always fetch the full text" in Edit feed, for sites whose feed has only a summary.
+- The same article from several feeds (same link, or the same long title) shows once; expand it to see each feed's copy, and reading it marks every copy read.
+- Vimeo links get a player in the reader, like YouTube and Bilibili.
+- Newsletters: right-click a mail and choose "Read with feeds" to read that sender's mail in Feeds instead of Mail. Each sender gets a row under Newsletters (and a Newsletters icon in the type row); Mail's views and counts no longer include them. Right-click the sender to move it back.
+- Podcast chapters and transcripts (Podcasting 2.0): the play bar lists the chapters and shows the transcript; click a chapter or a line to play from there, and the current one is highlighted.
+- Download podcast episodes for offline listening from the play bar. Downloads stay on this device and play without the network; Settings → General sets how many to keep (the oldest go first).
 
 ### 中文
 - 播客：在「添加订阅 → 播客」里按节目名搜索，或者在「发现」新增的「播客」分类里挑。单集在阅读区里播放，换条目时列表底下的迷你播放器接着放：后退 15 秒、前进 30 秒、0.8×–3× 倍速，每一期记住听到哪里。听完自动标为已读，打开「播完接着放下一期」可以连着听。带视频附件的条目在阅读区里直接播放。
@@ -26,9 +34,17 @@ that heading into the version number and date.
 - 列表里的播客单集显示时长（听过的显示还剩多久）和播放按钮，点一下就放，不用打开。
 - 视频类默认用卡片视图，播客类默认用列表，和文章各记各的。
 - 播放器快捷键：P 播放 / 暂停（没有在放时放打开的这一期），Shift ← / Shift → 后退 15 秒、前进 30 秒。倍速菜单里有睡眠定时：15、30、60 分钟后暂停，或者这一期放完就停。
-- 数字键 1–4 在订阅里切换全部、文章、视频、播客。
+- 数字键按订阅顶上那排图标的顺序切换类型（1 是全部）。
 - 设置 → 通用 里可以选邮件和订阅各显示哪几个视图，和右键侧栏「视图」标题是同一个设置。
 - 发版：后打完的旧版本不会再抢走「最新版」，应用里的在线更新总是给最新的版本。
+- 订阅里的视图（默认「今天」「星标」）并排放在一行，不再单独成组。
+- 可选：订阅文章在列表里滚出顶部就标为已读（设置 → 通用）。「未读」视图里不会，邮件不受影响。
+- 「编辑订阅」里可以设「打开时自动取全文」，给源里只有摘要的网站用。
+- 同一篇文章出现在好几个订阅源里（链接相同，或者标题一样且够长）只显示一次；展开能看到每个源的那一条，读了就全部算已读。
+- Vimeo 的视频和 YouTube、B 站一样，在阅读区里直接播放。
+- Newsletter：右键一封邮件选「放到订阅里看」，这个发件人的信就在订阅里看，不在邮件里了。每个发件人在「Newsletter」下有一行（类型那排图标里也多一个 Newsletter），邮件那边的视图和计数不再算它们。右键发件人可以放回邮件。
+- 播客章节和文字稿（Podcasting 2.0）：播放条下面列出章节、显示文字稿，点一个章节或一句话就从那里放，正在放的那一项高亮。
+- 播放条上可以下载单集离线听：文件只在这台设备上，放的时候不用联网；在「设置 → 通用」里设最多留几期（早下的先删）。
 
 ## 0.1.28 — 2026-11-18
 

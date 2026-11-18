@@ -51,7 +51,7 @@ import { api, type ItemDetail, type MailDetail, type Mailbox } from "../lib/api"
 import { errorText, useLang, useT } from "../lib/i18n";
 import { copyText, formatSize, hasInsetTitlebar, isMac, openExternal, saveAttachment } from "../lib/platform";
 import { useReadingTracker } from "../lib/reading";
-import { keys, useItem } from "../lib/queries";
+import { keys, useItem, useNav } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
 import { useDrawerSidebar, useIsMobile, useReaderOverlay } from "../lib/mobile";
 import { SnoozeButton, snoozeTime } from "./Snooze";
@@ -316,6 +316,8 @@ function Article({ id }: { id: string }) {
 
   const readerFullText = useUi((s) => s.readerFullText);
   const setReaderFullText = useUi((s) => s.setReaderFullText);
+  // 这个订阅源设了「打开时自动取全文」
+  const feedFullText = useNav().data?.feeds.find((f) => f.id === summary?.source_id)?.full_text === true;
 
   // 原网页模式：开着时有网页链接的条目直接显示原网页，没有链接的（多数邮件）照常显示正文
   const readerWeb = useUi((s) => s.readerWeb);
@@ -370,14 +372,14 @@ function Article({ id }: { id: string }) {
     }
   };
 
-  // 全文开关开着：文章一打开就显示全文
+  // 全文开关开着、或者这个源设了自动取全文：文章一打开就显示全文
   const autoFull = useRef(false);
   useEffect(() => {
-    if (!readerFullText || autoFull.current || !item || item.mail || !item.url) return;
+    if (!(readerFullText || feedFullText) || autoFull.current || !item || item.mail || !item.url) return;
     autoFull.current = true;
     void showFullText();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, readerFullText]);
+  }, [item, readerFullText, feedFullText]);
 
 
   /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。用不上的是 null。 */

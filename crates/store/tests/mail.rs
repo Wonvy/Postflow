@@ -649,3 +649,81 @@ fn garbled_mail_text_is_repaired_once() {
     // 只做一次
     assert_eq!(store.repair_mail_text(|_| unreachable!()).unwrap(), 0);
 }
+
+#[test]
+fn newsletters_read_with_the_feeds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = open(tmp.path(), &tmp.path().join("data"), "aaaaaaaaaaaa");
+    let acc = store.put_account(account("me@example.com")).unwrap().id;
+    let from = |uid: u32, name: &str, address: &str| NewMail {
+        from_name: Some(name.into()),
+        from_address: Some(address.into()),
+        ..mail(&acc, uid, i64::from(uid) * 1_000)
+    };
+    let mut first = sync(1, 1_000);
+    first.new = vec![
+        from(1, "Bob", "bob@example.com"),
+        from(2, "Weekly News", "News@Letters.example"),
+        from(3, "Weekly News", "news@letters.example"),
+    ];
+    store.apply_mail_sync(&acc, first).unwrap();
+    let titles = |filter: ItemFilter| -> Vec<String> {
+        store
+            .items(&filter, None, 50)
+            .unwrap()
+            .into_iter()
+            .map(|i| i.title)
+            .collect()
+    };
+    let mail_inbox = || ItemFilter {
+        view: View::Inbox,
+        kind: Some(ItemKind::Mail),
+        ..Default::default()
+    };
+    let feeds_inbox = || ItemFilter {
+        view: View::Inbox,
+        kind: Some(ItemKind::Article),
+        ..Default::default()
+    };
+    assert_eq!(titles(mail_inbox()).len(), 3);
+    assert!(titles(feeds_inbox()).is_empty());
+    assert!(store.newsletters().unwrap().is_empty());
+
+    // 把这个发件人放到订阅里看（地址不分大小写）
+    store
+        .set_setting("newsletters", serde_json::json!(["NEWS@letters.example"]))
+        .unwrap();
+    assert_eq!(titles(mail_inbox()), vec!["Subject 1"]);
+    assert_eq!(titles(feeds_inbox()), vec!["Subject 3", "Subject 2"]);
+    assert_eq!(
+        titles(ItemFilter {
+            view: View::Inbox,
+            sender: Some("news@LETTERS.example".into()),
+            ..Default::default()
+        }),
+        vec!["Subject 3", "Subject 2"]
+    );
+    assert_eq!(
+        titles(ItemFilter {
+            view: View::Inbox,
+            kind: Some(ItemKind::Article),
+            feed_kind: Some("newsletter".into()),
+            ..Default::default()
+        }),
+        vec!["Subject 3", "Subject 2"]
+    );
+    let counts = store.counts(0).unwrap();
+    assert_eq!((counts.unread_mail, counts.unread_article), (1, 2));
+    assert_eq!(store.accounts().unwrap()[0].unread, 1);
+    let letters = store.newsletters().unwrap();
+    assert_eq!(letters.len(), 1);
+    assert_eq!(letters[0].address, "news@letters.example");
+    assert_eq!(letters[0].name, "Weekly News");
+    assert_eq!((letters[0].unread, letters[0].total), (2, 2));
+
+    // 放回邮件
+    store
+        .set_setting("newsletters", serde_json::json!([]))
+        .unwrap();
+    assert_eq!(titles(mail_inbox()).len(), 3);
+}

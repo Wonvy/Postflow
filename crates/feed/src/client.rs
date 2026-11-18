@@ -122,6 +122,72 @@ impl Client {
         self.get_with_cookie(url, cond, timeout, None).await
     }
 
+    /// 把一个大文件（播客单集）下载到 `to`，边下边写，不整个放进内存。先写到旁边的临时文件，下完再改名，
+    /// 中途失败不会留下半个文件。`progress` 收到已下载的字节数和总大小（服务器说了的话）。
+    /// 超过 `limit` 字节、或者一分钟收不到数据就放弃。
+    pub async fn download(
+        &self,
+        url: &str,
+        to: &std::path::Path,
+        limit: u64,
+        progress: impl Fn(u64, Option<u64>),
+    ) -> Result<u64> {
+        use std::io::Write;
+        const STALL: Duration = Duration::from_secs(60);
+        let mut resp = self
+            .http
+            .get(url)
+            // 大文件慢慢下，不用客户端默认的 30 秒
+            .timeout(Duration::from_secs(6 * 3600))
+            .send()
+            .await
+            .map_err(describe)?;
+        if !resp.status().is_success() {
+            return Err(Error::Status(resp.status().as_u16()));
+        }
+        let total = resp.content_length();
+        if total.is_some_and(|t| t > limit) {
+            return Err(Error::TooLarge((limit / (1024 * 1024)) as usize));
+        }
+        let partial = to.with_extension("part");
+        let mut file = std::fs::File::create(&partial).map_err(|e| Error::Http(e.to_string()))?;
+        let mut received = 0u64;
+        let result = async {
+            loop {
+                let chunk = tokio::time::timeout(STALL, resp.chunk())
+                    .await
+                    .map_err(|_| Error::Http("download stalled".into()))?
+                    .map_err(describe)?;
+                let Some(chunk) = chunk else { break };
+                received += chunk.len() as u64;
+                if received > limit {
+                    return Err(Error::TooLarge((limit / (1024 * 1024)) as usize));
+                }
+                file.write_all(&chunk)
+                    .map_err(|e| Error::Http(e.to_string()))?;
+                progress(received, total);
+            }
+            file.flush().map_err(|e| Error::Http(e.to_string()))?;
+            Ok(received)
+        }
+        .await;
+        drop(file);
+        match result {
+            Ok(n) if n > 0 => {
+                std::fs::rename(&partial, to).map_err(|e| Error::Http(e.to_string()))?;
+                Ok(n)
+            }
+            Ok(_) => {
+                let _ = std::fs::remove_file(&partial);
+                Err(Error::Http("empty file".into()))
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&partial);
+                Err(e)
+            }
+        }
+    }
+
     /// 同 `get`，可以带一个 Cookie 头。有的网站（YouTube）不带同意 Cookie 时先给一个确认页。
     pub(crate) async fn get_with_cookie(
         &self,

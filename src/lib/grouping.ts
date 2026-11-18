@@ -44,13 +44,46 @@ export function threadSubject(title: string): string {
   return subject.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+/** 比较文章链接用的形式：不管 http/https、www、结尾的斜杠、#后面的部分和 utm_ 之类的跟踪参数。 */
+export function articleUrlKey(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url.trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  for (const name of [...u.searchParams.keys()]) {
+    if (/^(utm_|mc_|fbclid$|gclid$|ref$|ref_src$|spm$|from$|source$)/i.test(name)) u.searchParams.delete(name);
+  }
+  const query = u.searchParams.toString();
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  const path = u.pathname.replace(/\/+$/, "");
+  return `${host}${path}${query ? `?${query}` : ""}`;
+}
+
+/** 标题够长时才拿来认重复，免得「周报」「Weekly update」这种通用标题把不相干的文章并在一起。 */
+const DUPLICATE_TITLE_MIN = 12;
+
+/**
+ * 同一篇文章被几个订阅源转发：链接指向同一个网页，或者标题一字不差（够长的标题），只显示一次。
+ * 折成一组，展开能看到每个源的那一条。
+ */
+export function duplicateKey(item: Item): string | null {
+  if (item.kind !== "article") return null;
+  const url = item.url ? articleUrlKey(item.url) : null;
+  if (url) return `d:u:${url}`;
+  const title = item.title.replace(/\s+/g, " ").trim().toLowerCase();
+  return [...title].length >= DUPLICATE_TITLE_MIN ? `d:t:${title}` : null;
+}
+
 function keyOf(item: Item, mode: GroupMode): string | null {
   switch (mode) {
     case "none":
-      return null;
+      return duplicateKey(item);
     case "thread": {
-      // 文章没有会话的概念；没有主题的邮件也不硬凑到一起
-      if (item.kind !== "mail") return null;
+      // 文章没有会话的概念，只把重复的并在一起；没有主题的邮件也不硬凑到一起
+      if (item.kind !== "mail") return duplicateKey(item);
       const subject = threadSubject(item.title);
       return subject ? `t:${item.source_id}:${subject}` : null;
     }
@@ -60,8 +93,8 @@ function keyOf(item: Item, mode: GroupMode): string | null {
       }
       return `f:${item.source_id}`;
     case "mailbox":
-      // 邮件按所属邮箱合并；订阅文章没有邮箱，仍按单条显示。
-      return item.kind === "mail" ? `a:${item.source_id}` : null;
+      // 邮件按所属邮箱合并；订阅文章没有邮箱，只把重复的并在一起。
+      return item.kind === "mail" ? `a:${item.source_id}` : duplicateKey(item);
   }
 }
 

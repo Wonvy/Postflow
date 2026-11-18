@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS feeds (
     -- 在侧栏里的顺序。没拖动过的为空，排在后面按名称排
     position     REAL,
     -- 用户选的类型：article、video、podcast。为空表示按内容自动判断
-    kind         TEXT
+    kind         TEXT,
+    -- 打开这个源的文章时自动取全文
+    full_text    INTEGER NOT NULL DEFAULT 0
 ) WITHOUT ROWID;
 
 -- 邮箱账户的配置。密码不在这里，在系统钥匙串里。
@@ -271,6 +273,19 @@ macro_rules! snoozed_now_sql {
     };
 }
 
+/// 这一条是放到订阅里看的订阅邮件（Newsletter）：发件人在设置 `newsletters` 的地址列表里。
+/// 这些邮件在订阅那边和文章一起看，不算在邮件那边的视图和计数里。
+#[macro_export]
+#[doc(hidden)]
+macro_rules! newsletter_sql {
+    () => {
+        "i.id IN (SELECT nm.id FROM mail_meta nm WHERE lower(nm.from_address) IN            (SELECT lower(nj.value) FROM lww ns, json_each(ns.value) nj              WHERE ns.kind = 'setting' AND ns.id = 'newsletters' AND ns.field = 'value'))"
+    };
+}
+
+/// 设置里放到订阅里看的发件人地址（小写）。
+pub const NEWSLETTERS_SETTING: &str = "newsletters";
+
 /// 现在的时间（毫秒），在 SQL 里用。
 const NOW_MS: &str = "(CAST(strftime('%s', 'now') AS INTEGER) * 1000)";
 
@@ -471,6 +486,9 @@ impl Store {
         if let Some(interval) = patch.interval_min {
             set.insert("interval_min".into(), json!(interval));
         }
+        if let Some(full_text) = patch.full_text {
+            set.insert("full_text".into(), json!(full_text));
+        }
         if let Some(kind) = patch.kind {
             let kind = kind.filter(|k| FEED_KINDS.contains(&k.as_str()));
             set.insert("kind".into(), json!(kind));
@@ -604,21 +622,27 @@ impl Store {
         let mut seen = HashSet::new();
         let mut lines = Vec::new();
         {
-            // 已经有的跳过；但以前入库时没存附件、这次带着附件的，再记一次好补上
-            let mut has_media = inner
+            // 已经有的跳过；但以前入库时附件没存全（没有附件、没有章节或文字稿），这次带来了的，再记一次好补上
+            let mut stored_media = inner
                 .conn
-                .prepare_cached("SELECT media IS NOT NULL FROM items WHERE id = ?1")?;
+                .prepare_cached("SELECT media FROM items WHERE id = ?1")?;
             for article in &articles {
                 if !seen.insert(article.id.as_str()) {
                     continue;
                 }
-                let existing: Option<bool> = has_media
+                let existing: Option<Option<String>> = stored_media
                     .query_row([&article.id], |r| r.get(0))
                     .optional()?;
-                match existing {
-                    Some(true) => continue,
-                    Some(false) if article.media.is_none() => continue,
-                    _ => {}
+                if let Some(stored) = existing {
+                    let stored: Option<Media> =
+                        stored.and_then(|json| serde_json::from_str(&json).ok());
+                    if !article
+                        .media
+                        .as_ref()
+                        .is_some_and(|m| m.adds_to(stored.as_ref()))
+                    {
+                        continue;
+                    }
                 }
                 lines.push(serde_json::to_string(article)?);
             }
@@ -741,13 +765,15 @@ impl Store {
 
     pub fn counts(&self, today_since: i64) -> Result<Counts> {
         let guard = self.lock();
+        // 放到订阅里看的订阅邮件算在订阅那边
         let sql = format!(
             "SELECT COALESCE(SUM(i.read = 0), 0), \
                     COALESCE(SUM(i.read = 0 AND i.published_at >= ?1), 0), \
-                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail'), 0), \
-                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND i.published_at >= ?1), 0) \
+                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND NOT {nl}), 0), \
+                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND NOT {nl} AND i.published_at >= ?1), 0) \
              FROM {ITEM_FROM} WHERE i.archived = 0 AND {ALIVE} AND NOT {}",
-            snoozed_now()
+            snoozed_now(),
+            nl = newsletter_sql!(),
         );
         let (unread, today, unread_mail, today_mail): (i64, i64, i64, i64) =
             guard.conn.query_row(&sql, [today_since], |r| {
@@ -768,6 +794,74 @@ impl Store {
             unread_article: unread - unread_mail,
             today_article: today - today_mail,
         })
+    }
+
+    /// 放到订阅里看的订阅邮件发件人，按名字排序。还没收到过信的也列出来（数字是 0）。
+    pub fn newsletters(&self) -> Result<Vec<Newsletter>> {
+        let addresses: Vec<String> = self
+            .settings()?
+            .get(NEWSLETTERS_SETTING)
+            .and_then(Value::as_array)
+            .map(|list| {
+                let mut out: Vec<String> = list
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(|a| a.trim().to_lowercase())
+                    .filter(|a| a.contains('@'))
+                    .collect();
+                out.sort();
+                out.dedup();
+                out
+            })
+            .unwrap_or_default();
+        if addresses.is_empty() {
+            return Ok(Vec::new());
+        }
+        let guard = self.lock();
+        let sql = format!(
+            "SELECT lower(m.from_address), \
+                    (SELECT COALESCE(m2.from_name, '') FROM mail_meta m2 JOIN items i2 ON i2.id = m2.id \
+                      WHERE lower(m2.from_address) = lower(m.from_address) \
+                      ORDER BY i2.published_at DESC LIMIT 1), \
+                    SUM(i.read = 0 AND i.archived = 0 AND NOT {snoozed}), COUNT(*) \
+             FROM items i JOIN mail_meta m ON m.id = i.id \
+                  JOIN accounts a ON a.id = i.source_id AND a.deleted = 0 \
+             WHERE i.kind = 'mail' AND i.archived < 2 AND {nl} \
+             GROUP BY lower(m.from_address)",
+            snoozed = snoozed_now(),
+            nl = newsletter_sql!(),
+        );
+        let mut stmt = guard.conn.prepare(&sql)?;
+        let found: HashMap<String, Newsletter> = stmt
+            .query_map([], |r| {
+                Ok(Newsletter {
+                    address: r.get(0)?,
+                    name: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                    unread: r.get(2)?,
+                    total: r.get(3)?,
+                })
+            })?
+            .map(|row| row.map(|n| (n.address.clone(), n)))
+            .collect::<rusqlite::Result<_>>()?;
+        let mut out: Vec<Newsletter> = addresses
+            .into_iter()
+            .map(|address| {
+                found.get(&address).cloned().unwrap_or(Newsletter {
+                    address,
+                    name: String::new(),
+                    unread: 0,
+                    total: 0,
+                })
+            })
+            .collect();
+        out.sort_by_key(|n| {
+            if n.name.is_empty() {
+                n.address.clone()
+            } else {
+                n.name.to_lowercase()
+            }
+        });
+        Ok(out)
     }
 
     pub fn settings(&self) -> Result<Map<String, Value>> {
@@ -955,6 +1049,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     add_column(conn, "items", "media", "TEXT")?;
     add_column(conn, "items", "media_kind", "TEXT")?;
     add_column(conn, "feeds", "kind", "TEXT")?;
+    add_column(conn, "feeds", "full_text", "INTEGER NOT NULL DEFAULT 0")?;
     Ok(())
 }
 
@@ -1115,8 +1210,8 @@ fn materialize_feed(conn: &Connection, id: &str) -> Result<()> {
     };
     conn.execute(
         "INSERT OR REPLACE INTO feeds \
-         (id, url, title, site_url, icon_url, folder, interval_min, deleted, added_at, position, kind) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+         (id, url, title, site_url, icon_url, folder, interval_min, deleted, added_at, position, kind, full_text) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             id,
             url,
@@ -1132,6 +1227,10 @@ fn materialize_feed(conn: &Connection, id: &str) -> Result<()> {
             fields.get("added_at").and_then(Value::as_i64).unwrap_or(0),
             fields.get("position").and_then(Value::as_f64),
             text("kind").filter(|k| FEED_KINDS.contains(&k.as_str())),
+            fields
+                .get("full_text")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         ],
     )?;
     Ok(())
@@ -1174,13 +1273,18 @@ fn insert_article(conn: &Connection, a: &Article) -> Result<bool> {
             a.media.as_ref().map(Media::kind),
         ])?;
     if inserted == 0 {
-        // 早先入库时还不认附件的单集：这次带着附件来了，补上
+        // 早先入库时附件没存全的单集：这次带着来了，补上
         if let Some(media) = &a.media {
-            conn.prepare_cached(
-                "UPDATE items SET media = ?2, media_kind = ?3 \
-                 WHERE id = ?1 AND kind = 'article' AND media IS NULL",
-            )?
-            .execute(params![a.id, media_json(a), media.kind()])?;
+            let stored: Option<Media> = conn
+                .prepare_cached("SELECT media FROM items WHERE id = ?1 AND kind = 'article'")?
+                .query_row([&a.id], |r| r.get::<_, Option<String>>(0))
+                .optional()?
+                .flatten()
+                .and_then(|json| serde_json::from_str(&json).ok());
+            if media.adds_to(stored.as_ref()) {
+                conn.prepare_cached("UPDATE items SET media = ?2, media_kind = ?3 WHERE id = ?1 AND kind = 'article'")?
+                    .execute(params![a.id, media_json(a), media.kind()])?;
+            }
         }
         return Ok(false);
     }
@@ -1248,15 +1352,24 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         args.push(SqlValue::Text(folder.clone()));
         conds.push_str(&format!(" AND f.folder = ?{}", args.len()));
     }
+    // 放到订阅里看的订阅邮件：在订阅（文章）那边，不在邮件那边
     if let Some(kind) = filter.kind {
-        args.push(SqlValue::Text(kind.as_str().to_string()));
-        conds.push_str(&format!(" AND i.kind = ?{}", args.len()));
+        conds.push_str(match kind {
+            ItemKind::Article => concat!(" AND (i.kind = 'article' OR ", newsletter_sql!(), ")"),
+            ItemKind::Mail => concat!(" AND i.kind = 'mail' AND NOT ", newsletter_sql!()),
+        });
+    }
+    if let Some(sender) = filter.sender.as_deref().filter(|s| !s.trim().is_empty()) {
+        args.push(SqlValue::Text(sender.trim().to_lowercase()));
+        conds.push_str(&format!(" AND lower(m.from_address) = ?{}", args.len()));
     }
     if let Some(label) = &filter.label {
         args.push(SqlValue::Text(label.clone()));
         conds.push_str(&format!(" AND l.label = ?{}", args.len()));
     }
-    if let Some(feed_kind) = &filter.feed_kind {
+    if filter.feed_kind.as_deref() == Some("newsletter") {
+        conds.push_str(concat!(" AND ", newsletter_sql!()));
+    } else if let Some(feed_kind) = &filter.feed_kind {
         args.push(SqlValue::Text(feed_kind.clone()));
         conds.push_str(&format!(
             " AND i.kind = 'article' AND i.source_id IN \
@@ -1301,7 +1414,7 @@ fn feed_sql(cond: &str) -> String {
         "SELECT f.id, f.url, f.title, f.site_url, f.icon_url, f.folder, f.interval_min, f.added_at, \
                 (SELECT COUNT(*) FROM items i \
                   WHERE i.source_id = f.id AND i.read = 0 AND i.archived = 0 AND NOT {snoozed}), \
-                ff.last_fetch_at, ff.error, {kind}, f.kind \
+                ff.last_fetch_at, ff.error, {kind}, f.kind, f.full_text \
          FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
          WHERE {cond} \
          ORDER BY f.folder COLLATE NOCASE, f.position IS NULL, f.position, f.title COLLATE NOCASE",
@@ -1325,6 +1438,7 @@ fn feed_from_row(r: &Row<'_>) -> rusqlite::Result<Feed> {
         error: r.get(10)?,
         kind: r.get(11)?,
         kind_set: r.get(12)?,
+        full_text: r.get(13)?,
     })
 }
 

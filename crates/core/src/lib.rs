@@ -4,6 +4,7 @@
 
 mod ai_rpc;
 mod compose;
+mod episodes;
 mod feed_icon;
 mod list_translate;
 pub mod logging;
@@ -236,6 +237,8 @@ pub struct Core {
     pub(crate) rsshub: rsshub::Rsshub,
     /// 自动规则处理到哪儿了，见 rules.rs。
     pub(crate) rules_state: rules::RulesState,
+    /// 下载下来离线听的播客单集，见 episodes.rs。
+    pub(crate) episodes: episodes::Episodes,
 }
 
 impl Core {
@@ -257,6 +260,7 @@ impl Core {
             sender_icons: sender_icon::SenderIcons::new(&local_dir),
             rsshub: rsshub::Rsshub::new(&local_dir),
             rules_state: rules::RulesState::new(&local_dir),
+            episodes: episodes::Episodes::new(&local_dir),
             ai: Default::default(),
             translator,
             local_dir,

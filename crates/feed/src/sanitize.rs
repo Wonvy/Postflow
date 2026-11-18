@@ -72,7 +72,7 @@ fn drop_empty_iframes(html: String) -> String {
     out
 }
 
-/// 视频网页（YouTube、B 站）对应的嵌入播放器地址。
+/// 视频网页（YouTube、B 站、Vimeo）对应的嵌入播放器地址。
 fn page_player(link: &str) -> Option<String> {
     let url = ammonia::Url::parse(link.trim()).ok()?;
     let host = url
@@ -122,6 +122,12 @@ fn page_player(link: &str) -> Option<String> {
             }
             _ => None,
         },
+        // vimeo.com/123456789，也可能是 vimeo.com/channels/名字/123456789
+        "vimeo.com" => {
+            let id = segments.last()?;
+            (id.len() >= 6 && id.bytes().all(|b| b.is_ascii_digit()))
+                .then(|| format!("https://player.vimeo.com/video/{id}"))
+        }
         _ => None,
     }
 }
@@ -134,6 +140,7 @@ pub fn with_player(content: &str, link: Option<&str>) -> Option<String> {
         "youtube.com/embed",
         "youtube-nocookie.com/embed",
         "player.bilibili.com",
+        "player.vimeo.com",
     ]
     .iter()
     .any(|p| content.contains(p))
@@ -449,6 +456,19 @@ mod tests {
             bili.contains("player.bilibili.com/player.html?bvid=BV17osu6pEP9&amp;autoplay=0"),
             "{bili}"
         );
+
+        for link in [
+            "https://vimeo.com/76979871",
+            "https://vimeo.com/channels/staffpicks/76979871",
+        ] {
+            let vimeo = with_player("<p>hi</p>", Some(link)).unwrap();
+            assert!(vimeo.contains("player.vimeo.com/video/76979871"), "{vimeo}");
+            assert!(
+                sanitize_html(&vimeo, None).contains("player.vimeo.com/video/76979871"),
+                "{link}"
+            );
+        }
+        assert_eq!(with_player("", Some("https://vimeo.com/about")), None);
 
         // 已经有播放器、不是视频页、地址不对的都不加
         assert_eq!(

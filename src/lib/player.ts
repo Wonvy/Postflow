@@ -128,6 +128,12 @@ function savePosition(id: string, t: number, duration: number) {
 // ---------------------------------------------------------------- 播放
 
 let audio: HTMLAudioElement | null = null;
+/** 下载到本机的单集：条目 ID → 播放地址。见 episodes.ts。 */
+let localFiles: Record<string, string> = {};
+
+export function setLocalFiles(files: Record<string, string>) {
+  localFiles = files;
+}
 let lastSaved = 0;
 let onEnded: ((episode: Episode) => void) | null = null;
 
@@ -185,11 +191,12 @@ function element(): HTMLAudioElement {
   return el;
 }
 
-/** 放一期。`queue` 是它所在的列表里能放的几期，按列表顺序。 */
-export function play(episode: Episode, queue: Episode[] = []) {
+/** 放一期。`queue` 是它所在的列表里能放的几期，按列表顺序；`at` 是从第几秒开始（章节、文字稿里点的）。 */
+export function play(episode: Episode, queue: Episode[] = [], at?: number) {
   const el = element();
   const s = usePlayer.getState();
   if (s.current?.id === episode.id) {
+    if (at !== undefined) seek(at);
     void el.play().catch(() => undefined);
     return;
   }
@@ -198,14 +205,15 @@ export function play(episode: Episode, queue: Episode[] = []) {
   usePlayer.setState({
     current: episode,
     queue: queue.length > 0 ? queue : s.queue.some((e) => e.id === episode.id) ? s.queue : [episode],
-    position: savedPosition(episode.id),
+    position: at ?? savedPosition(episode.id),
     duration: episode.media.duration ?? 0,
     error: null,
     waiting: true,
   });
-  el.src = episode.media.url;
+  // 下载过的放本机文件，不用联网
+  el.src = localFiles[episode.id] ?? episode.media.url;
   el.playbackRate = s.rate;
-  const start = savedPosition(episode.id);
+  const start = at ?? savedPosition(episode.id);
   lastSaved = start;
   if (start > 0) {
     const seekOnce = () => {

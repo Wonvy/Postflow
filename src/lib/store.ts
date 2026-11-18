@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { FeedKind, ItemFilter, ItemKind, View } from "./api";
+import type { ContentKind, ItemFilter, ItemKind, View } from "./api";
 import type { ComposeMode } from "./compose";
 import type { GroupMode } from "./grouping";
 import { IS_TABLET } from "./device";
@@ -19,14 +19,16 @@ export type ListScope =
   /** 邮箱里的一个普通文件夹。`label` 是侧栏里显示的名字。 */
   | { kind: "mailbox"; accountId: string; mailbox: string; label: string }
   | { kind: "folder"; folder: string }
-  | { kind: "label"; label: string };
+  | { kind: "label"; label: string }
+  /** 订阅里的一个 Newsletter 发件人（放到订阅里看的订阅邮件）。 */
+  | { kind: "newsletter"; address: string };
 
 export type ThemePref = "system" | "dark" | "light";
 /** 列表的显示方式：一行一条、带摘要和缩略图、卡片。 */
 export type ListView = "list" | "summary" | "cards";
 
 /** 侧栏里能折叠的几组：邮箱账户、订阅源、分类。 */
-export type SidebarSection = "mail" | "feeds" | "labels" | "views-mail" | "views-feeds";
+export type SidebarSection = "mail" | "feeds" | "labels" | "views-mail" | "views-feeds" | "newsletters";
 
 /**
  * 邮件和订阅是两块独立的空间：侧栏顶部切换，各有自己的视图（收件箱、未读、星标……）、
@@ -52,6 +54,7 @@ export function spaceOfScope(scope: ListScope): Space | null {
       return "mail";
     case "feed":
     case "folder":
+    case "newsletter":
       return "feeds";
     case "view":
       return isMailOnlyView(scope.view) ? "mail" : null;
@@ -168,6 +171,12 @@ interface UiState {
   groupModes: Record<string, GroupMode>;
   lockedLists: string[];
   rememberViews: boolean;
+  /** 下载离线听的播客单集最多留几期（早下的先删）。只在这台设备上。 */
+  episodesKeep: number;
+  setEpisodesKeep: (n: number) => void;
+  /** 订阅文章在列表里滚过去（整行移出顶部）就标为已读。 */
+  markReadOnScroll: boolean;
+  setMarkReadOnScroll: (on: boolean) => void;
   /** 鼠标停在侧栏、列表、阅读区中的一栏上时，另外两栏变淡。 */
   focusPane: boolean;
   setFocusPane: (on: boolean) => void;
@@ -175,8 +184,8 @@ interface UiState {
   hiddenViews: Record<Space, View[]>;
   toggleViewShown: (space: Space, view: View) => void;
   /** 订阅里只看哪一类源：全部、文章、视频、播客。 */
-  feedKind: FeedKind | "all";
-  setFeedKind: (kind: FeedKind | "all") => void;
+  feedKind: ContentKind | "all";
+  setFeedKind: (kind: ContentKind | "all") => void;
   /** 阅读区放在列表右边（三栏），还是打开条目时弹出来盖在上面（两栏）。手机上一直是一次一栏。 */
   readerLayout: ReaderLayout;
   setReaderLayout: (layout: ReaderLayout) => void;
@@ -394,6 +403,8 @@ export const useUi = create<UiState>()(
       lockedLists: [],
       rememberViews: false,
       focusPane: true,
+      markReadOnScroll: false,
+      episodesKeep: 10,
       readerLayout: "pane",
       feedKind: "all",
       hiddenViews: DEFAULT_HIDDEN_VIEWS,
@@ -414,6 +425,8 @@ export const useUi = create<UiState>()(
         }),
       setRememberViews: (rememberViews) => set({ rememberViews }),
       setFocusPane: (focusPane) => set({ focusPane }),
+      setMarkReadOnScroll: (markReadOnScroll) => set({ markReadOnScroll }),
+      setEpisodesKeep: (episodesKeep) => set({ episodesKeep }),
       setReaderLayout: (readerLayout) => set({ readerLayout }),
       toggleViewShown: (space, view) =>
         set((s) => {
@@ -431,7 +444,7 @@ export const useUi = create<UiState>()(
           feedKind,
           selection: [],
           expandedGroups: [],
-          ...(s.space === "feeds" && (s.scope.kind === "feed" || s.scope.kind === "folder")
+          ...(s.space === "feeds" && (s.scope.kind === "feed" || s.scope.kind === "folder" || s.scope.kind === "newsletter")
             ? { scope: { kind: "view", view: "inbox" } as ListScope, openId: null }
             : {}),
         })),
@@ -681,6 +694,8 @@ export const useUi = create<UiState>()(
         lockedLists: s.lockedLists,
         rememberViews: s.rememberViews,
         focusPane: s.focusPane,
+        markReadOnScroll: s.markReadOnScroll,
+        episodesKeep: s.episodesKeep,
         readerLayout: s.readerLayout,
         feedKind: s.feedKind,
         hiddenViews: s.hiddenViews,
@@ -760,6 +775,8 @@ export function scopeKey(scope: ListScope): string {
       return `folder:${scope.folder}`;
     case "label":
       return `label:${scope.label}`;
+    case "newsletter":
+      return `newsletter:${scope.address}`;
   }
 }
 
@@ -812,7 +829,7 @@ export function searchFilterOf(
   space: Space,
   query: string,
   all: boolean,
-  feedKind: FeedKind | "all" = "all",
+  feedKind: ContentKind | "all" = "all",
 ): ItemFilter {
   const base: ItemFilter = all
     ? withFeedKind({ view: "all", kind: kindOfSpace(space) }, space, feedKind)
@@ -821,18 +838,21 @@ export function searchFilterOf(
 }
 
 /** 订阅那边选了某一类源时，只看这一类。 */
-function withFeedKind(filter: ItemFilter, space: Space, feedKind: FeedKind | "all"): ItemFilter {
+function withFeedKind(filter: ItemFilter, space: Space, feedKind: ContentKind | "all"): ItemFilter {
   return space === "feeds" && feedKind !== "all" ? { ...filter, feed_kind: feedKind } : filter;
 }
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */
-export function filterOf(scope: ListScope, space: Space, feedKind: FeedKind | "all" = "all"): ItemFilter {
+export function filterOf(scope: ListScope, space: Space, feedKind: ContentKind | "all" = "all"): ItemFilter {
   const kind = kindOfSpace(space);
   switch (scope.kind) {
     case "feed":
       return { view: "inbox", source_id: scope.feedId };
     case "account":
-      return { view: "inbox", source_id: scope.accountId };
+      // 放到订阅里看的订阅邮件不在邮箱里显示
+      return { view: "inbox", source_id: scope.accountId, kind: "mail" };
+    case "newsletter":
+      return { view: "inbox", sender: scope.address };
     case "mailbox":
       return { view: "folder", source_id: scope.accountId, mailbox: scope.mailbox };
     case "folder":
@@ -856,6 +876,7 @@ export function sameScope(a: ListScope, b: ListScope): boolean {
   if (a.kind === "mailbox" && b.kind === "mailbox") return a.accountId === b.accountId && a.mailbox === b.mailbox;
   if (a.kind === "folder" && b.kind === "folder") return a.folder === b.folder;
   if (a.kind === "label" && b.kind === "label") return a.label === b.label;
+  if (a.kind === "newsletter" && b.kind === "newsletter") return a.address === b.address;
   return false;
 }
 

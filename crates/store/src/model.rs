@@ -67,9 +67,34 @@ pub struct Media {
     /// 文件大小，字节。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    /// 章节文件（Podcasting 2.0 的 JSON）地址。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chapters: Option<String>,
+    /// 文字稿。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<Transcript>,
+}
+
+/// 单集的文字稿：地址和格式（text/vtt、application/x-subrip、application/json、text/html、text/plain）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Transcript {
+    pub url: String,
+    pub mime: String,
 }
 
 impl Media {
+    /// 以前存下的附件少了这次源里有的章节或文字稿，要补上。
+    /// 地址本身变了不算：有的源每次给的下载地址都带不同的签名，不能每抓一次就记一次。
+    pub fn adds_to(&self, stored: Option<&Media>) -> bool {
+        match stored {
+            None => true,
+            Some(old) => {
+                (old.chapters.is_none() && self.chapters.is_some())
+                    || (old.transcript.is_none() && self.transcript.is_some())
+            }
+        }
+    }
+
     /// 存进索引、用来判断订阅源类型的 `audio` 或 `video`。
     pub fn kind(&self) -> &'static str {
         if self.mime.starts_with("video/") {
@@ -78,6 +103,17 @@ impl Media {
             "audio"
         }
     }
+}
+
+/// 放到订阅里看的一个订阅邮件发件人。
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Newsletter {
+    /// 发件人地址，小写。
+    pub address: String,
+    /// 最近一封信里发件人的名字，没有时为空。
+    pub name: String,
+    pub unread: i64,
+    pub total: i64,
 }
 
 /// 订阅源的类型：文章、视频、播客。界面按它分成几类。
@@ -94,6 +130,8 @@ pub struct Feed {
     pub kind: String,
     /// 用户选的类型；`None` 表示自动。
     pub kind_set: Option<String>,
+    /// 打开这个源的文章时自动取全文（源里只有摘要的网站用）。
+    pub full_text: bool,
     pub folder: String,
     pub interval_min: Option<i64>,
     pub added_at: i64,
@@ -128,6 +166,8 @@ pub struct FeedPatch {
     /// 类型（`FEED_KINDS` 之一）。`Some(None)` 表示恢复自动判断。
     #[serde(default, deserialize_with = "double_option")]
     pub kind: Option<Option<String>>,
+    /// 打开文章时自动取全文。
+    pub full_text: Option<bool>,
 }
 
 fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
@@ -205,8 +245,10 @@ pub struct ItemFilter {
     pub label: Option<String>,
     /// 全文搜索：标题、发件人、作者和正文里都要有这些词。
     pub query: Option<String>,
-    /// 只看某一类订阅源（`FEED_KINDS` 之一）的文章。
+    /// 只看某一类订阅源（`FEED_KINDS` 之一）的文章；`newsletter` 是放到订阅里看的订阅邮件。
     pub feed_kind: Option<String>,
+    /// 只看这个发件人的邮件（地址，不分大小写）。订阅里的 Newsletter 用。
+    pub sender: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

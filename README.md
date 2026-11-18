@@ -94,10 +94,17 @@ click **More info → Run anyway**.
   subscribe to the show's own RSS feed). Episodes play in the reader and keep playing in a small player under the
   list while you move around: back 15 s, forward 30 s, 0.8×–3× speed, and each episode remembers where you stopped
   (on this device). Finished episodes are marked read; turn on "Play the next episode when done" in the speed menu to
-  keep going. Video attachments play in the reader.
+  keep going. Video attachments play in the reader. Shows that publish chapters or transcripts (Podcasting 2.0) list
+  them under the play bar; click one to play from there. Episodes can be downloaded for offline listening; the files
+  stay on this device, and Settings → General sets how many to keep.
+- Newsletters: right-click a mail and choose "Read with feeds" to read that sender's mail in Feeds, one row per sender
+  under Newsletters, instead of in Mail. Right-click the sender to move it back.
 - Feeds are sorted into articles, videos and podcasts automatically (mostly audio means podcast; video sites or video
   attachments mean video), and you can change a feed's type in its Edit dialog. Once you have more than one type, a
   row of icons at the top of Feeds shows one type at a time.
+- The same article from several feeds (same link, or the same long title) shows once, folded into one row you can
+  expand. A feed can be set to always fetch the full text, and articles can be marked read as they scroll past
+  (Settings → General).
 - The folder field lists your recently used folders first; type to filter or to create a new folder. A folder's menu
   in the sidebar has "Add a feed here".
 - Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them: drop one on the middle of a
@@ -217,7 +224,7 @@ download page instead.
 | `H` | Snooze (pick a time with 1–5) |
 | `P` | Podcast: play / pause (plays the open episode if nothing is playing) |
 | `Shift ←` / `Shift →` | Podcast: back 15 s / forward 30 s |
-| `1`–`4` | Feeds: everything / articles / videos / podcasts |
+| `1`–`5` | Feeds: switch type, in the order of the icon row (1 is everything) |
 | `U` | Read / unread |
 | `V` | Open the original page in your browser |
 | `X` | Select the current item for a bulk action |

@@ -18,7 +18,7 @@ const GROUPS: { title: MessageKey; keys: [string[], MessageKey][] }[] = [
       [["X"], "reader.hintSelect"],
       [["/", `${MOD}F`], "reader.hintSearch"],
       [[`${MOD}K`], "commands.title"],
-      [["1", "2", "3", "4"], "shortcuts.feedKind"],
+      [["1", "…", "5"], "shortcuts.feedKind"],
       [["R"], "action.refresh"],
       [["Esc"], "shortcuts.escape"],
     ],

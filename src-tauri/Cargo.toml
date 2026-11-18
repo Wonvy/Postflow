@@ -16,7 +16,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 postflow-core = { workspace = true }
 # unstable：阅读区的原网页模式要在主窗口里再放一个网页视图（Window::add_child）
-tauri = { version = "2", features = ["unstable", "tray-icon"] }
+tauri = { version = "2", features = ["unstable", "tray-icon", "protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 # 新邮件的系统通知

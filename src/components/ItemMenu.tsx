@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Newspaper,
   Archive,
   ArchiveRestore,
   AtSign,
@@ -29,7 +30,9 @@ import { useCategories, useLabelColor } from "../lib/labels";
 import { copyText, openExternal } from "../lib/platform";
 import { keys } from "../lib/queries";
 import { canArchive, canSnooze, useArticleActions, useUi } from "../lib/store";
+import { useNewsletterActions } from "../lib/newsletters";
 import { SnoozeSubMenu } from "./Snooze";
+import { toast } from "./Toast";
 import { SourceIcon } from "./SourceIcon";
 import { MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./ui";
 
@@ -185,6 +188,7 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
       {!lead.draft && !lead.sent && canSnooze(items, allowed) && <SnoozeSubMenu items={items} />}
       <LabelSub items={items} />
       <MoveSub items={items} />
+      <NewsletterItem items={items} />
       <MenuSeparator />
       {lead.url && (
         <>
@@ -221,5 +225,30 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
         </>
       )}
     </>
+  );
+}
+
+/** 邮件的「放到订阅里看」/「放回邮件」：按发件人，这个人以后的信也一样。一组里发件人都相同时才有。 */
+function NewsletterItem({ items }: { items: Item[] }) {
+  const t = useT();
+  const { has, add, remove } = useNewsletterActions();
+  const address = items[0]?.sender_address?.trim().toLowerCase();
+  if (!address || items.some((i) => i.kind !== "mail" || i.draft || i.sent || i.sender_address?.trim().toLowerCase() !== address)) {
+    return null;
+  }
+  const inFeeds = has(address);
+  return (
+    <MenuItem
+      icon={inFeeds ? <Inbox size={14} /> : <Newspaper size={14} />}
+      onSelect={() => {
+        if (inFeeds) {
+          void remove(address).then(() => toast(t("newsletter.removed")));
+        } else {
+          void add(address).then(() => toast(t("newsletter.added", { name: items[0]?.author || address })));
+        }
+      }}
+    >
+      {inFeeds ? t("newsletter.remove") : t("newsletter.add")}
+    </MenuItem>
   );
 }

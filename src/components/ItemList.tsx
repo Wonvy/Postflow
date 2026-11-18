@@ -671,6 +671,8 @@ function scopeTitle(
       return scope.label;
     case "label":
       return scope.label;
+    case "newsletter":
+      return sourceTitle(scope.address) ?? scope.address;
   }
 }
 
@@ -702,8 +704,8 @@ export function ItemList({ width }: { width: number }) {
   const setDialog = useUi((s) => s.setDialog);
   const nav = useNav();
   const setGroupExpanded = useUi((s) => s.setGroupExpanded);
-  const { confirmMarkAllRead, refresh, membersOf, compose, toggle, itemsOf } = useActions();
-  const { query, items, rows: listRows, stops, groupMode, search } = useListModel();
+  const { confirmMarkAllRead, refresh, membersOf, compose, toggle, itemsOf, applyTo } = useActions();
+  const { query, items, rows: listRows, stops, groupMode, search, filter } = useListModel();
   const searchOpen = useUi((s) => s.searchOpen);
   // 手机和平板布局里侧栏收起来了，列表左上角有打开它的按钮
   const drawer = useDrawerSidebar();
@@ -941,6 +943,32 @@ export function ItemList({ width }: { width: number }) {
     }
   }, [ahead, fetchNextPage, hasNextPage, isFetchingNextPage, lines.length, lastVisible]);
 
+  // 「滚过去就标为已读」：整行移出列表顶部的订阅文章，停止滚动半秒后一起标为已读。
+  // 「未读」视图里不做：标了已读的会从列表里消失，内容跟着跳
+  const markReadOnScroll = useUi((s) => s.markReadOnScroll);
+  const markedOnScroll = useRef(new Set<string>());
+  useEffect(() => {
+    if (!markReadOnScroll || filter.view === "unread" || search) return;
+    const timer = setTimeout(() => {
+      const ids: string[] = [];
+      for (const m of virtualizer.measurementsCache) {
+        if (m.end > offset) break;
+        const line = lines[m.index];
+        if (!line || line.kind === "header" || line.kind === "section") continue;
+        for (const r of line.kind === "row" ? [line.row] : line.rows) {
+          const members = r.kind === "item" ? [r.item] : r.group.items;
+          for (const i of members) {
+            if (i.kind === "article" && !i.read && !markedOnScroll.current.has(i.id)) ids.push(i.id);
+          }
+        }
+      }
+      if (ids.length === 0) return;
+      for (const id of ids) markedOnScroll.current.add(id);
+      applyTo(ids, { read: true });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [markReadOnScroll, filter.view, search, offset, lines, virtualizer, applyTo]);
+
   // 打开了「列表里显示 AI 摘要」：停止滚动一会儿以后，为看得到的条目要摘要
   const visibleIds = virtualRows
     .flatMap((v) => {
@@ -1018,7 +1046,8 @@ export function ItemList({ width }: { width: number }) {
     t,
     (id) =>
       feeds?.find((f) => f.id === id)?.title ??
-      accounts?.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean),
+      accounts?.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean) ??
+      (nav.data?.newsletters?.find((n) => n.address === id)?.name || undefined),
   );
   const unreadCount = items.filter((i) => !i.read).length;
   const hasUnread = unreadCount > 0;
@@ -1530,7 +1559,8 @@ export function MarkAllReadDialog() {
     t,
     (id) =>
       nav.data?.feeds.find((f) => f.id === id)?.title ??
-      nav.data?.accounts.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean),
+      nav.data?.accounts.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean) ??
+      (nav.data?.newsletters?.find((n) => n.address === id)?.name || undefined),
   );
   const { items, query } = useListModel();
   const { markAllRead: markCurrent } = useActions();

@@ -3,7 +3,7 @@ import { useActions } from "./actions";
 import { IS_TABLET } from "./device";
 import { normalizeReaderStyle, readerDefault } from "./readerStyle";
 import { episodeOf, play, skip, toggleIfLoaded, usePlayer, BACK_SECONDS, FORWARD_SECONDS } from "./player";
-import type { FeedKind } from "./api";
+import type { ContentKind } from "./api";
 import { kindsIn } from "./feedKinds";
 import { useNav } from "./queries";
 import { articleActions, useUi } from "./store";
@@ -26,9 +26,9 @@ export function useShortcuts() {
   const latest = useRef(actions);
   latest.current = actions;
   // 订阅里有哪几类源：数字键切换类型时只认有的
-  const feeds = useNav().data?.feeds;
-  const kinds = useRef<FeedKind[]>([]);
-  kinds.current = kindsIn(feeds ?? []);
+  const nav = useNav().data;
+  const kinds = useRef<ContentKind[]>([]);
+  kinds.current = kindsIn(nav?.feeds ?? [], nav?.newsletters ?? []);
 
   useEffect(() => {
     // 对话框或新手引导开着时，按键属于它们
@@ -146,11 +146,12 @@ export function useShortcuts() {
         case "1":
         case "2":
         case "3":
-        case "4": {
-          // 订阅：1 全部，2 文章，3 视频，4 播客（侧栏顶上那排图标，只有一类时没有）
+        case "4":
+        case "5": {
+          // 订阅：按侧栏顶上那排图标的顺序，1 是全部，后面依次是有的那几类（只有一类时没有这排图标）
           if (ui.space !== "feeds" || kinds.current.length < 2) return;
-          const kind = (["all", "article", "video", "podcast"] as const)[Number(key) - 1];
-          if (!kind || (kind !== "all" && !kinds.current.includes(kind))) return;
+          const kind = (["all", ...kinds.current] as const)[Number(key) - 1];
+          if (!kind) return;
           ui.setFeedKind(kind);
           break;
         }

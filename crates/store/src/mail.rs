@@ -24,6 +24,8 @@ const ACCOUNT_SQL: &str = concat!(
             (SELECT COUNT(*) FROM items i \
               WHERE i.kind = 'mail' AND i.source_id = a.id AND i.read = 0 AND i.archived = 0 AND NOT ",
     crate::snoozed_now_sql!(),
+    " AND NOT ",
+    crate::newsletter_sql!(),
     "), \
             s.last_sync_at, s.error, s.error_code, a.smtp_host, a.smtp_port, a.smtp_security, \
             a.sender_name, a.signature \

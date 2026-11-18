@@ -35,8 +35,10 @@ import {
 } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { refreshSpace, useActions } from "../lib/actions";
-import { type Account, api, type Feed, type FeedKind, type ItemPatch, type Nav, type View } from "../lib/api";
-import { FEED_KIND_ICON, FEED_KIND_LABEL, kindsIn, useFeedKind } from "../lib/feedKinds";
+import { type Account, api, type ContentKind, type Feed, type ItemPatch, type Nav, type View } from "../lib/api";
+import { FEED_KIND_ICON, FEED_KIND_LABEL, kindsIn, useFeedKind, useNewsletters } from "../lib/feedKinds";
+import { useNewsletterActions } from "../lib/newsletters";
+import { SenderAvatar } from "./SourceIcon";
 import { type DragPayload, type DropPosition, dropPosition, endDrag, isOurs, moveInList, startDrag, useDrag } from "../lib/dnd";
 import { moveTop, type TopEntry } from "../lib/feedTree";
 import { useFolderActions, useTopLevel } from "../lib/folders";
@@ -612,22 +614,28 @@ function SectionHeader({
 
 /** 侧栏顶部「邮件 | 订阅」的切换条。不在的那一边显示未读数；右键可以隐藏订阅。 */
 /**
- * 订阅那边顶上的一排图标：全部、文章、视频、播客。只显示图标，悬停看名字；没选中的那一类有未读时右上角一个小点。
- * 订阅源只有一类时不显示。
+ * 订阅那边顶上的一排图标：全部、文章、视频、播客、Newsletter。只显示图标，悬停看名字；没选中的那一类有未读时
+ * 右上角一个小点。只有一类时不显示。
  */
 function FeedKindBar({ feeds }: { feeds: readonly Feed[] }) {
   const t = useT();
   const chosen = useFeedKind();
   const setFeedKind = useUi((s) => s.setFeedKind);
-  const present = kindsIn(feeds);
+  const newsletters = useNewsletters();
+  const present = kindsIn(feeds, newsletters);
   if (present.length < 2) return null;
-  const options: (FeedKind | "all")[] = ["all", ...present];
+  const options: (ContentKind | "all")[] = ["all", ...present];
   return (
     <div role="tablist" aria-label={t("feedKind.bar")} className="mb-2 flex gap-0.5">
       {options.map((kind) => {
         const Icon = FEED_KIND_ICON[kind];
         const label = t(FEED_KIND_LABEL[kind]);
-        const unread = kind === "all" ? 0 : feeds.reduce((sum, f) => (f.kind === kind ? sum + f.unread : sum), 0);
+        const unread =
+          kind === "all"
+            ? 0
+            : kind === "newsletter"
+              ? newsletters.reduce((sum, n) => sum + n.unread, 0)
+              : feeds.reduce((sum, f) => (f.kind === kind ? sum + f.unread : sum), 0);
         return (
           <Tip key={kind} label={label} side="bottom">
             <button
@@ -734,6 +742,16 @@ export function Sidebar({ width }: { width: number }) {
   const toggleViewShown = useUi((s) => s.toggleViewShown);
   const shownViews = VIEWS.filter(({ view }) => !hiddenViews.includes(view));
   const viewsSection: SidebarSection = space === "mail" ? "views-mail" : "views-feeds";
+  // 右键菜单里「显示哪几个视图」的勾选
+  const viewChoices = VIEWS.map(({ view, icon: Icon }) => (
+    <MenuItem
+      key={view}
+      icon={hiddenViews.includes(view) ? <Icon size={14} className="opacity-40" /> : <Check size={14} />}
+      onSelect={() => toggleViewShown(space, view)}
+    >
+      {t(viewLabelKey(view, space))}
+    </MenuItem>
+  ));
   const qc = useQueryClient();
   const { applyTo, compose, itemsOf, moveTo } = useActions();
   const hasAccounts = (nav.data?.accounts.length ?? 0) > 0;
@@ -1057,22 +1075,67 @@ export function Sidebar({ width }: { width: number }) {
         )}
         {!mail && <FeedKindBar feeds={allFeeds ?? []} />}
 
-        {/* 内置视图：可以收起来给下面的列表腾地方，右键选显示哪几个 */}
+        {/* 内置视图。订阅那边只有一两个（默认今天、星标），并排放在一行，不单独成组；
+            邮件那边放在可以收起的「视图」标题下。右键选显示哪几个 */}
+        {!mail ? (
+          shownViews.length > 0 && (
+            <div className="flex gap-1">
+              {shownViews.map(({ view, icon: Icon }) => {
+                const label = t(viewLabelKey(view, space));
+                // 视图多了放不下名字，只留图标，悬停看名字
+                const iconOnly = shownViews.length > 3;
+                const active = isActive({ kind: "view", view });
+                const button = (
+                  <button
+                    type="button"
+                    aria-label={label}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => choose({ kind: "view", view })}
+                    {...viewTarget(view)}
+                    className={cx(
+                      "flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[13px] transition-colors touch:h-11 touch:text-[15px]",
+                      active ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
+                      dropAt(`view:${view}`) && "ring-1 ring-inset ring-accent",
+                    )}
+                  >
+                    <Icon {...ICON} className="shrink-0" />
+                    {!iconOnly && <span className="truncate">{label}</span>}
+                    <Count n={countFor(view)} />
+                  </button>
+                );
+                return (
+                  <ContextMenu
+                    key={view}
+                    bare
+                    items={
+                      <>
+                        <MarkAllReadItem scope={{ kind: "view", view }} />
+                        <MenuSeparator />
+                        {viewChoices}
+                      </>
+                    }
+                  >
+                    {iconOnly ? (
+                      <Tip label={label} side="bottom">
+                        {button}
+                      </Tip>
+                    ) : (
+                      button
+                    )}
+                  </ContextMenu>
+                );
+              })}
+            </div>
+          )
+        ) : (
+        <>
         <SectionHeader
           first
           label={t("nav.views")}
           collapsed={isCollapsed(viewsSection)}
           onToggle={() => toggleSection(viewsSection)}
           unread={shownViews.some((v) => v.view === "inbox") ? countFor("inbox") : 0}
-          menu={VIEWS.map(({ view, icon: Icon }) => (
-            <MenuItem
-              key={view}
-              icon={hiddenViews.includes(view) ? <Icon size={14} className="opacity-40" /> : <Check size={14} />}
-              onSelect={() => toggleViewShown(space, view)}
-            >
-              {t(viewLabelKey(view, space))}
-            </MenuItem>
-          ))}
+          menu={viewChoices}
         />
         {!isCollapsed(viewsSection) && (
           <div className="flex flex-col gap-px">
@@ -1090,6 +1153,8 @@ export function Sidebar({ width }: { width: number }) {
               </ContextMenu>
             ))}
           </div>
+        )}
+        </>
         )}
 
         {shownLabels.length > 0 && (
@@ -1283,6 +1348,7 @@ export function Sidebar({ width }: { width: number }) {
                     )}
                   </div>
                 )}
+                {(feedKind === "all" || feedKind === "newsletter") && <NewsletterSection />}
                 {allFeeds && allFeeds.length === 0 && (
                   <button
                     type="button"
@@ -1421,5 +1487,53 @@ function FolderDialog() {
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** 订阅里的 Newsletter：放到订阅里看的订阅邮件，按发件人一行。右键可以放回邮件。 */
+function NewsletterSection() {
+  const t = useT();
+  const newsletters = useNewsletters();
+  const scope = useUi((s) => s.scope);
+  const collapsed = useUi((s) => s.collapsedSections.includes("newsletters"));
+  const toggleSection = useUi((s) => s.toggleSection);
+  const choose = useChooseScope();
+  const { remove } = useNewsletterActions();
+  if (newsletters.length === 0) return null;
+  return (
+    <>
+      <SectionHeader
+        label={t("newsletter.section")}
+        collapsed={collapsed}
+        onToggle={() => toggleSection("newsletters")}
+        unread={newsletters.reduce((sum, n) => sum + n.unread, 0)}
+      />
+      {!collapsed &&
+        newsletters.map((n) => {
+          const target: ListScope = { kind: "newsletter", address: n.address };
+          return (
+            <ContextMenu
+              key={n.address}
+              items={
+                <>
+                  <MarkAllReadItem scope={target} />
+                  <MenuSeparator />
+                  <MenuItem icon={<Inbox size={14} />} onSelect={() => void remove(n.address)}>
+                    {t("newsletter.remove")}
+                  </MenuItem>
+                </>
+              }
+            >
+              <Row
+                active={sameScope(scope, target)}
+                onClick={() => choose(target)}
+                leading={<SenderAvatar name={n.name || n.address} address={n.address} size={16} />}
+                label={n.name || n.address}
+                trailing={<Count n={n.unread} />}
+              />
+            </ContextMenu>
+          );
+        })}
+    </>
   );
 }
