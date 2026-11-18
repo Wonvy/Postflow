@@ -7,8 +7,18 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Mail and Feeds are now two separate spaces. Switch between them at the top of the sidebar; each has its own Inbox / All articles, Today, Unread, Starred and Archive, its own buttons (compose, sync mail and add account on the Mail side; stats, refresh feeds and add feed or folder on the Feeds side) and remembers the list you were on. The mail / articles filter and the stacked sidebar layout are gone.
+- Categories show on both sides, counting only that side's items; a category with nothing on one side is hidden there.
+- Feeds are optional: turn off Settings → Appearance → Show Feeds, or right-click the switch, to see only mail.
+- The Inbox unread count now counts mail only, matching what the Inbox shows.
+- A side with nothing added yet offers to add a mail account or a feed, and each side's refresh button spins only while that side is syncing.
 
 ### 中文
+- 邮件和订阅分成两个独立的空间，在侧栏顶部切换。两边各有自己的收件箱（订阅这边叫「全部文章」）、今天、未读、星标、已归档和按钮：邮件这边是写信、同步邮件、添加邮箱，订阅这边是统计、刷新订阅、添加订阅或文件夹；切回来时停在上次看的列表。去掉了「只看邮件 / 只看订阅」筛选和侧栏的上下排列模式。
+- 分类在两边都显示，数字只算这一边的条目；某一边没有内容的分类在那边不显示。
+- 订阅可以不看：在「设置 → 外观」关掉「显示订阅」，或者右键切换条，侧栏就只有邮件。
+- 收件箱旁的未读数只算邮件，和收件箱里显示的一致。
+- 某一边还没有来源时，列表里直接提示添加邮箱或订阅；两边的刷新按钮只在自己那一边同步时转圈。
 
 ## 0.1.18 — 2026-11-18
 

@@ -152,7 +152,7 @@ export function useCoreEvents() {
     return subscribe((event) => {
       switch (event.type) {
         case "refresh":
-          setRefreshing(event.active);
+          setRefreshing(event.active, event.mail ?? 0);
           break;
         case "new_mail":
           notifyNewMail(event, qc.getQueryData<Nav>(keys.nav));

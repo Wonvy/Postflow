@@ -165,9 +165,12 @@ fn default_stats_days() -> i64 {
 }
 
 #[derive(Deserialize)]
-struct OptionalId {
+struct RefreshParams {
     #[serde(default)]
     id: Option<String>,
+    /// 只刷新订阅源，不收邮件：侧栏「订阅」那边的刷新按钮。
+    #[serde(default)]
+    feeds_only: bool,
 }
 
 #[derive(Deserialize)]
@@ -394,9 +397,10 @@ impl Core {
                 reply(json!({}))
             }
             "feeds.refresh" => {
-                let p: OptionalId = parse(params)?;
-                // 刷新全部时邮箱也一起收；指定的是邮箱账户时只收那一个
+                let p: RefreshParams = parse(params)?;
+                // 刷新全部时邮箱也一起收（除非只要订阅）；指定的是邮箱账户时只收那一个
                 match &p.id {
+                    None if p.feeds_only => {}
                     None => self.sync_all_mail(&session, true).await,
                     Some(id) => {
                         if self.sync_account(&session, id, true) {

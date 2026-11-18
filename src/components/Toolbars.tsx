@@ -7,7 +7,6 @@ import {
   BookOpenText,
   CheckCheck,
   FilePen,
-  Filter,
   Forward,
   Globe,
   GripVertical,
@@ -51,7 +50,6 @@ import { ContextMenu, cx, ICON, IconButton, MenuItem, Modal, Segmented } from ".
 /** 对话框里每个按钮的名字和图标。 */
 const TOOL_META: Record<ToolbarId, Record<string, { label: MessageKey; icon: LucideIcon }>> = {
   list: {
-    kindFilter: { label: "tool.kindFilter", icon: Filter },
     search: { label: "tool.search", icon: Search },
     markAllRead: { label: "tool.markAllRead", icon: CheckCheck },
     refresh: { label: "tool.refresh", icon: RefreshCw },

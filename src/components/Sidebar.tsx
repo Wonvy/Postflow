@@ -5,11 +5,10 @@ import {
   CheckCheck,
   ChevronRight,
   ChevronsDownUp,
-  PanelTop,
-  Rows3,
   CircleDot,
   Copy,
   Ellipsis,
+  EyeOff,
   FilePen,
   Folder,
   FolderPlus,
@@ -32,7 +31,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { useActions } from "../lib/actions";
+import { refreshSpace, useActions } from "../lib/actions";
 import { type Account, api, type Feed, type ItemPatch, type Nav, type View } from "../lib/api";
 import { type DragPayload, type DropPosition, dropPosition, endDrag, isOurs, moveInList, startDrag, useDrag } from "../lib/dnd";
 import { moveTop, type TopEntry } from "../lib/feedTree";
@@ -43,7 +42,7 @@ import { UpdateButton } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar } from "../lib/platform";
 import { keys, useNav, usePresets } from "../lib/queries";
-import { type ListScope, type SidebarSection, sameScope, useUi } from "../lib/store";
+import { type ListScope, type SidebarSection, type Space, sameScope, useUi, viewLabelKey } from "../lib/store";
 import {
   Avatar,
   Button,
@@ -63,12 +62,13 @@ import {
   Tip,
 } from "./ui";
 
-const VIEWS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
-  { view: "inbox", icon: Inbox, label: "nav.inbox" },
-  { view: "today", icon: Sun, label: "nav.today" },
-  { view: "unread", icon: CircleDot, label: "nav.unread" },
-  { view: "starred", icon: Star, label: "nav.starred" },
-  { view: "archived", icon: Archive, label: "nav.archived" },
+/** 两个空间都有的视图，各自只看自己那一类。名字见 `viewLabelKey`（订阅那边的收件箱叫「全部文章」）。 */
+const VIEWS: { view: View; icon: LucideIcon }[] = [
+  { view: "inbox", icon: Inbox },
+  { view: "today", icon: Sun },
+  { view: "unread", icon: CircleDot },
+  { view: "starred", icon: Star },
+  { view: "archived", icon: Archive },
 ];
 
 /** 邮箱里另外同步的几个文件夹，放在邮箱列表下面。 */
@@ -577,50 +577,50 @@ function SectionHeader({
   );
 }
 
-/** 选项卡模式下「邮箱」和「订阅」的切换条，只有两块，别的操作在右键菜单里（当前选项卡那一组的菜单）。 */
-function SectionTabs({
-  tab,
-  onTab,
+/** 侧栏顶部「邮件 | 订阅」的切换条。不在的那一边显示未读数；右键可以隐藏订阅。 */
+function SpaceSwitch({
+  space,
+  onSpace,
   mailUnread,
   feedsUnread,
-  feedsDrag,
-  feedsHighlight,
-  menu,
 }: {
-  tab: "mail" | "feeds";
-  onTab: (tab: "mail" | "feeds") => void;
+  space: Space;
+  onSpace: (space: Space) => void;
   mailUnread: number;
   feedsUnread: number;
-  /** 订阅或文件夹拖到「订阅」选项卡上：移到最上层，和拖到上下排列时的「订阅」标题一样。 */
-  feedsDrag: DragHandlers;
-  feedsHighlight: boolean;
-  menu: ReactNode;
 }) {
   const t = useT();
+  const setShowFeeds = useUi((s) => s.setShowFeeds);
   const tabs = [
-    { key: "mail" as const, label: t("nav.mail"), unread: mailUnread },
-    { key: "feeds" as const, label: t("nav.feeds"), unread: feedsUnread },
+    { key: "mail" as const, label: t("space.mail"), icon: Mail, unread: mailUnread },
+    { key: "feeds" as const, label: t("space.feeds"), icon: Rss, unread: feedsUnread },
   ];
   return (
-    <ContextMenu bare items={menu}>
-      <div role="tablist" className="mb-1 mt-3 flex gap-0.5 rounded-md border border-line-strong p-0.5">
-        {tabs.map(({ key, label, unread }) => (
+    <ContextMenu
+      bare
+      items={
+        <MenuItem icon={<EyeOff size={14} />} onSelect={() => setShowFeeds(false)}>
+          {t("space.hideFeeds")}
+        </MenuItem>
+      }
+    >
+      <div role="tablist" className="mb-2 flex gap-0.5 rounded-md border border-line-strong p-0.5">
+        {tabs.map(({ key, label, icon: Icon, unread }) => (
           <button
             key={key}
             type="button"
             role="tab"
-            aria-selected={tab === key}
-            onClick={() => onTab(key)}
-            {...(key === "feeds" ? feedsDrag : {})}
+            aria-selected={space === key}
+            onClick={() => onSpace(key)}
             className={cx(
-              "flex h-6 min-w-0 flex-1 items-center justify-center gap-1 rounded px-1.5 text-[12px] font-medium transition-colors",
-              // 当前选项卡用强调色，和侧栏里选中的行（灰底）区分开，两种主题下都一眼看得出
-              tab === key ? "bg-accent-soft text-accent" : "text-fg-3 hover:bg-hover hover:text-fg-2",
-              key === "feeds" && feedsHighlight && "bg-accent-soft ring-1 ring-inset ring-accent/60",
+              "flex h-6 min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 text-[12px] font-medium transition-colors",
+              // 当前空间用强调色，和侧栏里选中的行（灰底）区分开
+              space === key ? "bg-accent-soft text-accent" : "text-fg-3 hover:bg-hover hover:text-fg-2",
             )}
           >
+            <Icon size={13} strokeWidth={2} className="shrink-0" />
             <span className="truncate">{label}</span>
-            {tab !== key && <Count n={unread} />}
+            {space !== key && <Count n={unread} />}
           </button>
         ))}
       </div>
@@ -637,15 +637,17 @@ export function Sidebar({ width }: { width: number }) {
   const mainView = useUi((s) => s.mainView);
   const setMainView = useUi((s) => s.setMainView);
   const refreshing = useUi((s) => s.refreshing);
+  const refreshingMail = useUi((s) => s.refreshingMail);
   const collapsed = useUi((s) => s.collapsedFolders);
   const toggleFolder = useUi((s) => s.toggleFolder);
   const collapsedSections = useUi((s) => s.collapsedSections);
   const toggleSection = useUi((s) => s.toggleSection);
   const isCollapsed = (section: SidebarSection) => collapsedSections.includes(section);
-  const tabs = useUi((s) => s.sidebarTabs);
-  const setTabs = useUi((s) => s.setSidebarTabs);
-  const tab = useUi((s) => s.sidebarTab);
-  const setTab = useUi((s) => s.setSidebarTab);
+  const space = useUi((s) => s.space);
+  const setSpace = useUi((s) => s.setSpace);
+  const showFeeds = useUi((s) => s.showFeeds);
+  const setShowFeeds = useUi((s) => s.setShowFeeds);
+  const mail = space === "mail";
   const qc = useQueryClient();
   const { applyTo, compose, itemsOf, moveTo } = useActions();
   const hasAccounts = (nav.data?.accounts.length ?? 0) > 0;
@@ -850,18 +852,37 @@ export function Sidebar({ width }: { width: number }) {
 
   const isActive = (target: ListScope) => sameScope(scope, target);
   const countFor = (view: View) => {
-    if (!counts) return undefined;
-    if (view === "inbox") return counts.unread;
-    if (view === "today") return counts.today;
-    return undefined;
+    if (!counts) return 0;
+    if (view === "inbox") return mail ? counts.unread_mail : counts.unread_article;
+    if (view === "today") return mail ? counts.today_mail : counts.today_article;
+    return 0;
   };
 
-  // 邮箱和订阅两组的右键菜单和标题上的按钮；上下排列时在各自的标题上，选项卡模式时在选项卡上
-  const layoutItem = (
-    <MenuItem icon={tabs ? <Rows3 size={14} /> : <PanelTop size={14} />} onSelect={() => setTabs(!tabs)}>
-      {tabs ? t("section.stacked") : t("section.tabs")}
-    </MenuItem>
+  // 分类：定义两边共用，数字只算这一边的。这一边没有条目的分类不显示；
+  // 拖着条目时全部显示出来，好拖进去
+  const labelCountIn = (label: string) => {
+    const c = labelCounts.find((l) => l.label === label);
+    if (!c) return { unread: 0, total: 0 };
+    return mail
+      ? { unread: c.unread_mail, total: c.total_mail }
+      : { unread: c.unread - c.unread_mail, total: c.total - c.total_mail };
+  };
+  const draggingItems = dragging?.kind === "items";
+  const shownLabels = labels.filter(
+    (label) => draggingItems || labelCountIn(label).total > 0 || isActive({ kind: "label", label }),
   );
+
+  const statsButton = (
+    <IconButton
+      label={t("stats.title")}
+      active={mainView === "stats"}
+      onClick={() => setMainView(mainView === "stats" ? "list" : "stats")}
+    >
+      <ChartColumn {...ICON} />
+    </IconButton>
+  );
+
+  // 每一边的右键菜单，挂在那一边的标题上
   const mailMenu = (
     <>
       <MenuItem icon={<Plus size={14} />} onSelect={() => setDialog({ type: "add-account" })}>
@@ -872,13 +893,11 @@ export function Sidebar({ width }: { width: number }) {
           <MenuItem icon={<SquarePen size={14} />} onSelect={() => compose("new")}>
             {t("compose.new")}
           </MenuItem>
-          <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.syncAccount()}>
+          <MenuItem icon={<RefreshCw size={14} />} onSelect={() => refreshSpace("mail")}>
             {t("action.syncAllMail")}
           </MenuItem>
         </>
       )}
-      <MenuSeparator />
-      {layoutItem}
     </>
   );
   const feedsMenu = (
@@ -889,35 +908,19 @@ export function Sidebar({ width }: { width: number }) {
       <MenuItem icon={<FolderPlus size={14} />} onSelect={() => setDialog({ type: "folder" })}>
         {t("folder.new")}
       </MenuItem>
-      <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void api.refresh()}>
+      <MenuItem icon={<RefreshCw size={14} />} onSelect={() => refreshSpace("feeds")}>
         {t("action.refreshAll")}
       </MenuItem>
-      <MenuItem
-        icon={<ChartColumn size={14} />}
-        onSelect={() => setMainView(mainView === "stats" ? "list" : "stats")}
-      >
+      <MenuItem icon={<ChartColumn size={14} />} onSelect={() => setMainView(mainView === "stats" ? "list" : "stats")}>
         {t("stats.title")}
       </MenuItem>
       <MenuSeparator />
-      {layoutItem}
+      <MenuItem icon={<EyeOff size={14} />} onSelect={() => setShowFeeds(false)}>
+        {t("space.hideFeeds")}
+      </MenuItem>
     </>
   );
   const feedsExtra = (
-    <>
-    <Tip label={t("stats.title")} side="right">
-      <button
-        type="button"
-        aria-label={t("stats.title")}
-        aria-pressed={mainView === "stats"}
-        onClick={() => setMainView(mainView === "stats" ? "list" : "stats")}
-        className={cx(
-          "flex size-5 items-center justify-center rounded hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100",
-          mainView === "stats" ? "text-accent opacity-100" : "text-fg-3 opacity-0",
-        )}
-      >
-        <ChartColumn size={14} strokeWidth={2} />
-      </button>
-    </Tip>
     <Tip label={t("folder.new")} side="right">
       <button
         type="button"
@@ -928,7 +931,6 @@ export function Sidebar({ width }: { width: number }) {
         <FolderPlus size={14} strokeWidth={2} />
       </button>
     </Tip>
-    </>
   );
 
   return (
@@ -945,41 +947,64 @@ export function Sidebar({ width }: { width: number }) {
         )}
         <div className="flex-1" data-tauri-drag-region />
         <UpdateButton />
-        {hasAccounts && (
-          <IconButton label={t("compose.new")} shortcut="C" onClick={() => compose("new")}>
-            <SquarePen {...ICON} />
-          </IconButton>
-        )}
-        <IconButton label={t("action.refreshAll")} shortcut="R" onClick={() => void api.refresh()}>
-          <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
-        </IconButton>
-        <Menu
-          align="end"
-          trigger={
-            <button
-              type="button"
-              aria-label={t("action.addMenu")}
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
-            >
+        {/* 顶栏的按钮只管当前这一边 */}
+        {mail ? (
+          <>
+            {hasAccounts && (
+              <IconButton label={t("compose.new")} shortcut="C" onClick={() => compose("new")}>
+                <SquarePen {...ICON} />
+              </IconButton>
+            )}
+            {hasAccounts && (
+              <IconButton label={t("action.syncAllMail")} shortcut="R" onClick={() => refreshSpace("mail")}>
+                <RefreshCw {...ICON} className={cx(refreshingMail > 0 && "animate-spin")} />
+              </IconButton>
+            )}
+            <IconButton label={t("action.addAccount")} onClick={() => setDialog({ type: "add-account" })}>
               <Plus {...ICON} />
-            </button>
-          }
-        >
-          <MenuItem icon={<Mail size={14} />} onSelect={() => setDialog({ type: "add-account" })}>
-            {t("action.addAccount")}
-          </MenuItem>
-          <MenuItem icon={<Rss size={14} />} onSelect={() => setDialog({ type: "add-feed" })}>
-            {t("action.addFeed")}
-          </MenuItem>
-          <MenuItem icon={<FolderPlus size={14} />} onSelect={() => setDialog({ type: "folder" })}>
-            {t("folder.new")}
-          </MenuItem>
-        </Menu>
+            </IconButton>
+          </>
+        ) : (
+          <>
+            {statsButton}
+            <IconButton label={t("action.refreshAll")} shortcut="R" onClick={() => refreshSpace("feeds")}>
+              <RefreshCw {...ICON} className={cx(refreshing - refreshingMail > 0 && "animate-spin")} />
+            </IconButton>
+            <Menu
+              align="end"
+              trigger={
+                <button
+                  type="button"
+                  aria-label={t("action.addMenu")}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
+                >
+                  <Plus {...ICON} />
+                </button>
+              }
+            >
+              <MenuItem icon={<Rss size={14} />} onSelect={() => setDialog({ type: "add-feed" })}>
+                {t("action.addFeed")}
+              </MenuItem>
+              <MenuItem icon={<FolderPlus size={14} />} onSelect={() => setDialog({ type: "folder" })}>
+                {t("folder.new")}
+              </MenuItem>
+            </Menu>
+          </>
+        )}
       </header>
 
       <div className="shrink-0 px-2">
+        {showFeeds && (
+          <SpaceSwitch
+            space={space}
+            onSpace={setSpace}
+            mailUnread={counts?.unread_mail ?? 0}
+            feedsUnread={counts?.unread_article ?? 0}
+          />
+        )}
+
         <div className="flex flex-col gap-px">
-          {VIEWS.map(({ view, icon: Icon, label }) => (
+          {VIEWS.map(({ view, icon: Icon }) => (
             <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
               <Row
                 active={isActive({ kind: "view", view })}
@@ -987,14 +1012,14 @@ export function Sidebar({ width }: { width: number }) {
                 drag={viewTarget(view)}
                 drop={dropAt(`view:${view}`)}
                 leading={<Icon {...ICON} />}
-                label={t(label)}
-                trailing={<Count n={countFor(view) ?? 0} />}
+                label={t(viewLabelKey(view, space))}
+                trailing={<Count n={countFor(view)} />}
               />
             </ContextMenu>
           ))}
         </div>
 
-        {labels.length > 0 && (
+        {shownLabels.length > 0 && (
           <>
             <SectionHeader
               label={t("nav.labels")}
@@ -1002,7 +1027,7 @@ export function Sidebar({ width }: { width: number }) {
               onAdd={() => setDialog({ type: "settings", page: "categories" })}
               collapsed={isCollapsed("labels")}
               onToggle={() => toggleSection("labels")}
-              unread={labelCounts.reduce((n, l) => n + l.unread, 0)}
+              unread={shownLabels.reduce((n, l) => n + labelCountIn(l).unread, 0)}
               menu={
                 <MenuItem icon={<Tags size={14} />} onSelect={() => setDialog({ type: "settings", page: "categories" })}>
                   {t("label.edit")}
@@ -1011,7 +1036,7 @@ export function Sidebar({ width }: { width: number }) {
             />
             {!isCollapsed("labels") && (
               <div className="flex flex-col gap-px">
-                {labels.map((label) => (
+                {shownLabels.map((label) => (
                   <ContextMenu
                     key={label}
                     items={
@@ -1027,41 +1052,26 @@ export function Sidebar({ width }: { width: number }) {
                       </>
                     }
                   >
-                  <Row
-                    active={isActive({ kind: "label", label })}
-                    onClick={() => setScope({ kind: "label", label })}
-                    drag={labelTarget(label)}
-                    drop={dropAt(`label:${label}`)}
-                    leading={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(label) }} />}
-                    label={label}
-                    trailing={<Count n={labelCounts.find((l) => l.label === label)?.unread ?? 0} />}
-                  />
+                    <Row
+                      active={isActive({ kind: "label", label })}
+                      onClick={() => setScope({ kind: "label", label })}
+                      drag={labelTarget(label)}
+                      drop={dropAt(`label:${label}`)}
+                      leading={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(label) }} />}
+                      label={label}
+                      trailing={<Count n={labelCountIn(label).unread} />}
+                    />
                   </ContextMenu>
                 ))}
               </div>
             )}
           </>
         )}
-
-        {tabs && (
-          <SectionTabs
-            tab={tab}
-            onTab={setTab}
-            mailUnread={counts?.unread_mail ?? 0}
-            feedsUnread={counts?.unread_article ?? 0}
-            feedsDrag={feedsSectionTarget}
-            feedsHighlight={dropAt("section:feeds") !== null}
-            menu={tab === "mail" ? mailMenu : feedsMenu}
-          />
-        )}
-
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-
-        {(
+        {mail ? (
           <>
-            {!tabs && (
             <SectionHeader
               label={t("nav.mail")}
               addLabel={t("action.addAccount")}
@@ -1071,8 +1081,7 @@ export function Sidebar({ width }: { width: number }) {
               unread={counts?.unread_mail}
               menu={mailMenu}
             />
-            )}
-            {(tabs ? tab === "mail" : !isCollapsed("mail")) && (
+            {!isCollapsed("mail") && (
               <div className="flex flex-col gap-px">
                 {accounts?.map((account) => (
                   <AccountRow
@@ -1127,11 +1136,8 @@ export function Sidebar({ width }: { width: number }) {
               </div>
             )}
           </>
-        )}
-
-        {(
+        ) : (
           <>
-            {!tabs && (
             <SectionHeader
               label={t("nav.feeds")}
               addLabel={t("action.addFeed")}
@@ -1144,9 +1150,7 @@ export function Sidebar({ width }: { width: number }) {
               drag={feedsSectionTarget}
               highlight={dropAt("section:feeds") !== null}
             />
-            )}
-
-            {(tabs ? tab === "feeds" : !isCollapsed("feeds")) && (
+            {!isCollapsed("feeds") && (
               <div className="flex flex-col gap-px">
                 {top.map((entry) => {
                   if (entry.kind === "feed") {

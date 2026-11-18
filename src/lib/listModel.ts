@@ -8,7 +8,7 @@ import { filterOf, searchFilterOf, useGroupMode, useUi } from "./store";
 
 export function useListModel() {
   const scope = useUi((s) => s.scope);
-  const kindFilter = useUi((s) => s.kindFilter);
+  const space = useUi((s) => s.space);
   const groupMode = useGroupMode();
   const expandedGroups = useUi((s) => s.expandedGroups);
 
@@ -16,8 +16,8 @@ export function useListModel() {
   const search = useUi((s) => (s.searchOpen ? s.searchQuery.trim() : ""));
   const searchAll = useUi((s) => s.searchAll);
   const filter = useMemo(
-    () => (search ? searchFilterOf(scope, kindFilter, search, searchAll) : filterOf(scope, kindFilter)),
-    [scope, kindFilter, search, searchAll],
+    () => (search ? searchFilterOf(scope, space, search, searchAll) : filterOf(scope, space)),
+    [scope, space, search, searchAll],
   );
   const query = useItems(filter);
   const { items } = query;

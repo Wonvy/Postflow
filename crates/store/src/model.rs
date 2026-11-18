@@ -220,7 +220,7 @@ pub struct Counts {
     /// 今天发布的未读数。
     pub today: i64,
     pub starred: i64,
-    /// 同样两个数，只算邮件或只算文章。侧栏的选项卡用。
+    /// 同样两个数，只算邮件或只算文章：侧栏邮件和订阅两边各显示各的。
     pub unread_mail: i64,
     pub today_mail: i64,
     pub unread_article: i64,

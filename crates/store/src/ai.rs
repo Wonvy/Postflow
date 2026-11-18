@@ -39,12 +39,15 @@ pub struct AiUsage {
 
 const DAY_MS: i64 = 86_400_000;
 
-/// 一个分类里有多少条、多少未读（收件箱里的）。
+/// 一个分类里有多少条、多少未读（收件箱里的）。另外单算邮件的，文章的就是两者之差：
+/// 侧栏的「邮件」和「订阅」各显示各的分类数。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LabelCount {
     pub label: String,
     pub unread: i64,
     pub total: i64,
+    pub unread_mail: i64,
+    pub total_mail: i64,
 }
 
 /// 从 1970-01-01 起的第几天（UTC）。
@@ -218,7 +221,8 @@ impl Store {
     pub fn label_counts(&self) -> Result<Vec<LabelCount>> {
         let guard = self.lock();
         let sql = format!(
-            "SELECT l.label, COALESCE(SUM(i.read = 0), 0), COUNT(*) FROM {} \
+            "SELECT l.label, COALESCE(SUM(i.read = 0), 0), COUNT(*), \
+                    COALESCE(SUM(i.read = 0 AND i.kind = 'mail'), 0), COALESCE(SUM(i.kind = 'mail'), 0) FROM {} \
              WHERE l.label <> '' AND i.archived = 0 AND {} GROUP BY l.label ORDER BY l.label",
             crate::store::ITEM_FROM,
             crate::store::ALIVE
@@ -229,6 +233,8 @@ impl Store {
                 label: r.get(0)?,
                 unread: r.get(1)?,
                 total: r.get(2)?,
+                unread_mail: r.get(3)?,
+                total_mail: r.get(4)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)

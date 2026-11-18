@@ -37,6 +37,24 @@ const LABELS = {
   zh: { addAccount: "添加邮箱" },
 };
 
+// Categories for the sidebar, with the items filed under each. Mail and articles share them, and each side of the
+// sidebar counts only its own items.
+const CATEGORIES = {
+  // Not "Work" / "Personal": those are the demo mailboxes' names, and the shots click them in the sidebar
+  en: { work: "Projects", personal: "Family", reading: "Reading" },
+  zh: { work: "项目", personal: "家人", reading: "资讯" },
+};
+const FILED = {
+  work: ["Q4 budget for review", "Re: Design review notes", "Build #1201 passed on main"],
+  personal: ["Dinner on Saturday?", "Photos from the trip"],
+  reading: [
+    "Weekly digest: making the inbox a tool again",
+    "Syncing without a server: append-only logs",
+    "Quiet interfaces",
+    "Designing keyboard-first tools",
+  ],
+};
+
 const children = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -75,6 +93,20 @@ async function allItems() {
   return items;
 }
 
+/** Sets up the categories in the screenshot's language and files the demo items under them. */
+async function fileCategories(lang) {
+  const names = CATEGORIES[lang];
+  await rpc("settings.set", {
+    key: "ai.categories",
+    value: Object.values(names).map((name) => ({ name, description: "" })),
+  });
+  const items = await allItems();
+  for (const [key, titles] of Object.entries(FILED)) {
+    const ids = items.filter((i) => titles.some((t) => i.title.startsWith(t))).map((i) => i.id);
+    await rpc("items.label", { ids, label: names[key] });
+  }
+}
+
 /** Puts read and starred state back to the same starting point before each screenshot. */
 async function resetState() {
   const items = await allItems();
@@ -110,8 +142,8 @@ async function shot(browser, lang, name, prefs, act) {
     sidebarWidth: 232,
     listWidth: 400,
     collapsedFolders: [],
-    kindFilter: null,
-    groupModes: { "view:inbox": prefs.groupMode ?? "none" },
+    space: prefs.space ?? "mail",
+    groupModes: { "view:inbox:mail": prefs.groupMode ?? "none" },
   };
   await context.addInitScript((s) => {
     localStorage.setItem("postflow.ui", JSON.stringify({ state: s, version: 0 }));
@@ -176,8 +208,9 @@ async function main() {
         console.log(`Screenshots (${lang}):`);
         mkdirSync(join(OUT, lang), { recursive: true });
         const L = LABELS[lang];
+        await fileCategories(lang);
 
-        // 按发件人折叠：同一发件人的通知、同一订阅源的文章各合成一行
+        // 按发件人折叠：同一发件人的通知合成一行
         await shot(browser, lang, "inbox", { theme: "dark", groupMode: "sender" }, async (page) => {
           await open(page, "Weekly digest");
           await page.locator("main iframe").waitFor();
@@ -189,7 +222,7 @@ async function main() {
           await page.locator("main section li").first().waitFor();
         });
 
-        await shot(browser, lang, "article", { theme: "dark" }, async (page) => {
+        await shot(browser, lang, "article", { theme: "dark", space: "feeds" }, async (page) => {
           await page.locator("aside").getByText("Field Notes", { exact: true }).click();
           await open(page, "Syncing without a server");
           await page.locator("main .article pre").waitFor();
@@ -203,7 +236,7 @@ async function main() {
 
         await shot(browser, lang, "selection", { theme: "light", density: "comfortable" }, async (page) => {
           const modifier = process.platform === "darwin" ? "Meta" : "Control";
-          for (const title of ["Q4 budget for review", "Photos from the trip", "Quiet interfaces"]) {
+          for (const title of ["Q4 budget for review", "Photos from the trip", "Dinner on Saturday?"]) {
             await page.getByRole("option").filter({ hasText: title }).first().click({ modifiers: [modifier] });
           }
           await page.getByRole("toolbar").waitFor();

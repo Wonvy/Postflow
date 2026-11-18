@@ -68,6 +68,8 @@ export function SettingsDialog() {
   const senderLogos = useUi((s) => s.senderLogos);
   const setSenderLogos = useUi((s) => s.setSenderLogos);
   const setBadgeUnread = useUi((s) => s.setBadgeUnread);
+  const showFeeds = useUi((s) => s.showFeeds);
+  const setShowFeeds = useUi((s) => s.setShowFeeds);
 
   const status = useStatus();
   const settings = useSettings();
@@ -169,6 +171,9 @@ export function SettingsDialog() {
               { value: "comfortable", label: t("settings.comfortable") },
             ]}
           />
+        </SettingRow>
+        <SettingRow label={t("settings.showFeeds")} hint={t("settings.showFeedsHint")}>
+          <Switch label={t("settings.showFeeds")} checked={showFeeds} onChange={setShowFeeds} />
         </SettingRow>
         <SettingRow label={t("settings.senderLogos")} hint={t("settings.senderLogosHint")}>
           <Switch label={t("settings.senderLogos")} checked={senderLogos} onChange={setSenderLogos} />

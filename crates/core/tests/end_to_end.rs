@@ -92,7 +92,7 @@ async fn list(core: &Arc<Core>, view: &str) -> Vec<Value> {
 async fn wait_for_refresh(rx: &mut tokio::sync::broadcast::Receiver<Event>) {
     let wait = async {
         loop {
-            if let Ok(Event::Refresh { active: 0 }) = rx.recv().await {
+            if let Ok(Event::Refresh { active: 0, .. }) = rx.recv().await {
                 break;
             }
         }

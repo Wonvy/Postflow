@@ -2,13 +2,13 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-An open-source, cross-platform client that brings your email and RSS feeds into one inbox.
+An open-source, cross-platform client for your email and RSS feeds, each in its own space in one app.
 
 - **Local first.** Postflow talks to your mail servers and feeds directly from your device. No server, no account.
 - **Sync on your terms.** Your data is a folder of append-only logs. Keep it in sync between devices with Syncthing, iCloud Drive, Dropbox or any file-sync tool.
 - **Keyboard first.** A calm three-pane layout where every frequent action has a single key.
 
-![Unified inbox with mail and feeds side by side, grouped by sender](docs/screenshots/en/inbox.png)
+![Mail inbox grouped by sender, with the Mail and Feeds switch at the top of the sidebar](docs/screenshots/en/inbox.png)
 
 ## Screenshots
 
@@ -111,15 +111,18 @@ click **More info → Run anyway**.
   first and, when a site doesn't allow embedding, says so and offers to open it in your browser. Mail without a web
   link keeps its normal view.
 
-**One inbox**
+**Mail and Feeds**
 
-- Mail and articles are sorted together by time. Switch between everything, mail only and feeds only,
-  or look at a single account or feed.
+- Mail and Feeds are two separate spaces: switch between them at the top of the sidebar. Each side has its own
+  views, buttons and right-click menus, shows only its own items, and remembers the list you were on. Look at a
+  single account, mail folder, feed or feed folder from the side it belongs to.
+- Feeds are optional: turn off Settings → Appearance → Show Feeds (or right-click the switch) for a mail-only
+  sidebar. Feeds keep updating in the background.
 - Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
   source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
   Every feed, mailbox, folder and view keeps its own display mode and grouping; changing one leaves the others alone.
-- Inbox, Today, Unread, Starred and Archive views. Drag items from the list onto Starred or Archive to star or
-  archive them.
+- Inbox, Today, Unread, Starred and Archive views on the Mail side; All articles, Today, Unread, Starred and Archive
+  on the Feeds side. Drag items from the list onto Starred or Archive to star or archive them.
 - Spam and Trash under your mailboxes show what your mail server filed there, so a message caught by the spam
   filter is easy to find. Move it back to the inbox with the same button (or `E`). Gmail only shares these folders
   with mail apps when "Show in IMAP" is ticked for them in its label settings.
@@ -146,7 +149,7 @@ click **More info → Run anyway**.
   40–70 MB per direction) from Mozilla's Firefox Translations project. Nothing you read is sent anywhere.
 - List translation (the translate button in the list toolbar): titles and summaries in the list show in your
   language. Items already in your language are left alone, in the list and in the reader.
-- The sidebar's Mail and Feeds sections fold away; the filter at the top of the list shows only mail or only feeds.
+- The sidebar's category, account and feed sections fold away.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - The same interface also runs in your browser, served by the app on your own machine.
 - Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
@@ -160,7 +163,7 @@ click **More info → Run anyway**.
 - Press `A` for an AI panel beside the reader: a summary with key points and keywords, and a chat about the message
   or article (key points, what you need to do, draft a reply).
 - Translate with AI instead of the offline model, keeping layout and links.
-- One-line AI summaries in the summary and card views. Categories you define show up in the sidebar; new items are
+- One-line AI summaries in the summary and card views. Categories you define show up in the sidebar on both sides, each counting only that side's items; new items are
   filed by your rules (Settings → Rules), and you can ask the AI to sort recent items once with "Classify now".
   Your own choices always win.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
@@ -194,7 +197,7 @@ download page instead.
 | `⇧⌘R` / `Ctrl+Shift+R` | Reply all |
 | `⇧⌘F` / `Ctrl+Shift+F` | Forward |
 | `⌘↩` / `Ctrl+Enter` | Send (while writing) |
-| `R` | Refresh all feeds and mail |
+| `R` | Refresh the current side: sync all mail, or refresh all feeds |
 | `Esc` | Clear the selection, or close the reader |
 
 ## Outlook.com and Microsoft 365

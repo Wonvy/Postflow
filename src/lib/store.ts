@@ -24,8 +24,40 @@ export type ThemePref = "system" | "dark" | "light";
 /** 列表的显示方式：一行一条、带摘要和缩略图、卡片。 */
 export type ListView = "list" | "summary" | "cards";
 
-/** 侧栏布局：邮箱和订阅上下排列（可折叠），或者分成选项卡。 */
+/** 侧栏里能折叠的几组：邮箱账户、订阅源、分类。 */
 export type SidebarSection = "mail" | "feeds" | "labels";
+
+/**
+ * 邮件和订阅是两块独立的空间：侧栏顶部切换，各有自己的视图（收件箱、未读、星标……）、
+ * 按钮、分类和右键菜单，列表只显示这一类条目。
+ */
+export type Space = "mail" | "feeds";
+
+/** 空间里的条目是哪一类。 */
+export function kindOfSpace(space: Space): ItemKind {
+  return space === "mail" ? "mail" : "article";
+}
+
+/** 内置视图在侧栏和列表标题里的名字。订阅那边没有「收件箱」，叫「全部文章」。 */
+export function viewLabelKey(view: View, space: Space): `nav.${View}` | "nav.allArticles" {
+  return space === "feeds" && view === "inbox" ? "nav.allArticles" : `nav.${view}`;
+}
+
+/** 这个列表属于哪个空间；内置视图和分类两边都有，返回 null。 */
+export function spaceOfScope(scope: ListScope): Space | null {
+  switch (scope.kind) {
+    case "account":
+    case "mailbox":
+      return "mail";
+    case "feed":
+    case "folder":
+      return "feeds";
+    case "view":
+      return isMailOnlyView(scope.view) ? "mail" : null;
+    case "label":
+      return null;
+  }
+}
 
 export const CARD_MIN = 160;
 export const CARD_MAX = 480;
@@ -78,8 +110,12 @@ interface UiState {
   dialog: Dialog;
   /** 正在刷新的订阅源和邮箱数量。 */
   refreshing: number;
-  /** 内置视图里只看邮件或只看文章。 */
-  kindFilter: ItemKind | null;
+  /** 其中正在同步的邮箱数。订阅那边转圈看 `refreshing - refreshingMail`。 */
+  refreshingMail: number;
+  /** 当前在哪个空间：邮件还是订阅。 */
+  space: Space;
+  /** 每个空间最后打开的列表，切回去时回到那里。不保存。 */
+  spaceScopes: Partial<Record<Space, ListScope>>;
   /** 当前列表里展开着的组。换列表时清空。 */
   expandedGroups: string[];
   /** 按 T 键时加一，阅读面板据此切换译文。 */
@@ -114,10 +150,8 @@ interface UiState {
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
   collapsedSections: SidebarSection[];
-  /** 侧栏的「邮箱」和「订阅」做成左右两个选项卡，一次只显示一个。在这两组的右键菜单里切换。 */
-  sidebarTabs: boolean;
-  /** 选项卡模式下显示的是哪一个。 */
-  sidebarTab: "mail" | "feeds";
+  /** 侧栏显示「订阅」空间。关掉后只有邮件，没有切换条。 */
+  showFeeds: boolean;
   /** 列表里显示译文。 */
   listTranslate: boolean;
   /** 阅读面板的翻译开关：开着时打开的每一条都自动翻译，直到关掉。 */
@@ -172,8 +206,10 @@ interface UiState {
   open: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
   setDialog: (dialog: Dialog) => void;
-  setRefreshing: (n: number) => void;
-  setKindFilter: (kind: ItemKind | null) => void;
+  setRefreshing: (total: number, mail: number) => void;
+  /** 切换空间，回到那边最后打开的列表。 */
+  setSpace: (space: Space) => void;
+  setShowFeeds: (on: boolean) => void;
   setGroupMode: (mode: GroupMode) => void;
   setGroupExpanded: (key: string, expanded: boolean) => void;
   setTheme: (theme: ThemePref) => void;
@@ -187,8 +223,6 @@ interface UiState {
   setListView: (scope: ListScope, view: ListView) => void;
   setCardSize: (size: number) => void;
   toggleSection: (section: SidebarSection) => void;
-  setSidebarTabs: (on: boolean) => void;
-  setSidebarTab: (tab: "mail" | "feeds") => void;
   toggleAiPanel: () => void;
   toggleListTranslate: () => void;
   setReaderTranslate: (on: boolean) => void;
@@ -239,7 +273,9 @@ export const useUi = create<UiState>()(
       selection: [],
       dialog: null,
       refreshing: 0,
-      kindFilter: null,
+      refreshingMail: 0,
+      space: "mail",
+      spaceScopes: {},
       expandedGroups: [],
       translateRequest: 0,
       searchOpen: false,
@@ -261,8 +297,7 @@ export const useUi = create<UiState>()(
       groupModes: {},
       cardSize: 260,
       collapsedSections: [],
-      sidebarTabs: false,
-      sidebarTab: "mail",
+      showFeeds: true,
       aiPanel: false,
       aiPanelFor: null,
       mainView: "list",
@@ -291,13 +326,12 @@ export const useUi = create<UiState>()(
       setWelcomeStep: (welcomeStep) => set({ welcomeStep }),
       finishWelcome: () => set({ welcomeStep: null, welcomeDone: true }),
 
-      // 换列表时收起搜索
+      // 换列表时收起搜索。打开的是另一边的订阅源或邮箱时，空间跟着换过去
       setScope: (scope) =>
         set((s) => ({
           scope,
-          ...(scope.kind === "view" && scope.view === "inbox"
-            ? { kindFilter: "mail" as const, ...(s.sidebarTabs ? { sidebarTab: "mail" as const } : {}) }
-            : {}),
+          space: spaceOfScope(scope) ?? s.space,
+          ...(spaceOfScope(scope) === "feeds" ? { showFeeds: true } : {}),
           mainView: "list",
           openId: null,
           selection: [],
@@ -309,11 +343,42 @@ export const useUi = create<UiState>()(
       open: (id) => set({ openId: id }),
       setSelection: (ids) => set({ selection: ids }),
       setDialog: (dialog) => set({ dialog }),
-      setRefreshing: (refreshing) => set({ refreshing }),
-      setKindFilter: (kindFilter) => set({ kindFilter, openId: null, selection: [], expandedGroups: [] }),
+      setRefreshing: (refreshing, refreshingMail) => set({ refreshing, refreshingMail }),
+      setSpace: (space) =>
+        set((s) => {
+          if (space === s.space) return {};
+          return {
+            space,
+            spaceScopes: { ...s.spaceScopes, [s.space]: s.scope },
+            scope: s.spaceScopes[space] ?? { kind: "view", view: "inbox" },
+            openId: null,
+            selection: [],
+            expandedGroups: [],
+            mainView: "list",
+            searchOpen: false,
+            searchQuery: "",
+          };
+        }),
+      setShowFeeds: (showFeeds) =>
+        set((s) =>
+          !showFeeds && s.space === "feeds"
+            ? {
+                showFeeds,
+                space: "mail",
+                spaceScopes: { ...s.spaceScopes, feeds: s.scope },
+                scope: s.spaceScopes.mail ?? { kind: "view", view: "inbox" },
+                openId: null,
+                selection: [],
+                expandedGroups: [],
+                mainView: "list",
+                searchOpen: false,
+                searchQuery: "",
+              }
+            : { showFeeds },
+        ),
       setGroupMode: (mode) =>
         set((s) => ({
-          groupModes: { ...s.groupModes, [listKey(s.scope, s.kindFilter)]: mode },
+          groupModes: { ...s.groupModes, [listKey(s.scope, s.space)]: mode },
           selection: [],
           expandedGroups: [],
         })),
@@ -342,7 +407,7 @@ export const useUi = create<UiState>()(
         })),
       setTranslateTo: (translateTo) => set({ translateTo }),
       setListView: (scope, view) =>
-        set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.kindFilter)]: view } })),
+        set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.space)]: view } })),
       toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
       setReaderTranslate: (readerTranslate) => set({ readerTranslate }),
       setReaderFullText: (readerFullText) => set({ readerFullText }),
@@ -384,41 +449,6 @@ export const useUi = create<UiState>()(
             ? s.collapsedSections.filter((x) => x !== section)
             : [...s.collapsedSections, section],
         })),
-      setSidebarTabs: (sidebarTabs) =>
-        set((s) =>
-          sidebarTabs
-            ? {
-                sidebarTabs,
-                kindFilter: s.sidebarTab === "mail" ? "mail" : "article",
-                openId: null,
-                selection: [],
-                expandedGroups: [],
-                mainView: "list",
-              }
-            : {
-                sidebarTabs,
-                ...(s.scope.kind === "view" && s.scope.view === "inbox" ? { kindFilter: "mail" as const } : {}),
-              },
-        ),
-      setSidebarTab: (sidebarTab) =>
-        set((s) => {
-          // 在邮箱、订阅源或邮件专属文件夹里切换时，回到收件箱，让右侧内容也切换。
-          const scope =
-            s.scope.kind === "view" && (sidebarTab === "mail" || !isMailOnlyView(s.scope.view))
-              ? s.scope
-              : { kind: "view" as const, view: "inbox" as const };
-          return {
-            sidebarTab,
-            scope,
-            kindFilter: sidebarTab === "mail" ? "mail" : "article",
-            openId: null,
-            selection: [],
-            expandedGroups: [],
-            mainView: "list",
-            searchOpen: false,
-            searchQuery: "",
-          };
-        }),
       setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
       openSearch: () => set((s) => ({ searchOpen: true, searchFocus: s.searchFocus + 1, mainView: "list" })),
@@ -428,18 +458,32 @@ export const useUi = create<UiState>()(
     }),
     {
       name: "postflow.ui",
-      // 以前的「选项卡」侧栏模式已经去掉。用过它的人，选项卡留下的「只看邮件 / 只看订阅」筛选也一起清掉，
-      // 不然列表会莫名只显示一类
+      // 旧版本的「只看邮件 / 只看订阅」筛选和「邮箱 / 订阅」选项卡换成了空间：选项卡停在订阅的，升级后停在订阅空间
       merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as Partial<UiState> & { sidebarLayout?: string; tab?: string; tabScopes?: unknown };
-        const { sidebarLayout, tab: _tab, tabScopes: _tabScopes, ...rest } = saved;
-        const merged = { ...current, ...rest, ...(sidebarLayout === "tabs" ? { kindFilter: null } : {}) };
-        // 邮箱 / 订阅选项卡负责决定收件箱内容，避免旧的独立筛选状态混入另一类条目。
-        if (merged.sidebarTabs) {
-          merged.kindFilter = merged.sidebarTab === "mail" ? "mail" : "article";
-        } else if (merged.scope.kind === "view" && merged.scope.view === "inbox") {
-          merged.kindFilter = "mail";
+        const saved = (persisted ?? {}) as Partial<UiState> & {
+          sidebarLayout?: unknown;
+          tab?: unknown;
+          tabScopes?: unknown;
+          kindFilter?: unknown;
+          sidebarTabs?: unknown;
+          sidebarTab?: unknown;
+        };
+        const {
+          sidebarLayout: _layout,
+          tab: _tab,
+          tabScopes: _tabScopes,
+          kindFilter: _kind,
+          sidebarTabs,
+          sidebarTab,
+          ...rest
+        } = saved;
+        const merged: UiState = { ...current, ...rest };
+        if (saved.space !== "mail" && saved.space !== "feeds") {
+          merged.space = sidebarTabs === true && sidebarTab === "feeds" ? "feeds" : "mail";
         }
+        if (!merged.showFeeds) merged.space = "mail";
+        merged.listViews = splitViewKeys(merged.listViews);
+        merged.groupModes = splitViewKeys(merged.groupModes);
         return merged;
       },
       partialize: (s) => ({
@@ -451,14 +495,13 @@ export const useUi = create<UiState>()(
         collapsedFolders: s.collapsedFolders,
         expandedAccounts: s.expandedAccounts,
         composeRich: s.composeRich,
-        kindFilter: s.kindFilter,
+        space: s.space,
         translateTo: s.translateTo,
         listViews: s.listViews,
         groupModes: s.groupModes,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
-        sidebarTabs: s.sidebarTabs,
-        sidebarTab: s.sidebarTab,
+        showFeeds: s.showFeeds,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,
@@ -495,9 +538,22 @@ export function isMailOnlyView(view: View): boolean {
   return view === "junk" || view === "trash" || view === "drafts" || view === "sent";
 }
 
-/** Type filtering is only available for built-in views that can contain mail and articles. */
-export function supportsKindFilter(scope: ListScope): boolean {
-  return scope.kind === "view" && !isMailOnlyView(scope.view);
+/** 内置视图和分类两个空间都有，按当前空间只看那一类；邮件专属的视图本来就只有邮件。 */
+function splitsBySpace(scope: ListScope): boolean {
+  return scope.kind === "label" || (scope.kind === "view" && !isMailOnlyView(scope.view));
+}
+
+/** 旧版本按列表记的显示方式里，不分邮件和订阅的内置视图拆成两边各一份。 */
+function splitViewKeys<T>(record: Record<string, T> | undefined): Record<string, T> {
+  const out: Record<string, T> = { ...(record ?? {}) };
+  for (const [key, value] of Object.entries(record ?? {})) {
+    const m = /^view:(inbox|today|unread|starred|archived)$/.exec(key);
+    if (!m) continue;
+    delete out[key];
+    out[`${key}:mail`] ??= value;
+    out[`${key}:article`] ??= value;
+  }
+  return out;
 }
 
 export function scopeKey(scope: ListScope): string {
@@ -517,42 +573,31 @@ export function scopeKey(scope: ListScope): string {
   }
 }
 
-/** 记住显示方式用的键。内置视图在只看邮件或只看订阅时各记各的，选项卡因此也各记各的。 */
-export function listKey(scope: ListScope, kind: ItemKind | null): string {
+/** 记住显示方式用的键。内置视图和分类在两个空间里各记各的。 */
+export function listKey(scope: ListScope, space: Space): string {
   const base = scopeKey(scope);
-  const activeKind = supportsKindFilter(scope) ? (kind ?? (scope.kind === "view" && scope.view === "inbox" ? "mail" : null)) : null;
-  return activeKind ? `${base}:${activeKind}` : base;
+  return splitsBySpace(scope) ? `${base}:${kindOfSpace(space)}` : base;
 }
 
 /** 当前列表的显示方式。 */
 export function useListView(): ListView {
-  return useUi((s) => s.listViews[listKey(s.scope, s.kindFilter)] ?? "list");
+  return useUi((s) => s.listViews[listKey(s.scope, s.space)] ?? "list");
 }
 
 /** 当前列表的折叠方式。 */
 export function useGroupMode(): GroupMode {
-  return useUi((s) => s.groupModes[listKey(s.scope, s.kindFilter)] ?? "none");
+  return useUi((s) => s.groupModes[listKey(s.scope, s.space)] ?? "none");
 }
 
-/**
- * 搜索时的查询条件：在当前列表里搜，或者在全部内容（收件箱和归档）里搜。
- * 只看邮件、只看订阅的切换仍然有效。
- */
-export function searchFilterOf(scope: ListScope, kind: ItemKind | null, query: string, all: boolean): ItemFilter {
-  const activeKind = supportsKindFilter(scope)
-    ? (kind ?? (scope.kind === "view" && scope.view === "inbox" ? "mail" : null))
-    : null;
-  const base: ItemFilter = all
-    ? { view: "all", ...(activeKind ? { kind: activeKind } : {}) }
-    : filterOf(scope, activeKind);
+/** 搜索时的查询条件：在当前列表里搜，或者在当前空间的全部内容（收件箱和归档）里搜。 */
+export function searchFilterOf(scope: ListScope, space: Space, query: string, all: boolean): ItemFilter {
+  const base: ItemFilter = all ? { view: "all", kind: kindOfSpace(space) } : filterOf(scope, space);
   return { ...base, query };
 }
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */
-export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFilter {
-  const activeKind = supportsKindFilter(scope)
-    ? (kind ?? (scope.kind === "view" && scope.view === "inbox" ? "mail" : null))
-    : null;
+export function filterOf(scope: ListScope, space: Space): ItemFilter {
+  const kind = kindOfSpace(space);
   switch (scope.kind) {
     case "feed":
       return { view: "inbox", source_id: scope.feedId };
@@ -563,13 +608,11 @@ export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFi
     case "folder":
       return { view: "inbox", folder: scope.folder };
     case "label":
-      return activeKind
-        ? { view: "inbox", label: scope.label, kind: activeKind }
-        : { view: "inbox", label: scope.label };
+      return { view: "inbox", label: scope.label, kind };
     case "view": {
       const filter: ItemFilter =
         scope.view === "today" ? { view: "today", since: startOfToday() } : { view: scope.view };
-      if (activeKind) filter.kind = activeKind;
+      if (!isMailOnlyView(scope.view)) filter.kind = kind;
       return filter;
     }
   }

@@ -18,7 +18,6 @@ export type ToolbarLayout = ToolSlot[];
  */
 export const TOOL_DEFAULTS: Record<ToolbarId, ToolbarLayout> = {
   list: [
-    { id: "kindFilter", place: "top" },
     { id: "search", place: "top" },
     { id: "markAllRead", place: "top" },
     { id: "refresh", place: "top" },

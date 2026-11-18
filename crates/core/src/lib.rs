@@ -64,8 +64,8 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<String>,
     },
-    /// 正在刷新的订阅源数量，0 表示空闲。
-    Refresh { active: usize },
+    /// 正在刷新的订阅源和邮箱一共多少个，0 表示空闲；`mail` 是其中正在同步的邮箱数。
+    Refresh { active: usize, mail: usize },
     /// 收件箱里来了新邮件。界面据此弹系统通知；只列最新的几封，`total` 是总数。
     NewMail {
         account_id: String,
@@ -213,6 +213,8 @@ pub struct Core {
     last_error: Mutex<Option<String>>,
     events: broadcast::Sender<Event>,
     pub(crate) refreshing: AtomicUsize,
+    /// `refreshing` 里正在同步的邮箱数，侧栏邮件那边的同步按钮据此转圈。
+    pub(crate) syncing_mail: AtomicUsize,
     pub(crate) secrets: Arc<dyn Secrets>,
     /// 离线翻译，模型放在 `local_dir/translation` 下。
     pub(crate) translator: Arc<Translator>,
@@ -255,6 +257,7 @@ impl Core {
             last_error: Mutex::new(None),
             events,
             refreshing: AtomicUsize::new(0),
+            syncing_mail: AtomicUsize::new(0),
             secrets,
             uploads: Mutex::new(Default::default()),
         });

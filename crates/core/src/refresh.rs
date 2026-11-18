@@ -39,7 +39,8 @@ impl Core {
             return;
         }
         let active = self.refreshing.fetch_add(targets.len(), Ordering::SeqCst) + targets.len();
-        self.emit(Event::Refresh { active });
+        let mail = self.syncing_mail.load(Ordering::SeqCst);
+        self.emit(Event::Refresh { active, mail });
         let default_interval = default_interval(session).await;
 
         futures::stream::iter(targets)
@@ -51,7 +52,8 @@ impl Core {
                     .unwrap_or_else(|e| e.into_inner())
                     .remove(&target.feed_id);
                 let left = self.refreshing.fetch_sub(1, Ordering::SeqCst) - 1;
-                self.emit(Event::Refresh { active: left });
+                let mail = self.syncing_mail.load(Ordering::SeqCst);
+                self.emit(Event::Refresh { active: left, mail });
             })
             .await;
         // 新文章要让所有界面都看到，所以不带发起方

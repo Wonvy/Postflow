@@ -5,7 +5,8 @@ export type Scope = "feeds" | "items" | "settings" | "devices";
 
 export type CoreEvent =
   | { type: "changed"; scope: Scope[]; source?: string }
-  | { type: "refresh"; active: number }
+  /** `active` 是正在刷新的订阅源和邮箱总数，`mail` 是其中的邮箱数（旧版核心没有这个字段）。 */
+  | { type: "refresh"; active: number; mail?: number }
   | {
       type: "new_mail";
       account_id: string;

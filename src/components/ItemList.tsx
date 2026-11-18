@@ -13,7 +13,6 @@ import {
   Inbox,
   Languages,
   LayoutGrid,
-  Layers,
   List,
   type LucideIcon,
   Mail,
@@ -53,7 +52,7 @@ import {
   useListTranslations,
 } from "../lib/listTranslate";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateTarget } from "../lib/translate";
-import type { Item, ItemKind, OlderTarget } from "../lib/api";
+import type { Item, OlderTarget } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
@@ -85,7 +84,8 @@ import {
   useListStyle,
   useListView,
   useUi,
-  supportsKindFilter,
+  viewLabelKey,
+  type Space,
 } from "../lib/store";
 import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
@@ -618,10 +618,15 @@ function LoadOlder({ target }: { target: OlderTarget }) {
   );
 }
 
-function scopeTitle(scope: ListScope, t: Translate, sourceTitle: (id: string) => string | undefined) {
+function scopeTitle(
+  scope: ListScope,
+  space: Space,
+  t: Translate,
+  sourceTitle: (id: string) => string | undefined,
+) {
   switch (scope.kind) {
     case "view":
-      return t(`nav.${scope.view}`);
+      return t(viewLabelKey(scope.view, space));
     case "folder":
       return scope.folder;
     case "feed":
@@ -633,40 +638,6 @@ function scopeTitle(scope: ListScope, t: Translate, sourceTitle: (id: string) =>
     case "label":
       return scope.label;
   }
-}
-
-const KIND_OPTIONS: { value: ItemKind | null; icon: LucideIcon; label: "filter.all" | "filter.mail" | "filter.article" }[] = [
-  { value: null, icon: Layers, label: "filter.all" },
-  { value: "mail", icon: Mail, label: "filter.mail" },
-  { value: "article", icon: Rss, label: "filter.article" },
-];
-
-/** 内置视图里切换「全部 / 只看邮件 / 只看订阅」。 */
-function KindFilter() {
-  const t = useT();
-  const kind = useUi((s) => s.kindFilter);
-  const setKind = useUi((s) => s.setKindFilter);
-  return (
-    <div role="radiogroup" className="mr-1 inline-flex rounded-md border border-line p-px">
-      {KIND_OPTIONS.map(({ value, icon: Icon, label }) => (
-        <Tip key={label} label={t(label)}>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={kind === value}
-            aria-label={t(label)}
-            onClick={() => setKind(value)}
-            className={cx(
-              "inline-flex size-6 items-center justify-center rounded-[5px] transition-colors",
-              kind === value ? "bg-active text-fg" : "text-fg-3 hover:text-fg-2",
-            )}
-          >
-            <Icon size={14} strokeWidth={1.75} />
-          </button>
-        </Tip>
-      ))}
-    </div>
-  );
 }
 
 const GROUP_OPTIONS: {
@@ -692,6 +663,8 @@ export function ItemList({ width }: { width: number }) {
   const selection = useUi((s) => s.selection);
   const density = useUi((s) => s.density);
   const refreshing = useUi((s) => s.refreshing);
+  // 列表工具栏的刷新按钮只看这一边：邮件那边看邮箱同步，订阅那边看订阅源
+  const spinning = useUi((s) => (s.space === "mail" ? s.refreshingMail : s.refreshing - s.refreshingMail) > 0);
   const setDialog = useUi((s) => s.setDialog);
   const nav = useNav();
   const setGroupExpanded = useUi((s) => s.setGroupExpanded);
@@ -706,8 +679,8 @@ export function ItemList({ width }: { width: number }) {
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   const view = useListView();
   const cardSize = useUi((s) => s.cardSize);
-  const kindFilter = useUi((s) => s.kindFilter);
-  const here = listKey(scope, kindFilter);
+  const space = useUi((s) => s.space);
+  const here = listKey(scope, space);
   const settings = useSettings();
   const showAbstracts = settings.data?.["ai.list_abstracts"] === true && view !== "list";
   const abstracts = useAbstracts((s) => s.byKey);
@@ -988,6 +961,7 @@ export function ItemList({ width }: { width: number }) {
   const accounts = nav.data?.accounts;
   const title = scopeTitle(
     scope,
+    space,
     t,
     (id) =>
       feeds?.find((f) => f.id === id)?.title ??
@@ -998,8 +972,6 @@ export function ItemList({ width }: { width: number }) {
 
   /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。 */
   const tools = {
-    kindFilter:
-      supportsKindFilter(scope) && !(scope.kind === "view" && scope.view === "inbox") ? <KindFilter /> : null,
     search: (
       <IconButton
         label={t("search.label")}
@@ -1023,7 +995,7 @@ export function ItemList({ width }: { width: number }) {
     ),
     refresh: (
       <IconButton label={t("action.refresh")} onClick={refresh}>
-        <RefreshCw {...ICON} className={cx(refreshing > 0 && "animate-spin")} />
+        <RefreshCw {...ICON} className={cx(spinning && "animate-spin")} />
       </IconButton>
     ),
   };
@@ -1069,7 +1041,15 @@ export function ItemList({ width }: { width: number }) {
         ) : items.length === 0 ? (
           <EmptyList
             search={search ? { query: search, all: searchAll, onAll: () => setSearchAll(true) } : undefined}
-            noSources={feeds !== undefined && feeds.length === 0 && accounts !== undefined && accounts.length === 0}
+            noSources={
+              space === "mail"
+                ? accounts !== undefined && accounts.length === 0
+                  ? "mail"
+                  : null
+                : feeds !== undefined && feeds.length === 0
+                  ? "feeds"
+                  : null
+            }
             caughtUp={scope.kind === "view" && (scope.view === "inbox" || scope.view === "unread")}
             folderHint={
               scope.kind === "mailbox"
@@ -1362,15 +1342,6 @@ function ListMenu({
           </MenuItem>
         </MenuSub>
       )}
-      {supportsKindFilter(ui.scope) && !(ui.scope.kind === "view" && ui.scope.view === "inbox") && (
-        <MenuSub icon={<Layers size={14} />} label={t("listMenu.show")}>
-          {KIND_OPTIONS.map(({ value, label }) => (
-            <MenuItem key={label} icon={check(ui.kindFilter === value)} onSelect={() => ui.setKindFilter(value)}>
-              {t(label)}
-            </MenuItem>
-          ))}
-        </MenuSub>
-      )}
       <MenuSub icon={<ChevronsUpDown size={14} />} label={t("listStyle.paging")}>
         <MenuItem icon={check(ui.listPaging === "scroll")} onSelect={() => ui.setListPaging("scroll")}>
           {t("listStyle.pagingScroll")}
@@ -1440,7 +1411,7 @@ export function MarkAllReadDialog() {
   const dialog = useUi((s) => s.dialog);
   const setDialog = useUi((s) => s.setDialog);
   const current = useUi((s) => s.scope);
-  const kindFilter = useUi((s) => s.kindFilter);
+  const space = useUi((s) => s.space);
   const nav = useNav();
   const open = dialog?.type === "mark-all-read";
   // 侧栏右键菜单可以指定别的列表；那时不知道列表里有多少条，不写数字
@@ -1448,6 +1419,7 @@ export function MarkAllReadDialog() {
   const isCurrent = sameScope(scope, current);
   const title = scopeTitle(
     scope,
+    space,
     t,
     (id) =>
       nav.data?.feeds.find((f) => f.id === id)?.title ??
@@ -1456,7 +1428,7 @@ export function MarkAllReadDialog() {
   const { items, query } = useListModel();
   const { markAllRead: markCurrent } = useActions();
   const markAll = useMarkAllRead();
-  const markAllRead = () => (isCurrent ? markCurrent() : markAll.mutate(filterOf(scope, kindFilter)));
+  const markAllRead = () => (isCurrent ? markCurrent() : markAll.mutate(filterOf(scope, space)));
   const unread = items.filter((i) => !i.read).length;
   // 列表还有没加载的部分时说不准有多少条，不写数字
   const counted = isCurrent && !query.hasNextPage;
@@ -1545,6 +1517,7 @@ function tooltipExcerpt(text: string): string | undefined {
  * Esc 先清空，再按一次收起。
  */
 function SearchBar({ scopeName, fetching, firstId }: { scopeName: string; fetching: boolean; firstId?: string }) {
+  const space = useUi((s) => s.space);
   const t = useT();
   const query = useUi((s) => s.searchQuery);
   const setQuery = useUi((s) => s.setSearchQuery);
@@ -1594,7 +1567,11 @@ function SearchBar({ scopeName, fetching, firstId }: { scopeName: string; fetchi
             }
           }
         }}
-        placeholder={all ? t("search.placeholderAll") : t("search.placeholderIn", { name: scopeName })}
+        placeholder={
+          all
+            ? t(space === "mail" ? "search.placeholderAllMail" : "search.placeholderAllFeeds")
+            : t("search.placeholderIn", { name: scopeName })
+        }
         aria-label={t("search.label")}
         spellCheck={false}
         autoComplete="off"
@@ -2017,7 +1994,8 @@ function EmptyList({
 }: {
   /** 搜索没有结果。 */
   search?: { query: string; all: boolean; onAll: () => void };
-  noSources: boolean;
+  /** 当前这一边还没有来源：邮件这边没有邮箱，订阅这边没有订阅源。 */
+  noSources: Space | null;
   caughtUp: boolean;
   /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
   /** 邮箱文件夹空着时的说明。 */
@@ -2044,19 +2022,24 @@ function EmptyList({
       {noSources ? (
         <>
           <div>
-            <p className="font-medium text-fg-2">{t("list.noSourcesTitle")}</p>
-            <p className="mt-1 max-w-[260px] text-[12px] leading-relaxed text-fg-3">{t("list.noSourcesBody")}</p>
+            <p className="font-medium text-fg-2">
+              {t(noSources === "mail" ? "list.noMailTitle" : "list.noFeedsTitle")}
+            </p>
+            <p className="mt-1 max-w-[260px] text-[12px] leading-relaxed text-fg-3">
+              {t(noSources === "mail" ? "list.noMailBody" : "list.noFeedsBody")}
+            </p>
           </div>
-          <div className="flex gap-2">
+          {noSources === "mail" ? (
             <Button variant="primary" onClick={onAddAccount}>
               <Mail size={14} />
               {t("action.addAccount")}
             </Button>
-            <Button onClick={onAddFeed}>
+          ) : (
+            <Button variant="primary" onClick={onAddFeed}>
               <Rss size={14} />
               {t("action.addFeed")}
             </Button>
-          </div>
+          )}
         </>
       ) : (
         <div>

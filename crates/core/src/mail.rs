@@ -781,13 +781,15 @@ async fn serve(
         }
 
         if announce {
+            let mail = core.syncing_mail.fetch_add(1, Ordering::SeqCst) + 1;
             let active = core.refreshing.fetch_add(1, Ordering::SeqCst) + 1;
-            core.emit(Event::Refresh { active });
+            core.emit(Event::Refresh { active, mail });
         }
         let result = sync_all_folders(&mut conn, session, account_id, watched).await;
         if announce {
+            let mail = core.syncing_mail.fetch_sub(1, Ordering::SeqCst) - 1;
             let active = core.refreshing.fetch_sub(1, Ordering::SeqCst) - 1;
-            core.emit(Event::Refresh { active });
+            core.emit(Event::Refresh { active, mail });
             announce = false;
         }
         let stats = result?;

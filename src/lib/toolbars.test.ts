@@ -34,6 +34,8 @@ test("buttons added in a newer version slot in after their default neighbour", (
   ]);
   const ids = layout.map((s) => s.id);
   assert.equal(ids.indexOf("markAllRead"), ids.indexOf("search") + 1);
+  // 邮件 / 文章筛选已经去掉（邮件和订阅分成了两个空间），旧布局里的它被丢掉
+  assert.ok(!ids.includes("kindFilter"));
   assert.equal(layout.find((s) => s.id === "view")?.place, "status");
 });
 

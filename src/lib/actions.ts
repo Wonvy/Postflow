@@ -10,7 +10,7 @@ import type { ComposeMode } from "./compose";
 import { useListModel } from "./listModel";
 import { openExternal } from "./platform";
 import { keys, useMarkAllRead, useSetItems } from "./queries";
-import { isArchiveLike, useUi } from "./store";
+import { isArchiveLike, type Space, useUi } from "./store";
 
 type Flag = "read" | "starred" | "archived";
 
@@ -162,10 +162,12 @@ export function useActions() {
         : scope.kind === "account" || scope.kind === "mailbox"
           ? scope.accountId
           : undefined;
-    void api.refresh(id);
+    if (id) void api.refresh(id);
+    else refreshSpace(useUi.getState().space);
   }, [scope]);
 
-  const refreshAll = useCallback(() => void api.refresh(), []);
+  /** 刷新当前空间：邮件那边收全部邮箱，订阅那边只抓订阅源。快捷键 R。 */
+  const refreshAll = useCallback(() => refreshSpace(useUi.getState().space), []);
 
   /**
    * 写信。回复、全部回复、转发作用于 `item`，不给就是阅读面板里打开的那封邮件；写新邮件时
@@ -243,7 +245,7 @@ export function useActions() {
     ui.setScope(
       item.kind === "mail" ? { kind: "account", accountId: item.source_id } : { kind: "feed", feedId: item.source_id },
     );
-    // 内置视图里只看邮件或订阅时，换到订阅源或邮箱不受影响；打开的那一条留着
+    // 换到另一边的订阅源或邮箱时空间跟着切换（见 setScope）；打开的那一条留着
     ui.open(item.id);
   }, []);
 
@@ -271,4 +273,10 @@ export function useActions() {
     deleteDrafts,
     moveTo,
   };
+}
+
+/** 刷新一个空间里的全部来源。 */
+export function refreshSpace(space: Space) {
+  if (space === "mail") void api.syncAccount();
+  else void api.refresh(undefined, true);
 }
