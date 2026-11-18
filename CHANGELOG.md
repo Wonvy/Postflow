@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.18 — 2026-11-18
+
+### English
 - Mail and feeds: the inbox stays on mail in the Mail tab, while the Feeds tab shows subscriptions. Mail can be grouped by mailbox, and hovering an account shows its full address.
 - Lists: switch between list, summary and cards directly from the bottom bar. Grouping moved into List style, which now has area-padding and spacing sliders, wheel-adjustable values, and simpler checkmark options.
 - Translation: language detection is less likely to request unrelated offline models for short or mixed-language items; missing-model prompts refresh when the list or translation settings change.
