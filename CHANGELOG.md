@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.30 — 2026-11-18
+
+### English
 - Discover → Podcasts gains 56 popular Chinese shows, picked from Apple Podcasts' China charts with 声链 (shenglianfm.com) as a guide, and podcasts are now sorted into news, tech, business, education, health, stories, arts, sports, entertainment and society; pick one at the top of the list. Every feed was checked to work in Postflow.
 - A calmer Feeds sidebar: under the Mail/Feeds switch there's one row of icons, the feed types on the left (everything, articles, videos, podcasts, newsletters; hover for the name, a dot means unread) and Today and Starred on the right; the feed list has a Feeds heading you can collapse, and categories sit at the end of the list.
 - Add feed → Podcasts now looks like Discover: Featured and the podcast categories on the left, the shows as a grid or list on the right. Searching lists matching built-in shows first, then more from Apple Podcasts.
