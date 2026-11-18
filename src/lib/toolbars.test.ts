@@ -45,7 +45,7 @@ test("moving and placing buttons", () => {
   assert.deepEqual(moveTo(base, "missing", 0), base);
   const hidden = setPlace(base, "search", "hidden");
   assert.ok(!toolsAt(hidden, "top").includes("search"));
-  assert.deepEqual(toolsAt(base, "status"), ["view", "group", "translate"]);
+  assert.deepEqual(toolsAt(base, "status"), ["view", "translate"]);
   assert.ok(!isDefaultLayout("list", hidden));
 });
 
