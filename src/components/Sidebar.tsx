@@ -363,7 +363,8 @@ function AccountRow({
                 onKeyDown={(e) => e.stopPropagation()}
                 className={cx(
                   "size-5 shrink-0 items-center justify-center rounded text-fg-3 hover:bg-active hover:text-fg",
-                  expanded ? "flex" : "hidden group-hover:flex",
+                  // 触屏没有悬停：一直显示，能点开文件夹
+                  expanded ? "flex" : "hidden group-hover:flex [@media(hover:none)]:flex",
                 )}
               >
                 <ChevronRight size={13} strokeWidth={2} className={cx("transition-transform", expanded && "rotate-90")} />

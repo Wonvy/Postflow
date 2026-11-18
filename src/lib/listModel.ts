@@ -20,8 +20,15 @@ export function useListModel() {
     [scope, space, search, searchAll],
   );
   const query = useItems(filter);
-  // 收件箱顶部：提醒时间刚到、还没读的稍后提醒，按日期本来排在后面，这里提到最前
-  const pinReminders = !search && scope.kind === "view" && scope.view === "inbox";
+  // 顶部：提醒时间刚到、还没读的稍后提醒，按日期本来排在后面，这里提到最前。
+  // 收件箱，以及某个邮箱、订阅源、文件夹、分类里都这样
+  const pinReminders =
+    !search &&
+    ((scope.kind === "view" && scope.view === "inbox") ||
+      scope.kind === "account" ||
+      scope.kind === "feed" ||
+      scope.kind === "folder" ||
+      scope.kind === "label");
   const reminders = useItems({ ...filterOf(scope, space), view: "reminders" }, pinReminders);
   const items = useMemo(() => {
     if (!pinReminders || reminders.items.length === 0) return query.items;

@@ -159,6 +159,7 @@ export function WebAccessSettings() {
                   <p className="mb-1.5 text-[12px] font-medium text-fg-2">{t("webAccess.otherDevices")}</p>
                   <UrlRow url={status.lan_url} />
                   <p className="mt-2 text-[12px] leading-relaxed text-fg-3">{t("webAccess.qrHint")}</p>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-fg-3">{t("webAccess.httpNote")}</p>
                 </div>
               </div>
             ) : (

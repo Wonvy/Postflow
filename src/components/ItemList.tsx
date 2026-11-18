@@ -693,7 +693,7 @@ export function ItemList({ width }: { width: number }) {
   const setDialog = useUi((s) => s.setDialog);
   const nav = useNav();
   const setGroupExpanded = useUi((s) => s.setGroupExpanded);
-  const { confirmMarkAllRead, refresh, membersOf, compose } = useActions();
+  const { confirmMarkAllRead, refresh, membersOf, compose, toggle, itemsOf } = useActions();
   const { query, items, rows: listRows, stops, groupMode, search } = useListModel();
   const searchOpen = useUi((s) => s.searchOpen);
   const mobile = useIsMobile();
@@ -1246,8 +1246,17 @@ export function ItemList({ width }: { width: number }) {
               }
 
               const d = describe(line.row);
+              const swipeItems = () => itemsOf(membersOf(d.id));
               return (
-                <ContextMenu key={d.key} bare items={<RowMenu id={d.id} />}>
+                <SwipeRow
+                  key={d.key}
+                  enabled={mobile}
+                  style={{ ...position, height: rowHeight }}
+                  read={d.props.group ? d.props.group.unread === 0 : d.props.item.read}
+                  onLeft={() => toggle("archived", swipeItems())}
+                  onRight={() => toggle("read", swipeItems())}
+                >
+                <ContextMenu bare items={<RowMenu id={d.id} />}>
                   <div
                     role="option"
                     aria-selected={d.opened || d.selected}
@@ -1256,7 +1265,7 @@ export function ItemList({ width }: { width: number }) {
                     title={d.tooltip}
                     {...d.drag}
                     className={cx(
-                      "absolute inset-x-0 top-0 flex rounded-md transition-colors",
+                      "relative flex h-full rounded-md transition-colors",
                       view === "summary"
                         ? "items-center gap-3"
                         : rows === "compact"
@@ -1267,7 +1276,7 @@ export function ItemList({ width }: { width: number }) {
                       d.selected && d.opened && "ring-1 ring-inset ring-accent/50",
                       "data-[state=open]:ring-1 data-[state=open]:ring-inset data-[state=open]:ring-accent/60",
                     )}
-                    style={{ ...position, height: rowHeight, paddingLeft: metrics.padX, paddingRight: metrics.padX }}
+                    style={{ paddingLeft: metrics.padX, paddingRight: metrics.padX }}
                   >
                     {view === "summary" ? (
                       <SummaryRow {...d.props} />
@@ -1278,6 +1287,7 @@ export function ItemList({ width }: { width: number }) {
                     )}
                   </div>
                 </ContextMenu>
+                </SwipeRow>
               );
             })}
           </div>
@@ -2098,6 +2108,118 @@ function EmptyList({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 手机上的滑动操作：一行往左滑归档，往右滑标为已读或未读。只认手指，鼠标照常点选、拖动。
+ * 横着滑过一段距离才算，竖着滑照常滚动列表；松手时没滑够就弹回去。
+ */
+function SwipeRow({
+  enabled,
+  style,
+  read,
+  onLeft,
+  onRight,
+  children,
+}: {
+  enabled: boolean;
+  style: CSSProperties;
+  /** 这一行已经读过：往右滑是标为未读。 */
+  read: boolean;
+  onLeft: () => void;
+  onRight: () => void;
+  children: ReactNode;
+}) {
+  const t = useT();
+  const [dx, setDxState] = useState(0);
+  // 松手时用最新的距离判断，不等界面重画
+  const dxRef = useRef(0);
+  const setDx = (value: number) => {
+    dxRef.current = value;
+    setDxState(value);
+  };
+  const start = useRef<{ x: number; y: number; axis: "x" | "y" | null } | null>(null);
+  const swiped = useRef(false);
+  const THRESHOLD = 80;
+  if (!enabled) {
+    return (
+      <div className="absolute inset-x-0 top-0" style={style}>
+        {children}
+      </div>
+    );
+  }
+  const end = () => {
+    if (start.current?.axis === "x") {
+      const moved = dxRef.current;
+      if (moved <= -THRESHOLD) onLeft();
+      else if (moved >= THRESHOLD) onRight();
+    }
+    start.current = null;
+    setDx(0);
+  };
+  return (
+    <div
+      className="absolute inset-x-0 top-0 overflow-hidden rounded-md"
+      style={{ ...style, touchAction: "pan-y" }}
+      onPointerDown={(e) => {
+        if (e.pointerType !== "touch") return;
+        start.current = { x: e.clientX, y: e.clientY, axis: null };
+        swiped.current = false;
+      }}
+      onPointerMove={(e) => {
+        const s = start.current;
+        if (!s) return;
+        const mx = e.clientX - s.x;
+        const my = e.clientY - s.y;
+        if (s.axis === null) {
+          if (Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my)) {
+            s.axis = "x";
+            swiped.current = true;
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              // 拿不到指针也照样能滑
+            }
+          } else if (Math.abs(my) > 12) {
+            s.axis = "y";
+          }
+        }
+        if (s.axis === "x") setDx(Math.max(-160, Math.min(160, mx)));
+      }}
+      onPointerUp={end}
+      onPointerCancel={() => {
+        start.current = null;
+        setDx(0);
+      }}
+      // 滑过以后松手不算一次点击，不要打开这一行
+      onClickCapture={(e) => {
+        if (swiped.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          swiped.current = false;
+        }
+      }}
+    >
+      {dx !== 0 && (
+        <div
+          aria-hidden
+          className={cx(
+            "absolute inset-0 flex items-center px-5 text-[12px] font-medium text-white",
+            dx < 0 ? "justify-end" : "justify-start",
+            dx < 0 ? (dx <= -THRESHOLD ? "bg-accent" : "bg-accent/60") : dx >= THRESHOLD ? "bg-warning" : "bg-warning/60",
+          )}
+        >
+          {dx < 0 ? t("action.archive") : read ? t("action.markUnread") : t("action.markRead")}
+        </div>
+      )}
+      <div
+        className={cx("relative h-full bg-bg", start.current === null && "transition-transform duration-150")}
+        style={{ transform: dx ? `translateX(${dx}px)` : undefined }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

@@ -253,16 +253,23 @@ pub(crate) const ITEM_COLUMNS: &str = "i.id, i.kind, i.source_id, \
 /// `ITEM_COLUMNS` 有几列。在它后面再选别的列时，从这个序号开始读。
 pub(crate) const ITEM_COLUMN_COUNT: usize = 18;
 
+/// 这一条正稍后提醒着、还没到时间：收件箱、今天、未读、各个来源和计数里都先不算它。
+/// 提醒时间存在同步日志里（kind = snooze），邮件和文章都一样，所以其他设备也知道。
+/// 写成宏，固定的 SQL 字符串（比如邮箱列表）也能用 `concat!` 拼进去。
+#[macro_export]
+#[doc(hidden)]
+macro_rules! snoozed_now_sql {
+    () => {
+        "EXISTS (SELECT 1 FROM lww s WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
+         AND CAST(s.value AS INTEGER) > (CAST(strftime('%s', 'now') AS INTEGER) * 1000))"
+    };
+}
+
 /// 现在的时间（毫秒），在 SQL 里用。
 const NOW_MS: &str = "(CAST(strftime('%s', 'now') AS INTEGER) * 1000)";
 
-/// 这一条正稍后提醒着、还没到时间：收件箱、今天、未读和各个来源里先藏起来。
-/// 提醒时间存在同步日志里（kind = snooze），邮件和文章都一样，所以其他设备也知道。
 fn snoozed_now() -> String {
-    format!(
-        "EXISTS (SELECT 1 FROM lww s WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
-         AND CAST(s.value AS INTEGER) > {NOW_MS})"
-    )
+    snoozed_now_sql!().to_string()
 }
 
 /// 提醒时间在 `after`（不含）到现在之间的条目。
@@ -1231,11 +1238,12 @@ fn feed_sql(cond: &str) -> String {
     format!(
         "SELECT f.id, f.url, f.title, f.site_url, f.icon_url, f.folder, f.interval_min, f.added_at, \
                 (SELECT COUNT(*) FROM items i \
-                  WHERE i.source_id = f.id AND i.read = 0 AND i.archived = 0), \
+                  WHERE i.source_id = f.id AND i.read = 0 AND i.archived = 0 AND NOT {snoozed}), \
                 ff.last_fetch_at, ff.error \
          FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
          WHERE {cond} \
-         ORDER BY f.folder COLLATE NOCASE, f.position IS NULL, f.position, f.title COLLATE NOCASE"
+         ORDER BY f.folder COLLATE NOCASE, f.position IS NULL, f.position, f.title COLLATE NOCASE",
+        snoozed = snoozed_now()
     )
 }
 

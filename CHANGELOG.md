@@ -7,8 +7,18 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Unread counts next to feeds, mailboxes and categories no longer include snoozed items.
+- Snoozed items that come back are pinned to the top of the mailbox, feed, folder or category they belong to, not only the inbox.
+- Phones: add Postflow to the home screen to open it full screen like an app. If a phone opens it without the access key, Postflow asks you to paste the link from the desktop app instead of showing an error. On phones, swipe a row left to archive or right to mark it read or unread.
+- Browser access settings explain what plain HTTP limits on phones (notifications, some copying).
+- The recommended-feeds list now records the exact time it changed, so a second change on the same day still reaches everyone.
 
 ### 中文
+- 侧栏里订阅源、邮箱和分类的未读数不再算上稍后提醒的条目。
+- 到时间回来的稍后提醒，在它所在的邮箱、订阅源、文件夹或分类里也排在最上面，不只是收件箱。
+- 手机：可以「添加到主屏幕」，像应用一样全屏打开。手机上没带访问密钥打开时，Postflow 会请你贴上桌面应用里的链接，而不是报错。手机上把一行往左滑归档，往右滑标为已读或未读。
+- 网页访问的设置里说明了普通 HTTP 在手机上的限制（通知、部分复制功能）。
+- 推荐订阅源列表记下的是精确的修改时间，同一天改第二次也能推送给所有人。
 
 ## 0.1.23 — 2026-11-18
 

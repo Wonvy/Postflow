@@ -17,13 +17,18 @@ use crate::store::{Store, lww_fields};
 /// 同步时只看收件箱。
 pub const INBOX: &str = "INBOX";
 
-const ACCOUNT_SQL: &str = "SELECT a.id, a.email, a.name, a.imap_host, a.imap_port, a.imap_security, \
+// 未读数不算正稍后提醒着的
+const ACCOUNT_SQL: &str = concat!(
+    "SELECT a.id, a.email, a.name, a.imap_host, a.imap_port, a.imap_security, \
             a.username, a.added_at, \
             (SELECT COUNT(*) FROM items i \
-              WHERE i.kind = 'mail' AND i.source_id = a.id AND i.read = 0 AND i.archived = 0), \
+              WHERE i.kind = 'mail' AND i.source_id = a.id AND i.read = 0 AND i.archived = 0 AND NOT ",
+    crate::snoozed_now_sql!(),
+    "), \
             s.last_sync_at, s.error, s.error_code, a.smtp_host, a.smtp_port, a.smtp_security, \
             a.sender_name, a.signature \
-     FROM accounts a LEFT JOIN mail_state s ON s.account_id = a.id";
+     FROM accounts a LEFT JOIN mail_state s ON s.account_id = a.id"
+);
 
 fn account_from_row(r: &Row<'_>) -> rusqlite::Result<Account> {
     Ok(Account {

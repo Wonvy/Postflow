@@ -99,13 +99,15 @@ pub fn tray_update<R: Runtime>(app: AppHandle<R>, update: TrayUpdate) -> Result<
         return Ok(());
     };
     let _ = tray.set_tooltip(Some(&update.tooltip));
-    // macOS：数字显示在菜单栏图标旁边
+    // macOS：数字显示在菜单栏图标旁边。其他系统没有这个位置，数字已经写在悬停提示里
     #[cfg(target_os = "macos")]
     let _ = tray.set_title(if update.unread > 0 {
         Some(update.unread.to_string())
     } else {
         None
     });
+    #[cfg(not(target_os = "macos"))]
+    let _ = update.unread;
     let show = MenuItem::with_id(&app, "show", &update.show_label, true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let quit = MenuItem::with_id(&app, "quit", &update.quit_label, true, None::<&str>)

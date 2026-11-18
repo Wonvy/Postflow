@@ -23,7 +23,7 @@ const CATALOG = parseCatalog(FILE)?.feeds ?? [];
 test("the catalog file reads cleanly, with nothing dropped", () => {
   const raw = JSON.parse(FILE) as Catalog;
   assert.equal(raw.schema, 1);
-  assert.match(raw.updated, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(raw.updated, /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?$/);
   // 每个条目都通过了检查：手改文件时写错的条目会在这里被发现
   assert.equal(CATALOG.length, raw.feeds.length);
   const urls = new Set<string>();
@@ -80,6 +80,12 @@ test("the newer catalog wins, the bundled one on a tie", () => {
   assert.equal(newerCatalog(local, older), local);
   assert.equal(newerCatalog(local, { ...local }), local);
   assert.equal(newerCatalog(local, null), local);
+  // 同一天改了第二次：带时间的比只有日期的新，晚的比早的新
+  const sameDay: Catalog = { schema: 1, updated: "2026-11-18T09:30:00Z", feeds: [] };
+  const later: Catalog = { schema: 1, updated: "2026-11-18T17:05:00Z", feeds: [] };
+  assert.equal(newerCatalog(local, sameDay), sameDay);
+  assert.equal(newerCatalog(sameDay, later), later);
+  assert.equal(newerCatalog(later, sameDay), later);
 });
 
 test("the interface language picks which feeds come first", () => {

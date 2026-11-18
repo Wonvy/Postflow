@@ -178,7 +178,8 @@ click **More info → Run anyway**.
 - Keeps running in the tray (menu bar) when you close the window, still checking mail, with the unread count on the
   icon. Turn it off in Settings → Appearance.
 - Works on phones: on a narrow screen Postflow shows one pane at a time, with the sidebar sliding in from the left
-  and a back button in the reader. Open it on your phone through [browser access](#using-postflow-in-a-browser).
+  and a back button in the reader. Swipe a row left to archive or right to mark it read or unread. Open it on your
+  phone through [browser access](#using-postflow-in-a-browser) and add it to the home screen to use it like an app.
 
 **AI (optional, bring your own key)**
 

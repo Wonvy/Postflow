@@ -13,6 +13,8 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": { target: API, changeOrigin: false },
+      // 「添加到主屏幕」的清单由服务端生成
+      "/manifest.webmanifest": { target: API, changeOrigin: false },
     },
   },
   clearScreen: false,

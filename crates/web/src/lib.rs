@@ -6,8 +6,10 @@
 //!
 //! 两种用法：
 //! - 开发时单独运行（`npm run server`）：只接受发往回环地址的请求，没有访问密钥。
-//! - 桌面应用里打开「在浏览器中使用」：一定要访问密钥（[`Access::key`]）。链接里带一次 `?key=`，
-//!   之后浏览器用 Cookie 记住它。打开「允许局域网访问」时才绑定到所有网卡（[`Access::lan`]）。
+//! - 桌面应用里打开「在浏览器中使用」：读写数据的接口（`/api/…`）一定要访问密钥（[`Access::key`]）。
+//!   链接里带一次 `?key=`，之后浏览器用 Cookie 记住它。界面本身的文件（开源的界面代码、图标、
+//!   推荐订阅源目录）不要密钥，没有密钥时界面会请用户贴上访问链接——手机主屏幕上的网页应用和浏览器
+//!   不共用 Cookie，这样第一次打开也有路走。打开「允许局域网访问」时才绑定到所有网卡（[`Access::lan`]）。
 
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -213,11 +215,12 @@ async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> R
     }
 
     let Some(key) = access.key.as_deref() else {
+        if req.uri().path() == "/manifest.webmanifest" {
+            return manifest("/");
+        }
         return next.run(req).await;
     };
-    if cookie_value(req.headers(), KEY_COOKIE).is_some_and(|v| same(v, key)) {
-        return next.run(req).await;
-    }
+    let signed_in = cookie_value(req.headers(), KEY_COOKIE).is_some_and(|v| same(v, key));
     // 链接或二维码里带着密钥：记进 Cookie，跳回不带密钥的地址，免得它留在地址栏和历史记录里
     let (with_key, rest) = split_key(req.uri().query());
     if req.method() == Method::GET && with_key.is_some_and(|v| same(&v, key)) {
@@ -238,23 +241,49 @@ async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> R
             .body(Body::empty())
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
     }
-    if req.uri().path().starts_with("/api/") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": { "code": "unauthorized", "message": "open Postflow with the link from the desktop app" } }))).into_response();
+    // 「添加到主屏幕」用的清单：已经带着密钥的浏览器，主屏幕上的图标直接带着密钥打开
+    if req.uri().path() == "/manifest.webmanifest" {
+        return manifest(&if signed_in {
+            format!("/?key={key}")
+        } else {
+            "/".to_string()
+        });
+    }
+    if signed_in || !req.uri().path().starts_with("/api/") {
+        return next.run(req).await;
     }
     (
         StatusCode::UNAUTHORIZED,
-        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        NEED_KEY_PAGE,
+        Json(json!({ "error": { "code": "unauthorized", "message": "open Postflow with the link from the desktop app" } })),
     )
         .into_response()
 }
 
-/// 没带密钥时显示的页面。
-const NEED_KEY_PAGE: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>\
-<title>Postflow</title><body style='font:15px system-ui;max-width:420px;margin:15vh auto;padding:0 20px;line-height:1.6'>\
-<h1 style='font-size:20px'>Postflow</h1>\
-<p>请在电脑上打开 Postflow，到「设置 → 网页访问」里点链接或扫二维码打开。</p>\
-<p style='color:#666'>Open Postflow on your computer and use the link or QR code in Settings → Browser access.</p>";
+/// 网页应用清单：手机「添加到主屏幕」后像应用一样全屏打开。
+fn manifest(start_url: &str) -> Response {
+    let body = json!({
+        "name": "Postflow",
+        "short_name": "Postflow",
+        "start_url": start_url,
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#16161a",
+        "theme_color": "#16161a",
+        "icons": [
+            { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+            { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+        ],
+    });
+    (
+        [
+            (header::CONTENT_TYPE, "application/manifest+json"),
+            // 带着密钥的清单不让中间的缓存留着
+            (header::CACHE_CONTROL, "private, no-store"),
+        ],
+        body.to_string(),
+    )
+        .into_response()
+}
 
 /// 请求里某个 Cookie 的值。
 fn cookie_value<'a>(headers: &'a axum::http::HeaderMap, name: &str) -> Option<&'a str> {
@@ -353,12 +382,13 @@ mod tests {
         })
         .await;
 
+        // 界面本身不要密钥（没有密钥时界面会请用户贴上链接），读写数据的接口要
         let res = send(
             &app,
             get("/", "127.0.0.1:4319").body(Body::empty()).unwrap(),
         )
         .await;
-        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(res.status(), StatusCode::OK);
         let wrong = send(
             &app,
             get("/?key=nope", "127.0.0.1:4319")
@@ -366,7 +396,10 @@ mod tests {
                 .unwrap(),
         )
         .await;
-        assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
+        assert!(
+            wrong.headers().get(header::SET_COOKIE).is_none(),
+            "a wrong key sets nothing"
+        );
 
         // 链接里的密钥换成 Cookie，跳回不带密钥的地址
         let res = send(
@@ -445,13 +478,13 @@ mod tests {
         )
         .await;
         assert_eq!(res.status(), StatusCode::OK);
-        let res = send(
-            &lan,
-            get("/", "192.168.1.5:4319").body(Body::empty()).unwrap(),
-        )
-        .await;
+        let api = axum::http::Request::post("/api/rpc")
+            .header(header::HOST, "192.168.1.5:4319")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"method":"app.status"}"#))
+            .unwrap();
         assert_eq!(
-            res.status(),
+            send(&lan, api).await.status(),
             StatusCode::UNAUTHORIZED,
             "the network alone isn't enough"
         );
@@ -464,6 +497,43 @@ mod tests {
             .body(Body::from(r#"{"method":"app.status"}"#))
             .unwrap();
         assert_eq!(send(&lan, cross).await.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn the_manifest_carries_the_key_only_for_a_signed_in_browser() {
+        let key = new_key();
+        let (_dir, app) = app(Access {
+            key: Some(key.clone()),
+            lan: false,
+        })
+        .await;
+        async fn read(res: Response) -> Value {
+            let bytes = axum::body::to_bytes(res.into_body(), 4096).await.unwrap();
+            serde_json::from_slice(&bytes).unwrap()
+        }
+        let anonymous = send(
+            &app,
+            get("/manifest.webmanifest", "127.0.0.1:4319")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(read(anonymous).await["start_url"], "/");
+        let signed_in = send(
+            &app,
+            get("/manifest.webmanifest", "127.0.0.1:4319")
+                .header(header::COOKIE, format!("{KEY_COOKIE}={key}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(
+            signed_in.headers()[header::CACHE_CONTROL],
+            "private, no-store"
+        );
+        let manifest = read(signed_in).await;
+        assert_eq!(manifest["start_url"], format!("/?key={key}"));
+        assert_eq!(manifest["display"], "standalone");
     }
 
     #[tokio::test]

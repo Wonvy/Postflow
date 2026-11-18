@@ -7,7 +7,7 @@
 //   node scripts/catalog.mjs icons            # add icons for feeds that have none
 //   node scripts/catalog.mjs icons --force    # download all icons again
 //   node scripts/catalog.mjs icons sspai v2ex # only these
-//   node scripts/catalog.mjs touch            # set "updated" to today after editing by hand
+//   node scripts/catalog.mjs touch            # set "updated" to now after editing by hand
 //
 // Icons are 64×64 PNGs stored as base64 in the file, so browsing the catalog never contacts the sites.
 // Resizing uses `sips`, which comes with macOS. A feed without an icon shows its first letter.
@@ -22,9 +22,12 @@ const FILE = join(ROOT, "public", "catalog", "catalog.json");
 const catalog = JSON.parse(readFileSync(FILE, "utf8"));
 const CATALOG = catalog.feeds;
 
-/** Writes the file back with today's date as "updated", so installed apps pick it up. */
+/**
+ * Writes the file back with the current time as "updated" (UTC, to the second), so installed apps pick it up even
+ * if the file changes twice in a day. Apps compare it as text, and a full time sorts after an older date-only value.
+ */
 function save() {
-  catalog.updated = new Date().toISOString().slice(0, 10);
+  catalog.updated = `${new Date().toISOString().slice(0, 19)}Z`;
   writeFileSync(FILE, `${JSON.stringify(catalog, null, 2)}\n`);
   console.log(`Saved ${FILE} (updated ${catalog.updated}).`);
 }

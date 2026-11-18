@@ -80,6 +80,8 @@ fn snoozed_items_leave_the_inbox_until_their_time() {
         2,
         "the badge doesn't count it either"
     );
+    let feed = &store.feeds().unwrap()[0];
+    assert_eq!(feed.unread, 2, "nor does the feed's count in the sidebar");
     let snoozed = store
         .items(
             &ItemFilter {

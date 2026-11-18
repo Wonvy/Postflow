@@ -22,14 +22,14 @@ import { useFirstRunWelcome, WelcomeGuide } from "./components/WelcomeGuide";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatsPage } from "./components/StatsPage";
-import { Button, Spinner } from "./components/ui";
+import { Button, Logo, Spinner, TextInput } from "./components/ui";
 import { api } from "./lib/api";
-import { resolveLang } from "./lib/i18n";
+import { resolveLang, useT } from "./lib/i18n";
 import { useTray, useUnreadBadge } from "./lib/notify";
 import { useCoreEvents, useNav, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
-import { isTauri } from "./lib/transport";
+import { isTauri, RpcError } from "./lib/transport";
 import { startUpdateChecks } from "./lib/updater";
 
 /** 收信的间隔：窗口回到前台时，离上次超过这么久就马上收一次。 */
@@ -234,6 +234,11 @@ function Body() {
     );
   }
 
+  // 网页访问时还没有访问密钥（比如手机主屏幕上第一次打开）：请用户贴上桌面应用里的链接
+  if (status.error instanceof RpcError && status.error.code === "unauthorized") {
+    return <AccessKeyScreen />;
+  }
+
   if (status.isError || !status.data) {
     return (
       <div data-tauri-drag-region className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
@@ -254,4 +259,51 @@ function Body() {
   }
 
   return status.data.configured ? <Shell /> : <Onboarding status={status.data} />;
+}
+
+/** 从贴进来的访问链接里取出密钥；直接贴密钥也行。 */
+function keyFrom(text: string): string | null {
+  const value = text.trim();
+  if (!value) return null;
+  try {
+    const key = new URL(value).searchParams.get("key");
+    if (key) return key;
+  } catch {
+    // 不是链接：当作密钥本身
+  }
+  return /^[A-Za-z0-9]{16,}$/.test(value) ? value : null;
+}
+
+/** 网页访问需要访问密钥时的页面。 */
+function AccessKeyScreen() {
+  const t = useT();
+  const [text, setText] = useState("");
+  const key = keyFrom(text);
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
+      <Logo size={36} />
+      <div className="max-w-[360px]">
+        <p className="font-medium text-fg">{t("access.title")}</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-fg-3">{t("access.text")}</p>
+      </div>
+      <form
+        className="flex w-full max-w-[360px] flex-col gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (key) window.location.href = `/?key=${encodeURIComponent(key)}`;
+        }}
+      >
+        <TextInput
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={t("access.placeholder")}
+          aria-label={t("access.placeholder")}
+          inputMode="url"
+        />
+        <Button variant="primary" type="submit" disabled={!key}>
+          {t("access.open")}
+        </Button>
+      </form>
+    </div>
+  );
 }

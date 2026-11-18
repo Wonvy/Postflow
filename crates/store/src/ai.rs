@@ -223,9 +223,10 @@ impl Store {
         let sql = format!(
             "SELECT l.label, COALESCE(SUM(i.read = 0), 0), COUNT(*), \
                     COALESCE(SUM(i.read = 0 AND i.kind = 'mail'), 0), COALESCE(SUM(i.kind = 'mail'), 0) FROM {} \
-             WHERE l.label <> '' AND i.archived = 0 AND {} GROUP BY l.label ORDER BY l.label",
+             WHERE l.label <> '' AND i.archived = 0 AND {} AND NOT {} GROUP BY l.label ORDER BY l.label",
             crate::store::ITEM_FROM,
-            crate::store::ALIVE
+            crate::store::ALIVE,
+            crate::snoozed_now_sql!()
         );
         let mut stmt = guard.conn.prepare(&sql)?;
         let rows = stmt.query_map([], |r| {

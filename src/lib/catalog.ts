@@ -54,7 +54,10 @@ export interface CatalogFeed {
 export interface Catalog {
   /** 文件格式的版本。以后改了格式就加一，旧版应用不认新格式时继续用自己带的目录。 */
   schema: number;
-  /** 最后修改的日期（YYYY-MM-DD）。在线的比本机的新才用在线的。 */
+  /**
+   * 最后修改的时间：UTC 的 YYYY-MM-DDTHH:MM:SSZ（早期只有日期 YYYY-MM-DD）。按文字比较，
+   * 在线的比本机的新才用在线的；同一天的完整时间排在只有日期的后面。
+   */
   updated: string;
   feeds: CatalogFeed[];
 }
