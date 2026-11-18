@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.20 — 2026-11-18
+
+### English
 - Add feed opens on a new Discover page: about 150 official feeds from well-known sites, with icons, in ten categories (News, Tech, Programming, Design, Science, Business, Gaming, Culture, Life, Blogs). Feeds in your interface language come first, and you can show only Chinese or only English ones. Search by name or topic, subscribe with one click, or subscribe to a whole category; each category goes into its own folder unless you turn that off. Pasting an address still works from the same search box.
 - The other two pages are Address (paste a site or feed address, or pick YouTube, GitHub and other popular sites) and Advanced (RSSHub, and a link to OPML import).
 - The welcome guide's feed step lets you pick topics and subscribe to a few recommended feeds for each in one go.
