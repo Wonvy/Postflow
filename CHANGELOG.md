@@ -7,8 +7,22 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Snooze: send mail or articles away until later today, this evening, tomorrow, the weekend, next week or a time you pick. They wait under Snoozed and come back unread at the top of the inbox with a notification. Snoozes sync between devices.
+- Undo send (5 seconds by default, Settings → Appearance) and schedule send (the clock next to Send). Scheduled mail is listed under Scheduled in the Mail sidebar; Postflow sends it when it's running at that time, or as soon as it opens.
+- Command palette: ⌘K / Ctrl+K (or the button at the bottom of the sidebar) to jump anywhere or run a command.
+- Tray: closing the window keeps Postflow running in the tray (menu bar) with the unread count; quit from the tray menu. Can be turned off.
+- Phones: on narrow screens the layout shows one pane at a time, with a sliding sidebar and a back button, so browser access works well on a phone.
+- More Chinese feeds in the catalog for design and life. Postflow is now licensed under GPL-3.0-or-later.
+- Browser access: turn on Settings → Browser access to use Postflow in a browser with the same data. Open it on this computer with one click, or allow access from your network and scan the QR code on your phone. Links carry an access key that the browser then remembers; changing the key signs out every browser. It runs inside the desktop app and stops when you quit.
 
 ### 中文
+- 稍后提醒：邮件或文章可以先拿走，到今晚、明早、周末、下周或者自己挑的时间再回来。等待时在「稍后提醒」里，到时间回到收件箱顶部、标为未读并弹提醒。提醒时间会在设备间同步。
+- 撤销发送（默认 5 秒，设置 → 外观）和定时发送（「发送」旁边的时钟）。等着发的在邮件侧栏的「定时发送」里；到时间时 Postflow 开着就发，关着的话下次打开时补发。
+- 命令面板：⌘K / Ctrl+K（或侧栏底部的按钮），前往任意位置或执行命令。
+- 托盘常驻：关闭窗口后 Postflow 留在托盘（菜单栏）里继续收信，显示未读数；从托盘菜单退出。可以关掉。
+- 手机：屏幕窄时一次只显示一栏，侧栏滑出、阅读区有返回按钮，网页访问在手机上也好用。
+- 推荐订阅源补了中文的设计和生活类。Postflow 采用 GPL-3.0-or-later 许可证。
+- 网页访问：在「设置 → 网页访问」里打开后，可以在浏览器里用 Postflow，数据和应用里的一样。这台电脑上一点就能打开；允许局域网访问后，手机扫二维码也能用。链接里带访问密钥，浏览器之后会记住；更换密钥后所有浏览器都要重新打开。它由桌面应用提供，关掉应用就停了。
 
 ## 0.1.21 — 2026-11-18
 

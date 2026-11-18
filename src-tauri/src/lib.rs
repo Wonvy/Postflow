@@ -8,8 +8,11 @@ use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(desktop)]
-#[cfg(desktop)]
 mod elevated_update;
+#[cfg(desktop)]
+mod tray;
+#[cfg(desktop)]
+mod web_access;
 mod web_page;
 
 /// 核心事件在界面一侧的事件名。
@@ -69,7 +72,10 @@ fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
         web_page::web_show,
         web_page::web_frame,
         web_page::web_hide,
-        web_page::web_reload
+        web_page::web_reload,
+        web_access::web_access_status,
+        web_access::web_access_update,
+        tray::tray_update
     ]
 }
 
@@ -89,7 +95,11 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .manage(web_page::WebPageState::default());
+        .manage(web_page::WebPageState::default())
+        .manage(web_access::WebAccess::default())
+        .manage(tray::TrayState::default())
+        // 关窗口时留在后台（托盘常驻）
+        .on_window_event(tray::on_window_event);
 
     builder
         .setup(|app| {
@@ -128,17 +138,30 @@ pub fn run() {
                 }
             });
 
+            // 上次开着「在浏览器中使用」就接着开
+            #[cfg(desktop)]
+            web_access::start(app.handle(), core.clone());
+            // 托盘图标：关窗口后还能从这里打开，也显示未读数
+            #[cfg(desktop)]
+            if let Err(err) = tray::create(app.handle()) {
+                tracing::warn!("tray icon: {err}");
+            }
+
             app.manage(AppState { core });
             Ok(())
         })
         .invoke_handler(handlers())
         .build(tauri::generate_context!())
         .expect("error while building Postflow")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event
-                && let Some(state) = app.try_state::<AppState>()
-            {
-                state.core.shutdown();
+        .run(|app, event| match event {
+            tauri::RunEvent::Exit => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    state.core.shutdown();
+                }
             }
+            // macOS：窗口藏起来以后点程序坞图标，把它拿回来
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => tray::show_main(app),
+            _ => {}
         });
 }

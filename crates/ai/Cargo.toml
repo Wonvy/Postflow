@@ -3,6 +3,7 @@ name = "postflow-ai"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 reqwest = "0.13.5"

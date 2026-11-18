@@ -75,6 +75,7 @@ export type SettingsPage =
   | "rules"
   | "plugins"
   | "data"
+  | "web"
   | "storage"
   | "diagnostics"
   | "about";
@@ -97,6 +98,12 @@ export type Dialog =
   | { type: "mark-all-read"; scope?: ListScope }
   /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
   | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string }
+  /** ⌘K 命令面板。 */
+  | { type: "commands" }
+  /** 定时发送里等着发的邮件。 */
+  | { type: "outbox" }
+  /** 自己挑稍后提醒的时间。 */
+  | { type: "snooze"; ids: string[] }
   /** 查看一封邮件或一篇文章的源代码。 */
   | { type: "source"; itemId: string; title: string }
   | null;
@@ -114,6 +121,9 @@ interface UiState {
   refreshingMail: number;
   /** 当前在哪个空间：邮件还是订阅。 */
   space: Space;
+  /** 手机布局里侧栏（从左边滑出）开着。不保存。 */
+  drawerOpen: boolean;
+  setDrawerOpen: (open: boolean) => void;
   /** 每个空间最后打开的列表，切回去时回到那里。不保存。 */
   spaceScopes: Partial<Record<Space, ListScope>>;
   /** 当前列表里展开着的组。换列表时清空。 */
@@ -155,6 +165,12 @@ interface UiState {
   /** 「添加订阅 → 发现」里的目录显示成图标网格还是列表。 */
   catalogView: "grid" | "list";
   setCatalogView: (view: "grid" | "list") => void;
+  /** 桌面应用：关掉窗口时留在后台继续收信，从托盘图标打开。 */
+  keepRunning: boolean;
+  setKeepRunning: (on: boolean) => void;
+  /** 点「发送」后等几秒才真的发，这段时间里可以撤销。0 是马上发。 */
+  undoSendSeconds: number;
+  setUndoSendSeconds: (n: number) => void;
   /** 推荐订阅源的目录每天在线检查一次更新。 */
   catalogOnline: boolean;
   setCatalogOnline: (on: boolean) => void;
@@ -282,6 +298,8 @@ export const useUi = create<UiState>()(
       refreshingMail: 0,
       space: "mail",
       spaceScopes: {},
+      drawerOpen: false,
+      setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
       expandedGroups: [],
       translateRequest: 0,
       searchOpen: false,
@@ -307,6 +325,10 @@ export const useUi = create<UiState>()(
       catalogView: "grid",
       setCatalogView: (catalogView) => set({ catalogView }),
       catalogOnline: true,
+      undoSendSeconds: 5,
+      keepRunning: true,
+      setKeepRunning: (keepRunning) => set({ keepRunning }),
+      setUndoSendSeconds: (undoSendSeconds) => set({ undoSendSeconds }),
       setCatalogOnline: (catalogOnline) => set({ catalogOnline }),
       aiPanel: false,
       aiPanelFor: null,
@@ -343,13 +365,15 @@ export const useUi = create<UiState>()(
           space: spaceOfScope(scope) ?? s.space,
           ...(spaceOfScope(scope) === "feeds" ? { showFeeds: true } : {}),
           mainView: "list",
+          // 手机上在侧栏里选了一个列表，侧栏就收起来
+          drawerOpen: false,
           openId: null,
           selection: [],
           expandedGroups: [],
           searchOpen: false,
           searchQuery: "",
         })),
-      setMainView: (mainView) => set({ mainView }),
+      setMainView: (mainView) => set({ mainView, drawerOpen: false }),
       open: (id) => set({ openId: id }),
       setSelection: (ids) => set({ selection: ids }),
       setDialog: (dialog) => set({ dialog }),
@@ -514,6 +538,8 @@ export const useUi = create<UiState>()(
         showFeeds: s.showFeeds,
         catalogView: s.catalogView,
         catalogOnline: s.catalogOnline,
+        undoSendSeconds: s.undoSendSeconds,
+        keepRunning: s.keepRunning,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,

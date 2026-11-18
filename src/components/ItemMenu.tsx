@@ -29,6 +29,7 @@ import { useCategories, useLabelColor } from "../lib/labels";
 import { copyText, openExternal } from "../lib/platform";
 import { keys } from "../lib/queries";
 import { useUi } from "../lib/store";
+import { SnoozeSubMenu } from "./Snooze";
 import { SourceIcon } from "./SourceIcon";
 import { MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./ui";
 
@@ -180,6 +181,7 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
           {all("archived") ? t("action.unarchive") : t("action.archive")}
         </MenuItem>
       )}
+      {!lead.draft && !lead.sent && <SnoozeSubMenu items={items} />}
       <LabelSub items={items} />
       <MoveSub items={items} />
       <MenuSeparator />

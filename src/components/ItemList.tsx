@@ -16,6 +16,7 @@ import {
   List,
   type LucideIcon,
   Mail,
+  Menu as MenuIcon,
   MailOpen,
   Minus,
   Paperclip,
@@ -58,6 +59,7 @@ import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
+import { useIsMobile } from "../lib/mobile";
 import {
   isDefaultListStyle,
   LIST_STYLE_DEFAULT,
@@ -671,6 +673,8 @@ export function ItemList({ width }: { width: number }) {
   const { confirmMarkAllRead, refresh, membersOf, compose } = useActions();
   const { query, items, rows: listRows, stops, groupMode, search } = useListModel();
   const searchOpen = useUi((s) => s.searchOpen);
+  const mobile = useIsMobile();
+  const setDrawerOpen = useUi((s) => s.setDrawerOpen);
   const searchAll = useUi((s) => s.searchAll);
   const openSearch = useUi((s) => s.openSearch);
   const closeSearch = useUi((s) => s.closeSearch);
@@ -1001,9 +1005,20 @@ export function ItemList({ width }: { width: number }) {
   };
 
   return (
-    <section className="relative flex h-full shrink-0 flex-col border-l border-line bg-bg" style={{ width }}>
+    <section
+      className={cx("relative flex h-full shrink-0 flex-col bg-bg", !mobile && "border-l border-line")}
+      style={{ width }}
+    >
       <ToolbarMenu toolbar="list">
-        <header data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line pl-4 pr-2">
+        <header
+          data-tauri-drag-region
+          className={cx("flex h-11 shrink-0 items-center gap-0.5 border-b border-line pr-2", mobile ? "pl-1" : "pl-4")}
+        >
+          {mobile && (
+            <IconButton label={t("mobile.menu")} onClick={() => setDrawerOpen(true)}>
+              <MenuIcon {...ICON} />
+            </IconButton>
+          )}
           <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold">
             {title}
           </h1>

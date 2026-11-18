@@ -87,8 +87,10 @@ struct ContextParams {
     forward: bool,
 }
 
-/// 写信窗口里的一封信。发送和存草稿用同一个样子。
-#[derive(Deserialize)]
+mod outbox;
+
+/// 写信窗口里的一封信。发送和存草稿用同一个样子；定时发送时原样存在本机。
+#[derive(Deserialize, Serialize, Clone)]
 struct Letter {
     account_id: String,
     #[serde(default)]
@@ -257,6 +259,13 @@ impl Core {
                 Err(e) => Err(e),
             },
             "accounts.smtp" => self.smtp_settings(params, session).await,
+            m if m == "mail.schedule"
+                || m == "mail.outbox"
+                || m == "mail.outbox_send"
+                || m == "mail.unschedule" =>
+            {
+                return self.outbox_rpc(m, params, session).await;
+            }
             _ => return None,
         };
         Some(result)

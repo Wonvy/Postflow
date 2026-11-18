@@ -15,7 +15,11 @@ export type View =
   | "drafts"
   | "sent"
   /** 邮箱里的某个其他文件夹，和 `source_id`、`mailbox` 一起用。 */
-  | "folder";
+  | "folder"
+  /** 稍后提醒着、还没到时间的。 */
+  | "snoozed"
+  /** 提醒时间刚到、还没读的：收件箱顶部单独列出来。 */
+  | "reminders";
 
 export interface Status {
   configured: boolean;
@@ -121,6 +125,8 @@ export interface Item {
   image: string | null;
   /** 分类。 */
   label: string | null;
+  /** 稍后提醒的时间（毫秒）。没设过是 null；已经过了的也还在。 */
+  snoozed_until?: number | null;
   /** 搜索时，正文里命中搜索词的那一小段。 */
   snippet?: string | null;
 }
@@ -246,6 +252,18 @@ export interface FolderInfo {
 }
 
 /** 写信窗口里的一封信。发送和存草稿用同一个样子。 */
+/** 定时发送里的一封。 */
+export interface OutboxItem {
+  id: string;
+  send_at: number;
+  account_id: string;
+  to: string[];
+  subject: string;
+  attachments: number;
+  /** 上次发送失败的原因。 */
+  error: string | null;
+}
+
 export interface Outgoing {
   account_id: string;
   to: string[];
@@ -546,6 +564,8 @@ export const api = {
   getItem: (id: string, allowRemote = false) =>
     rpc<ItemDetail>("items.get", { id, allow_remote: allowRemote }),
   setItems: (ids: string[], patch: ItemPatch) => rpc<void>("items.set", { ids, ...patch }),
+  /** 稍后提醒到 `until`（毫秒）；`null` 取消。 */
+  snooze: (ids: string[], until: number | null) => rpc<void>("items.snooze", { ids, until }),
   markAllRead: (filter: ItemFilter) =>
     rpc<{ count: number }>("items.mark_all_read", { filter }),
   fullText: (id: string) => rpc<{ full_text: string }>("items.full_text", { id }),
@@ -597,6 +617,14 @@ export const api = {
   composeContext: (id: string, forward = false) =>
     rpc<ReplyContext>("mail.compose_context", { id, forward }),
   send: (mail: Outgoing) => rpc<{ message_id: string }>("mail.send", mail),
+  /** 定时发送：存在本机，到 `sendAt`（毫秒）时由核心发出。 */
+  schedule: (mail: Outgoing, sendAt: number) => rpc<{ id: string }>("mail.schedule", { ...mail, send_at: sendAt }),
+  /** 定时发送里还没发的。 */
+  outbox: () => rpc<{ items: OutboxItem[] }>("mail.outbox").then((r) => r.items),
+  /** 定时发送的这一封现在就发。 */
+  outboxSend: (id: string) => rpc<void>("mail.outbox_send", { id }),
+  /** 取消定时发送，存回邮箱的草稿里。 */
+  unschedule: (id: string) => rpc<void>("mail.unschedule", { id }),
   /** 存成草稿，返回新草稿的 Message-ID 和它在列表里的 ID。 */
   saveDraft: (mail: Outgoing) => rpc<{ message_id: string; item_id: string }>("mail.save_draft", mail),
   deleteDraft: (accountId: string, messageId: string) =>

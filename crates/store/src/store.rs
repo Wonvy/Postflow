@@ -246,7 +246,27 @@ pub(crate) const ITEM_FROM: &str = "items i \
 pub(crate) const ITEM_COLUMNS: &str = "i.id, i.kind, i.source_id, \
      CASE WHEN i.kind = 'mail' THEN COALESCE(NULLIF(a.name, ''), a.email, '') ELSE COALESCE(f.title, '') END, \
      f.icon_url, i.url, i.title, i.author, i.summary, i.published_at, i.read, i.starred, i.archived, \
-     m.from_address, COALESCE(m.has_attachments, 0), i.image, NULLIF(l.label, '')";
+     m.from_address, COALESCE(m.has_attachments, 0), i.image, NULLIF(l.label, ''), \
+     NULLIF((SELECT CAST(s.value AS INTEGER) FROM lww s \
+             WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until'), 0)";
+
+/// `ITEM_COLUMNS` 有几列。在它后面再选别的列时，从这个序号开始读。
+pub(crate) const ITEM_COLUMN_COUNT: usize = 18;
+
+/// 现在的时间（毫秒），在 SQL 里用。
+const NOW_MS: &str = "(CAST(strftime('%s', 'now') AS INTEGER) * 1000)";
+
+/// 这一条正稍后提醒着、还没到时间：收件箱、今天、未读和各个来源里先藏起来。
+/// 提醒时间存在同步日志里（kind = snooze），邮件和文章都一样，所以其他设备也知道。
+fn snoozed_now() -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM lww s WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
+         AND CAST(s.value AS INTEGER) > {NOW_MS})"
+    )
+}
+
+/// 提醒时间在 `after`（不含）到现在之间的条目。
+const REMINDER_WINDOW_MS: i64 = 3 * 86_400_000;
 
 /// 来源还在：订阅没退订，邮箱没移除。
 pub(crate) const ALIVE: &str = "COALESCE(f.deleted, a.deleted, 1) = 0";
@@ -513,6 +533,29 @@ impl Store {
         Ok(refs)
     }
 
+    /// 稍后提醒：`until` 之前这些条目不出现在收件箱里，到时间再回来。`None` 取消。
+    /// 写进同步日志，邮件和文章一样，其他设备也会藏起来。
+    pub fn set_snooze(&self, ids: &[String], until: Option<i64>) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("until".into(), until.map_or(Value::Null, |v| json!(v)));
+        self.set_fields("snooze", ids, set)
+    }
+
+    /// 提醒时间落在 (`after`, `until`] 里的条目（不含已删除、垃圾邮件），用来到时间时提醒。
+    pub fn due_reminders(&self, after: i64, until: i64) -> Result<Vec<ItemSummary>> {
+        let guard = self.lock();
+        let sql = format!(
+            "SELECT {ITEM_COLUMNS} FROM {ITEM_FROM} \
+             JOIN lww s ON s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
+             WHERE i.archived < 2 AND {ALIVE} \
+               AND CAST(s.value AS INTEGER) > ?1 AND CAST(s.value AS INTEGER) <= ?2 \
+             ORDER BY CAST(s.value AS INTEGER)"
+        );
+        let mut stmt = guard.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![after, until], item_from_row)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// 把筛选范围内的未读条目全部标为已读。返回条目数，以及需要写回服务器的邮件。
     pub fn mark_all_read(&self, filter: &ItemFilter) -> Result<(usize, Vec<MailRef>)> {
         let ids: Vec<String> = {
@@ -661,8 +704,9 @@ impl Store {
             .query_row([id], |r| {
                 Ok(ItemDetail {
                     item: item_from_row(r)?,
-                    content: r.get(17)?,
-                    full_text: r.get(18)?,
+                    // ITEM_COLUMNS 之后的两列（ITEM_COLUMN_COUNT 是它的列数）
+                    content: r.get(ITEM_COLUMN_COUNT)?,
+                    full_text: r.get(ITEM_COLUMN_COUNT + 1)?,
                 })
             })
             .optional()?;
@@ -676,7 +720,8 @@ impl Store {
                     COALESCE(SUM(i.read = 0 AND i.published_at >= ?1), 0), \
                     COALESCE(SUM(i.read = 0 AND i.kind = 'mail'), 0), \
                     COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND i.published_at >= ?1), 0) \
-             FROM {ITEM_FROM} WHERE i.archived = 0 AND {ALIVE}"
+             FROM {ITEM_FROM} WHERE i.archived = 0 AND {ALIVE} AND NOT {}",
+            snoozed_now()
         );
         let (unread, today, unread_mail, today_mail): (i64, i64, i64, i64) =
             guard.conn.query_row(&sql, [today_since], |r| {
@@ -1113,16 +1158,20 @@ fn article_image(a: &Article) -> Option<String> {
 
 fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
     let mut conds = match filter.view {
-        View::Inbox => format!("i.archived = 0 AND {ALIVE}"),
+        View::Inbox => format!("i.archived = 0 AND {ALIVE} AND NOT {}", snoozed_now()),
         View::All => format!("i.archived < 2 AND {ALIVE}"),
         View::Today => {
             args.push(SqlValue::Integer(filter.since.unwrap_or(0)));
             format!(
-                "i.archived = 0 AND {ALIVE} AND i.published_at >= ?{}",
-                args.len()
+                "i.archived = 0 AND {ALIVE} AND i.published_at >= ?{} AND NOT {}",
+                args.len(),
+                snoozed_now()
             )
         }
-        View::Unread => format!("i.read = 0 AND i.archived = 0 AND {ALIVE}"),
+        View::Unread => format!(
+            "i.read = 0 AND i.archived = 0 AND {ALIVE} AND NOT {}",
+            snoozed_now()
+        ),
         // 星标的文章即使退订了也保留。垃圾邮件和已删除的不算
         View::Starred => "i.starred = 1 AND i.archived < 2".to_string(),
         View::Archived => format!("i.archived = 1 AND {ALIVE}"),
@@ -1131,6 +1180,12 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         View::Drafts => format!("i.archived = 4 AND {ALIVE}"),
         View::Sent => format!("i.archived = 5 AND {ALIVE}"),
         View::Folder => format!("i.archived = 6 AND {ALIVE}"),
+        View::Snoozed => format!("i.archived < 2 AND {ALIVE} AND {}", snoozed_now()),
+        View::Reminders => format!(
+            "i.read = 0 AND i.archived = 0 AND {ALIVE} AND EXISTS (SELECT 1 FROM lww s \
+             WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
+             AND CAST(s.value AS INTEGER) BETWEEN {NOW_MS} - {REMINDER_WINDOW_MS} AND {NOW_MS})"
+        ),
     };
     if let Some(source_id) = &filter.source_id {
         args.push(SqlValue::Text(source_id.clone()));
@@ -1222,6 +1277,7 @@ pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         has_attachments: r.get(14)?,
         image: r.get(15)?,
         label: r.get(16)?,
+        snoozed_until: r.get(17)?,
         snippet: None,
     })
 }

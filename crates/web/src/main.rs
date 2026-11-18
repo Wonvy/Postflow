@@ -68,9 +68,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("local dir: {}", local_dir.display());
     tracing::info!("listening on http://{addr}");
 
+    // 开发用：只绑定回环地址、不要访问密钥。桌面应用里的网页访问一定带密钥
+    let ui = static_dir.map_or(postflow_web::Ui::None, postflow_web::Ui::Dir);
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let server = tokio::spawn(postflow_web::serve(
+        core.clone(),
+        listener,
+        ui,
+        postflow_web::Access::default(),
+        stopped,
+    ));
     tokio::select! {
-        result = postflow_web::serve(core.clone(), listener, static_dir) => result?,
-        _ = tokio::signal::ctrl_c() => {}
+        result = server => result??,
+        _ = tokio::signal::ctrl_c() => {
+            let _ = stop.send(true);
+        }
     }
     core.shutdown();
     Ok(())

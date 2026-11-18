@@ -134,9 +134,9 @@ export function DiscoverPane({
   );
 
   return (
-    <div className="flex h-[min(540px,calc(76vh-96px))] flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-4 pb-3">
-        <div className="relative min-w-0 flex-1">
+    <div className="flex h-[min(540px,calc(76vh-96px))] flex-col max-md:h-[calc(100dvh-140px)]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 px-4 pb-3">
+        <div className="relative min-w-[200px] flex-1">
           <Search size={14} strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3" />
           <input
             data-autofocus=""
@@ -187,9 +187,12 @@ export function DiscoverPane({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 border-t border-line">
-        {/* 分类 */}
-        <nav aria-label={t("catalog.categories")} className="w-[152px] shrink-0 overflow-y-auto border-r border-line p-1.5">
+      <div className="flex min-h-0 flex-1 border-t border-line max-md:flex-col">
+        {/* 分类；手机上是一排，左右滑动 */}
+        <nav
+          aria-label={t("catalog.categories")}
+          className="w-[152px] shrink-0 overflow-y-auto border-r border-line p-1.5 no-scrollbar max-md:flex max-md:w-auto max-md:gap-1 max-md:overflow-x-auto max-md:overflow-y-hidden max-md:border-b max-md:border-r-0"
+        >
           {sections.map((s) => (
             <button
               key={s}
@@ -200,7 +203,7 @@ export function DiscoverPane({
                 setQuery("");
               }}
               className={cx(
-                "flex h-7 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] transition-colors",
+                "flex h-7 w-full shrink-0 items-center justify-between gap-2 rounded-md px-2 text-left text-[13px] transition-colors max-md:w-auto",
                 !search && s === current ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
               )}
             >
@@ -229,7 +232,7 @@ export function DiscoverPane({
           ) : list.length === 0 ? (
             <p className="px-3 py-8 text-center text-[13px] leading-relaxed text-fg-3">{t("catalog.empty")}</p>
           ) : view === "grid" ? (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5 p-0.5">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-1.5 p-0.5">
               {list.map((feed) => (
                 <li key={feed.id}>
                   <GridCard

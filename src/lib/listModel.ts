@@ -20,7 +20,14 @@ export function useListModel() {
     [scope, space, search, searchAll],
   );
   const query = useItems(filter);
-  const { items } = query;
+  // 收件箱顶部：提醒时间刚到、还没读的稍后提醒，按日期本来排在后面，这里提到最前
+  const pinReminders = !search && scope.kind === "view" && scope.view === "inbox";
+  const reminders = useItems({ ...filterOf(scope, space), view: "reminders" }, pinReminders);
+  const items = useMemo(() => {
+    if (!pinReminders || reminders.items.length === 0) return query.items;
+    const pinned = new Set(reminders.items.map((i) => i.id));
+    return [...reminders.items, ...query.items.filter((i) => !pinned.has(i.id))];
+  }, [pinReminders, reminders.items, query.items]);
   const groups = useMemo(() => groupItems(items, groupMode), [items, groupMode]);
   const rows = useMemo(() => rowsOf(groups, new Set(expandedGroups)), [groups, expandedGroups]);
   const stops = useMemo(() => rows.map(stopOf).filter((s): s is Stop => s !== null), [rows]);

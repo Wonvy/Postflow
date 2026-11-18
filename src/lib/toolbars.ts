@@ -35,6 +35,7 @@ export const TOOL_DEFAULTS: Record<ToolbarId, ToolbarLayout> = {
     { id: "read", place: "top" },
     { id: "star", place: "top" },
     { id: "archive", place: "top" },
+    { id: "snooze", place: "top" },
     { id: "original", place: "top" },
     { id: "maximize", place: "top" },
     { id: "fullscreen", place: "top" },

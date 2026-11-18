@@ -128,6 +128,10 @@ pub enum View {
     Sent,
     /// 邮箱里的某个其他文件夹：和 `source_id`、`mailbox` 一起用。
     Folder,
+    /// 稍后提醒着、还没到时间的。
+    Snoozed,
+    /// 提醒时间刚到（三天内）、还没读的：收件箱顶部单独列出来。
+    Reminders,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -199,6 +203,8 @@ pub struct ItemSummary {
     pub image: Option<String>,
     /// 分类。
     pub label: Option<String>,
+    /// 稍后提醒的时间（毫秒）。没设过、取消了是 None；已经过了的也还在，界面据此判断。
+    pub snoozed_until: Option<i64>,
     /// 搜索时，正文里命中搜索词的那一小段。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,

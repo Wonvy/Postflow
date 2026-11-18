@@ -164,7 +164,8 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
   const messages = history.data ?? [];
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-line bg-sidebar">
+    // 手机上盖住阅读区占满宽度，关掉回到正文
+    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-line bg-sidebar max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-full max-md:border-l-0">
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line pl-3.5 pr-1.5">
         <Sparkles size={15} strokeWidth={1.75} className="text-accent" />
         <span className="font-medium">{t("ai.panel")}</span>

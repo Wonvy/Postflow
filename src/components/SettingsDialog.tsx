@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   Database,
+  Globe,
   HardDrive,
   Workflow,
   Puzzle,
@@ -36,9 +37,10 @@ import { LanguageSettings } from "./LanguageSettings";
 import { RulesSettings } from "./RulesSettings";
 import { PluginsSettings } from "./PluginsSettings";
 import { RsshubServer } from "./RsshubServer";
+import { WebAccessSettings } from "./WebAccessSettings";
 
-/** 设置的各页，按组排：常用的、AI、数据和应用本身。 */
-const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
+/** 设置的各页，按组排：常用的、AI、数据和应用本身。「网页访问」只有桌面应用里有。 */
+const ALL_PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
   { page: "appearance", icon: Palette, label: "settings.appearance", group: 0 },
   { page: "feeds", icon: Rss, label: "settings.feeds", group: 0 },
   { page: "translation", icon: Languages, label: "settings.translation", group: 0 },
@@ -47,10 +49,14 @@ const PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: M
   { page: "rules", icon: Workflow, label: "rules.title", group: 1 },
   { page: "plugins", icon: Puzzle, label: "plugins.title", group: 1 },
   { page: "data", icon: Database, label: "settings.data", group: 2 },
+  { page: "web", icon: Globe, label: "webAccess.title", group: 2 },
   { page: "storage", icon: HardDrive, label: "storage.title", group: 2 },
   { page: "diagnostics", icon: Activity, label: "settings.diagnostics", group: 2 },
   { page: "about", icon: Info, label: "settings.about", group: 2 },
 ];
+const PAGES = ALL_PAGES.filter((p) => p.page !== "web" || isTauri);
+/** 设置的各页，命令面板里也列出来。 */
+export const SETTINGS_PAGES = PAGES;
 
 export function SettingsDialog() {
   const t = useT();
@@ -70,6 +76,10 @@ export function SettingsDialog() {
   const setSenderLogos = useUi((s) => s.setSenderLogos);
   const setBadgeUnread = useUi((s) => s.setBadgeUnread);
   const showFeeds = useUi((s) => s.showFeeds);
+  const undoSendSeconds = useUi((s) => s.undoSendSeconds);
+  const keepRunning = useUi((s) => s.keepRunning);
+  const setKeepRunning = useUi((s) => s.setKeepRunning);
+  const setUndoSendSeconds = useUi((s) => s.setUndoSendSeconds);
   const setShowFeeds = useUi((s) => s.setShowFeeds);
 
   const status = useStatus();
@@ -179,6 +189,26 @@ export function SettingsDialog() {
         <SettingRow label={t("settings.senderLogos")} hint={t("settings.senderLogosHint")}>
           <Switch label={t("settings.senderLogos")} checked={senderLogos} onChange={setSenderLogos} />
         </SettingRow>
+        {isTauri && (
+          <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>
+            <Switch label={t("settings.keepRunning")} checked={keepRunning} onChange={setKeepRunning} />
+          </SettingRow>
+        )}
+        <SettingRow label={t("settings.undoSend")} hint={t("settings.undoSendHint")}>
+          <Select
+            className="w-28"
+            value={undoSendSeconds}
+            aria-label={t("settings.undoSend")}
+            onChange={(e) => setUndoSendSeconds(Number(e.target.value))}
+          >
+            <option value={0}>{t("settings.undoSendOff")}</option>
+            {[5, 10, 20].map((n) => (
+              <option key={n} value={n}>
+                {t("settings.seconds", { n })}
+              </option>
+            ))}
+          </Select>
+        </SettingRow>
         <SettingRow label={t("settings.notifyMail")} hint={t("settings.notifyMailHint")}>
           <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />
         </SettingRow>
@@ -285,6 +315,7 @@ export function SettingsDialog() {
       </>
     ),
     storage: () => <StorageSettings open={open && page === "storage"} />,
+    web: () => <WebAccessSettings />,
     diagnostics: () => <Diagnostics open={open} />,
     about: () => (
       <>

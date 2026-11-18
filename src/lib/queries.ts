@@ -23,7 +23,7 @@ import { isArchiveLike, useUi } from "./store";
 import { useAiStreams } from "./ai";
 import { retryBlocked } from "./listTranslate";
 import { useModelDownloads } from "./translate";
-import { notifyNewMail } from "./notify";
+import { notifyNewMail, notifyReminders } from "./notify";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
 
@@ -44,8 +44,9 @@ export function useNav() {
   return useQuery({ queryKey: keys.nav, queryFn: () => api.nav(startOfToday()) });
 }
 
-export function useItems(filter: ItemFilter) {
+export function useItems(filter: ItemFilter, enabled = true) {
   const query = useInfiniteQuery({
+    enabled,
     queryKey: keys.items(filter),
     queryFn: ({ pageParam }) => api.listItems(filter, pageParam),
     initialPageParam: undefined as Cursor | undefined,
@@ -157,6 +158,9 @@ export function useCoreEvents() {
         case "new_mail":
           notifyNewMail(event, qc.getQueryData<Nav>(keys.nav));
           break;
+        case "reminders":
+          notifyReminders(event);
+          break;
         case "status":
           void qc.invalidateQueries({ queryKey: keys.status });
           break;
@@ -184,6 +188,7 @@ export function useCoreEvents() {
           if (event.scope.includes("items")) {
             void qc.invalidateQueries({ queryKey: ["items"] });
             void qc.invalidateQueries({ queryKey: ["item"] });
+            void qc.invalidateQueries({ queryKey: ["outbox"] });
           }
           if (event.scope.includes("settings")) {
             void qc.invalidateQueries({ queryKey: keys.settings });

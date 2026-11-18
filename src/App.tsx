@@ -1,3 +1,7 @@
+import { OutboxDialog } from "./components/Outbox";
+import { SnoozeDialog } from "./components/Snooze";
+import { CommandPalette } from "./components/CommandPalette";
+import { useIsMobile } from "./lib/mobile";
 import { Unplug } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
@@ -21,7 +25,7 @@ import { StatsPage } from "./components/StatsPage";
 import { Button, Spinner } from "./components/ui";
 import { api } from "./lib/api";
 import { resolveLang } from "./lib/i18n";
-import { useUnreadBadge } from "./lib/notify";
+import { useTray, useUnreadBadge } from "./lib/notify";
 import { useCoreEvents, useNav, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
@@ -106,7 +110,9 @@ function Resizer({ width, onResize }: { width: number; onResize: (width: number)
 function Shell() {
   useShortcuts();
   useMailCatchUp();
-  useUnreadBadge(useNav().data?.counts.unread_mail);
+  const unreadMail = useNav().data?.counts.unread_mail;
+  useUnreadBadge(unreadMail);
+  useTray(unreadMail);
   useEffect(() => startUpdateChecks(), []);
   useEffect(() => watchFullscreen(), []);
   usePluginLoader();
@@ -130,6 +136,54 @@ function Shell() {
 
   // 阅读区最大化（或全屏）时只留阅读区
   const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats";
+  const mobile = useIsMobile();
+  const openId = useUi((s) => s.openId);
+  const drawerOpen = useUi((s) => s.drawerOpen);
+  const setDrawerOpen = useUi((s) => s.setDrawerOpen);
+
+  const dialogs = (
+    <>
+      <AddFeedDialog />
+      <EditFeedDialog />
+      <AddAccountDialog />
+      <EditAccountDialog />
+      <RemoveAccountDialog />
+      <MarkAllReadDialog />
+      <UpdateDialog />
+      <UpdateNotice />
+      <SettingsDialog />
+      <ToolbarsDialog />
+      <ComposeDialog />
+      <SourceDialog />
+      <WelcomeGuide />
+      <CommandPalette />
+      <SnoozeDialog />
+      <OutboxDialog />
+      <Toaster />
+    </>
+  );
+
+  // 手机：一次一栏。打开了一条就只显示阅读区，否则是列表；侧栏从左边滑出来
+  if (mobile) {
+    return (
+      <div className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+        {mainView === "stats" ? <StatsPage /> : openId ? <Reader /> : <ItemList width={viewport} />}
+        {drawerOpen && (
+          <>
+            <div
+              aria-hidden
+              className="anim-fade fixed inset-0 z-30 bg-overlay"
+              onClick={() => setDrawerOpen(false)}
+            />
+            <div className="anim-drawer fixed inset-y-0 left-0 z-30 flex pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-pop">
+              <Sidebar width={Math.min(300, viewport - 56)} />
+            </div>
+          </>
+        )}
+        {dialogs}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -152,20 +206,7 @@ function Shell() {
           <Reader />
         </>
       )}
-      <AddFeedDialog />
-      <EditFeedDialog />
-      <AddAccountDialog />
-      <EditAccountDialog />
-      <RemoveAccountDialog />
-      <MarkAllReadDialog />
-      <UpdateDialog />
-      <UpdateNotice />
-      <SettingsDialog />
-      <ToolbarsDialog />
-      <ComposeDialog />
-      <SourceDialog />
-      <WelcomeGuide />
-      <Toaster />
+      {dialogs}
     </div>
   );
 }

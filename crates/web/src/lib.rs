@@ -4,16 +4,19 @@
 //! - `GET  /api/events` 事件流（SSE）
 //! - 其余路径           界面的静态文件
 //!
-//! 目前只面向本机：只接受发往回环地址的请求，没有登录。
-//! 开放给局域网需要先加上访问密码，在那之前不要把它绑定到其他网卡。
+//! 两种用法：
+//! - 开发时单独运行（`npm run server`）：只接受发往回环地址的请求，没有访问密钥。
+//! - 桌面应用里打开「在浏览器中使用」：一定要访问密钥（[`Access::key`]）。链接里带一次 `?key=`，
+//!   之后浏览器用 Cookie 记住它。打开「允许局域网访问」时才绑定到所有网卡（[`Access::lan`]）。
 
 use std::convert::Infallible;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Request, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -23,6 +26,7 @@ use futures::{Stream, StreamExt};
 use postflow_core::{Core, Event, Scope};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use tokio::sync::watch;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tower_http::services::{ServeDir, ServeFile};
@@ -39,36 +43,107 @@ struct RpcRequest {
 /// 一次请求最多这么大：50 MB 的附件转成 Base64 以后，再留些余量。
 const RPC_BODY_LIMIT: usize = 72 * 1024 * 1024;
 
-pub fn router(core: Arc<Core>, static_dir: Option<PathBuf>) -> Router {
+/// 界面文件从哪里来。
+#[derive(Clone)]
+pub enum Ui {
+    /// 磁盘上构建好的目录（开发时的 dist）。
+    Dir(PathBuf),
+    /// 桌面应用内置的文件：给路径，返回内容、类型和要带的 Content-Security-Policy。
+    /// 找不到的路径应该返回首页（单页应用）。
+    Assets(AssetFn),
+    /// 只有接口，没有界面。
+    None,
+}
+
+/// 按路径取界面文件。
+pub type AssetFn = Arc<dyn Fn(&str) -> Option<UiFile> + Send + Sync>;
+
+/// 一个界面文件。
+pub struct UiFile {
+    pub bytes: Vec<u8>,
+    pub mime: String,
+    pub csp: Option<String>,
+}
+
+/// 谁能访问。
+#[derive(Clone, Default)]
+pub struct Access {
+    /// 访问密钥。为空时不检查（只给开发时单独运行用，那时只绑定回环地址）。
+    pub key: Option<String>,
+    /// 接受发往其他地址（局域网 IP）的请求。必须同时有 `key`。
+    pub lan: bool,
+}
+
+/// 浏览器记住访问密钥用的 Cookie。
+const KEY_COOKIE: &str = "postflow_key";
+
+#[derive(Clone)]
+struct ApiState {
+    core: Arc<Core>,
+    /// 变成 true 时服务要停：事件流也随之结束，不然浏览器开着就停不下来。
+    stop: watch::Receiver<bool>,
+}
+
+pub fn router(core: Arc<Core>, ui: Ui, access: Access, stop: watch::Receiver<bool>) -> Router {
     let api = Router::new()
-        // 写信时附件随请求一起传，默认的 2 MB 不够。只接受本机的连接
+        // 写信时附件随请求一起传，默认的 2 MB 不够
         .route(
             "/api/rpc",
             post(rpc).layer(DefaultBodyLimit::max(RPC_BODY_LIMIT)),
         )
         .route("/api/events", get(events))
-        .with_state(core);
-    let app = match static_dir {
-        Some(dir) => {
+        .with_state(ApiState { core, stop });
+    let app = match ui {
+        Ui::Dir(dir) => {
             // 界面是单页应用，找不到的路径一律回到首页
             let index = ServeFile::new(dir.join("index.html"));
             api.fallback_service(ServeDir::new(dir).fallback(index))
         }
-        None => api,
+        Ui::Assets(get) => api.fallback(move |req: Request| {
+            let get = get.clone();
+            async move { asset(&get, req.uri().path()) }
+        }),
+        Ui::None => api,
     };
-    app.layer(middleware::from_fn(loopback_only))
+    // 密钥比本机地址更严：有密钥时不用再限定回环地址（局域网访问靠它）
+    let access = Arc::new(access);
+    app.layer(middleware::from_fn_with_state(access, guard))
 }
 
+/// 运行服务，直到 `stop` 变成 true。
 pub async fn serve(
     core: Arc<Core>,
     listener: tokio::net::TcpListener,
-    static_dir: Option<PathBuf>,
+    ui: Ui,
+    access: Access,
+    stop: watch::Receiver<bool>,
 ) -> std::io::Result<()> {
-    axum::serve(listener, router(core, static_dir)).await
+    let mut until = stop.clone();
+    axum::serve(listener, router(core, ui, access, stop))
+        .with_graceful_shutdown(async move {
+            let _ = until.wait_for(|stopped| *stopped).await;
+        })
+        .await
 }
 
-async fn rpc(State(core): State<Arc<Core>>, Json(req): Json<RpcRequest>) -> Response {
-    match core.rpc(&req.method, req.params, req.client).await {
+fn asset(get: &AssetFn, path: &str) -> Response {
+    // 单页应用：不是具体文件的路径（包括 /）都给首页
+    let Some(file) = get(path).or_else(|| get("/index.html")) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mut res = Response::new(Body::from(file.bytes));
+    if let Ok(mime) = HeaderValue::from_str(&file.mime) {
+        res.headers_mut().insert(header::CONTENT_TYPE, mime);
+    }
+    if let Some(csp) = file.csp.and_then(|c| HeaderValue::from_str(&c).ok()) {
+        res.headers_mut()
+            .insert(header::CONTENT_SECURITY_POLICY, csp);
+    }
+    res
+}
+
+async fn rpc(State(state): State<ApiState>, Json(req): Json<RpcRequest>) -> Response {
+    match state.core.rpc(&req.method, req.params, req.client).await {
         Ok(result) => Json(json!({ "result": result })).into_response(),
         Err(error) => {
             // 只记方法名和错误，不记参数：参数里可能有密码
@@ -84,9 +159,13 @@ async fn rpc(State(core): State<Arc<Core>>, Json(req): Json<RpcRequest>) -> Resp
 }
 
 async fn events(
-    State(core): State<Arc<Core>>,
+    State(state): State<ApiState>,
 ) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
-    let stream = BroadcastStream::new(core.subscribe()).map(|item| {
+    let mut stop = state.stop.clone();
+    let stopped = async move {
+        let _ = stop.wait_for(|stopped| *stopped).await;
+    };
+    let stream = BroadcastStream::new(state.core.subscribe()).map(|item| {
         let event = match item {
             Ok(event) => event,
             // 客户端太慢、漏了事件：让它把所有东西重新查一遍
@@ -97,35 +176,126 @@ async fn events(
         };
         Ok(SseEvent::default().json_data(&event).unwrap_or_default())
     });
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20)))
+    Sse::new(stream.take_until(Box::pin(stopped)))
+        .keep_alive(KeepAlive::new().interval(Duration::from_secs(20)))
 }
 
-/// 只放行发往回环地址、且来自本机页面的请求。
+/// 放行规则：
 ///
-/// 检查 Host 是为了挡住 DNS 重绑定：恶意网站把自己的域名解析到 127.0.0.1，
-/// 浏览器就会把它当成同源去读本机服务。检查 Origin 是为了挡住其他网站直接往本机发请求。
-async fn loopback_only(req: Request, next: Next) -> Response {
+/// - 没有局域网访问时，只放行发往回环地址的请求。检查 Host 是为了挡住 DNS 重绑定：恶意网站把自己的
+///   域名解析到 127.0.0.1，浏览器就会把它当成同源去读本机服务。
+/// - 带 Origin 的请求必须来自同一个地方（没有局域网访问时：本机的任何端口，开发时界面在另一个端口上），
+///   挡住其他网站直接往这里发请求。
+/// - 有访问密钥时，请求要带着它：Cookie 里，或者网址的 `?key=`（这时种下 Cookie，再跳回不带密钥的地址）。
+async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> Response {
     let headers = req.headers();
-    let host_ok = headers
-        .get(header::HOST)
+    let host = headers.get(header::HOST).and_then(|v| v.to_str().ok());
+    let origin = headers
+        .get(header::ORIGIN)
         .and_then(|v| v.to_str().ok())
-        .is_some_and(is_loopback_authority);
-    let origin_ok = match headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
+        .map(|o| {
+            o.strip_prefix("http://")
+                .or_else(|| o.strip_prefix("https://"))
+                .unwrap_or("")
+        });
+    let host_ok = access.lan || host.is_some_and(is_loopback_authority);
+    let origin_ok = match origin {
         None => true,
-        Some(origin) => origin
-            .strip_prefix("http://")
-            .or_else(|| origin.strip_prefix("https://"))
-            .is_some_and(is_loopback_authority),
+        Some(origin) if access.lan => host.is_some_and(|h| h.eq_ignore_ascii_case(origin)),
+        Some(origin) => is_loopback_authority(origin),
     };
-    if host_ok && origin_ok {
-        next.run(req).await
-    } else {
-        (
+    if !host_ok || !origin_ok {
+        return (
             StatusCode::FORBIDDEN,
-            "this server only accepts requests from this machine",
+            "this server doesn't accept requests from here",
         )
-            .into_response()
+            .into_response();
     }
+
+    let Some(key) = access.key.as_deref() else {
+        return next.run(req).await;
+    };
+    if cookie_value(req.headers(), KEY_COOKIE).is_some_and(|v| same(v, key)) {
+        return next.run(req).await;
+    }
+    // 链接或二维码里带着密钥：记进 Cookie，跳回不带密钥的地址，免得它留在地址栏和历史记录里
+    let (with_key, rest) = split_key(req.uri().query());
+    if req.method() == Method::GET && with_key.is_some_and(|v| same(&v, key)) {
+        let path = req.uri().path();
+        let location = if rest.is_empty() {
+            path.to_string()
+        } else {
+            format!("{path}?{rest}")
+        };
+        return Response::builder()
+            .status(StatusCode::SEE_OTHER)
+            .header(header::LOCATION, location)
+            // Lax：扫码、点链接这样从别处打开时也带上；别的网站发来的 POST 不带
+            .header(
+                header::SET_COOKIE,
+                format!("{KEY_COOKIE}={key}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax"),
+            )
+            .body(Body::empty())
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+    }
+    if req.uri().path().starts_with("/api/") {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": { "code": "unauthorized", "message": "open Postflow with the link from the desktop app" } }))).into_response();
+    }
+    (
+        StatusCode::UNAUTHORIZED,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        NEED_KEY_PAGE,
+    )
+        .into_response()
+}
+
+/// 没带密钥时显示的页面。
+const NEED_KEY_PAGE: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>\
+<title>Postflow</title><body style='font:15px system-ui;max-width:420px;margin:15vh auto;padding:0 20px;line-height:1.6'>\
+<h1 style='font-size:20px'>Postflow</h1>\
+<p>请在电脑上打开 Postflow，到「设置 → 网页访问」里点链接或扫二维码打开。</p>\
+<p style='color:#666'>Open Postflow on your computer and use the link or QR code in Settings → Browser access.</p>";
+
+/// 请求里某个 Cookie 的值。
+fn cookie_value<'a>(headers: &'a axum::http::HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(';'))
+        .filter_map(|pair| pair.trim().split_once('='))
+        .find(|(k, _)| *k == name)
+        .map(|(_, v)| v)
+}
+
+/// 从查询字符串里取出 `key`，返回它和剩下的部分。
+fn split_key(query: Option<&str>) -> (Option<String>, String) {
+    let mut key = None;
+    let mut rest = Vec::new();
+    for pair in query.unwrap_or("").split('&').filter(|p| !p.is_empty()) {
+        match pair.strip_prefix("key=") {
+            Some(v) => key = Some(v.to_string()),
+            None => rest.push(pair),
+        }
+    }
+    (key, rest.join("&"))
+}
+
+/// 比较密钥，耗时和内容无关，免得从响应时间一个字一个字猜出来。
+fn same(a: &str, b: &str) -> bool {
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
+}
+
+/// 新的访问密钥：32 个字母和数字。
+pub fn new_key() -> String {
+    const CHARS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    (0..32)
+        .map(|_| CHARS[rand::random_range(0..CHARS.len())] as char)
+        .collect()
 }
 
 fn is_loopback_authority(authority: &str) -> bool {
@@ -149,6 +319,207 @@ fn is_loopback_authority(authority: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn app(access: Access) -> (tempfile::TempDir, Router) {
+        let dir = tempfile::tempdir().unwrap();
+        let secrets = Arc::new(postflow_core::MemorySecrets::default());
+        let core = Core::open_with_secrets(dir.path(), secrets).await.unwrap();
+        let ui = Ui::Assets(Arc::new(|path: &str| {
+            Some(UiFile {
+                bytes: format!("ui:{path}").into_bytes(),
+                mime: "text/html".into(),
+                csp: None,
+            })
+        }));
+        let (_stop, stopped) = watch::channel(false);
+        (dir, router(core, ui, access, stopped))
+    }
+
+    async fn send(app: &Router, req: axum::http::Request<Body>) -> Response {
+        use tower::ServiceExt;
+        app.clone().oneshot(req).await.unwrap()
+    }
+
+    fn get(uri: &str, host: &str) -> axum::http::request::Builder {
+        axum::http::Request::get(uri).header(header::HOST, host)
+    }
+
+    #[tokio::test]
+    async fn the_access_key_is_required_and_remembered() {
+        let key = new_key();
+        let (_dir, app) = app(Access {
+            key: Some(key.clone()),
+            lan: false,
+        })
+        .await;
+
+        let res = send(
+            &app,
+            get("/", "127.0.0.1:4319").body(Body::empty()).unwrap(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        let wrong = send(
+            &app,
+            get("/?key=nope", "127.0.0.1:4319")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
+
+        // 链接里的密钥换成 Cookie，跳回不带密钥的地址
+        let res = send(
+            &app,
+            get(&format!("/inbox?key={key}&a=1"), "127.0.0.1:4319")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
+        assert_eq!(res.headers()[header::LOCATION], "/inbox?a=1");
+        let cookie = res.headers()[header::SET_COOKIE]
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"));
+        let cookie = cookie.split(';').next().unwrap().to_string();
+
+        let res = send(
+            &app,
+            get("/", "127.0.0.1:4319")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+        let rpc = axum::http::Request::post("/api/rpc")
+            .header(header::HOST, "127.0.0.1:4319")
+            .header(header::COOKIE, &cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"method":"app.status"}"#))
+            .unwrap();
+        assert_eq!(send(&app, rpc).await.status(), StatusCode::OK);
+        let no_cookie = axum::http::Request::post("/api/rpc")
+            .header(header::HOST, "127.0.0.1:4319")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"method":"app.status"}"#))
+            .unwrap();
+        assert_eq!(
+            send(&app, no_cookie).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn lan_addresses_only_when_allowed_and_never_from_other_sites() {
+        let key = new_key();
+        let cookie = format!("{KEY_COOKIE}={key}");
+        let (_dir, local) = app(Access {
+            key: Some(key.clone()),
+            lan: false,
+        })
+        .await;
+        let res = send(
+            &local,
+            get("/", "192.168.1.5:4319")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let (_dir, lan) = app(Access {
+            key: Some(key.clone()),
+            lan: true,
+        })
+        .await;
+        let res = send(
+            &lan,
+            get("/", "192.168.1.5:4319")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+        let res = send(
+            &lan,
+            get("/", "192.168.1.5:4319").body(Body::empty()).unwrap(),
+        )
+        .await;
+        assert_eq!(
+            res.status(),
+            StatusCode::UNAUTHORIZED,
+            "the network alone isn't enough"
+        );
+        // 别的网站往这里发请求：即使碰巧带着 Cookie 也不行
+        let cross = axum::http::Request::post("/api/rpc")
+            .header(header::HOST, "192.168.1.5:4319")
+            .header(header::ORIGIN, "http://evil.example")
+            .header(header::COOKIE, &cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"method":"app.status"}"#))
+            .unwrap();
+        assert_eq!(send(&lan, cross).await.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn paths_without_a_file_get_the_index_page() {
+        let dir = tempfile::tempdir().unwrap();
+        let secrets = Arc::new(postflow_core::MemorySecrets::default());
+        let core = Core::open_with_secrets(dir.path(), secrets).await.unwrap();
+        // 像开发时的 Tauri 一样：只认得具体的文件名，不会自己回到首页
+        let ui = Ui::Assets(Arc::new(|path: &str| {
+            (path == "/index.html" || path == "/app.js").then(|| UiFile {
+                bytes: path.as_bytes().to_vec(),
+                mime: "text/html".into(),
+                csp: Some("default-src 'self'".into()),
+            })
+        }));
+        let (_stop, stopped) = watch::channel(false);
+        let app = router(core, ui, Access::default(), stopped);
+        for (path, body) in [
+            ("/", "/index.html"),
+            ("/inbox/today", "/index.html"),
+            ("/app.js", "/app.js"),
+        ] {
+            let res = send(
+                &app,
+                get(path, "127.0.0.1:4319").body(Body::empty()).unwrap(),
+            )
+            .await;
+            assert_eq!(res.status(), StatusCode::OK, "{path}");
+            assert_eq!(
+                res.headers()[header::CONTENT_SECURITY_POLICY],
+                "default-src 'self'"
+            );
+            let bytes = axum::body::to_bytes(res.into_body(), 1024).await.unwrap();
+            assert_eq!(&bytes[..], body.as_bytes(), "{path}");
+        }
+    }
+
+    #[test]
+    fn key_helpers() {
+        assert_eq!(
+            split_key(Some("key=abc&x=1")),
+            (Some("abc".into()), "x=1".into())
+        );
+        assert_eq!(split_key(None), (None, String::new()));
+        assert!(same("abc", "abc") && !same("abc", "abd") && !same("abc", "ab"));
+        let key = new_key();
+        assert_eq!(key.len(), 32);
+        assert!(key.chars().all(|c| c.is_ascii_alphanumeric()));
+        assert_ne!(key, new_key());
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("a=1; postflow_key=xyz"),
+        );
+        assert_eq!(cookie_value(&headers, KEY_COOKIE), Some("xyz"));
+    }
 
     #[test]
     fn loopback_detection() {

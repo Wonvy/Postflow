@@ -1,9 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  AlarmClock,
   Archive,
   ArchiveRestore,
   BookOpenText,
   Check,
+  ChevronLeft,
   Download,
   Copy,
   ExternalLink,
@@ -48,6 +50,8 @@ import { copyText, formatSize, hasInsetTitlebar, isMac, openExternal, saveAttach
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
+import { useIsMobile } from "../lib/mobile";
+import { SnoozeButton, snoozeTime } from "./Snooze";
 import { useReaderStyle, useUi } from "../lib/store";
 import { fullTime } from "../lib/time";
 import { readingMinutes, totalWords, wordCount } from "../lib/wordCount";
@@ -99,8 +103,12 @@ export function Reader() {
 }
 
 function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactNode }) {
+  const t = useT();
   // 阅读区的顶栏总在窗口最右上角（AI 栏在它下面），窗口按钮的位置由它留
   const gap = useWindowControlsGap(true);
+  // 手机上阅读区占满屏幕，左上角返回列表；按钮放不下时左右滑动
+  const mobile = useIsMobile();
+  const close = () => useUi.getState().open(null);
   // 最大化时侧栏没了，macOS 的红绿灯落在阅读区顶栏上，左边要给它们留位置（全屏时没有红绿灯）
   const maximized = useUi((s) => s.readerMaximized);
   const fullscreen = useFullscreen((s) => s.on);
@@ -112,10 +120,19 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
       className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2"
       style={{ ...(gap ? { paddingRight: gap + 8 } : {}), ...(inset ? { paddingLeft: inset } : {}) }}
     >
-      <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center pr-2">
+      {mobile && (
+        <IconButton label={t("mobile.back")} onClick={close}>
+          <ChevronLeft {...ICON} />
+        </IconButton>
+      )}
+      <div data-tauri-drag-region className={cx("flex min-w-0 flex-1 items-center", mobile ? "pr-1" : "pr-2")}>
         {leading}
       </div>
-      {children}
+      {mobile ? (
+        <div className="no-scrollbar flex min-w-0 max-w-[65%] items-center gap-0.5 overflow-x-auto">{children}</div>
+      ) : (
+        children
+      )}
     </header>
     </ToolbarMenu>
   );
@@ -413,6 +430,7 @@ function Article({ id }: { id: string }) {
           </IconButton>
         ),
         label: <LabelMenu ids={targets.map((i) => i.id)} current={summary.label} />,
+        snooze: summary.draft || summary.sent ? null : <SnoozeButton item={summary} />,
         ai: (
           <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
             <Sparkles {...ICON} />
@@ -479,7 +497,8 @@ function Article({ id }: { id: string }) {
         <Tools toolbar="reader" place="top" tools={tools} />
       </Toolbar>
 
-      <div className="flex min-h-0 flex-1">
+      {summary && (summary.snoozed_until ?? 0) > Date.now() && <SnoozedBar item={summary} />}
+      <div className="relative flex min-h-0 flex-1">
       {webShown && webUrl ? (
         <WebPage url={webUrl} onShowContent={() => setReaderWeb(false)} />
       ) : (
@@ -1251,6 +1270,7 @@ function Empty() {
     [["X"], t("reader.hintSelect")],
     [["T"], t("reader.hintTranslate")],
     [["W"], t("reader.hintWeb")],
+    [[MOD + "K"], t("commands.title")],
     [["/"], t("reader.hintSearch")],
     [["C"], t("reader.hintCompose")],
     [[MOD + "R"], t("reader.hintReply")],
@@ -1279,5 +1299,23 @@ function Empty() {
         </dl>
       </div>
     </>
+  );
+}
+
+/** 这一条正稍后提醒着：顶上一行说到什么时候，可以取消。 */
+function SnoozedBar({ item }: { item: Item }) {
+  const t = useT();
+  const lang = useLang();
+  const { snooze } = useActions();
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line bg-accent-soft/40 px-4 text-[12px] text-fg-2">
+      <AlarmClock size={13} strokeWidth={2} className="shrink-0 text-accent" />
+      <span className="min-w-0 flex-1 truncate">
+        {t("snooze.until", { time: snoozeTime(item.snoozed_until ?? 0, lang) })}
+      </span>
+      <button type="button" onClick={() => snooze(null, [item])} className="shrink-0 text-accent hover:underline">
+        {t("snooze.cancel")}
+      </button>
+    </div>
   );
 }

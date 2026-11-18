@@ -8,7 +8,7 @@ import type { Nav } from "./api";
 import { activePack, resolveLang, translate } from "./i18n";
 import type { LangPack } from "./langPack";
 import { useUi } from "./store";
-import { isTauri } from "./transport";
+import { type CoreEvent, isTauri } from "./transport";
 
 export interface NewMailEvent {
   account_id: string;
@@ -88,4 +88,49 @@ export function useUnreadBadge(unreadMail: number | undefined) {
       document.title = count > 0 ? `(${count}) Postflow` : "Postflow";
     }
   }, [enabled, unreadMail]);
+}
+
+/** 稍后提醒到时间了：弹通知（应用在前台时也弹，因为这是自己定的提醒）。点通知打开那一条。 */
+export function notifyReminders(event: Extract<CoreEvent, { type: "reminders" }>) {
+  const ui = useUi.getState();
+  const [first] = event.items;
+  if (!first) return;
+  const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) =>
+    translate(resolveLang(ui.lang), key, vars, activePack(ui.lang));
+  const title = event.total === 1 ? t("notify.reminder") : t("notify.reminders", { n: event.total });
+  const lines = event.items.map((i) => (i.source_title ? `${i.source_title}: ` : "") + (i.title || t("mail.noSubject")));
+  void show(title, lines.join("\n"), () => {
+    const state = useUi.getState();
+    state.setSpace(first.kind === "mail" ? "mail" : "feeds");
+    state.setScope({ kind: "view", view: "inbox" });
+    if (event.total === 1) state.open(first.id);
+  }).catch(() => {});
+}
+
+/**
+ * 托盘图标：未读数（macOS 显示在菜单栏图标旁，其他系统在悬停提示里）、菜单文字（界面语言），
+ * 以及关窗口时要不要留在后台。只有桌面应用有。
+ */
+export function useTray(unreadMail: number | undefined) {
+  const keepRunning = useUi((s) => s.keepRunning);
+  const lang = useUi((s) => s.lang);
+  useEffect(() => {
+    if (!isTauri) return;
+    const unread = unreadMail ?? 0;
+    const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) =>
+      translate(resolveLang(lang), key, vars, activePack(lang));
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) =>
+        invoke("tray_update", {
+          update: {
+            unread,
+            tooltip: unread > 0 ? `Postflow · ${t("tray.unread", { n: unread })}` : "Postflow",
+            show_label: t("tray.open"),
+            quit_label: t("tray.quit"),
+            keep_running: keepRunning,
+          },
+        }),
+      )
+      .catch(() => {});
+  }, [unreadMail, keepRunning, lang]);
 }

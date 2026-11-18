@@ -157,9 +157,27 @@ click **More info → Run anyway**.
   language. Items already in your language are left alone, in the list and in the reader.
 - The sidebar's category, account and feed sections fold away.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
-- The same interface also runs in your browser, served by the app on your own machine.
+- Use it in a browser too: turn on Settings → Browser access in the desktop app, and the app serves the same
+  interface and data on a port of your choice. See [Using Postflow in a browser](#using-postflow-in-a-browser).
 - Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
   packages are signed, and the app refuses any package whose signature doesn't match.
+
+**Getting things done**
+
+- Snooze (the alarm-clock button in the reader, or right-click): later today, this evening, tomorrow morning, this
+  weekend, next week, or a time you pick. The item leaves the inbox until then, waits under Snoozed, and comes back
+  unread, pinned to the top of the inbox, with a notification. Snoozes sync to your other devices, for mail too.
+- Undo send: after you press Send there are a few seconds to take it back (Settings → Appearance; 5 seconds by
+  default, or off).
+- Schedule send (the clock next to Send): pick a time and Postflow sends it then. Scheduled mail waits under
+  Scheduled in the Mail sidebar, where you can send it now or cancel it back into a draft. Postflow needs to be
+  running to send; if it's closed at that time, it sends when you open it next.
+- Command palette (`⌘K` / `Ctrl+K`, or the button at the bottom of the sidebar): jump to any view, mailbox, feed,
+  folder, category or settings page, or act on the open item.
+- Keeps running in the tray (menu bar) when you close the window, still checking mail, with the unread count on the
+  icon. Turn it off in Settings → Appearance.
+- Works on phones: on a narrow screen Postflow shows one pane at a time, with the sidebar sliding in from the left
+  and a back button in the reader. Open it on your phone through [browser access](#using-postflow-in-a-browser).
 
 **AI (optional, bring your own key)**
 
@@ -195,6 +213,7 @@ download page instead.
 | `W` | Web page view on / off |
 | `F` | Maximize the reader (hide the sidebar and list); `Esc` restores |
 | `Shift+F` | Full screen, with the reader maximized; `Esc` leaves |
+| `⌘K` / `Ctrl+K` | Command palette: go to any mailbox, feed, folder or category, or run a command |
 | `/` or `⌘F` / `Ctrl+F` | Search |
 | `+` `-` `0` | Larger / smaller text, reset |
 | `A` | AI panel: summary and questions |
@@ -252,6 +271,20 @@ While the consent screen is in **Testing**, Google ends sign-ins after seven day
 keep them. Google then warns that the app isn't verified, because it asks for full mail access; for an app only you
 use, continue past the warning under **Advanced**. Developers can set `POSTFLOW_GOOGLE_CLIENT_ID` and
 `POSTFLOW_GOOGLE_CLIENT_SECRET` instead.
+
+## Using Postflow in a browser
+
+The desktop app can serve Postflow to a browser, on this computer or on your phone:
+
+1. Open **Settings → Browser access** and turn on **Use Postflow in a browser**.
+2. Click the open button next to the link. The browser shows the same mailboxes and feeds as the app.
+3. For a phone or another computer on the same network, turn on **Allow access from your network** and scan the
+   QR code (or send yourself the link).
+
+The links carry an access key; the browser remembers it after the first visit, so later you only need the address.
+**Change the access key** makes every old link and open page stop working. Requests from other websites are refused.
+The browser version runs inside the desktop app, so it stops when you quit the app. The connection isn't encrypted
+(plain HTTP), so only allow network access on networks you trust.
 
 ## Your data
 
@@ -422,4 +455,4 @@ Icons are from [Lucide](https://lucide.dev) (ISC). The font is [Inter](https://r
 Translation uses the [Firefox Translations](https://github.com/mozilla/translations) models (MPL-2.0), run by
 [fxtranslate](https://crates.io/crates/fxtranslate) (MPL-2.0). Models are downloaded on demand and are not bundled.
 
-The project's own license has not been chosen yet.
+Postflow is free software under the [GNU General Public License v3.0 or later](LICENSE): you can use, study, share and change it, and anything you distribute that builds on it must be released under the same license.

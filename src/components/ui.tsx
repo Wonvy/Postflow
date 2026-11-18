@@ -315,7 +315,7 @@ export function Modal({
             }
           }}
           style={{ width }}
-          className="anim-pop fixed left-1/2 top-[14vh] z-40 flex max-h-[76vh] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none"
+          className="anim-pop fixed left-1/2 top-[14vh] z-40 flex max-h-[76vh] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none max-md:top-[max(8px,env(safe-area-inset-top))] max-md:max-h-[calc(100dvh-16px-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-md:max-w-[calc(100vw-16px)]"
         >
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-line pl-4 pr-2">
             <Dialog.Title className="text-[13px] font-semibold">{title}</Dialog.Title>

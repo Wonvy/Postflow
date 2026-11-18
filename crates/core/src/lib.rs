@@ -11,6 +11,7 @@ mod mail_rpc;
 mod oauth;
 mod plugins;
 mod refresh;
+mod reminders;
 mod rpc;
 mod rsshub;
 mod rules;
@@ -70,6 +71,11 @@ pub enum Event {
     NewMail {
         account_id: String,
         mails: Vec<postflow_store::FreshMail>,
+        total: usize,
+    },
+    /// 稍后提醒到时间了，这些条目回到了收件箱。界面据此弹提醒；只列最早的几条，`total` 是总数。
+    Reminders {
+        items: Vec<reminders::Reminder>,
         total: usize,
     },
     /// 配置状态变了，例如首次设置完成。
@@ -458,6 +464,8 @@ async fn run_scheduler(core: Arc<Core>, session: Arc<Session>) {
     loop {
         tick.tick().await;
         core.import_external(&session).await;
+        core.check_reminders(&session).await;
+        core.send_due_mail(&session).await;
         let now = refresh::now();
         match session.db(move |s| s.due_feeds(now)).await {
             Ok(due) if !due.is_empty() => core.refresh(&session, due).await,

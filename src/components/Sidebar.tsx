@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlarmClock,
   Archive,
   ChartColumn,
   CheckCheck,
   ChevronRight,
   ChevronsDownUp,
+  Command,
   CircleDot,
   Copy,
   Ellipsis,
@@ -38,9 +40,10 @@ import { moveTop, type TopEntry } from "../lib/feedTree";
 import { useFolderActions, useTopLevel } from "../lib/folders";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
+import { OutboxRow } from "./Outbox";
 import { UpdateButton } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
-import { copyText, hasInsetTitlebar } from "../lib/platform";
+import { copyText, hasInsetTitlebar, isMac } from "../lib/platform";
 import { keys, useNav, usePresets } from "../lib/queries";
 import { type ListScope, type SidebarSection, type Space, sameScope, useUi, viewLabelKey } from "../lib/store";
 import {
@@ -68,6 +71,7 @@ const VIEWS: { view: View; icon: LucideIcon }[] = [
   { view: "today", icon: Sun },
   { view: "unread", icon: CircleDot },
   { view: "starred", icon: Star },
+  { view: "snoozed", icon: AlarmClock },
   { view: "archived", icon: Archive },
 ];
 
@@ -1123,6 +1127,7 @@ export function Sidebar({ width }: { width: number }) {
                       />
                     </ContextMenu>
                   ))}
+                {accounts && accounts.length > 0 && <OutboxRow />}
                 {accounts && accounts.length === 0 && (
                   <button
                     type="button"
@@ -1244,6 +1249,14 @@ export function Sidebar({ width }: { width: number }) {
       <footer className="flex h-10 shrink-0 items-center gap-1 border-t border-line px-2">
         <IconButton label={t("action.settings")} tipSide="top" onClick={() => setDialog({ type: "settings" })}>
           <Settings {...ICON} />
+        </IconButton>
+        <IconButton
+          label={t("commands.title")}
+          shortcut={isMac ? "⌘K" : "Ctrl K"}
+          tipSide="top"
+          onClick={() => setDialog({ type: "commands" })}
+        >
+          <Command {...ICON} />
         </IconButton>
         {refreshing > 0 && (
           <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-3">

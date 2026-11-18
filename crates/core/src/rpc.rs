@@ -165,6 +165,13 @@ fn default_stats_days() -> i64 {
 }
 
 #[derive(Deserialize)]
+struct SnoozeParams {
+    ids: Vec<String>,
+    #[serde(default)]
+    until: Option<i64>,
+}
+
+#[derive(Deserialize)]
 struct RefreshParams {
     #[serde(default)]
     id: Option<String>,
@@ -569,6 +576,13 @@ impl Core {
                     .db(move |s| s.set_item_state(&p.ids, &p.patch))
                     .await?;
                 self.dispatch(&session, refs, &patch);
+                self.emit_changed(&[Scope::Feeds, Scope::Items], client);
+                reply(json!({}))
+            }
+            // 稍后提醒：`until` 之前不出现在收件箱里；`until` 为空是取消
+            "items.snooze" => {
+                let p: SnoozeParams = parse(params)?;
+                session.db(move |s| s.set_snooze(&p.ids, p.until)).await?;
                 self.emit_changed(&[Scope::Feeds, Scope::Items], client);
                 reply(json!({}))
             }

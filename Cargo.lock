@@ -3992,6 +3992,7 @@ name = "postflow-desktop"
 version = "0.1.21"
 dependencies = [
  "postflow-core",
+ "postflow-web",
  "serde",
  "serde_json",
  "tauri",
@@ -4097,10 +4098,13 @@ dependencies = [
  "axum",
  "futures",
  "postflow-core",
+ "rand",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-stream",
+ "tower",
  "tower-http 0.7.1",
  "tracing",
 ]

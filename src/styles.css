@@ -352,9 +352,26 @@
 .anim-fade {
   animation: fade-in 0.12s ease-out;
 }
+/* 能左右滑动、但不显示滚动条（手机上的工具栏） */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* 手机上的侧栏从左边滑出来 */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+.anim-drawer {
+  animation: drawer-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 @media (prefers-reduced-motion: reduce) {
   .anim-pop,
   .anim-fade,
+  .anim-drawer,
   .animate-spin {
     animation: none;
   }

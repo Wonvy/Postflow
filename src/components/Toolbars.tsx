@@ -5,6 +5,7 @@
 import {
   Archive,
   BookOpenText,
+  AlarmClock,
   CheckCheck,
   FilePen,
   Forward,
@@ -67,6 +68,7 @@ const TOOL_META: Record<ToolbarId, Record<string, { label: MessageKey; icon: Luc
     read: { label: "tool.read", icon: MailOpen },
     star: { label: "tool.star", icon: Star },
     archive: { label: "tool.archive", icon: Archive },
+    snooze: { label: "snooze.title", icon: AlarmClock },
     original: { label: "tool.original", icon: ExternalLink },
     maximize: { label: "tool.maximize", icon: Maximize2 },
     fullscreen: { label: "tool.fullscreen", icon: Expand },

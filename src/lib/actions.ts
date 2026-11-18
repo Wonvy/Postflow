@@ -211,6 +211,30 @@ export function useActions() {
     [qc],
   );
 
+  /**
+   * 稍后提醒：选中的（或打开的）条目先从列表里拿掉，到 `until` 再回到收件箱。`null` 是取消，马上回来。
+   * 在「稍后提醒」视图里改时间时留在列表里。
+   */
+  const snooze = useCallback(
+    (until: number | null, list = targets()) => {
+      if (list.length === 0) return;
+      const ids = list.map((i) => i.id);
+      const ui = useUi.getState();
+      const inSnoozed = ui.scope.kind === "view" && ui.scope.view === "snoozed";
+      if (until !== null && !inSnoozed) dropFromLists(ids);
+      if (until === null && inSnoozed) dropFromLists(ids);
+      api
+        .snooze(ids, until)
+        .catch(() => {})
+        .finally(() => {
+          void qc.invalidateQueries({ queryKey: ["items"] });
+          void qc.invalidateQueries({ queryKey: ["item"] });
+          void qc.invalidateQueries({ queryKey: keys.nav });
+        });
+    },
+    [dropFromLists, qc, targets],
+  );
+
   /** 删掉列表里的草稿：先从列表里拿掉，再让后台去邮箱里删。 */
   const deleteDrafts = useCallback(
     (list: Item[]) => {
@@ -272,6 +296,7 @@ export function useActions() {
     compose,
     deleteDrafts,
     moveTo,
+    snooze,
   };
 }
 

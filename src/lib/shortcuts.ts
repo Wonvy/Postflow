@@ -28,6 +28,15 @@ export function useShortcuts() {
       return ui.dialog !== null || ui.welcomeStep !== null;
     };
     const onKeyDown = (e: KeyboardEvent) => {
+      // ⌘K / Ctrl+K：命令面板，再按一次关上（输入框里打字时也行）
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        const ui = useUi.getState();
+        if (ui.dialog === null || ui.dialog.type === "commands") {
+          e.preventDefault();
+          ui.setDialog(ui.dialog ? null : { type: "commands" });
+          return;
+        }
+      }
       // ⌘F / Ctrl+F：搜索（输入框里打字时也行，对话框开着时不抢）
       if (
         (e.metaKey || e.ctrlKey) &&

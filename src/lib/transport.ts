@@ -13,6 +13,11 @@ export type CoreEvent =
       mails: { id: string; from: string; subject: string; date: number }[];
       total: number;
     }
+  | {
+      type: "reminders";
+      items: { id: string; kind: "mail" | "article"; title: string; source_title: string }[];
+      total: number;
+    }
   | { type: "status" }
   | {
       type: "model";

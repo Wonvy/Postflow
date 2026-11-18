@@ -6,7 +6,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
+import { Clock, FileText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -36,9 +36,20 @@ import { errorDetail, errorText, useLang, useT } from "../lib/i18n";
 import { formatSize, isMac } from "../lib/platform";
 import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
+import { type SnoozePreset, snoozePresets, toLocalInput } from "../lib/snooze";
 import { RichEditor, type RichEditorHandle } from "./RichEditor";
+import { snoozeTime } from "./Snooze";
 import { toast } from "./Toast";
-import { Button, cx, IconButton, ICON, Select, Spinner, Tip } from "./ui";
+import { Button, cx, IconButton, ICON, Menu, MenuItem, Select, Spinner, Tip } from "./ui";
+
+/** 定时发送的预设时间（和稍后提醒的一样，去掉「稍后」）。 */
+const SCHEDULE_LABEL: Record<SnoozePreset, "snooze.later" | "snooze.tonight" | "snooze.tomorrow" | "snooze.weekend" | "snooze.nextWeek"> = {
+  later: "snooze.later",
+  tonight: "snooze.tonight",
+  tomorrow: "snooze.tomorrow",
+  weekend: "snooze.weekend",
+  nextWeek: "snooze.nextWeek",
+};
 
 /** 一栏收件人：已经确认的几个，加上正在输入还没确认的那段文字。 */
 interface Recipients {
@@ -107,7 +118,9 @@ type Footer =
   /** 存过草稿的信，问要不要连草稿一起删掉。 */
   | "delete-draft"
   /** 草稿没存上，关掉会丢。 */
-  | "unsaved";
+  | "unsaved"
+  /** 自己挑定时发送的时间。 */
+  | "schedule";
 
 type DraftStatus = { kind: "idle" } | { kind: "saving" } | { kind: "saved"; at: number } | { kind: "failed" };
 
@@ -180,6 +193,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; detail: string | null } | null>(null);
   const [footer, setFooter] = useState<Footer>("normal");
+  const [scheduleAt, setScheduleAt] = useState("");
   const [status, setStatus] = useState<DraftStatus>({ kind: "idle" });
   const body = useRef<HTMLTextAreaElement>(null);
   const toField = useRef<HTMLInputElement>(null);
@@ -338,9 +352,32 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     return () => clearTimeout(timer);
   }, [key, dirty, busy, uploading, saveDraft]);
 
+  // 撤销发送：等待中的这封，到时间才真的发
+  const undoSeconds = useUi((s) => s.undoSendSeconds);
+  const [pending, setPending] = useState<{ until: number } | null>(null);
+  const pendingRef = useRef(false);
+  const pendingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(() => setTick((n) => n + 1), 250);
+    return () => clearInterval(timer);
+  }, [pending]);
+
   // 窗口关掉：附件不用再留着
   const tokensRef = useRef<string[]>([]);
   tokensRef.current = tokens;
+  // 等着撤销时窗口被换掉（打开了别的对话框）：马上发。附件要留给它用，下面就不放掉了
+  useEffect(
+    () => () => {
+      if (!pendingRef.current) return;
+      clearTimeout(pendingTimer.current);
+      pendingRef.current = false;
+      tokensRef.current = [];
+      void deliverRef.current();
+    },
+    [],
+  );
   useEffect(() => () => void api.attachDrop(tokensRef.current).catch(() => {}), []);
 
   /** 关窗口。打开的草稿存过新的一版（旧的那封在邮箱里已经删了），阅读区也关上。 */
@@ -401,19 +438,73 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
     if (entry.token) void api.attachDrop([entry.token]).catch(() => {});
   };
 
-  const send = async () => {
-    if (busy || uploading) return;
+  /** 发之前的检查：有收件人、地址都对。不对就在窗口里说。 */
+  const checkLetter = (): boolean => {
+    if (busy || uploading || pendingRef.current) return false;
     const { letter: current } = latest.current;
     const all = [...current.to, ...current.cc, ...current.bcc];
     if (all.length === 0) {
       setError({ text: t("compose.noRecipients"), detail: null });
-      return;
+      return false;
     }
     const bad = all.find((a) => !isValidAddress(a));
     if (bad) {
       setError({ text: t("compose.badAddress", { address: bad }), detail: null });
+      return false;
+    }
+    return !!fromId;
+  };
+
+  /**
+   * 发送。设了「撤销发送」时先把窗口藏起来、底下显示倒计时，时间到了才真的发；
+   * 撤销就把窗口原样拿回来。等待时窗口被别的对话框换掉，就马上发，不会丢。
+   */
+  const send = async () => {
+    if (!checkLetter()) return;
+    if (undoSeconds > 0) {
+      pendingRef.current = true;
+      setPending({ until: Date.now() + undoSeconds * 1000 });
+      pendingTimer.current = setTimeout(() => {
+        pendingRef.current = false;
+        void deliverRef.current();
+      }, undoSeconds * 1000);
       return;
     }
+    await deliver();
+  };
+
+  const undoSend = () => {
+    clearTimeout(pendingTimer.current);
+    pendingRef.current = false;
+    setPending(null);
+  };
+
+  /** 定时发送：存到本机的待发送里，到时间由核心发出去。 */
+  const schedule = async (at: number) => {
+    if (!checkLetter()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      while (saving.current) await saving.current;
+      const { letter: current } = latest.current;
+      const old = draft.current;
+      await api.schedule({ ...current, draft: old?.account === current.account_id ? old.id : null }, at);
+      if (old && old.account !== current.account_id) void api.deleteDraft(old.account, old.id).catch(() => {});
+      draft.current = null;
+      tokensRef.current = [];
+      resaved.current = true;
+      close();
+      toast(t("compose.scheduled", { time: snoozeTime(at, lang) }));
+      void qc.invalidateQueries({ queryKey: ["outbox"] });
+    } catch (err) {
+      setError({ text: errorText(t, err), detail: errorDetail(err) });
+      setBusy(false);
+    }
+  };
+
+  /** 真的发出去。 */
+  const deliver = async () => {
+    const { letter: current } = latest.current;
     if (!fromId) return;
     setBusy(true);
     setError(null);
@@ -446,8 +537,12 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
             : { text: errorText(t, err), detail: errorDetail(err) },
       );
       setBusy(false);
+      // 等撤销时窗口藏着：发不出去就拿回来，让人看到出了什么错
+      setPending(null);
     }
   };
+  const deliverRef = useRef(deliver);
+  deliverRef.current = deliver;
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -501,9 +596,26 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const hasDraft = draft.current !== null;
 
   return (
-    <Dialog.Root open onOpenChange={(next) => !next && void requestClose()}>
+    <>
+    {pending && (
+      <div
+        role="status"
+        className="anim-pop fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-fg py-2 pl-4 pr-2 text-[13px] text-bg shadow-pop"
+      >
+        <Spinner size={13} />
+        {t("compose.sendingIn", { n: Math.max(1, Math.ceil((pending.until - Date.now()) / 1000)) })}
+        <button
+          type="button"
+          onClick={undoSend}
+          className="rounded-full bg-bg/15 px-3 py-1 font-medium hover:bg-bg/25"
+        >
+          {t("compose.undo")}
+        </button>
+      </div>
+    )}
+    <Dialog.Root open modal={!pending} onOpenChange={(next) => !next && !pending && void requestClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="anim-fade fixed inset-0 z-40 bg-overlay" />
+        <Dialog.Overlay className={cx("anim-fade fixed inset-0 z-40 bg-overlay", pending && "hidden")} />
         <Dialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -515,7 +627,10 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
-          className="anim-pop fixed left-1/2 top-[7vh] z-40 flex h-[min(680px,86vh)] w-[680px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none"
+          className={cx(
+            "anim-pop fixed left-1/2 top-[7vh] z-40 flex h-[min(680px,86vh)] w-[680px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none max-md:top-[max(8px,env(safe-area-inset-top))] max-md:h-[calc(100dvh-16px)] max-md:max-w-[calc(100vw-16px)]",
+            pending && "hidden",
+          )}
         >
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-line pl-4 pr-2">
             <Dialog.Title className="min-w-0 truncate text-[13px] font-semibold">
@@ -634,7 +749,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
                   <RichEditor
                     key={rich.generation}
                     editorRef={editor}
-                    initialHtml={rich.initial}
+                    initialHtml={rich.html}
                     label={t("compose.body")}
                     onPaste={onPaste}
                     onChange={(html, plain) =>
@@ -714,7 +829,29 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
           )}
 
           <div className="flex h-14 shrink-0 items-center gap-2 border-t border-line px-3">
-            {footer === "discard" || footer === "delete-draft" || footer === "unsaved" ? (
+            {footer === "schedule" ? (
+              <>
+                <span className="pl-1 text-[13px] text-fg-2">{t("compose.scheduleAt")}</span>
+                <input
+                  type="datetime-local"
+                  value={scheduleAt}
+                  min={toLocalInput(new Date())}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                  className="h-8 min-w-0 flex-1 rounded-md border border-line-strong bg-bg px-2 text-[13px] text-fg outline-none focus:border-accent"
+                />
+                <Button variant="ghost" onClick={() => setFooter("normal")}>
+                  {t("action.cancel")}
+                </Button>
+                <Button
+                  variant="primary"
+                  busy={busy}
+                  disabled={!(new Date(scheduleAt).getTime() > Date.now())}
+                  onClick={() => void schedule(new Date(scheduleAt).getTime())}
+                >
+                  {t("compose.scheduleButton")}
+                </Button>
+              </>
+            ) : footer === "discard" || footer === "delete-draft" || footer === "unsaved" ? (
               <>
                 <span className="mr-auto pl-1 text-[13px] text-fg-2">
                   {footer === "discard"
@@ -781,6 +918,40 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
                 >
                   {hasDraft ? t("compose.deleteDraft") : t("compose.discard")}
                 </Button>
+                <Menu
+                  align="end"
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label={t("compose.schedule")}
+                      title={t("compose.schedule")}
+                      disabled={!ready || !fromId || uploading || busy}
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:opacity-40 data-[state=open]:bg-hover"
+                    >
+                      <Clock size={15} strokeWidth={1.75} />
+                    </button>
+                  }
+                >
+                  <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{t("compose.schedule")}</div>
+                  {snoozePresets(new Date())
+                    .filter((p) => p.key !== "later")
+                    .map((p) => (
+                      <MenuItem key={p.key} onSelect={() => void schedule(p.at.getTime())}>
+                        <span className="flex w-full items-center justify-between gap-4">
+                          {t(SCHEDULE_LABEL[p.key])}
+                          <span className="text-[12px] text-fg-3">{snoozeTime(p.at.getTime(), lang)}</span>
+                        </span>
+                      </MenuItem>
+                    ))}
+                  <MenuItem
+                    onSelect={() => {
+                      setScheduleAt(toLocalInput(new Date(Date.now() + 86_400_000)));
+                      setFooter("schedule");
+                    }}
+                  >
+                    {t("snooze.custom")}
+                  </MenuItem>
+                </Menu>
                 <Tip label={t("compose.send")} shortcut={sendShortcut} side="top">
                   <Button
                     variant="primary"
@@ -798,6 +969,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+    </>
   );
 }
 
