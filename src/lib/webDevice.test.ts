@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { desktopUserAgent, devicePreset, fitFrame, isWebUrl } from "./webDevice.ts";
+import { desktopUserAgent, devicePreset, fitFrame, isWebUrl, resizeDevice, withSize } from "./webDevice.ts";
 
 test("unknown saved devices fall back to desktop", () => {
   assert.equal(devicePreset("toaster").id, "desktop");
@@ -40,4 +40,35 @@ test("only http and https pages are opened", () => {
 test("the desktop user agent says Safari on macOS only", () => {
   assert.match(desktopUserAgent(true) ?? "", /Safari/);
   assert.equal(desktopUserAgent(false), null);
+});
+
+test("dragging the frame resizes the device, in page pixels and within limits", () => {
+  const start = { width: 393, height: 852 };
+  // 居中显示：右边框往外拖 10 像素，宽度多 20
+  assert.deepEqual(resizeDevice(start, false, { dx: 10, dy: 0, scale: 1, horizontal: true, vertical: false }), {
+    width: 413,
+    height: 852,
+  });
+  // 页面缩小到一半显示时，屏幕上拖 10 像素是网页的 20 像素
+  assert.deepEqual(resizeDevice(start, false, { dx: 0, dy: 10, scale: 0.5, horizontal: false, vertical: true }), {
+    width: 393,
+    height: 872,
+  });
+  // 横着时，屏幕上的宽是设备的高
+  assert.deepEqual(resizeDevice(start, true, { dx: 5, dy: 0, scale: 1, horizontal: true, vertical: false }), {
+    width: 393,
+    height: 862,
+  });
+  // 不会小得离谱，也不会无限大
+  assert.deepEqual(resizeDevice(start, false, { dx: -1000, dy: 5000, scale: 1, horizontal: true, vertical: true }), {
+    width: 240,
+    height: 2560,
+  });
+});
+
+test("a custom size replaces the preset only for devices, never the desktop", () => {
+  const custom = { width: 500, height: 700 };
+  assert.deepEqual(withSize(devicePreset("iphone"), custom).size, custom);
+  assert.equal(withSize(devicePreset("desktop"), custom).size, null);
+  assert.deepEqual(withSize(devicePreset("ipad"), null).size, devicePreset("ipad").size);
 });

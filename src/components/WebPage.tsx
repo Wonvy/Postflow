@@ -15,14 +15,24 @@ import {
   Smartphone,
   Tablet,
   TabletSmartphone,
+  Undo2,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { isMac, openExternal } from "../lib/platform";
 import { useUi } from "../lib/store";
 import { isTauri } from "../lib/transport";
-import { DEVICES, desktopUserAgent, devicePreset, type Frame, fitFrame, type WebDevice } from "../lib/webDevice";
+import {
+  DEVICES,
+  desktopUserAgent,
+  devicePreset,
+  type Frame,
+  fitFrame,
+  resizeDevice,
+  type WebDevice,
+  withSize,
+} from "../lib/webDevice";
 import { Button, cx, IconButton, Spinner, Tip } from "./ui";
 
 /** 手机上的应用没有独立网页视图可用，和浏览器一样走 iframe。 */
@@ -52,7 +62,11 @@ export function WebPage({ url, onShowContent }: { url: string; onShowContent: ()
   const landscape = useUi((s) => s.webLandscape);
   const setDevice = useUi((s) => s.setWebDevice);
   const setLandscape = useUi((s) => s.setWebLandscape);
-  const device = devicePreset(deviceId);
+  const customSize = useUi((s) => s.webSizes[devicePreset(deviceId).id]);
+  const setWebSize = useUi((s) => s.setWebSize);
+  const preset = devicePreset(deviceId);
+  // 手机、平板可以拖边框随意改大小，记在每种设备上
+  const device = withSize(preset, customSize);
   const userAgent = device.id === "desktop" ? desktopUserAgent(isMac) : device.userAgent;
 
   // 放网页的这块地方有多大
@@ -129,6 +143,16 @@ export function WebPage({ url, onShowContent }: { url: string; onShowContent: ()
             <RotateCw size={14} strokeWidth={1.75} />
           </IconButton>
         )}
+        {device.size && customSize && (
+          <IconButton
+            label={t("web.resetSize")}
+            tipSide="top"
+            className="size-6"
+            onClick={() => setWebSize(preset.id, null)}
+          >
+            <Undo2 size={14} strokeWidth={1.75} />
+          </IconButton>
+        )}
         <Tip side="top" label={shownUrl}>
           <span className="tabular ml-1 min-w-0 flex-1 truncate text-center text-[12px] text-fg-3">
             {hostOf(shownUrl)}
@@ -166,6 +190,15 @@ export function WebPage({ url, onShowContent }: { url: string; onShowContent: ()
         ref={area}
         className={cx("relative flex min-h-0 flex-1 items-center justify-center overflow-hidden", device.size && "bg-hover")}
       >
+        {size.width > 0 && device.size && (
+          <ResizeHandles
+            frame={frame}
+            onResize={(drag) => {
+              const start = device.size;
+              if (start) setWebSize(preset.id, resizeDevice(start, landscape, drag));
+            }}
+          />
+        )}
         {size.width > 0 &&
           (nativeView ? (
             <NativeFrame
@@ -466,5 +499,60 @@ function NativeFrame({
     <Screen frame={frame} device={device}>
       <div ref={slot} className="absolute inset-0" />
     </Screen>
+  );
+}
+
+/**
+ * 设备边框外面的拖动把手：右边改宽，下边改高，右下角两样一起改。放在设备外面，
+ * 桌面应用里的网页是盖在界面上面的独立视图，把手放在里面会被挡住。
+ * 拖的时候每一步都从按下时的大小重新算，松手前不会越拖越偏。
+ */
+function ResizeHandles({
+  frame,
+  onResize,
+}: {
+  frame: Frame;
+  onResize: (drag: { dx: number; dy: number; scale: number; horizontal: boolean; vertical: boolean }) => void;
+}) {
+  const t = useT();
+  const start = useRef<{ x: number; y: number; horizontal: boolean; vertical: boolean } | null>(null);
+  const shownW = Math.round(frame.width * frame.scale);
+  const shownH = Math.round(frame.height * frame.scale);
+  const handle = (horizontal: boolean, vertical: boolean, className: string, style: CSSProperties) => (
+    <div
+      role="separator"
+      aria-label={t("web.resize")}
+      title={t("web.resize")}
+      onPointerDown={(e) => {
+        start.current = { x: e.clientX, y: e.clientY, horizontal, vertical };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const s = start.current;
+        if (!s) return;
+        onResize({ dx: e.clientX - s.x, dy: e.clientY - s.y, scale: frame.scale, horizontal: s.horizontal, vertical: s.vertical });
+        start.current = { ...s, x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={() => {
+        start.current = null;
+      }}
+      onPointerCancel={() => {
+        start.current = null;
+      }}
+      className={cx("absolute z-10 rounded-full bg-fg-4/40 transition-colors hover:bg-accent active:bg-accent", className)}
+      style={style}
+    />
+  );
+  // 设备在这块地方居中；把手贴在它外面 6 像素
+  return (
+    <div aria-hidden={false} className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <div className="pointer-events-none relative" style={{ width: shownW, height: shownH }}>
+        <div className="pointer-events-auto">
+          {handle(true, false, "cursor-ew-resize", { right: -12, top: "50%", width: 5, height: 40, marginTop: -20 })}
+          {handle(false, true, "cursor-ns-resize", { bottom: -12, left: "50%", height: 5, width: 40, marginLeft: -20 })}
+          {handle(true, true, "cursor-nwse-resize", { right: -13, bottom: -13, width: 10, height: 10 })}
+        </div>
+      </div>
+    </div>
   );
 }

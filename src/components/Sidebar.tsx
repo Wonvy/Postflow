@@ -787,12 +787,6 @@ export function Sidebar({ width }: { width: number }) {
       },
     );
 
-  // 拖到「订阅」标题上：排到最前面，从文件夹里拖出来的源就移出了文件夹
-  const feedsSectionTarget = target(
-    "section:feeds",
-    (p) => (p.kind === "feed" || p.kind === "folder" ? "inside" : null),
-    (p) => placeTop(p, null, "before"),
-  );
 
   // 拖到订阅列表下面的空白处：排到最后
   const feedsEndTarget = target(
@@ -924,18 +918,6 @@ export function Sidebar({ width }: { width: number }) {
       </MenuItem>
     </>
   );
-  const feedsExtra = (
-    <Tip label={t("folder.new")} side="right">
-      <button
-        type="button"
-        aria-label={t("folder.new")}
-        onClick={() => setDialog({ type: "folder" })}
-        className="flex size-5 items-center justify-center rounded text-fg-3 opacity-0 hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100"
-      >
-        <FolderPlus size={14} strokeWidth={2} />
-      </button>
-    </Tip>
-  );
 
   return (
     <aside className="flex h-full shrink-0 flex-col bg-sidebar" style={{ width }}>
@@ -974,25 +956,9 @@ export function Sidebar({ width }: { width: number }) {
             <IconButton label={t("action.refreshAll")} shortcut="R" onClick={() => refreshSpace("feeds")}>
               <RefreshCw {...ICON} className={cx(refreshing - refreshingMail > 0 && "animate-spin")} />
             </IconButton>
-            <Menu
-              align="end"
-              trigger={
-                <button
-                  type="button"
-                  aria-label={t("action.addMenu")}
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
-                >
-                  <Plus {...ICON} />
-                </button>
-              }
-            >
-              <MenuItem icon={<Rss size={14} />} onSelect={() => setDialog({ type: "add-feed" })}>
-                {t("action.addFeed")}
-              </MenuItem>
-              <MenuItem icon={<FolderPlus size={14} />} onSelect={() => setDialog({ type: "folder" })}>
-                {t("folder.new")}
-              </MenuItem>
-            </Menu>
+            <IconButton label={t("action.addFeed")} onClick={() => setDialog({ type: "add-feed" })}>
+              <Plus {...ICON} />
+            </IconButton>
           </>
         )}
       </header>
@@ -1073,19 +1039,13 @@ export function Sidebar({ width }: { width: number }) {
         )}
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      {/* 空白处右键：这一边的菜单（添加订阅、新建文件夹……）。行上右键是那一行自己的菜单 */}
+      <ContextMenu bare items={mail ? mailMenu : feedsMenu}>
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
         {mail ? (
           <>
-            <SectionHeader
-              label={t("nav.mail")}
-              addLabel={t("action.addAccount")}
-              onAdd={() => setDialog({ type: "add-account" })}
-              collapsed={isCollapsed("mail")}
-              onToggle={() => toggleSection("mail")}
-              unread={counts?.unread_mail}
-              menu={mailMenu}
-            />
-            {!isCollapsed("mail") && (
+            {/* 不再有「邮箱」标题：上面的切换条已经说了这是邮件 */}
+            {(
               <div className="flex flex-col gap-px">
                 {accounts?.map((account) => (
                   <AccountRow
@@ -1143,19 +1103,7 @@ export function Sidebar({ width }: { width: number }) {
           </>
         ) : (
           <>
-            <SectionHeader
-              label={t("nav.feeds")}
-              addLabel={t("action.addFeed")}
-              onAdd={() => setDialog({ type: "add-feed" })}
-              collapsed={isCollapsed("feeds")}
-              onToggle={() => toggleSection("feeds")}
-              unread={counts?.unread_article}
-              menu={feedsMenu}
-              extra={feedsExtra}
-              drag={feedsSectionTarget}
-              highlight={dropAt("section:feeds") !== null}
-            />
-            {!isCollapsed("feeds") && (
+            {(
               <div className="flex flex-col gap-px">
                 {top.map((entry) => {
                   if (entry.kind === "feed") {
@@ -1245,6 +1193,7 @@ export function Sidebar({ width }: { width: number }) {
           </>
         )}
       </nav>
+      </ContextMenu>
 
       <footer className="flex h-10 shrink-0 items-center gap-1 border-t border-line px-2">
         <IconButton label={t("action.settings")} tipSide="top" onClick={() => setDialog({ type: "settings" })}>

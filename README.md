@@ -126,7 +126,8 @@ click **More info → Run anyway**.
   sidebar. Feeds keep updating in the background.
 - Group similar items from the list toolbar: by conversation (replies fold into the original), or by sender and
   source (a stream of notifications becomes one row). Archiving, starring or marking a group acts on every item in it.
-  Every feed, mailbox, folder and view keeps its own display mode and grouping; changing one leaves the others alone.
+  All lists share one display mode and grouping; lock a list (bottom of the list) to give it its own, or turn on
+  Settings → Appearance → Remember each list's view so every list keeps its own, like folders in a file manager.
 - Inbox, Today, Unread, Starred and Archive views on the Mail side; All articles, Today, Unread, Starred and Archive
   on the Feeds side. Drag items from the list onto Starred or Archive to star or archive them.
 - Spam and Trash under your mailboxes show what your mail server filed there, so a message caught by the spam

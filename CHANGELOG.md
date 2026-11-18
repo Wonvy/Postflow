@@ -7,8 +7,18 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- List views: by default every list shares one display mode and grouping. Lock a list (the lock at the bottom of the list) to give it its own, or turn on Settings → Appearance → Remember each list's view to make every list keep its own, like folders in a file manager. Lists you had customised are locked for you.
+- Card view: rows without pictures are no longer as tall as rows with them, and pictures in cards and summaries are shown whole instead of cropped.
+- Web page view: drag the edges of the iPad, iPhone or Android frame to any size; each device remembers its size, with a button to reset it.
+- Sidebar: the Mail and Feeds lists no longer repeat their name as a heading. The Feeds + button adds a feed directly; right-click empty space in the sidebar to add a feed, make a folder or refresh.
+- Drop-down menus no longer show the old gradient look in the macOS app.
 
 ### 中文
+- 列表视图：默认所有列表共用一种显示方式和折叠方式。点列表底部的锁可以让这个列表单独记住自己的；或者在「设置 → 外观」打开「每个列表记住自己的视图」，像文件夹一样每个列表各记各的。以前单独设过的列表会自动锁上。
+- 卡片视图：没有图的一行不再和有图的一样高；卡片和摘要视图里的图片完整显示，不再裁剪。
+- 原网页视图：iPad、iPhone、Android 的设备框可以拖动边缘随意改大小，每种设备记住自己的大小，也可以一键恢复。
+- 侧栏：邮件和订阅里不再重复显示同名的标题。订阅那边的「+」直接添加订阅；在侧栏空白处右键可以添加订阅、新建文件夹、刷新。
+- 下拉框在 macOS 应用里不再是带渐变的老式样子。
 
 ## 0.1.22 — 2026-11-18
 

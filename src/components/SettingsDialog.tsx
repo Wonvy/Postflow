@@ -78,6 +78,8 @@ export function SettingsDialog() {
   const showFeeds = useUi((s) => s.showFeeds);
   const undoSendSeconds = useUi((s) => s.undoSendSeconds);
   const keepRunning = useUi((s) => s.keepRunning);
+  const rememberViews = useUi((s) => s.rememberViews);
+  const setRememberViews = useUi((s) => s.setRememberViews);
   const setKeepRunning = useUi((s) => s.setKeepRunning);
   const setUndoSendSeconds = useUi((s) => s.setUndoSendSeconds);
   const setShowFeeds = useUi((s) => s.setShowFeeds);
@@ -188,6 +190,9 @@ export function SettingsDialog() {
         </SettingRow>
         <SettingRow label={t("settings.senderLogos")} hint={t("settings.senderLogosHint")}>
           <Switch label={t("settings.senderLogos")} checked={senderLogos} onChange={setSenderLogos} />
+        </SettingRow>
+        <SettingRow label={t("settings.rememberViews")} hint={t("settings.rememberViewsHint")}>
+          <Switch label={t("settings.rememberViews")} checked={rememberViews} onChange={setRememberViews} />
         </SettingRow>
         {isTauri && (
           <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>

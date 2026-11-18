@@ -75,6 +75,35 @@ export function fitFrame(
   return { width, height, scale: Math.floor(scale * 1000) / 1000 };
 }
 
+/** 拖动改设备大小时的范围（CSS 像素）。 */
+export const DEVICE_SIZE_MIN = 240;
+export const DEVICE_SIZE_MAX = 2560;
+
+/** 设备用自己拖出来的大小（竖着拿时的宽高），没拖过就是预设的。 */
+export function withSize(device: DevicePreset, custom: { width: number; height: number } | null | undefined): DevicePreset {
+  return device.size && custom ? { ...device, size: custom } : device;
+}
+
+/**
+ * 拖边框改大小：从 `start`（竖着拿时的宽高）开始，屏幕上拖了 `dx`、`dy` 个像素，
+ * 页面缩小显示时按比例换算回网页的像素；横着时宽高对调。返回新的竖向宽高，限制在合理范围里。
+ */
+export function resizeDevice(
+  start: { width: number; height: number },
+  landscape: boolean,
+  drag: { dx: number; dy: number; scale: number; horizontal: boolean; vertical: boolean },
+): { width: number; height: number } {
+  const clamp = (n: number) => Math.round(Math.min(DEVICE_SIZE_MAX, Math.max(DEVICE_SIZE_MIN, n)));
+  const scale = drag.scale > 0 ? drag.scale : 1;
+  // 屏幕上看到的宽高
+  const shownW = landscape ? start.height : start.width;
+  const shownH = landscape ? start.width : start.height;
+  // 设备在阅读区里居中，拖右边框时两边一起变，所以按两倍算
+  const w = drag.horizontal ? clamp(shownW + (drag.dx * 2) / scale) : shownW;
+  const h = drag.vertical ? clamp(shownH + drag.dy / scale) : shownH;
+  return landscape ? { width: h, height: w } : { width: w, height: h };
+}
+
 /** 只认 http 和 https 的链接，别的（javascript:、file: 之类）一律不打开。 */
 export function isWebUrl(url: string | null | undefined): url is string {
   if (!url) return false;

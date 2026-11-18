@@ -14,6 +14,8 @@ import {
   Languages,
   LayoutGrid,
   List,
+  Lock,
+  LockOpen,
   type LucideIcon,
   Mail,
   Menu as MenuIcon,
@@ -86,6 +88,7 @@ import {
   useListStyle,
   useListView,
   useUi,
+  useViewLocked,
   viewLabelKey,
   type Space,
 } from "../lib/store";
@@ -214,8 +217,28 @@ function ViewModeButtons() {
   const scope = useUi((s) => s.scope);
   const view = useListView();
   const setView = useUi((s) => s.setListView);
+  const locked = useViewLocked();
+  const rememberViews = useUi((s) => s.rememberViews);
+  const toggleLock = useUi((s) => s.toggleViewLock);
   return (
     <div role="group" aria-label={t("listStyle.view")} className="flex items-center gap-0.5">
+      {/* 锁：这个列表单独记住视图，不跟着别的列表变。「每个列表记住自己的视图」开着时都是独立的，不需要锁 */}
+      {!rememberViews && (
+        <Tip label={locked ? t("view.locked") : t("view.lock")} side="top">
+          <button
+            type="button"
+            aria-label={locked ? t("view.locked") : t("view.lock")}
+            aria-pressed={locked}
+            onClick={toggleLock}
+            className={cx(
+              "mr-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors",
+              locked ? "text-accent hover:bg-hover" : "text-fg-3 hover:bg-hover hover:text-fg",
+            )}
+          >
+            {locked ? <Lock size={13} strokeWidth={2} /> : <LockOpen size={13} strokeWidth={1.75} />}
+          </button>
+        </Tip>
+      )}
       {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => (
         <Tip key={value} label={t(label)} side="top">
           <button
@@ -724,6 +747,13 @@ export function ItemList({ width }: { width: number }) {
   const cardWidth = Math.floor((inner - cardGap * (columns - 1)) / columns);
   const imageHeight = style.showImage ? Math.round(cardWidth * 0.56) : 0;
   const cardHeight = imageHeight + metrics.cardText;
+  // 一行卡片里都没有图时不留图的位置，只比有图时的文字多两行摘要（或一行标题），不会空出一大块
+  const textCardHeight =
+    metrics.cardText + (style.showSummary ? metrics.summary.line * 2 : metrics.bigTitle.line);
+  const cardsHeightOf = (rows: Row[]) =>
+    style.showImage && rows.some((r) => (r.kind === "item" ? r.item : r.group.lead).image)
+      ? cardHeight
+      : Math.min(cardHeight, textCardHeight);
   // 搜索结果总用两行，第二行放正文里命中的那一段
   const rows: Density = search ? "comfortable" : density;
   const rowHeight = view === "summary" ? metrics.summaryRow : rows === "compact" ? metrics.compact : metrics.comfortable;
@@ -752,7 +782,7 @@ export function ItemList({ width }: { width: number }) {
         : line.kind === "header"
         ? HEADER_HEIGHT
         : line.kind === "cards"
-          ? cardHeight + cardGap
+          ? cardsHeightOf(line.rows) + cardGap
           : rowHeight + metrics.gap;
   const virtualizer = useVirtualizer({
     count: lines.length,
@@ -761,7 +791,8 @@ export function ItemList({ width }: { width: number }) {
     overscan: view === "cards" ? 3 : 12,
   });
 
-  useEffect(() => virtualizer.measure(), [rowHeight, metrics.gap, cardGap, view, cardHeight, columns, virtualizer]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 行高跟着这些变，变了要重新量
+  useEffect(() => virtualizer.measure(), [rowHeight, metrics.gap, cardGap, view, cardHeight, textCardHeight, columns, lines, virtualizer]);
 
   // 按住 Ctrl（Mac 上是 ⌘，或者触控板双指捏合）滚动滚轮调整卡片大小
   const viewRef = useRef(view);
@@ -1171,13 +1202,14 @@ export function ItemList({ width }: { width: number }) {
               };
 
               if (line.kind === "cards") {
+                const lineHeight = cardsHeightOf(line.rows);
                 return (
                   <div
                     key={`c:${lineIds(line)[0]}`}
                     className="absolute inset-x-0 top-0 grid"
                     style={{
                       ...position,
-                      height: cardHeight,
+                      height: lineHeight,
                       gridTemplateColumns: `repeat(${columns}, ${cardWidth}px)`,
                       columnGap: cardGap,
                     }}
@@ -1202,7 +1234,7 @@ export function ItemList({ width }: { width: number }) {
                                   : "border-line bg-surface hover:border-line-strong hover:bg-hover",
                               "data-[state=open]:border-accent/60",
                             )}
-                            style={{ height: cardHeight }}
+                            style={{ height: lineHeight }}
                           >
                             <Card {...d.props} imageHeight={imageHeight} />
                           </div>
@@ -1935,7 +1967,8 @@ function SummaryRow(props: RowProps) {
       {look.style.showImage && item.image && (
         <Picture
           src={item.image}
-          className="shrink-0 rounded-md bg-active object-cover"
+          // 不裁剪：整张图缩到框里，空出来的地方是浅色底
+          className="shrink-0 rounded-md bg-active object-contain"
           style={{ width: THUMB_SIZE, height: THUMB_SIZE }}
         />
       )}
@@ -1963,7 +1996,8 @@ function Card(props: RowProps & { imageHeight: number }) {
           referrerPolicy="no-referrer"
           draggable={false}
           onError={() => setBroken(true)}
-          className="w-full shrink-0 bg-active object-cover"
+          // 不裁剪：整张图按比例缩到框里
+          className="w-full shrink-0 bg-active object-contain"
           style={{ height: imageHeight }}
         />
       )}

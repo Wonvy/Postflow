@@ -153,10 +153,20 @@ interface UiState {
   setComposeRich: (on: boolean) => void;
   /** 翻译成哪种语言，模型目录里的语言代码。为空时跟界面语言一致。 */
   translateTo: string | null;
-  /** 每个列表各自的显示方式，键见 `listKey`。没选过的是列表。改一个列表不影响别的。 */
+  /**
+   * 列表的显示方式和折叠方式：默认所有列表共用一套（`sharedView`、`sharedGroup`），改哪个列表都一样。
+   * 锁定的列表（`lockedLists`）或者打开了「每个列表记住自己的视图」（`rememberViews`）时，
+   * 各列表各记各的（`listViews`、`groupModes`，键见 `listKey`），像文件管理器里的文件夹一样。
+   */
+  sharedView: ListView;
+  sharedGroup: GroupMode;
   listViews: Record<string, ListView>;
-  /** 每个列表各自的折叠方式，键同上。没选过的不折叠。 */
   groupModes: Record<string, GroupMode>;
+  lockedLists: string[];
+  rememberViews: boolean;
+  /** 锁定或解锁当前列表的视图。锁定时把现在的样子记下来。 */
+  toggleViewLock: () => void;
+  setRememberViews: (on: boolean) => void;
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
   collapsedSections: SidebarSection[];
@@ -189,6 +199,9 @@ interface UiState {
   /** 原网页模拟的设备，以及是否横过来。 */
   webDevice: WebDevice;
   webLandscape: boolean;
+  /** 每种设备自己拖出来的大小（竖着拿时的宽高），没有的用预设。 */
+  webSizes: Partial<Record<WebDevice, { width: number; height: number }>>;
+  setWebSize: (device: WebDevice, size: { width: number; height: number } | null) => void;
   /** 最近放进去过订阅的文件夹，新的在前。添加订阅时排在最前面。 */
   recentFolders: string[];
   /** 应用不在前台时，新邮件弹系统通知。 */
@@ -317,8 +330,28 @@ export const useUi = create<UiState>()(
       composeRich: true,
       setComposeRich: (composeRich) => set({ composeRich }),
       translateTo: null,
+      sharedView: "list",
+      sharedGroup: "none",
       listViews: {},
       groupModes: {},
+      lockedLists: [],
+      rememberViews: false,
+      toggleViewLock: () =>
+        set((s) => {
+          const key = listKey(s.scope, s.space);
+          if (s.lockedLists.includes(key)) {
+            // 解锁：回到共用的那一套，自己的记录不要了
+            const { [key]: _v, ...listViews } = s.listViews;
+            const { [key]: _g, ...groupModes } = s.groupModes;
+            return { lockedLists: s.lockedLists.filter((k) => k !== key), listViews, groupModes };
+          }
+          return {
+            lockedLists: [...s.lockedLists, key],
+            listViews: { ...s.listViews, [key]: s.listViews[key] ?? s.sharedView },
+            groupModes: { ...s.groupModes, [key]: s.groupModes[key] ?? s.sharedGroup },
+          };
+        }),
+      setRememberViews: (rememberViews) => set({ rememberViews }),
       cardSize: 260,
       collapsedSections: [],
       showFeeds: true,
@@ -341,6 +374,14 @@ export const useUi = create<UiState>()(
       readerWeb: false,
       webDevice: "desktop",
       webLandscape: false,
+      webSizes: {},
+      setWebSize: (device, size) =>
+        set((s) => {
+          const webSizes = { ...s.webSizes };
+          if (size) webSizes[device] = size;
+          else delete webSizes[device];
+          return { webSizes };
+        }),
       recentFolders: [],
       notifyMail: true,
       badgeUnread: true,
@@ -411,11 +452,14 @@ export const useUi = create<UiState>()(
             : { showFeeds },
         ),
       setGroupMode: (mode) =>
-        set((s) => ({
-          groupModes: { ...s.groupModes, [listKey(s.scope, s.space)]: mode },
-          selection: [],
-          expandedGroups: [],
-        })),
+        set((s) => {
+          const key = listKey(s.scope, s.space);
+          return {
+            ...(ownsView(s, key) ? { groupModes: { ...s.groupModes, [key]: mode } } : { sharedGroup: mode }),
+            selection: [],
+            expandedGroups: [],
+          };
+        }),
       setGroupExpanded: (key, expanded) =>
         set((s) => ({
           expandedGroups: expanded
@@ -441,7 +485,10 @@ export const useUi = create<UiState>()(
         })),
       setTranslateTo: (translateTo) => set({ translateTo }),
       setListView: (scope, view) =>
-        set((s) => ({ listViews: { ...s.listViews, [listKey(scope, s.space)]: view } })),
+        set((s) => {
+          const key = listKey(scope, s.space);
+          return ownsView(s, key) ? { listViews: { ...s.listViews, [key]: view } } : { sharedView: view };
+        }),
       toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
       setReaderTranslate: (readerTranslate) => set({ readerTranslate }),
       setReaderFullText: (readerFullText) => set({ readerFullText }),
@@ -518,6 +565,10 @@ export const useUi = create<UiState>()(
         if (!merged.showFeeds) merged.space = "mail";
         merged.listViews = splitViewKeys(merged.listViews);
         merged.groupModes = splitViewKeys(merged.groupModes);
+        // 以前每个列表都各记各的。升级后改成默认共用；用户单独设过的列表锁住，看到的和以前一样
+        if (!Array.isArray(saved.lockedLists)) {
+          merged.lockedLists = [...new Set([...Object.keys(merged.listViews), ...Object.keys(merged.groupModes)])];
+        }
         return merged;
       },
       partialize: (s) => ({
@@ -531,8 +582,12 @@ export const useUi = create<UiState>()(
         composeRich: s.composeRich,
         space: s.space,
         translateTo: s.translateTo,
+        sharedView: s.sharedView,
+        sharedGroup: s.sharedGroup,
         listViews: s.listViews,
         groupModes: s.groupModes,
+        lockedLists: s.lockedLists,
+        rememberViews: s.rememberViews,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,
@@ -549,6 +604,7 @@ export const useUi = create<UiState>()(
         readerWeb: s.readerWeb,
         webDevice: s.webDevice,
         webLandscape: s.webLandscape,
+        webSizes: s.webSizes,
         recentFolders: s.recentFolders,
         searchAll: s.searchAll,
         notifyMail: s.notifyMail,
@@ -617,14 +673,30 @@ export function listKey(scope: ListScope, space: Space): string {
   return splitsBySpace(scope) ? `${base}:${kindOfSpace(space)}` : base;
 }
 
+/** 这个列表用自己的视图：锁定了，或者打开了「每个列表记住自己的视图」。 */
+function ownsView(s: Pick<UiState, "rememberViews" | "lockedLists">, key: string): boolean {
+  return s.rememberViews || s.lockedLists.includes(key);
+}
+
+/** 当前列表锁定了自己的视图。 */
+export function useViewLocked(): boolean {
+  return useUi((s) => s.lockedLists.includes(listKey(s.scope, s.space)));
+}
+
 /** 当前列表的显示方式。 */
 export function useListView(): ListView {
-  return useUi((s) => s.listViews[listKey(s.scope, s.space)] ?? "list");
+  return useUi((s) => {
+    const key = listKey(s.scope, s.space);
+    return (ownsView(s, key) ? s.listViews[key] : undefined) ?? s.sharedView;
+  });
 }
 
 /** 当前列表的折叠方式。 */
 export function useGroupMode(): GroupMode {
-  return useUi((s) => s.groupModes[listKey(s.scope, s.space)] ?? "none");
+  return useUi((s) => {
+    const key = listKey(s.scope, s.space);
+    return (ownsView(s, key) ? s.groupModes[key] : undefined) ?? s.sharedGroup;
+  });
 }
 
 /** 搜索时的查询条件：在当前列表里搜，或者在当前空间的全部内容（收件箱和归档）里搜。 */
