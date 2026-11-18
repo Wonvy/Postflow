@@ -6,11 +6,12 @@ import {
   clampTo,
   formatReaderValue,
   isDefaultStyle,
-  READER_DEFAULT,
   READER_RANGE,
+  readerDefault,
   type ReaderFont,
   type ReaderNumber,
 } from "../lib/readerStyle";
+import { IS_TABLET } from "../lib/device";
 import { useReaderStyle, useUi } from "../lib/store";
 import { ICON, Segmented, Slider, Tip } from "./ui";
 
@@ -64,7 +65,7 @@ export function ReaderStyleMenu() {
                 label={t(label)}
                 {...READER_RANGE[key]}
                 value={style[key]}
-                defaultValue={READER_DEFAULT[key]}
+                defaultValue={readerDefault(IS_TABLET)[key]}
                 onChange={(v) => set({ [key]: clampTo(key, v) })}
               />
             </Row>
@@ -73,8 +74,8 @@ export function ReaderStyleMenu() {
             <span className="text-[11px] leading-snug text-fg-3">{t("reader.styleHint")}</span>
             <button
               type="button"
-              disabled={isDefaultStyle(style)}
-              onClick={() => set(READER_DEFAULT)}
+              disabled={isDefaultStyle(style, readerDefault(IS_TABLET))}
+              onClick={() => set(readerDefault(IS_TABLET))}
               className="shrink-0 rounded px-1.5 py-0.5 text-[12px] text-accent hover:bg-hover disabled:pointer-events-none disabled:text-fg-4"
             >
               {t("reader.styleReset")}

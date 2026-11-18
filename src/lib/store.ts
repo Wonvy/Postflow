@@ -4,8 +4,9 @@ import { persist } from "zustand/middleware";
 import type { ItemFilter, ItemKind, View } from "./api";
 import type { ComposeMode } from "./compose";
 import type { GroupMode } from "./grouping";
-import { LIST_STYLE_DEFAULT, type ListStyle, normalizeListStyle } from "./listStyle";
-import { normalizeReaderStyle, READER_DEFAULT, type ReaderStyle } from "./readerStyle";
+import { IS_TABLET } from "./device";
+import { isDefaultListStyle, type ListStyle, listStyleDefault, normalizeListStyle } from "./listStyle";
+import { isDefaultStyle, normalizeReaderStyle, type ReaderStyle, readerDefault } from "./readerStyle";
 import { normalizeLayout, type ToolbarId, type ToolbarLayout } from "./toolbars";
 import { startOfToday } from "./time";
 import { devicePreset, type WebDevice } from "./webDevice";
@@ -372,8 +373,8 @@ export const useUi = create<UiState>()(
       listTranslate: false,
       readerTranslate: false,
       readerFullText: false,
-      readerStyle: READER_DEFAULT,
-      listStyle: LIST_STYLE_DEFAULT,
+      readerStyle: readerDefault(IS_TABLET),
+      listStyle: listStyleDefault(IS_TABLET),
       readerWeb: false,
       webDevice: "desktop",
       webLandscape: false,
@@ -566,6 +567,13 @@ export const useUi = create<UiState>()(
           merged.space = sidebarTabs === true && sidebarTab === "feeds" ? "feeds" : "mail";
         }
         if (!merged.showFeeds) merged.space = "mail";
+        // 平板上存的还是旧的通用默认（从没调过）时，换成平板的默认字号
+        if (IS_TABLET) {
+          if (isDefaultStyle(normalizeReaderStyle(merged.readerStyle))) {
+            merged.readerStyle = readerDefault(true);
+          }
+          if (isDefaultListStyle(normalizeListStyle(merged.listStyle))) merged.listStyle = listStyleDefault(true);
+        }
         merged.listViews = splitViewKeys(merged.listViews);
         merged.groupModes = splitViewKeys(merged.groupModes);
         // 以前每个列表都各记各的。升级后改成默认共用；用户单独设过的列表锁住，看到的和以前一样

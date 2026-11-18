@@ -47,6 +47,14 @@ export const READER_DEFAULT: ReaderStyle = {
   width: 720,
 };
 
+/** 平板上的默认：拿在手里读，字大一点。 */
+export const READER_TABLET: ReaderStyle = { ...READER_DEFAULT, size: 17 };
+
+/** 这台设备的默认排版。 */
+export function readerDefault(tablet: boolean): ReaderStyle {
+  return tablet ? READER_TABLET : READER_DEFAULT;
+}
+
 /** 以前行距和宽度是三档选项，旧版本存下来的是这些名字。 */
 const OLD_LEADING: Record<string, number> = { compact: 1.55, normal: 1.72, relaxed: 1.95 };
 const OLD_WIDTH: Record<string, number> = { narrow: 600, normal: 720, wide: 900 };
@@ -85,8 +93,8 @@ export function normalizeReaderStyle(raw: unknown): ReaderStyle {
   };
 }
 
-export function isDefaultStyle(style: ReaderStyle): boolean {
-  return (Object.keys(READER_DEFAULT) as (keyof ReaderStyle)[]).every((k) => style[k] === READER_DEFAULT[k]);
+export function isDefaultStyle(style: ReaderStyle, base: ReaderStyle = READER_DEFAULT): boolean {
+  return (Object.keys(base) as (keyof ReaderStyle)[]).every((k) => style[k] === base[k]);
 }
 
 /** 正文用的 CSS 变量，见 styles.css 里的 `.article`。 */

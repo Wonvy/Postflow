@@ -7,8 +7,22 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Browser access picks the right network: on computers with a VPN, virtual machines or WSL, the link and QR code now use the real Wi-Fi or Ethernet address, and you can choose another network in the settings if needed.
+- A phone icon at the bottom right of the sidebar shows the QR code on hover; click it for the browser access settings (desktop app).
+- Press H to snooze: pick a preset with 1–5 or choose a date and time.
+- The More menu in the reader no longer repeats buttons you've put back on the toolbar.
+- The welcome guide mentions the Mail/Feeds switch, ⌘K and ?.
+- Easier to use with your fingers on phones: the page is a little larger, and buttons, menus, sidebar rows, list rows and input fields are bigger on touch screens. Tapping a text box on an iPhone no longer zooms the page, and the reader's top bar fits on a phone screen.
+- iPad and other tablets: held upright, the list and reader sit side by side and the sidebar slides out from the menu button; turned sideways on 11-inch and larger screens, all three columns show. Articles default to 17px text and list rows are larger. Swipe a row to archive or mark it read, long-press for its menu, and drag the wider column divider with a finger.
 
 ### 中文
+- 网页访问选对网络了：电脑上有 VPN、虚拟机或 WSL 时，链接和二维码用的是真正的 Wi-Fi 或有线网卡的地址；需要时也可以在设置里换一个网络。
+- 侧栏右下角加了手机图标：鼠标移上去显示二维码，点一下打开网页访问设置（桌面应用）。
+- 按 H 稍后提醒：按 1 到 5 选预设时间，或者自己挑日期和时间。
+- 阅读区的「更多」不再重复你放回工具栏的按钮。
+- 新手引导介绍了邮件和订阅的切换、⌘K 和 ?。
+- 手机上更好用手指点了：页面整体放大一点，触屏上的按钮、菜单、侧栏、列表行和输入框都变大；iPhone 上点输入框不会再把页面放大，阅读区顶栏的按钮在手机屏幕上也放得下了。
+- iPad 等平板：竖着拿时列表和阅读区并排，侧栏从菜单按钮滑出来；11 寸及以上横着拿时三栏都显示。文章默认 17 像素字号，列表行更大；左右滑动一行可以归档或标为已读，长按弹出菜单，栏间的分隔线手指也好拖。
 
 ## 0.1.25 — 2026-11-18
 

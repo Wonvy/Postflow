@@ -81,8 +81,16 @@ export function normalizeListStyle(raw: unknown): ListStyle {
   };
 }
 
-export function isDefaultListStyle(style: ListStyle): boolean {
-  return (Object.keys(LIST_STYLE_DEFAULT) as (keyof ListStyle)[]).every((k) => style[k] === LIST_STYLE_DEFAULT[k]);
+/** 平板上的默认：字大一点，行高一点，手指好点。 */
+export const LIST_STYLE_TABLET: ListStyle = { ...LIST_STYLE_DEFAULT, titleSize: 15, summarySize: 13, padding: 12 };
+
+/** 这台设备的默认样式。 */
+export function listStyleDefault(tablet: boolean): ListStyle {
+  return tablet ? LIST_STYLE_TABLET : LIST_STYLE_DEFAULT;
+}
+
+export function isDefaultListStyle(style: ListStyle, base: ListStyle = LIST_STYLE_DEFAULT): boolean {
+  return (Object.keys(base) as (keyof ListStyle)[]).every((k) => style[k] === base[k]);
 }
 
 /** 一行文字占的高度。 */

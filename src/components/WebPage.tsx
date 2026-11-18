@@ -98,7 +98,7 @@ export function WebPage({ url, onShowContent }: { url: string; onShowContent: ()
 
   return (
     <div className="@container/web flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-line px-2">
+      <div className="flex h-9 shrink-0 touch:h-12 items-center gap-1 border-b border-line px-2">
         <div role="radiogroup" aria-label={t("web.devices")} className="inline-flex rounded-md border border-line p-px">
           {DEVICES.map((d) => {
             const Icon = DEVICE_ICON[d.id];

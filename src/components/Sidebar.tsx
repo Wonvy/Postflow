@@ -41,9 +41,11 @@ import { useFolderActions, useTopLevel } from "../lib/folders";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
 import { OutboxRow } from "./Outbox";
+import { PhoneAccessButton } from "./WebAccessSettings";
 import { UpdateButton } from "./UpdateDialog";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar, isMac } from "../lib/platform";
+import { isTauri } from "../lib/transport";
 import { keys, useNav, usePresets } from "../lib/queries";
 import { type ListScope, type SidebarSection, type Space, sameScope, useUi, viewLabelKey } from "../lib/store";
 import {
@@ -138,7 +140,7 @@ function Row({
       {...drag}
       style={depth ? { paddingLeft: 26 + (depth - 1) * 14 } : undefined}
       className={cx(
-        "group relative flex h-7 items-center gap-2 rounded-md pr-1.5 outline-offset-[-2px] transition-colors",
+        "group relative flex h-7 items-center gap-2 rounded-md pr-1.5 outline-offset-[-2px] transition-colors touch:h-11 touch:text-[15px]",
         indent ? "pl-[26px]" : "pl-2",
         drop === "inside"
           ? "bg-accent-soft text-fg ring-1 ring-inset ring-accent/60"
@@ -548,7 +550,7 @@ function SectionHeader({
     <div
       {...drag}
       className={cx(
-        "group/section mb-1 mt-3 flex h-6 items-center justify-between rounded-md pl-1 pr-0.5 transition-colors",
+        "group/section mb-1 mt-3 flex h-6 items-center justify-between rounded-md pl-1 pr-0.5 transition-colors touch:h-9",
         highlight && "bg-accent-soft ring-1 ring-inset ring-accent/60",
       )}
     >
@@ -618,7 +620,7 @@ function SpaceSwitch({
             aria-selected={space === key}
             onClick={() => onSpace(key)}
             className={cx(
-              "flex h-6 min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 text-[12px] font-medium transition-colors",
+              "flex h-6 min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 text-[12px] font-medium transition-colors touch:h-9 touch:text-[14px]",
               // 当前空间用强调色，和侧栏里选中的行（灰底）区分开
               space === key ? "bg-accent-soft text-accent" : "text-fg-3 hover:bg-hover hover:text-fg-2",
             )}
@@ -1187,7 +1189,7 @@ export function Sidebar({ width }: { width: number }) {
       </nav>
       </ContextMenu>
 
-      <footer className="flex h-10 shrink-0 items-center gap-1 border-t border-line px-2">
+      <footer className="flex h-10 shrink-0 items-center gap-1 border-t border-line px-2 touch:h-14">
         <IconButton label={t("action.settings")} tipSide="top" onClick={() => setDialog({ type: "settings" })}>
           <Settings {...ICON} />
         </IconButton>
@@ -1205,6 +1207,8 @@ export function Sidebar({ width }: { width: number }) {
             <span className="truncate">{t("status.refreshing", { n: refreshing })}</span>
           </span>
         )}
+        {/* 最右边：手机扫码打开（网页访问），只有桌面应用有 */}
+        {isTauri && <PhoneAccessButton />}
       </footer>
       <FolderDialog />
     </aside>

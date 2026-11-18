@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // 手机（触屏、屏幕窄）：整体放大一点，字和按钮都适合手指；同时不让 iPhone 点输入框时自动放大页面
+      try {
+        if (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 600) {
+          document
+            .querySelector("meta[name=viewport]")
+            .setAttribute("content", "width=device-width, initial-scale=1.15, maximum-scale=1.15, viewport-fit=cover");
+        }
+      } catch (e) {}
+    </script>
     <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- 手机「添加到主屏幕」：图标和全屏打开。清单由服务端生成（带着访问密钥时直接带密钥打开），要带上 Cookie -->

@@ -8,7 +8,7 @@ import type { Item } from "../lib/api";
 import { useLang, useT } from "../lib/i18n";
 import { type SnoozePreset, snoozePresets, toLocalInput } from "../lib/snooze";
 import { useUi } from "../lib/store";
-import { Button, cx, Field, Menu, MenuItem, MenuSeparator, MenuSub, Modal, TextInput } from "./ui";
+import { Button, cx, Field, Kbd, Menu, MenuItem, MenuSeparator, MenuSub, Modal, TextInput } from "./ui";
 
 const LABEL: Record<SnoozePreset, "snooze.later" | "snooze.tonight" | "snooze.tomorrow" | "snooze.weekend" | "snooze.nextWeek"> = {
   later: "snooze.later",
@@ -77,7 +77,7 @@ export function SnoozeButton({ item }: { item: Item }) {
           aria-label={t("snooze.title")}
           title={t("snooze.title")}
           className={cx(
-            "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors data-[state=open]:bg-hover",
+            "inline-flex size-7 shrink-0 touch:size-10 items-center justify-center rounded-md transition-colors data-[state=open]:bg-hover",
             active ? "bg-accent-soft text-accent" : "text-fg-2 hover:bg-hover hover:text-fg",
           )}
         >
@@ -101,26 +101,49 @@ export function SnoozeSubMenu({ items }: { items: Item[] }): ReactNode {
   );
 }
 
-/** 自己挑提醒时间。 */
+/**
+ * 稍后提醒的对话框：上面是预设时间（按 1 到 5 也能选），下面自己挑日期和时间。
+ * 快捷键 H 打开，右键菜单和工具栏菜单里的「选择日期和时间」也打开它。
+ */
 export function SnoozeDialog() {
   const t = useT();
+  const lang = useLang();
   const dialog = useUi((s) => s.dialog);
   const setDialog = useUi((s) => s.setDialog);
   const { snooze, itemsOf } = useActions();
   const open = dialog?.type === "snooze";
   const ids = dialog?.type === "snooze" ? dialog.ids : [];
   const [value, setValue] = useState("");
+  const [presets, setPresets] = useState(() => snoozePresets(new Date()));
   useEffect(() => {
-    if (open) setValue(toLocalInput(new Date(Date.now() + 86_400_000)));
+    if (!open) return;
+    setValue(toLocalInput(new Date(Date.now() + 86_400_000)));
+    setPresets(snoozePresets(new Date()));
   }, [open]);
   const at = new Date(value).getTime();
   const valid = Number.isFinite(at) && at > Date.now();
-  const save = () => {
-    if (!valid) return;
+  const pick = (when: number) => {
     const items = itemsOf(ids);
-    snooze(at, items.length > 0 ? items : undefined);
+    snooze(when, items.length > 0 ? items : undefined);
     setDialog(null);
   };
+  const save = () => {
+    if (valid) pick(at);
+  };
+  // 按数字键选预设（在日期框里打字时不算）
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement | null)?.tagName === "INPUT") return;
+      const n = Number(e.key);
+      const p = Number.isInteger(n) && n >= 1 ? presets[n - 1] : undefined;
+      if (!p) return;
+      e.preventDefault();
+      pick(p.at.getTime());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   return (
     <Modal open={open} onClose={() => setDialog(null)} title={t("snooze.title")} width={360}>
       <form
@@ -130,10 +153,22 @@ export function SnoozeDialog() {
           save();
         }}
       >
+        <div className="flex flex-col gap-px">
+          {presets.map((p, i) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => pick(p.at.getTime())}
+              className="flex h-8 items-center gap-3 rounded-md px-2 text-left text-[13px] text-fg-2 hover:bg-hover hover:text-fg"
+            >
+              <Kbd>{i + 1}</Kbd>
+              <span className="min-w-0 flex-1 truncate">{t(LABEL[p.key])}</span>
+              <span className="shrink-0 text-[12px] text-fg-3">{snoozeTime(p.at.getTime(), lang)}</span>
+            </button>
+          ))}
+        </div>
         <Field label={t("snooze.pick")} hint={value && !valid ? t("snooze.past") : undefined}>
           <TextInput
-            // biome-ignore lint/a11y/noAutofocus: 打开就能改时间
-            autoFocus
             type="datetime-local"
             value={value}
             min={toLocalInput(new Date())}

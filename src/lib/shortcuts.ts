@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useActions } from "./actions";
-import { normalizeReaderStyle, READER_DEFAULT } from "./readerStyle";
+import { IS_TABLET } from "./device";
+import { normalizeReaderStyle, readerDefault } from "./readerStyle";
 import { useUi } from "./store";
 import { setFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 
@@ -78,7 +79,7 @@ export function useShortcuts() {
       if (ui.openId && (key === "+" || key === "=" || key === "-" || key === "0")) {
         e.preventDefault();
         const size = normalizeReaderStyle(ui.readerStyle).size;
-        ui.setReaderStyle({ size: key === "0" ? READER_DEFAULT.size : size + (key === "-" ? -1 : 1) });
+        ui.setReaderStyle({ size: key === "0" ? readerDefault(IS_TABLET).size : size + (key === "-" ? -1 : 1) });
         return;
       }
 
@@ -116,6 +117,13 @@ export function useShortcuts() {
         case "s":
           a.toggle("starred");
           break;
+        case "h": {
+          // 稍后提醒：打开选时间的对话框，作用于勾选的、没勾选时是打开的这一条
+          const ids = ui.selection.length > 0 ? ui.selection : ui.openId ? [ui.openId] : [];
+          if (ids.length === 0) return;
+          ui.setDialog({ type: "snooze", ids });
+          break;
+        }
         case "u":
           a.toggle("read");
           break;

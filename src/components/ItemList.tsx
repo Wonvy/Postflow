@@ -62,10 +62,11 @@ import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
-import { useIsMobile } from "../lib/mobile";
+import { IS_TABLET } from "../lib/device";
+import { useDrawerSidebar, useIsTouch } from "../lib/mobile";
 import {
   isDefaultListStyle,
-  LIST_STYLE_DEFAULT,
+  listStyleDefault,
   LIST_STYLE_RANGE,
   type ListMetrics,
   type ListStyle,
@@ -233,7 +234,7 @@ function ViewModeButtons() {
             aria-pressed={locked}
             onClick={toggleLock}
             className={cx(
-              "mr-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors",
+              "mr-0.5 inline-flex size-6 shrink-0 touch:size-9 items-center justify-center rounded-md transition-colors",
               locked ? "text-accent hover:bg-hover" : "text-fg-3 hover:bg-hover hover:text-fg",
             )}
           >
@@ -249,7 +250,7 @@ function ViewModeButtons() {
             aria-pressed={view === value}
             onClick={() => setView(scope, value)}
             className={cx(
-              "inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors",
+              "inline-flex size-6 shrink-0 touch:size-9 items-center justify-center rounded-md transition-colors",
               view === value ? "bg-active text-fg" : "text-fg-3 hover:bg-hover hover:text-fg",
             )}
           >
@@ -314,7 +315,7 @@ function ViewControl() {
           <button
             type="button"
             aria-label={t("listStyle.title")}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
+            className="inline-flex size-7 shrink-0 touch:size-10 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
           >
             <Settings2 {...ICON} />
           </button>
@@ -401,7 +402,7 @@ function ViewControl() {
                 min={LIST_STYLE_RANGE.listPadding[0]}
                 max={LIST_STYLE_RANGE.listPadding[1]}
                 step={1}
-                defaultValue={LIST_STYLE_DEFAULT.listPadding}
+                defaultValue={listStyleDefault(IS_TABLET).listPadding}
                 onChange={(value) => set({ listPadding: value })}
               />
               <SliderSetting
@@ -410,7 +411,7 @@ function ViewControl() {
                 min={LIST_STYLE_RANGE.gap[0]}
                 max={LIST_STYLE_RANGE.gap[1]}
                 step={1}
-                defaultValue={LIST_STYLE_DEFAULT.gap}
+                defaultValue={listStyleDefault(IS_TABLET).gap}
                 onChange={(value) => set({ gap: value })}
               />
               <SliderSetting
@@ -419,7 +420,7 @@ function ViewControl() {
                 min={LIST_STYLE_RANGE.padding[0]}
                 max={LIST_STYLE_RANGE.padding[1]}
                 step={1}
-                defaultValue={LIST_STYLE_DEFAULT.padding}
+                defaultValue={listStyleDefault(IS_TABLET).padding}
                 onChange={(value) => set({ padding: value })}
               />
             </div>
@@ -454,8 +455,8 @@ function ViewControl() {
           <div className="flex justify-end border-t border-line pt-2">
             <button
               type="button"
-              disabled={isDefaultListStyle(style)}
-              onClick={() => set(LIST_STYLE_DEFAULT)}
+              disabled={isDefaultListStyle(style, listStyleDefault(IS_TABLET))}
+              onClick={() => set(listStyleDefault(IS_TABLET))}
               className="shrink-0 rounded px-1.5 py-0.5 text-[12px] text-accent hover:bg-hover disabled:pointer-events-none disabled:text-fg-4"
             >
               {t("listStyle.reset")}
@@ -573,7 +574,7 @@ function Stepper({
 }) {
   const t = useT();
   const button =
-    "inline-flex size-6 items-center justify-center rounded-md border border-line-strong text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-40";
+    "inline-flex size-6 touch:size-9 items-center justify-center rounded-md border border-line-strong text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-40";
   return (
     <div className="flex items-center gap-1">
       <button
@@ -698,7 +699,8 @@ export function ItemList({ width }: { width: number }) {
   const { confirmMarkAllRead, refresh, membersOf, compose, toggle, itemsOf } = useActions();
   const { query, items, rows: listRows, stops, groupMode, search } = useListModel();
   const searchOpen = useUi((s) => s.searchOpen);
-  const mobile = useIsMobile();
+  // 手机和平板布局里侧栏收起来了，列表左上角有打开它的按钮
+  const drawer = useDrawerSidebar();
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
   const searchAll = useUi((s) => s.searchAll);
   const openSearch = useUi((s) => s.openSearch);
@@ -727,7 +729,12 @@ export function ItemList({ width }: { width: number }) {
   ]);
   const translations = useListTranslations((s) => s.byKey);
   const style = useListStyle();
-  const metrics = useMemo(() => listMetrics(style), [style]);
+  // 手指操作时行再高一点，一行至少 44 像素左右，好点
+  const touch = useIsTouch();
+  const metrics = useMemo(
+    () => listMetrics(touch ? { ...style, padding: Math.max(style.padding, 12) } : style),
+    [style, touch],
+  );
   const mixedAccounts = useMixedAccounts() && scope.kind !== "account";
 
   const scroller = useRef<HTMLDivElement>(null);
@@ -1039,20 +1046,20 @@ export function ItemList({ width }: { width: number }) {
 
   return (
     <section
-      className={cx("relative flex h-full shrink-0 flex-col bg-bg", !mobile && "border-l border-line")}
+      className={cx("relative flex h-full shrink-0 flex-col bg-bg", !drawer && "border-l border-line")}
       style={{ width }}
     >
       <ToolbarMenu toolbar="list">
         <header
           data-tauri-drag-region
-          className={cx("flex h-11 shrink-0 items-center gap-0.5 border-b border-line pr-2", mobile ? "pl-1" : "pl-4")}
+          className={cx("flex h-11 shrink-0 touch:h-13 items-center gap-0.5 border-b border-line pr-2", drawer ? "pl-1" : "pl-4")}
         >
-          {mobile && (
+          {drawer && (
             <IconButton label={t("mobile.menu")} onClick={() => setDrawerOpen(true)}>
               <MenuIcon {...ICON} />
             </IconButton>
           )}
-          <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+          <h1 data-tauri-drag-region className="min-w-0 flex-1 truncate text-[13px] font-semibold touch:text-[15px]">
             {title}
           </h1>
           <Tools toolbar="list" place="top" tools={tools} />
@@ -1252,7 +1259,7 @@ export function ItemList({ width }: { width: number }) {
               return (
                 <SwipeRow
                   key={d.key}
-                  enabled={mobile}
+                  enabled={touch}
                   style={{ ...position, height: rowHeight }}
                   read={d.props.group ? d.props.group.unread === 0 : d.props.item.read}
                   onLeft={() => toggle("archived", swipeItems())}
@@ -1287,7 +1294,7 @@ export function ItemList({ width }: { width: number }) {
                     ) : (
                       <ComfortableRow {...d.props} />
                     )}
-                    {!mobile && <RowMoreButton id={d.id} />}
+                    {!touch && <RowMoreButton id={d.id} />}
                   </div>
                 </ContextMenu>
                 </SwipeRow>
@@ -1627,7 +1634,7 @@ function SearchBar({ scopeName, fetching, firstId }: { scopeName: string; fetchi
   }, [text, query, setQuery]);
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line pl-4 pr-2">
+    <div className="flex h-10 shrink-0 touch:h-12 touch:text-[15px] items-center gap-2 border-b border-line pl-4 pr-2">
       <Search size={14} strokeWidth={1.75} className="shrink-0 text-fg-3" />
       <input
         ref={input}

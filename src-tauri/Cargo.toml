@@ -31,3 +31,4 @@ tauri-plugin-updater = "2.14"
 tauri-plugin-process = "2.4"
 # 在浏览器中使用：桌面应用自己提供网页版（见 web_access.rs）
 postflow-web = { workspace = true }
+local-ip-address = "0.6.13"

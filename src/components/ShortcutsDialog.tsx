@@ -28,6 +28,7 @@ const GROUPS: { title: MessageKey; keys: [string[], MessageKey][] }[] = [
       [["E"], "reader.hintArchive"],
       [["S"], "reader.hintStar"],
       [["U"], "reader.hintRead"],
+      [["H"], "snooze.title"],
       [["⇧A"], "action.markAllRead"],
       [["V"], "reader.hintOpen"],
     ],

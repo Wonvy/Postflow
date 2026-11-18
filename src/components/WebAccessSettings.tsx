@@ -1,31 +1,17 @@
 // 设置 → 网页访问：桌面应用在本机端口上提供同一套界面，浏览器、同一网络里的手机都能打开。
 // 服务和设置在桌面端（src-tauri/src/web_access.rs），这里只是开关和显示链接。只有桌面应用里有这一页。
 
-import { Copy, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import { Copy, ExternalLink, RefreshCw, Smartphone, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { renderSVG } from "uqr";
 import { useT } from "../lib/i18n";
 import { copyText, openExternal } from "../lib/platform";
+import { useUpdateWebAccess, useWebAccess, type WebAccessUpdate } from "../lib/webAccess";
 import { SettingRow } from "./SettingsParts";
 import { toast } from "./Toast";
-import { Button, IconButton, Spinner, Switch, TextInput } from "./ui";
-
-interface WebAccessStatus {
-  enabled: boolean;
-  running: boolean;
-  port: number;
-  lan: boolean;
-  local_url: string | null;
-  lan_url: string | null;
-  error: string | null;
-}
-
-type Update = { enabled?: boolean; port?: number; lan?: boolean; new_key?: boolean };
-
-async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<T>(cmd, args);
-}
+import { useUi } from "../lib/store";
+import { Button, cx, IconButton, Select, Spinner, Switch, TextInput, useHoverOpen } from "./ui";
 
 /** 一个带访问密钥的地址：显示时把密钥藏起来，复制和打开时用完整的。 */
 function UrlRow({ url }: { url: string }) {
@@ -51,24 +37,22 @@ function UrlRow({ url }: { url: string }) {
 
 export function WebAccessSettings() {
   const t = useT();
-  const [status, setStatus] = useState<WebAccessStatus | null>(null);
+  const query = useWebAccess();
+  const save = useUpdateWebAccess();
+  const status = query.data ?? null;
   const [port, setPort] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    void invoke<WebAccessStatus>("web_access_status").then((s) => {
-      setStatus(s);
-      setPort(String(s.port));
-    });
-  }, []);
+    if (status) setPort(String(status.port));
+  }, [status?.port]);
 
-  const update = async (change: Update) => {
+  const update = async (change: WebAccessUpdate) => {
     setBusy(true);
     setProblem(null);
     try {
-      const s = await invoke<WebAccessStatus>("web_access_update", { update: change });
-      setStatus(s);
+      const s = await save(change);
       setPort(String(s.port));
     } catch (err) {
       setProblem(String(err));
@@ -144,6 +128,24 @@ export function WebAccessSettings() {
             />
           </SettingRow>
 
+          {status.lan && status.running && status.lan_addresses.length > 1 && (
+            <SettingRow label={t("webAccess.network")} hint={t("webAccess.networkHint")}>
+              <Select
+                className="w-56"
+                aria-label={t("webAccess.network")}
+                value={status.lan_interface ?? ""}
+                disabled={busy}
+                onChange={(e) => void update({ lan_interface: e.target.value })}
+              >
+                {status.lan_addresses.map((a) => (
+                  <option key={`${a.name}|${a.ip}`} value={a.name}>
+                    {a.name} · {a.ip}
+                  </option>
+                ))}
+              </Select>
+            </SettingRow>
+          )}
+
           {status.lan && status.running && (
             status.lan_url ? (
               <div className="flex items-start gap-4">
@@ -176,5 +178,73 @@ export function WebAccessSettings() {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * 侧栏底部最右边的手机图标：鼠标移上去显示扫码打开的二维码，点一下打开「设置 → 网页访问」。
+ * 局域网访问没开时，悬停说明怎么打开。只有桌面应用里有。
+ */
+export function PhoneAccessButton() {
+  const t = useT();
+  const setDialog = useUi((s) => s.setDialog);
+  const query = useWebAccess();
+  const status = query.data;
+  const { open, setOpen, hover } = useHoverOpen();
+  const ready = !!status?.lan_url;
+  const chosen = status?.lan_addresses.find((a) => a.name === status.lan_interface);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild {...hover}>
+        <button
+          type="button"
+          aria-label={t("webAccess.phone")}
+          onClick={(e) => {
+            e.preventDefault();
+            setOpen(false);
+            setDialog({ type: "settings", page: "web" });
+          }}
+          className={cx(
+            "ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-fg",
+            ready ? "text-accent" : "text-fg-2",
+          )}
+        >
+          <Smartphone size={16} strokeWidth={1.75} />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="end"
+          sideOffset={6}
+          {...hover}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="anim-pop z-50 w-[228px] rounded-lg bg-surface p-3 text-center shadow-pop outline-none"
+        >
+          {ready && status?.lan_url ? (
+            <>
+              <div
+                className="mx-auto size-[180px] rounded-md bg-white p-2 [&>svg]:size-full"
+                role="img"
+                aria-label={t("webAccess.qr")}
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: 本地生成的二维码
+                dangerouslySetInnerHTML={{ __html: renderSVG(status.lan_url, { border: 1 }) }}
+              />
+              <p className="mt-2 text-[12px] font-medium text-fg">{t("webAccess.phoneScan")}</p>
+              {chosen && (
+                <p className="mt-0.5 truncate text-[11px] text-fg-3">
+                  {chosen.name} · {chosen.ip}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-[12px] leading-relaxed text-fg-2">
+              {status?.enabled && status.running ? t("webAccess.phoneNeedsLan") : t("webAccess.phoneOff")}
+            </p>
+          )}
+          <p className="mt-2 text-[11px] text-fg-3">{t("webAccess.phoneClick")}</p>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

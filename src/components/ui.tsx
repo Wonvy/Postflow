@@ -88,7 +88,7 @@ export function IconButton({
         aria-label={label}
         aria-pressed={active}
         className={cx(
-          "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+          "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors touch:size-10",
           "disabled:pointer-events-none disabled:opacity-40",
           // 开着的开关（自动翻译、全文模式、AI 面板）一眼能看出来：强调色底和图标
           active ? "bg-accent-soft text-accent" : "text-fg-2 hover:bg-hover hover:text-fg",
@@ -113,7 +113,7 @@ export function Button({ variant = "secondary", busy, className, children, disab
       type="button"
       disabled={disabled || busy}
       className={cx(
-        "inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors",
+        "inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors touch:h-10 touch:px-3.5",
         "disabled:pointer-events-none disabled:opacity-50",
         variant === "primary" && "bg-accent-strong text-white hover:bg-accent",
         variant === "secondary" &&
@@ -170,7 +170,7 @@ export function Spinner({ size = 14 }: { size?: number }) {
 }
 
 const inputClass =
-  "h-8 w-full rounded-md border border-line-strong bg-bg px-2.5 text-[13px] text-fg " +
+  "h-8 w-full rounded-md border border-line-strong bg-bg px-2.5 text-[13px] text-fg touch:h-10 " +
   "placeholder:text-fg-3 outline-none transition-colors " +
   "focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50";
 
@@ -323,7 +323,7 @@ export function Modal({
               <button
                 type="button"
                 aria-label={t("action.close")}
-                className="inline-flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg"
+                className="inline-flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg touch:size-10"
               >
                 <X {...ICON} />
               </button>
@@ -461,7 +461,7 @@ export function MenuItem({
     <Item
       onSelect={onSelect}
       className={cx(
-        "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-active",
+        "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] outline-none data-[highlighted]:bg-active touch:h-11 touch:px-3",
         danger ? "text-danger" : "text-fg",
       )}
     >
@@ -482,7 +482,7 @@ export function MenuSub({ icon, label, children }: { icon?: ReactNode; label: Re
     </>
   );
   const triggerClass =
-    "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] text-fg outline-none data-[highlighted]:bg-active data-[state=open]:bg-active";
+    "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] text-fg outline-none data-[highlighted]:bg-active data-[state=open]:bg-active touch:h-11 touch:px-3";
   if (kind === "context") {
     return (
       <Context.Sub>

@@ -168,7 +168,7 @@ export function StatusBar({
 }) {
   return (
     <ToolbarMenu toolbar={toolbar}>
-      <footer className="flex h-9 shrink-0 items-center gap-0.5 border-t border-line pl-3 pr-1.5 text-[12px] text-fg-3">
+      <footer className="flex h-9 shrink-0 touch:h-12 touch:text-[13px] items-center gap-0.5 border-t border-line pl-3 pr-1.5 text-[12px] text-fg-3">
         <div className="tabular flex min-w-0 flex-1 items-center gap-3 truncate">{info}</div>
         {quickTools && <div className="flex shrink-0 items-center gap-0.5">{quickTools}</div>}
         <Tools toolbar={toolbar} place="status" tools={tools} />

@@ -53,9 +53,10 @@ import { copyText, formatSize, hasInsetTitlebar, isMac, openExternal, saveAttach
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
-import { useIsMobile } from "../lib/mobile";
+import { useDrawerSidebar, useIsMobile } from "../lib/mobile";
 import { SnoozeButton, snoozeTime } from "./Snooze";
-import { useReaderStyle, useUi } from "../lib/store";
+import { useReaderStyle, useToolbarLayout, useUi } from "../lib/store";
+import { toolsAt } from "../lib/toolbars";
 import { fullTime } from "../lib/time";
 import { readingMinutes, totalWords, wordCount } from "../lib/wordCount";
 import {
@@ -111,6 +112,8 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
   const gap = useWindowControlsGap(true);
   // 手机上阅读区占满屏幕，左上角返回列表；按钮放不下时左右滑动
   const mobile = useIsMobile();
+  // 平板竖屏时阅读区也不宽，按钮放不下时同样左右滑动
+  const narrow = useDrawerSidebar();
   const close = () => useUi.getState().open(null);
   // 最大化时侧栏没了，macOS 的红绿灯落在阅读区顶栏上，左边要给它们留位置（全屏时没有红绿灯）
   const maximized = useUi((s) => s.readerMaximized);
@@ -120,7 +123,7 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
     <ToolbarMenu toolbar="reader">
     <header
       data-tauri-drag-region
-      className="flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2"
+      className="flex h-11 shrink-0 touch:h-13 items-center gap-0.5 border-b border-line px-2"
       style={{ ...(gap ? { paddingRight: gap + 8 } : {}), ...(inset ? { paddingLeft: inset } : {}) }}
     >
       {mobile && (
@@ -131,8 +134,8 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
       <div data-tauri-drag-region className={cx("flex min-w-0 flex-1 items-center", mobile ? "pr-1" : "pr-2")}>
         {leading}
       </div>
-      {mobile ? (
-        <div className="no-scrollbar flex min-w-0 max-w-[65%] items-center gap-0.5 overflow-x-auto">{children}</div>
+      {narrow ? (
+        <div className="no-scrollbar flex min-w-0 max-w-[calc(100%-44px)] items-center gap-0.5 overflow-x-auto">{children}</div>
       ) : (
         children
       )}
@@ -151,7 +154,7 @@ function SourceChip({ item }: { item: Item }) {
       <button
         type="button"
         onClick={() => goToSource(item)}
-        className="flex h-7 min-w-0 max-w-full items-center gap-2 rounded-md px-1.5 text-fg-2 transition-colors hover:bg-hover hover:text-fg"
+        className="flex h-7 min-w-0 max-w-full touch:h-10 items-center gap-2 rounded-md px-1.5 text-fg-2 transition-colors hover:bg-hover hover:text-fg"
       >
         <SourceIcon item={item} size={18} />
         <span className="min-w-0 truncate text-[13px] font-medium">{item.source_title}</span>
@@ -235,6 +238,9 @@ function Article({ id }: { id: string }) {
   const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote);
   const { items, apply, toggle, openOriginal, openTargets, compose, deleteDrafts } = useActions();
   const fullscreenOn = useFullscreen((s) => s.on);
+  // 「更多」里只放工具栏上没有的：用户把哪个按钮放回了工具栏，菜单里就不再重复
+  const readerLayout = useToolbarLayout("reader");
+  const onBar = new Set([...toolsAt(readerLayout, "top"), ...toolsAt(readerLayout, "status")]);
   const autoRead = useRef<string | null>(null);
   const [mode, setMode] = useState<"feed" | "full">("feed");
   const [loadingFull, setLoadingFull] = useState(false);
@@ -399,7 +405,7 @@ function Article({ id }: { id: string }) {
                     type="button"
                     aria-label={t("reader.replyMore")}
                     title={t("reader.replyMore")}
-                    className="-ml-1 inline-flex h-7 w-4 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+                    className="-ml-1 inline-flex h-7 w-4 shrink-0 touch:h-10 touch:w-6 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
                   >
                     <ChevronDown size={12} strokeWidth={2} />
                   </button>
@@ -525,24 +531,26 @@ function Article({ id }: { id: string }) {
                 type="button"
                 aria-label={t("tool.more")}
                 title={t("tool.more")}
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+                className="inline-flex size-7 shrink-0 touch:size-10 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
               >
                 <Ellipsis {...ICON} />
               </button>
             }
           >
-            <MenuItem
-              icon={all("read") ? <Mail size={14} /> : <MailOpen size={14} />}
-              onSelect={() => toggle("read", targets)}
-            >
-              {all("read") ? t("action.markUnread") : t("action.markRead")}
-            </MenuItem>
-            {summary.url && (
+            {!onBar.has("read") && (
+              <MenuItem
+                icon={all("read") ? <Mail size={14} /> : <MailOpen size={14} />}
+                onSelect={() => toggle("read", targets)}
+              >
+                {all("read") ? t("action.markUnread") : t("action.markRead")}
+              </MenuItem>
+            )}
+            {summary.url && !onBar.has("original") && (
               <MenuItem icon={<ExternalLink size={14} />} onSelect={openOriginal}>
                 {t("action.openOriginal")}
               </MenuItem>
             )}
-            {!isMail && summary.url && !webShown && (
+            {!isMail && summary.url && !webShown && !onBar.has("fullText") && (
               <MenuItem icon={<BookOpenText size={14} />} onSelect={toggleFullText}>
                 {readerFullText ? t("action.fullTextOff") : t("action.fullTextOn")}
               </MenuItem>
@@ -553,10 +561,14 @@ function Article({ id }: { id: string }) {
             >
               {isMail ? t("source.mail") : t("source.xml")}
             </MenuItem>
-            <MenuSeparator />
-            <MenuItem icon={<Expand size={14} />} onSelect={() => void setFullscreen(!fullscreenOn)}>
-              {fullscreenOn ? t("reader.exitFullscreen") : t("reader.fullscreen")}
-            </MenuItem>
+            {!onBar.has("fullscreen") && (
+              <>
+                <MenuSeparator />
+                <MenuItem icon={<Expand size={14} />} onSelect={() => void setFullscreen(!fullscreenOn)}>
+                  {fullscreenOn ? t("reader.exitFullscreen") : t("reader.fullscreen")}
+                </MenuItem>
+              </>
+            )}
           </Menu>
         ),
       };
@@ -1103,7 +1115,7 @@ function LabelMenu({ ids, current }: { ids: string[]; current: string | null | u
           type="button"
           aria-label={t("label.set")}
           title={current ? `${t("label.set")}：${current}` : t("label.set")}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
+          className="inline-flex size-7 shrink-0 touch:size-10 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
         >
           {current ? (
             <span aria-hidden className="size-2.5 rounded-full" style={{ background: labelColor(current) }} />
@@ -1282,6 +1294,9 @@ function MaximizeButton() {
   const setMaximized = useUi((s) => s.setReaderMaximized);
   // Postflow 自己开的全屏里阅读区一直是最大化的，这个按钮没用
   const ownFullscreen = useFullscreen((s) => s.on && s.ours);
+  // 手机上阅读区本来就占满屏幕，最大化没有意义，也给其他按钮腾地方
+  const mobile = useIsMobile();
+  if (mobile) return null;
   // 全屏时这个按钮变成「退出全屏」
   if (ownFullscreen) {
     return (
@@ -1343,6 +1358,7 @@ function Empty() {
     [["F", "⇧F"], t("reader.hintMaximize")],
     [["E"], t("reader.hintArchive")],
     [["S"], t("reader.hintStar")],
+    [["H"], t("snooze.title")],
     [["U"], t("reader.hintRead")],
     [["V"], t("reader.hintOpen")],
     [["X"], t("reader.hintSelect")],

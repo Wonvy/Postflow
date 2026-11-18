@@ -2,7 +2,7 @@ import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { OutboxDialog } from "./components/Outbox";
 import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
-import { useIsMobile } from "./lib/mobile";
+import { useLayout } from "./lib/mobile";
 import { Unplug } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
@@ -101,9 +101,9 @@ function Resizer({ width, onResize }: { width: number; onResize: (width: number)
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      className="group relative z-10 -mx-[4px] w-[9px] shrink-0 cursor-col-resize"
+      className="group relative z-10 -mx-[4px] w-[9px] shrink-0 cursor-col-resize touch:-mx-[10px] touch:w-[21px]"
     >
-      <div className="absolute inset-y-0 left-[4px] w-px bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
+      <div className="absolute inset-y-0 left-[4px] w-px touch:left-[10px] bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
     </div>
   );
 }
@@ -137,10 +137,14 @@ function Shell() {
 
   // 阅读区最大化（或全屏）时只留阅读区
   const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats";
-  const mobile = useIsMobile();
+  const layout = useLayout();
   const openId = useUi((s) => s.openId);
   const drawerOpen = useUi((s) => s.drawerOpen);
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
+  // 平板转到横屏变成三栏时，滑出来的侧栏收回去，转回竖屏也不会自己冒出来
+  useEffect(() => {
+    if (layout === "desktop" && drawerOpen) setDrawerOpen(false);
+  }, [layout, drawerOpen, setDrawerOpen]);
 
   const dialogs = (
     <>
@@ -165,23 +169,47 @@ function Shell() {
     </>
   );
 
-  // 手机：一次一栏。打开了一条就只显示阅读区，否则是列表；侧栏从左边滑出来
-  if (mobile) {
+  // 手机和平板布局里侧栏从左边滑出来，点旁边的空白收回去
+  const drawer = drawerOpen && (
+    <>
+      <div aria-hidden className="anim-fade fixed inset-0 z-30 bg-overlay" onClick={() => setDrawerOpen(false)} />
+      <div className="anim-drawer fixed inset-y-0 left-0 z-30 flex pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-pop">
+        <Sidebar width={Math.min(layout === "tablet" ? 320 : 300, viewport - 56)} />
+      </div>
+    </>
+  );
+
+  // 手机：一次一栏。打开了一条就只显示阅读区，否则是列表
+  if (layout === "phone") {
     return (
       <div className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
         {mainView === "stats" ? <StatsPage /> : openId ? <Reader /> : <ItemList width={viewport} />}
-        {drawerOpen && (
+        {drawer}
+        {dialogs}
+      </div>
+    );
+  }
+
+  // 平板：列表和阅读区并排，侧栏收起来，阅读区宽一点
+  if (layout === "tablet") {
+    const tabletListMax = Math.max(LIST_MIN, viewport - READER_MIN);
+    const tabletList = Math.min(listWidth, tabletListMax);
+    return (
+      <div className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+        {mainView === "stats" ? (
+          <StatsPage />
+        ) : (
           <>
-            <div
-              aria-hidden
-              className="anim-fade fixed inset-0 z-30 bg-overlay"
-              onClick={() => setDrawerOpen(false)}
-            />
-            <div className="anim-drawer fixed inset-y-0 left-0 z-30 flex pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-pop">
-              <Sidebar width={Math.min(300, viewport - 56)} />
-            </div>
+            {!maximized && (
+              <>
+                <ItemList width={tabletList} />
+                <Resizer width={tabletList} onResize={(w) => setListWidth(Math.min(w, tabletListMax))} />
+              </>
+            )}
+            <Reader />
           </>
         )}
+        {drawer}
         {dialogs}
       </div>
     );
