@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.25 — 2026-11-18
+
+### English
 - Fewer buttons: the reader's top bar keeps Reply (with a small menu for Reply all and Forward), Category, AI, Star, Archive, Snooze, Maximize (Shift-click for full screen) and a new More menu with Mark unread, Open in browser, Full text, View source and Full screen. The list toolbar no longer repeats Refresh, and the Feeds sidebar no longer repeats Stats. Toolbars you customised keep your layout.
 - List rows show a … button on hover with the same menu as right-click.
 - Settings has a new General page for the sidebar, mail and app options; Appearance is just theme, density, sender logos and language.
