@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.26 — 2026-11-18
+
+### English
 - Browser access picks the right network: on computers with a VPN, virtual machines or WSL, the link and QR code now use the real Wi-Fi or Ethernet address, and you can choose another network in the settings if needed.
 - A phone icon at the bottom right of the sidebar shows the QR code on hover; click it for the browser access settings (desktop app).
 - Press H to snooze: pick a preset with 1–5 or choose a date and time.
