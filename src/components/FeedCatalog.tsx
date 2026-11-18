@@ -2,8 +2,8 @@
 // 新手引导里按分类一次订阅几个也用这里的订阅逻辑。目录数据和排序在 lib/catalog.ts。
 
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowRight, Check, LayoutGrid, List, Plus, Search } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import {
   browseCatalog,
@@ -19,8 +19,9 @@ import {
 } from "../lib/catalog";
 import { errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { keys, useNav } from "../lib/queries";
+import { useUi } from "../lib/store";
 import { toast } from "./Toast";
-import { Avatar, Button, cx, Select, Spinner, Switch } from "./ui";
+import { Avatar, Button, cx, IconButton, Select, Spinner, Switch } from "./ui";
 
 /** 分类在界面上的名字，也是按分类订阅时建的文件夹名。 */
 export function categoryName(t: Translate, category: CatalogCategory): string {
@@ -112,6 +113,8 @@ export function DiscoverPane({
   const [langFilter, setLangFilter] = useState<LangFilter>("auto");
   const [byCategory, setByCategory] = useState(true);
   const { subscribed, adding, subscribe } = useCatalogSubscribe();
+  const view = useUi((s) => s.catalogView);
+  const setView = useUi((s) => s.setCatalogView);
 
   const search = query.trim();
   const counts = sectionCounts(langFilter);
@@ -122,6 +125,11 @@ export function DiscoverPane({
   const folderOf = (feed: CatalogFeed) => startFolder || (byCategory ? categoryName(t, feed.category) : "");
   const sectionLabel = (s: CatalogSection) => (s === "featured" ? t("catalog.featured") : categoryName(t, s));
   const desc = (feed: CatalogFeed) => (prefer === "zh" ? feed.desc.zh : feed.desc.en);
+  const langBadge = (feed: CatalogFeed) => (
+    <span className="shrink-0 rounded border border-line px-1 text-[10px] leading-[14px] text-fg-3">
+      {feed.lang === "zh" ? t("catalog.langZh") : "EN"}
+    </span>
+  );
 
   return (
     <div className="flex h-[min(540px,calc(76vh-96px))] flex-col">
@@ -167,6 +175,14 @@ export function DiscoverPane({
             <option value="en">{t("catalog.langEn")}</option>
           </Select>
         </div>
+        <div className="flex shrink-0 items-center">
+          <IconButton label={t("catalog.viewGrid")} active={view === "grid"} onClick={() => setView("grid")}>
+            <LayoutGrid size={15} strokeWidth={1.75} />
+          </IconButton>
+          <IconButton label={t("catalog.viewList")} active={view === "list"} onClick={() => setView("list")}>
+            <List size={15} strokeWidth={1.75} />
+          </IconButton>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 border-t border-line">
@@ -206,6 +222,21 @@ export function DiscoverPane({
           )}
           {list.length === 0 ? (
             <p className="px-3 py-8 text-center text-[13px] leading-relaxed text-fg-3">{t("catalog.empty")}</p>
+          ) : view === "grid" ? (
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5 p-0.5">
+              {list.map((feed) => (
+                <li key={feed.id}>
+                  <GridCard
+                    feed={feed}
+                    desc={desc(feed)}
+                    badge={langFilter === "auto" && feed.lang !== prefer ? langBadge(feed) : null}
+                    done={subscribed.has(feed.id)}
+                    busy={adding.has(feed.id)}
+                    onSubscribe={() => void subscribe([feed], folderOf)}
+                  />
+                </li>
+              ))}
+            </ul>
           ) : (
             <ul className="flex flex-col gap-px">
               {list.map((feed) => {
@@ -219,32 +250,14 @@ export function DiscoverPane({
                         <span className="truncate text-[13px] font-medium text-fg" title={feed.site}>
                           {feed.name}
                         </span>
-                        {langFilter === "auto" && feed.lang !== prefer && (
-                          <span className="shrink-0 rounded border border-line px-1 text-[10px] leading-[14px] text-fg-3">
-                            {feed.lang === "zh" ? t("catalog.langZh") : "EN"}
-                          </span>
-                        )}
+                        {langFilter === "auto" && feed.lang !== prefer && langBadge(feed)}
                         {search && (
                           <span className="shrink-0 text-[11px] text-fg-3">{categoryName(t, feed.category)}</span>
                         )}
                       </div>
                       <p className="truncate text-[12px] text-fg-3">{desc(feed)}</p>
                     </div>
-                    {done ? (
-                      <span className="flex h-7 shrink-0 items-center gap-1 px-2 text-[12px] text-fg-3">
-                        <Check size={13} strokeWidth={2} />
-                        {t("catalog.subscribed")}
-                      </span>
-                    ) : (
-                      <Button
-                        className="h-7 shrink-0 px-2.5"
-                        disabled={busy}
-                        onClick={() => void subscribe([feed], folderOf)}
-                      >
-                        {busy ? <Spinner size={12} /> : <Plus size={13} strokeWidth={2} />}
-                        {t("catalog.subscribe")}
-                      </Button>
-                    )}
+                    <SubscribeButton done={done} busy={busy} onClick={() => void subscribe([feed], folderOf)} />
                   </li>
                 );
               })}
@@ -272,6 +285,73 @@ export function DiscoverPane({
             {t("catalog.done")}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 「订阅」按钮，订阅过的换成「已订阅」。 */
+function SubscribeButton({
+  done,
+  busy,
+  onClick,
+  wide = false,
+}: {
+  done: boolean;
+  busy: boolean;
+  onClick: () => void;
+  wide?: boolean;
+}) {
+  const t = useT();
+  if (done) {
+    return (
+      <span
+        className={cx(
+          "flex h-7 shrink-0 items-center justify-center gap-1 px-2 text-[12px] text-fg-3",
+          wide && "w-full",
+        )}
+      >
+        <Check size={13} strokeWidth={2} />
+        {t("catalog.subscribed")}
+      </span>
+    );
+  }
+  return (
+    <Button className={cx("h-7 shrink-0 px-2.5", wide && "w-full justify-center")} disabled={busy} onClick={onClick}>
+      {busy ? <Spinner size={12} /> : <Plus size={13} strokeWidth={2} />}
+      {t("catalog.subscribe")}
+    </Button>
+  );
+}
+
+/** 图标视图里的一张卡片：大图标、名字、两行介绍，下面是订阅按钮。 */
+function GridCard({
+  feed,
+  desc,
+  badge,
+  done,
+  busy,
+  onSubscribe,
+}: {
+  feed: CatalogFeed;
+  desc: string;
+  badge: ReactNode;
+  done: boolean;
+  busy: boolean;
+  onSubscribe: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center gap-1.5 rounded-lg border border-line px-2.5 pb-2.5 pt-3 text-center transition-colors hover:bg-hover">
+      <CatalogIcon feed={feed} size={40} />
+      <div className="flex w-full min-w-0 items-center justify-center gap-1">
+        <span className="truncate text-[13px] font-medium text-fg" title={feed.site}>
+          {feed.name}
+        </span>
+        {badge}
+      </div>
+      <p className="line-clamp-2 min-h-[32px] w-full text-[12px] leading-4 text-fg-3">{desc}</p>
+      <div className="mt-auto w-full pt-0.5">
+        <SubscribeButton done={done} busy={busy} onClick={onSubscribe} wide />
       </div>
     </div>
   );

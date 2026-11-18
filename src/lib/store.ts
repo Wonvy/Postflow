@@ -152,6 +152,9 @@ interface UiState {
   collapsedSections: SidebarSection[];
   /** 侧栏显示「订阅」空间。关掉后只有邮件，没有切换条。 */
   showFeeds: boolean;
+  /** 「添加订阅 → 发现」里的目录显示成图标网格还是列表。 */
+  catalogView: "grid" | "list";
+  setCatalogView: (view: "grid" | "list") => void;
   /** 列表里显示译文。 */
   listTranslate: boolean;
   /** 阅读面板的翻译开关：开着时打开的每一条都自动翻译，直到关掉。 */
@@ -298,6 +301,8 @@ export const useUi = create<UiState>()(
       cardSize: 260,
       collapsedSections: [],
       showFeeds: true,
+      catalogView: "grid",
+      setCatalogView: (catalogView) => set({ catalogView }),
       aiPanel: false,
       aiPanelFor: null,
       mainView: "list",
@@ -502,6 +507,7 @@ export const useUi = create<UiState>()(
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,
+        catalogView: s.catalogView,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,

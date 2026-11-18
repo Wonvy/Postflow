@@ -7,8 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Discover in Add feed shows feeds as a grid of icons by default; switch to the list with the buttons next to the language menu. The choice is kept on this device.
+- Offline translation recognises plain French, German and similar sentences again; since 0.1.18 they were sometimes left untranslated.
 
 ### 中文
+- 「添加订阅 → 发现」默认用图标网格显示，可以用语言菜单旁的按钮切换成列表，这台设备会记住。
+- 离线翻译又能认出普通的法语、德语等句子了；0.1.18 以来它们有时不会被翻译。
 
 ## 0.1.20 — 2026-11-18
 
