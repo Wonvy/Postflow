@@ -25,7 +25,8 @@ pub fn detect(text: &str) -> Option<String> {
         return None;
     }
     // 不把 whatlang 的猜测当作事实，否则短标题或签名会触发无关语言包下载。
-    if !info.is_reliable() && !english {
+    // 但一句话里有足够多那种语言的常用虚词时，猜测是有根据的（一句法语、德语的请求）
+    if !info.is_reliable() && !english && !backed_by_function_words(sample, info.lang()) {
         return None;
     }
     let code = match info.lang() {
@@ -109,6 +110,13 @@ fn function_words(lang: Lang) -> &'static [&'static str] {
         ],
         _ => &[],
     }
+}
+
+/// 那种语言最常见的虚词占了足够多的比例：至少两个，且约占五分之一。
+fn backed_by_function_words(text: &str, lang: Lang) -> bool {
+    let words = words(text);
+    let hits = count(&words, function_words(lang));
+    hits >= 2 && hits * 5 >= words.len()
 }
 
 /// whatlang 认成了别的拉丁字母语言，但英语的常用词比那种语言的还多：其实是英语。
