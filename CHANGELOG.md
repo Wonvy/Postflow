@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.31 — 2026-11-18
+
+### English
 - Clicking the menu-bar or tray icon brings Postflow back after it was minimized; before, the window could come back behind other apps.
 - Only one copy of Postflow runs at a time. Opening it again brings up the window that is already open.
 - Translation: the prompt to download an offline model now has Skip. Skipped languages stop asking when the list or an article translates automatically, so a few foreign words don't mean a download. Pressing T still offers it, and Settings → Translation can download it.
