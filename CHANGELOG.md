@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.23 — 2026-11-18
+
+### English
 - List views: by default every list shares one display mode and grouping. Lock a list (the lock at the bottom of the list) to give it its own, or turn on Settings → Appearance → Remember each list's view to make every list keep its own, like folders in a file manager. Lists you had customised are locked for you.
 - Card view: rows without pictures are no longer as tall as rows with them, and pictures in cards and summaries are shown whole instead of cropped.
 - Web page view: drag the edges of the iPad, iPhone or Android frame to any size; each device remembers its size, with a button to reset it.
