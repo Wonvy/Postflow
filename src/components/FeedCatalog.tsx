@@ -175,7 +175,7 @@ export function DiscoverPane({
   );
 
   return (
-    <div className="flex h-[min(540px,calc(76vh-96px))] flex-col max-md:h-[calc(100dvh-140px)]">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-4 pb-3">
         <div className="relative min-w-[200px] flex-1">
           <Search size={14} strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3" />
@@ -228,11 +228,11 @@ export function DiscoverPane({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 border-t border-line max-md:flex-col">
+      <div className="flex min-h-0 flex-1 max-md:flex-col">
         {/* 分类；手机上是一排，左右滑动 */}
         <nav
           aria-label={t("catalog.categories")}
-          className="w-[152px] shrink-0 overflow-y-auto border-r border-line p-1.5 no-scrollbar max-md:flex max-md:w-auto max-md:gap-1 max-md:overflow-x-auto max-md:overflow-y-hidden max-md:border-b max-md:border-r-0"
+          className="w-[152px] shrink-0 overflow-y-auto py-1.5 pl-3 pr-1 no-scrollbar max-md:flex max-md:w-auto max-md:gap-1 max-md:overflow-x-auto max-md:overflow-y-hidden max-md:px-3"
         >
           {nav.map((n) => (
             <button
@@ -260,7 +260,7 @@ export function DiscoverPane({
         </nav>
 
         {/* 源 */}
-        <div className="min-w-0 flex-1 overflow-y-auto p-1.5">
+        <div className="min-w-0 flex-1 overflow-y-auto py-1.5 pl-2 pr-3">
           {/* 播客的小类：新闻、科技、商业…… */}
           {showGroups && (
             <div role="group" aria-label={t("catalog.podcastGroups")} className="mb-1.5 flex flex-wrap gap-1 px-0.5">
@@ -271,10 +271,10 @@ export function DiscoverPane({
                   aria-pressed={(activeGroup ?? null) === g}
                   onClick={() => setGroup(g)}
                   className={cx(
-                    "h-6 rounded-full border px-2.5 text-[12px] transition-colors touch:h-9 touch:px-3",
+                    "h-6 rounded-full px-2.5 text-[12px] transition-colors touch:h-9 touch:px-3",
                     (activeGroup ?? null) === g
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-line-strong text-fg-2 hover:bg-hover hover:text-fg",
+                      ? "bg-accent-soft text-accent"
+                      : "bg-hover text-fg-2 hover:bg-active hover:text-fg",
                   )}
                 >
                   {g ? t(`catalog.group.${g}`) : t("feedKind.all")}
@@ -404,7 +404,15 @@ function SubscribeButton({
     );
   }
   return (
-    <Button className={cx("h-7 shrink-0 px-2.5", wide && "w-full justify-center")} disabled={busy} onClick={onClick}>
+    <Button
+      variant="ghost"
+      className={cx(
+        "h-7 shrink-0 bg-accent-soft px-2.5 text-accent hover:bg-accent hover:text-white",
+        wide && "w-full justify-center",
+      )}
+      disabled={busy}
+      onClick={onClick}
+    >
       {busy ? <Spinner size={12} /> : <Plus size={13} strokeWidth={2} />}
       {t("catalog.subscribe")}
     </Button>
@@ -428,7 +436,7 @@ function GridCard({
   onSubscribe: () => void;
 }) {
   return (
-    <div className="flex h-full flex-col items-center gap-1.5 rounded-lg border border-line px-2.5 pb-2.5 pt-3 text-center transition-colors hover:bg-hover">
+    <div className="flex h-full flex-col items-center gap-1.5 rounded-lg px-2.5 pb-2.5 pt-3 text-center transition-colors hover:bg-hover">
       <CatalogIcon feed={feed} size={40} />
       <div className="flex w-full min-w-0 items-center justify-center gap-1">
         <span className="truncate text-[13px] font-medium text-fg" title={feed.site}>

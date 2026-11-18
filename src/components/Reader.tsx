@@ -143,6 +143,15 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
       ) : (
         children
       )}
+      {/* 弹出的阅读区：最右边一个关闭按钮（手机上左上角已经有返回） */}
+      {overlay && !mobile && (
+        <>
+          <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
+          <IconButton label={t("action.close")} shortcut="Esc" onClick={close}>
+            <X {...ICON} />
+          </IconButton>
+        </>
+      )}
     </header>
     </ToolbarMenu>
   );
@@ -1190,8 +1199,16 @@ function TranslateBar({ translation }: { translation: ReturnType<typeof useTrans
           <Button variant="primary" className={small} onClick={() => download(phase.plan)}>
             {t("translate.download")}
           </Button>
-          <Button variant="ghost" className={small} onClick={off}>
-            {t("translate.cancel")}
+          <Button
+            variant="ghost"
+            className={small}
+            title={t("translate.skipHint")}
+            onClick={() => {
+              useUi.getState().skipModels(phase.plan.missing.map((m) => m.pair));
+              off();
+            }}
+          >
+            {t("translate.skip")}
           </Button>
         </>,
       );

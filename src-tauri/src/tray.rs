@@ -4,6 +4,7 @@
 //! macOS 上数字直接显示在菜单栏图标旁边；Windows 和 Linux 显示在鼠标悬停的提示里。
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use serde::Deserialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -25,12 +26,29 @@ impl Default for TrayState {
     }
 }
 
-/// 把主窗口拿出来放到最前面。
+/// 把主窗口拿出来放到最前面：关到后台藏起来的、最小化的、整个应用被隐藏（macOS ⌘H）的都行。
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+    #[cfg(target_os = "macos")]
+    let _ = app.show();
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let minimized = window.is_minimized().unwrap_or(false);
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    if minimized {
+        // 从最小化还原有动画，动画结束前系统还当它是最小化的，上面的 set_focus 不起作用，
+        // 窗口会回到别的程序后面。等它真的还原了再聚焦一次
+        std::thread::spawn(move || {
+            for _ in 0..40 {
+                std::thread::sleep(Duration::from_millis(50));
+                if !window.is_minimized().unwrap_or(false) {
+                    let _ = window.set_focus();
+                    return;
+                }
+            }
+        });
     }
 }
 

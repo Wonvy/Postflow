@@ -406,8 +406,14 @@ export function AddFeedDialog() {
   };
 
   return (
-    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={680}>
-      <div className="px-4 pb-3 pt-3">
+    <Modal
+      open={open}
+      onClose={() => setDialog(null)}
+      title={t("add.title")}
+      width={680}
+      resize={{ key: "add-feed", height: 640, minWidth: 520, minHeight: 420 }}
+    >
+      <div className="shrink-0 px-4 pb-3 pt-3">
         <Segmented<AddMode>
           value={mode}
           onChange={switchMode}
@@ -433,8 +439,8 @@ export function AddFeedDialog() {
           onDone={() => setDialog(null)}
         />
       ) : (
-      <form onSubmit={(e) => void submit(e)} className="flex flex-col">
-        <div className="flex flex-col gap-4 px-4 pb-4">
+      <form onSubmit={(e) => void submit(e)} className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4 pt-0.5">
         {mode === "rsshub" && !picked && (
           <p className="text-[12px] leading-relaxed text-fg-3">
             {t("add.advancedHint")}{" "}
@@ -560,7 +566,7 @@ export function AddFeedDialog() {
         </div>
 
         {/* 订阅设置和按钮固定在底部，表单再长也看得到 */}
-        <div className="sticky bottom-0 flex flex-col gap-3 border-t border-line bg-surface px-4 pb-4 pt-3">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-line bg-surface px-4 pb-4 pt-3">
           <div className="flex items-end gap-3">
             <IconPicker
               value={icon ?? preview?.feed.icon_url ?? null}

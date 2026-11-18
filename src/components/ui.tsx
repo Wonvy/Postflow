@@ -13,6 +13,7 @@ import {
   type PointerEvent,
   type ReactElement,
   type ReactNode,
+  type RefObject,
   type SelectHTMLAttributes,
   createContext,
   useContext,
@@ -301,20 +302,131 @@ export function Slider({
   );
 }
 
+/** 能拖边角改大小的对话框：记住的大小存在这台设备上，按 `key` 区分。 */
+export interface ModalResize {
+  key: string;
+  /** 默认高度（像素），没拖过时用。 */
+  height: number;
+  minWidth?: number;
+  minHeight?: number;
+}
+
+interface ModalSize {
+  width: number;
+  height: number;
+}
+
+const MODAL_SIZE_PREFIX = "postflow.dialogSize.";
+/** 对话框顶边离窗口顶部 14vh，底下留 16px。 */
+const modalMaxHeight = () => window.innerHeight * 0.86 - 16;
+const modalMaxWidth = () => window.innerWidth - 32;
+
+function loadModalSize(key: string): ModalSize | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MODAL_SIZE_PREFIX + key) ?? "null") as ModalSize | null;
+    return saved && typeof saved.width === "number" && typeof saved.height === "number" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveModalSize(key: string, size: ModalSize) {
+  try {
+    localStorage.setItem(MODAL_SIZE_PREFIX + key, JSON.stringify(size));
+  } catch {
+    // 存不了就只在这次有效
+  }
+}
+
+/**
+ * 对话框右边、下边和右下角的拖动把手。对话框水平居中，所以宽度按鼠标移动的两倍变，边缘一直跟着鼠标。
+ * 双击右下角恢复默认大小。
+ */
+function ModalResizeHandles({
+  resize,
+  target,
+  onSize,
+  onReset,
+}: {
+  resize: ModalResize;
+  target: RefObject<HTMLDivElement | null>;
+  onSize: (size: ModalSize, done: boolean) => void;
+  onReset: () => void;
+}) {
+  const start = (e: PointerEvent<HTMLDivElement>, axis: "x" | "y" | "xy") => {
+    const box = target.current?.getBoundingClientRect();
+    if (!box || e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const from = { x: e.clientX, y: e.clientY, width: box.width, height: box.height };
+    const sizeAt = (ev: globalThis.PointerEvent): ModalSize => ({
+      width:
+        axis === "y"
+          ? from.width
+          : Math.round(
+              Math.min(modalMaxWidth(), Math.max(resize.minWidth ?? 420, from.width + 2 * (ev.clientX - from.x))),
+            ),
+      height:
+        axis === "x"
+          ? from.height
+          : Math.round(Math.min(modalMaxHeight(), Math.max(resize.minHeight ?? 320, from.height + ev.clientY - from.y))),
+    });
+    const move = (ev: globalThis.PointerEvent) => onSize(sizeAt(ev), false);
+    const up = (ev: globalThis.PointerEvent) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      onSize(sizeAt(ev), true);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  };
+  return (
+    <>
+      <div
+        aria-hidden
+        onPointerDown={(e) => start(e, "x")}
+        className="absolute -right-1 bottom-4 top-4 w-2 cursor-ew-resize touch:hidden max-md:hidden"
+      />
+      <div
+        aria-hidden
+        onPointerDown={(e) => start(e, "y")}
+        className="absolute -bottom-1 left-4 right-4 h-2 cursor-ns-resize touch:hidden max-md:hidden"
+      />
+      <div
+        aria-hidden
+        onPointerDown={(e) => start(e, "xy")}
+        onDoubleClick={onReset}
+        className="absolute -bottom-1 -right-1 size-4 cursor-nwse-resize touch:hidden max-md:hidden"
+      />
+    </>
+  );
+}
+
 export function Modal({
   open,
   onClose,
   title,
   width = 440,
+  resize,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   width?: number;
+  /** 给了就能拖边角改大小，内容区高度固定为对话框的高度（里面自己滚动）。 */
+  resize?: ModalResize;
   children: ReactNode;
 }) {
   const t = useT();
+  const content = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<ModalSize | null>(() => (resize ? loadModalSize(resize.key) : null));
+  const style: CSSProperties = resize
+    ? { width: size?.width ?? width, height: size?.height ?? resize.height }
+    : { width };
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
@@ -331,8 +443,12 @@ export function Modal({
               target.focus();
             }
           }}
-          style={{ width }}
-          className="anim-pop fixed left-1/2 top-[14vh] z-40 flex max-h-[76vh] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none max-md:top-[max(8px,env(safe-area-inset-top))] max-md:max-h-[calc(100dvh-16px-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-md:max-w-[calc(100vw-16px)]"
+          ref={content}
+          style={style}
+          className={cx(
+            "anim-pop fixed left-1/2 top-[14vh] z-40 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col rounded-xl bg-surface shadow-pop outline-none max-md:top-[max(8px,env(safe-area-inset-top))] max-md:max-h-[calc(100dvh-16px-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-md:max-w-[calc(100vw-16px)]",
+            resize ? "max-h-[calc(86vh-16px)]" : "max-h-[76vh]",
+          )}
         >
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-line pl-4 pr-2">
             <Dialog.Title className="text-[13px] font-semibold">{title}</Dialog.Title>
@@ -346,7 +462,27 @@ export function Modal({
               </button>
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          <div className={cx("min-h-0 flex-1", resize ? "flex flex-col overflow-hidden" : "overflow-y-auto")}>
+            {children}
+          </div>
+          {resize && (
+            <ModalResizeHandles
+              resize={resize}
+              target={content}
+              onSize={(next, done) => {
+                setSize(next);
+                if (done) saveModalSize(resize.key, next);
+              }}
+              onReset={() => {
+                setSize(null);
+                try {
+                  localStorage.removeItem(MODAL_SIZE_PREFIX + resize.key);
+                } catch {
+                  // 忽略
+                }
+              }}
+            />
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

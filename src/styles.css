@@ -28,6 +28,8 @@
   --danger: #e5646a;
   --warning: #d9a03f;
   --overlay: rgb(0 0 0 / 0.55);
+  /* 弹出的阅读区后面：更暗一些，再加模糊，眼睛只看正文 */
+  --overlay-reader: rgb(0 0 0 / 0.68);
   --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 30px rgb(0 0 0 / 0.5);
 }
 
@@ -51,6 +53,7 @@
   --danger: #c93f46;
   --warning: #b07a16;
   --overlay: rgb(0 0 0 / 0.3);
+  --overlay-reader: rgb(0 0 0 / 0.45);
   --shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 30px rgb(0 0 0 / 0.14);
 }
 
@@ -77,6 +80,7 @@
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-overlay: var(--overlay);
+  --color-overlay-reader: var(--overlay-reader);
 
   --shadow-pop: var(--shadow-pop);
 }

@@ -139,7 +139,7 @@ const LOAD_AHEAD = 30;
  * 虚拟列表里的一行：展开的组的标题、一条（或折叠的一组），或者卡片视图里的一排卡片。
  */
 type Line =
-  | { kind: "section"; key: string; label: string; count: number }
+  | { kind: "section"; key: string; label: string; count: number; collapsed: boolean }
   | { kind: "header"; group: Group }
   | { kind: "row"; row: Row }
   | { kind: "cards"; rows: Row[] };
@@ -169,10 +169,11 @@ function linesOf(
   view: ListView,
   columns: number,
   section?: (ms: number) => { key: string; label: string },
+  collapsed: ReadonlySet<string> = new Set(),
 ): Line[] {
   const lines: Line[] = [];
   let current: Row[] = [];
-  let heading: Extract<Line, { kind: "section" }> | null = null;
+  let heading = null as Extract<Line, { kind: "section" }> | null;
   const flush = () => {
     if (current.length > 0) lines.push({ kind: "cards", rows: current });
     current = [];
@@ -183,11 +184,13 @@ function linesOf(
       const next = section(rowTime(row));
       if (next.key !== heading?.key) {
         flush();
-        heading = { kind: "section", ...next, count: 0 };
+        heading = { kind: "section", ...next, count: 0, collapsed: collapsed.has(next.key) };
         lines.push(heading);
       }
       heading.count += 1;
     }
+    // 收起的分段只留标题（展开的组里的条目跟着组头一起藏起来）
+    if (heading?.collapsed) continue;
     if (view !== "cards") {
       lines.push(row.kind === "group" && row.expanded ? { kind: "header", group: row.group } : { kind: "row", row });
       continue;
@@ -793,7 +796,18 @@ export function ItemList({ width }: { width: number }) {
       return { key: section.key, label: sectionLabel(section, lang, now) };
     };
   }, [style.dateSections, minute, lang]);
-  const lines = useMemo(() => linesOf(listRows, view, columns, sectionOf), [listRows, view, columns, sectionOf]);
+  // 收起的日期分段，点分段标题切换
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleSection = (key: string) =>
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const lines = useMemo(
+    () => linesOf(listRows, view, columns, sectionOf, collapsedSections),
+    [listRows, view, columns, sectionOf, collapsedSections],
+  );
   const sizeOf = (line: Line | undefined) =>
     !line
       ? 0
@@ -1170,17 +1184,29 @@ export function ItemList({ width }: { width: number }) {
               // 日期分段的标题
               if (line.kind === "section") {
                 return (
-                  <div
+                  <button
+                    type="button"
                     // 列表不按时间排时（比如星标），同一段可能出现不止一次
                     key={`s:${line.key}:${virtual.index}`}
-                    role="presentation"
-                    className="absolute inset-x-0 top-0 flex items-end gap-2 pb-1.5 text-[12px] font-semibold text-fg-2"
+                    aria-expanded={!line.collapsed}
+                    title={t(line.collapsed ? "group.expand" : "group.collapse")}
+                    onClick={() => toggleSection(line.key)}
+                    className="group/section absolute inset-x-0 top-0 flex items-end gap-1.5 pb-1.5 text-left text-[12px] font-semibold text-fg-2 hover:text-fg"
                     style={{ ...position, height: SECTION_HEIGHT, paddingLeft: metrics.padX, paddingRight: metrics.padX }}
                   >
+                    <ChevronDown
+                      size={13}
+                      strokeWidth={2}
+                      aria-hidden
+                      className={cx(
+                        "mb-px shrink-0 text-fg-3 transition-transform",
+                        line.collapsed && "-rotate-90",
+                      )}
+                    />
                     <span className="min-w-0 truncate">{line.label}</span>
                     <span className="tabular font-normal text-fg-4">{line.count}</span>
-                    <span aria-hidden className="mb-[5px] h-px flex-1 bg-line" />
-                  </div>
+                    <span aria-hidden className="mb-[5px] ml-0.5 h-px flex-1 bg-line" />
+                  </button>
                 );
               }
 
@@ -1270,6 +1296,7 @@ export function ItemList({ width }: { width: number }) {
                           <div
                             role="option"
                             aria-selected={d.opened || d.selected}
+                            data-row-id={d.id}
                             onClick={(e) => onRowClick(e, d.id)}
                             onDoubleClick={() => onRowDoubleClick(d.id)}
                             title={d.tooltip}
@@ -1310,6 +1337,7 @@ export function ItemList({ width }: { width: number }) {
                   <div
                     role="option"
                     aria-selected={d.opened || d.selected}
+                    data-row-id={d.id}
                     onClick={(e) => onRowClick(e, d.id)}
                     onDoubleClick={() => onRowDoubleClick(d.id)}
                     title={d.tooltip}
@@ -1735,8 +1763,11 @@ function SearchBar({ scopeName, fetching, firstId }: { scopeName: string; fetchi
 function ModelPrompt() {
   const t = useT();
   const lang = useLang();
-  const missing = useListTranslations((s) => s.missing);
+  const all = useListTranslations((s) => s.missing);
+  const skipped = useUi((s) => s.skippedModels);
+  const skip = useUi((s) => s.skipModels);
   const downloads = useModelDownloads((s) => s.byPair);
+  const missing = all.filter((m) => !skipped.includes(m.pair));
   if (missing.length === 0) return null;
   const states = missing.map((m) => downloads[m.pair]);
   const downloading = states.some((s) => s?.state === "downloading");
@@ -1763,6 +1794,16 @@ function ModelPrompt() {
           }}
         >
           {t("translate.download")}
+        </Button>
+      )}
+      {!downloading && (
+        <Button
+          variant="ghost"
+          className="h-6 px-2 text-[12px]"
+          title={t("translate.skipHint")}
+          onClick={() => skip(missing.map((m) => m.pair))}
+        >
+          {t("translate.skip")}
         </Button>
       )}
     </div>

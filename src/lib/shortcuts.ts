@@ -205,6 +205,16 @@ export function useShortcuts() {
           if (useFullscreen.getState().ours) return;
           ui.setReaderMaximized(!ui.readerMaximized);
           break;
+        case " ": {
+          // 空格：打开鼠标停着的那一行（设置里可以关）。鼠标不在列表的行上时不管，空格照常翻页
+          if (!ui.spaceOpensHovered) return;
+          const row = document.querySelector<HTMLElement>("[data-row-id]:hover");
+          const id = row?.dataset.rowId;
+          if (!id) return;
+          ui.setSelection([]);
+          ui.open(id);
+          break;
+        }
         case "Escape":
           // 先退出全屏，再退出最大化，最后才是取消选择、关掉条目
           if (useFullscreen.getState().on) void setFullscreen(false);

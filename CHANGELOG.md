@@ -7,8 +7,22 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Clicking the menu-bar or tray icon brings Postflow back after it was minimized; before, the window could come back behind other apps.
+- Only one copy of Postflow runs at a time. Opening it again brings up the window that is already open.
+- Translation: the prompt to download an offline model now has Skip. Skipped languages stop asking when the list or an article translates automatically, so a few foreign words don't mean a download. Pressing T still offers it, and Settings → Translation can download it.
+- Date headings in the list (Today, This week…) fold away with a click.
+- The pop-up reader sits on a darker, blurred background and has a close button at the top right.
+- Add feed is calmer, with fewer lines, and can be resized by dragging its edges or corner. It remembers the size; double-click the corner to reset it.
+- Point at a row in the list and press Space to open it. On by default; switch it off in Settings → Appearance.
 
 ### 中文
+- 最小化以后点菜单栏或托盘图标能把窗口拿回来了；以前窗口可能回到别的程序后面。
+- Postflow 只运行一个。再次打开时，把已经开着的窗口拿到最前面。
+- 翻译：提示下载离线模型时可以「跳过」。跳过的语言在列表和文章自动翻译时不再提示，不会为了几个外文单词去下载。按 T 翻译时还会问，也可以在「设置 → 翻译」里下载。
+- 列表里的日期分段（今天、本周……）点标题就能收起。
+- 弹出的阅读区后面更暗，还加了模糊，右上角有关闭按钮。
+- 「添加订阅」去掉了多余的线条，可以拖边缘或右下角改大小，会记住；双击右下角恢复默认大小。
+- 鼠标停在列表的一行上按空格就能打开它。默认开启，可以在「设置 → 外观」里关掉。
 
 ## 0.1.30 — 2026-11-18
 

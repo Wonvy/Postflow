@@ -85,6 +85,8 @@ export function SettingsDialog() {
   const keepRunning = useUi((s) => s.keepRunning);
   const rememberViews = useUi((s) => s.rememberViews);
   const focusPane = useUi((s) => s.focusPane);
+  const spaceOpens = useUi((s) => s.spaceOpensHovered);
+  const setSpaceOpens = useUi((s) => s.setSpaceOpensHovered);
   const markReadOnScroll = useUi((s) => s.markReadOnScroll);
   const episodesKeep = useUi((s) => s.episodesKeep);
   const setEpisodesKeep = useUi((s) => s.setEpisodesKeep);
@@ -216,6 +218,9 @@ export function SettingsDialog() {
         </SettingRow>
         <SettingRow label={t("settings.focusPane")} hint={t("settings.focusPaneHint")}>
           <Switch label={t("settings.focusPane")} checked={focusPane} onChange={setFocusPane} />
+        </SettingRow>
+        <SettingRow label={t("settings.spaceOpens")} hint={t("settings.spaceOpensHint")}>
+          <Switch label={t("settings.spaceOpens")} checked={spaceOpens} onChange={setSpaceOpens} />
         </SettingRow>
         <LanguageSettings />
       </>

@@ -233,6 +233,7 @@ download page instead.
 | Key | Action |
 |---|---|
 | `J` / `K` | Next / previous item |
+| `Space` | Open the row under the pointer (Settings → Appearance) |
 | `E` | Archive (in Archive, Spam or Trash, move back to the inbox) |
 | `S` | Star |
 | `H` | Snooze (pick a time with 1–5) |

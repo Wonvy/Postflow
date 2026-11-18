@@ -151,8 +151,8 @@ function usePaneFocus() {
 }
 
 /**
- * 「阅读区弹出」时打开的条目：盖在侧栏和列表上面的大面板，四周是半透明的遮罩。
- * 点遮罩、按 Esc 关掉；最大化（F）时铺满窗口。快捷键照常用，J/K 直接换下一条。
+ * 「阅读区弹出」时打开的条目：盖在侧栏和列表上面的大面板，四周是变暗、模糊的遮罩。
+ * 点遮罩、右上角的关闭按钮或按 Esc 关掉；最大化（F）时铺满窗口。快捷键照常用，J/K 直接换下一条。
  * 不用 role=dialog：它不是一个要先关掉才能做别的事的对话框，桌面应用的原网页视图也靠 role=dialog 判断有没有被盖住。
  */
 function ReaderPopup() {
@@ -163,7 +163,7 @@ function ReaderPopup() {
   if (!openId) return null;
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
-      <div aria-hidden className="anim-fade absolute inset-0 bg-overlay" onClick={() => open(null)} />
+      <div aria-hidden className="anim-fade absolute inset-0 bg-overlay-reader backdrop-blur-[6px]" onClick={() => open(null)} />
       <section
         aria-label={t("reader.popup")}
         className={cx(

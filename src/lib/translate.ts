@@ -398,7 +398,10 @@ export function useTranslation(source: TranslateSource | null) {
       } else if (plan.same) {
         setPhase(quiet.current ? { kind: "off" } : { kind: "same", from: plan.from });
       } else if (plan.missing.length > 0) {
-        setPhase({ kind: "need", plan });
+        // 自动翻译时，用户跳过过的模型不再提示下载
+        const skipped = useUi.getState().skippedModels;
+        const quietSkip = quiet.current && plan.missing.every((m) => skipped.includes(m.pair));
+        setPhase(quietSkip ? { kind: "off" } : { kind: "need", plan });
       } else {
         await translate(plan.from);
       }
