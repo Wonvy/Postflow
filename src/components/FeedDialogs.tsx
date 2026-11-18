@@ -14,6 +14,7 @@ import type { QuickSourceId } from "../lib/quickSources";
 import { httpStatusOf, type RsshubRoute } from "../lib/rsshub";
 import { RpcError } from "../lib/transport";
 import { FolderPicker } from "./FolderPicker";
+import { DiscoverPane } from "./FeedCatalog";
 import { QuickForm, QuickGrid } from "./QuickSources";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { RsshubStatus } from "./RsshubServer";
@@ -64,6 +65,9 @@ function hostOf(url: string | null): string {
     return url;
   }
 }
+
+/** 添加订阅的三页：发现（内置目录）、网址、高级（RSSHub）。 */
+type AddMode = "discover" | "url" | "rsshub";
 
 /** 看起来像一个网址：带点、没有空格。 */
 const looksLikeUrl = (text: string) => /^\S+\.\S+$/.test(text.trim());
@@ -212,8 +216,8 @@ export function AddFeedDialog() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** 「网址」直接填地址；「RSSHub」搜网站、填参数，拼出地址。 */
-  const [mode, setMode] = useState<"url" | "rsshub">("url");
+  /** 「发现」浏览内置目录；「网址」直接填地址；「高级」用 RSSHub 搜网站、填参数，拼出地址。 */
+  const [mode, setMode] = useState<AddMode>("discover");
   const modeRef = useRef(mode);
   modeRef.current = mode;
   /** RSSHub 模式下选中的路由，以及从网址里取到的参数值。 */
@@ -238,7 +242,7 @@ export function AddFeedDialog() {
       setPreview(null);
       setPreviewing(false);
       setError(null);
-      setMode("url");
+      setMode("discover");
       setPicked(null);
       setRsshubQuery("");
       setQuick(null);
@@ -386,7 +390,7 @@ export function AddFeedDialog() {
     setError(null);
   };
 
-  const switchMode = (next: "url" | "rsshub") => {
+  const switchMode = (next: AddMode) => {
     setQuick(null);
     if (next === mode) return;
     setMode(next);
@@ -401,17 +405,44 @@ export function AddFeedDialog() {
   };
 
   return (
-    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={600}>
-      <form onSubmit={(e) => void submit(e)} className="flex flex-col">
-        <div className="flex flex-col gap-4 p-4">
-        <Segmented<"url" | "rsshub">
+    <Modal open={open} onClose={() => setDialog(null)} title={t("add.title")} width={680}>
+      <div className="px-4 pb-3 pt-3">
+        <Segmented<AddMode>
           value={mode}
           onChange={switchMode}
           options={[
+            { value: "discover", label: t("add.modeDiscover") },
             { value: "url", label: t("add.modeUrl") },
-            { value: "rsshub", label: "RSSHub" },
+            { value: "rsshub", label: t("add.modeAdvanced") },
           ]}
         />
+      </div>
+      {mode === "discover" ? (
+        <DiscoverPane
+          startFolder={startFolder}
+          onUrl={(target) => {
+            // 搜索框里输入或粘贴的是网址：换到「网址」页，照常预览、订阅
+            switchMode("url");
+            setUrl(target);
+            void load(target);
+          }}
+          onDone={() => setDialog(null)}
+        />
+      ) : (
+      <form onSubmit={(e) => void submit(e)} className="flex flex-col">
+        <div className="flex flex-col gap-4 px-4 pb-4">
+        {mode === "rsshub" && !picked && (
+          <p className="text-[12px] leading-relaxed text-fg-3">
+            {t("add.advancedHint")}{" "}
+            <button
+              type="button"
+              onClick={() => setDialog({ type: "settings", page: "feeds" })}
+              className="text-accent hover:underline"
+            >
+              {t("add.importOpml")}
+            </button>
+          </p>
+        )}
         {mode === "rsshub" &&
           (picked ? (
             <RsshubForm
@@ -576,6 +607,7 @@ export function AddFeedDialog() {
           </div>
         </div>
       </form>
+      )}
     </Modal>
   );
 }

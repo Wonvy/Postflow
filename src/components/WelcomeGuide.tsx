@@ -5,12 +5,14 @@
 // 并显示刚加好的邮箱和订阅。
 
 import { Check, Keyboard, Languages, LayoutPanelLeft, Mail, MousePointerClick, Puzzle, Rss, Sparkles, Workflow } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
-import { type MessageKey, useT } from "../lib/i18n";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { CATALOG_CATEGORIES, type CatalogCategory, catalogLang, starterFeeds } from "../lib/catalog";
+import { type MessageKey, useLang, useT } from "../lib/i18n";
 import { useNav } from "../lib/queries";
 import { welcomeOnStart } from "../lib/welcome";
 import { type LangPref, type SettingsPage, type ThemePref, useUi } from "../lib/store";
-import { Button, cx, ICON, Kbd, Logo, Modal, Segmented, Select } from "./ui";
+import { categoryName, useCatalogSubscribe } from "./FeedCatalog";
+import { Button, cx, ICON, Kbd, Logo, Modal, Segmented, Select, Spinner } from "./ui";
 
 const STEPS = ["hello", "mail", "feeds", "layout", "more"] as const;
 type Step = (typeof STEPS)[number];
@@ -197,8 +199,16 @@ function MailStep() {
 
 function FeedsStep() {
   const t = useT();
+  const lang = useLang();
   const setDialog = useUi((s) => s.setDialog);
   const feeds = useNav().data?.feeds ?? [];
+  // 选几个感兴趣的分类，一次订阅每类几个推荐的官方源，放进以分类命名的文件夹
+  const [picked, setPicked] = useState<CatalogCategory[]>([]);
+  const { subscribed, adding, subscribe } = useCatalogSubscribe();
+  const starters = starterFeeds(picked, catalogLang(lang)).filter((f) => !subscribed.has(f.id));
+  const busy = adding.size > 0;
+  const toggle = (c: CatalogCategory) =>
+    setPicked((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
   return (
     <>
       <Heading
@@ -210,8 +220,39 @@ function FeedsStep() {
         title={t("welcome.feeds.title")}
         text={t("welcome.feeds.text")}
       />
+      <div>
+        <p className="mb-2 text-[12px] font-medium text-fg-2">{t("welcome.feeds.pick")}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {CATALOG_CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-pressed={picked.includes(c)}
+              onClick={() => toggle(c)}
+              className={cx(
+                "flex h-7 items-center gap-1 rounded-full border px-3 text-[12px] transition-colors",
+                picked.includes(c)
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line-strong text-fg-2 hover:bg-hover hover:text-fg",
+              )}
+            >
+              {picked.includes(c) && <Check size={12} strokeWidth={2.25} />}
+              {categoryName(t, c)}
+            </button>
+          ))}
+        </div>
+      </div>
       <Added names={feeds.slice(0, SHOWN).map((f) => f.title || f.url)} more={feeds.length - SHOWN} />
       <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="primary"
+          className="h-8"
+          disabled={busy || starters.length === 0}
+          onClick={() => void subscribe(starters, (f) => categoryName(t, f.category))}
+        >
+          {busy && <Spinner size={12} />}
+          {t("welcome.feeds.subscribePicked", { n: starters.length })}
+        </Button>
         <Button className="h-8" onClick={() => setDialog({ type: "add-feed" })}>
           {feeds.length > 0 ? t("welcome.feeds.another") : t("welcome.feeds.add")}
         </Button>

@@ -7,8 +7,16 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Add feed opens on a new Discover page: about 150 official feeds from well-known sites, with icons, in ten categories (News, Tech, Programming, Design, Science, Business, Gaming, Culture, Life, Blogs). Feeds in your interface language come first, and you can show only Chinese or only English ones. Search by name or topic, subscribe with one click, or subscribe to a whole category; each category goes into its own folder unless you turn that off. Pasting an address still works from the same search box.
+- The other two pages are Address (paste a site or feed address, or pick YouTube, GitHub and other popular sites) and Advanced (RSSHub, and a link to OPML import).
+- The welcome guide's feed step lets you pick topics and subscribe to a few recommended feeds for each in one go.
+- The catalog only lists feeds the sites publish themselves. Icons ship with the app, so browsing it doesn't contact any site.
 
 ### 中文
+- 「添加订阅」打开时先显示「发现」页：内置约 150 个知名网站的官方订阅源，带图标，分十类（新闻、科技、编程开发、设计、科学、商业财经、游戏、文化、生活、博客）。界面语言的源排在前面，也可以只看中文或只看英文。可以按名字或主题搜索，一键订阅，或者整个分类一起订阅；默认每个分类放进同名文件夹，可以关掉。在同一个搜索框里粘贴网址照样能订阅。
+- 另外两页是「网址」（粘贴网站或订阅地址，或者从 YouTube、GitHub 等常用网站里选）和「高级」（RSSHub，以及导入 OPML 的入口）。
+- 新手引导的订阅那一步可以选几个感兴趣的分类，一次订阅每类几个推荐源。
+- 目录只收网站自己提供的订阅源。图标随应用一起发布，浏览目录时不会访问任何网站。
 
 ## 0.1.19 — 2026-11-18
 
