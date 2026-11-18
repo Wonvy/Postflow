@@ -49,6 +49,8 @@ interface PlayerState {
   error: string | null;
   rate: number;
   autoNext: boolean;
+  /** 睡眠定时：到这个时间（毫秒）暂停；"end" 是这一期放完就停。 */
+  sleep: number | "end" | null;
   setRate: (rate: number) => void;
   setAutoNext: (on: boolean) => void;
 }
@@ -65,6 +67,7 @@ export const usePlayer = create<PlayerState>()(
       error: null,
       rate: 1,
       autoNext: false,
+      sleep: null,
       setRate: (rate) => {
         set({ rate });
         if (audio) audio.playbackRate = rate;
@@ -87,18 +90,24 @@ const DONE_MARGIN = 20;
 
 type Progress = Record<string, { t: number; at: number }>;
 
+// 列表里每一行都要看听到哪里，读一次放在内存里
+let progressCache: Progress | null = null;
+
 function readProgress(): Progress {
+  if (progressCache) return progressCache;
   try {
-    return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress;
+    progressCache = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress;
   } catch {
-    return {};
+    progressCache = {};
   }
+  return progressCache;
 }
 
 function writeProgress(progress: Progress) {
+  const entries = Object.entries(progress).sort((a, b) => b[1].at - a[1].at).slice(0, PROGRESS_LIMIT);
+  progressCache = Object.fromEntries(entries);
   try {
-    const entries = Object.entries(progress).sort((a, b) => b[1].at - a[1].at).slice(0, PROGRESS_LIMIT);
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(Object.fromEntries(entries)));
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressCache));
   } catch {
     // 存不下就算了，下次从头放
   }
@@ -110,7 +119,7 @@ export function savedPosition(id: string): number {
 }
 
 function savePosition(id: string, t: number, duration: number) {
-  const progress = readProgress();
+  const progress = { ...readProgress() };
   if (t < 5 || (duration > 0 && duration - t < DONE_MARGIN)) delete progress[id];
   else progress[id] = { t: Math.floor(t), at: Date.now() };
   writeProgress(progress);
@@ -163,6 +172,11 @@ function element(): HTMLAudioElement {
     savePosition(finished.id, 0, 0);
     usePlayer.setState({ playing: false, position: 0 });
     onEnded?.(finished);
+    // 睡眠定时选的是「这一期放完」：到这里就停，不接着放
+    if (s.sleep === "end") {
+      setSleep(null);
+      return;
+    }
     const next = s.autoNext ? s.queue[s.queue.findIndex((e) => e.id === finished.id) + 1] : undefined;
     if (next) play(next, s.queue);
   });
@@ -229,6 +243,7 @@ export function skip(delta: number) {
 
 /** 关掉播放器：停下来，记下听到哪里。 */
 export function stop() {
+  setSleep(null);
   const s = usePlayer.getState();
   if (audio) {
     if (s.current) savePosition(s.current.id, audio.currentTime, s.duration);
@@ -238,6 +253,32 @@ export function stop() {
   }
   usePlayer.setState({ current: null, playing: false, waiting: false, position: 0, duration: 0, error: null });
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = null;
+}
+
+// ---------------------------------------------------------------- 睡眠定时
+
+let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** 睡眠定时：几分钟后暂停，"end" 是这一期放完就停，null 取消。 */
+export function setSleep(choice: number | "end" | null) {
+  clearTimeout(sleepTimer);
+  if (typeof choice === "number") {
+    const at = Date.now() + choice * 60_000;
+    usePlayer.setState({ sleep: at });
+    sleepTimer = setTimeout(() => {
+      pause();
+      usePlayer.setState({ sleep: null });
+    }, choice * 60_000);
+  } else {
+    usePlayer.setState({ sleep: choice });
+  }
+}
+
+/** 正在放的那一期：有就播放 / 暂停，返回 true；没有在放的返回 false。 */
+export function toggleIfLoaded(): boolean {
+  if (!usePlayer.getState().current) return false;
+  toggle();
+  return true;
 }
 
 // ---------------------------------------------------------------- 系统媒体控制

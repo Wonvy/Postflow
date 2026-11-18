@@ -2,6 +2,10 @@ import { useEffect, useRef } from "react";
 import { useActions } from "./actions";
 import { IS_TABLET } from "./device";
 import { normalizeReaderStyle, readerDefault } from "./readerStyle";
+import { episodeOf, play, skip, toggleIfLoaded, usePlayer, BACK_SECONDS, FORWARD_SECONDS } from "./player";
+import type { FeedKind } from "./api";
+import { kindsIn } from "./feedKinds";
+import { useNav } from "./queries";
 import { articleActions, useUi } from "./store";
 import { setFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 
@@ -21,6 +25,10 @@ export function useShortcuts() {
   // 监听器只装一次，通过 ref 拿到最新的操作
   const latest = useRef(actions);
   latest.current = actions;
+  // 订阅里有哪几类源：数字键切换类型时只认有的
+  const feeds = useNav().data?.feeds;
+  const kinds = useRef<FeedKind[]>([]);
+  kinds.current = kindsIn(feeds ?? []);
 
   useEffect(() => {
     // 对话框或新手引导开着时，按键属于它们
@@ -84,6 +92,12 @@ export function useShortcuts() {
       }
 
       if (e.shiftKey) {
+        // Shift+← / Shift+→：播客后退 15 秒、前进 30 秒
+        if ((key === "ArrowLeft" || key === "ArrowRight") && usePlayer.getState().current) {
+          e.preventDefault();
+          skip(key === "ArrowLeft" ? -BACK_SECONDS : FORWARD_SECONDS);
+          return;
+        }
         // ?（Shift+/）：全部快捷键。有的键盘布局和浏览器报的是 Shift 加「/」
         if (key === "?" || key === "/") {
           e.preventDefault();
@@ -129,6 +143,26 @@ export function useShortcuts() {
         case "u":
           a.toggle("read");
           break;
+        case "1":
+        case "2":
+        case "3":
+        case "4": {
+          // 订阅：1 全部，2 文章，3 视频，4 播客（侧栏顶上那排图标，只有一类时没有）
+          if (ui.space !== "feeds" || kinds.current.length < 2) return;
+          const kind = (["all", "article", "video", "podcast"] as const)[Number(key) - 1];
+          if (!kind || (kind !== "all" && !kinds.current.includes(kind))) return;
+          ui.setFeedKind(kind);
+          break;
+        }
+        case "p": {
+          // 播客：播放 / 暂停正在放的那一期；还没放过时，放打开的这一期
+          if (toggleIfLoaded()) break;
+          const open = ui.openId ? a.itemsOf([ui.openId])[0] : undefined;
+          const episode = open ? episodeOf(open) : null;
+          if (!episode) return;
+          play(episode);
+          break;
+        }
         case "v":
           a.openOriginal();
           break;

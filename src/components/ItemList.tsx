@@ -63,9 +63,9 @@ import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
 import { IS_TABLET } from "../lib/device";
-import { useFeedKind } from "../lib/feedKinds";
+import { useFeedKind, useListMedia } from "../lib/feedKinds";
 import { useDrawerSidebar, useIsTouch, useReaderOverlay } from "../lib/mobile";
-import { MiniPlayer } from "./Player";
+import { EpisodeChip, EpisodeQueue, MiniPlayer } from "./Player";
 import { useWindowControlsGap } from "./WindowControls";
 import {
   isDefaultListStyle,
@@ -223,7 +223,8 @@ const VIEW_OPTIONS: { value: ListView; icon: LucideIcon; label: "view.list" | "v
 function ViewModeButtons() {
   const t = useT();
   const scope = useUi((s) => s.scope);
-  const view = useListView();
+  const media = useListMedia();
+  const view = useListView(media);
   const setView = useUi((s) => s.setListView);
   const locked = useViewLocked();
   const rememberViews = useUi((s) => s.rememberViews);
@@ -237,7 +238,7 @@ function ViewModeButtons() {
             type="button"
             aria-label={locked ? t("view.locked") : t("view.lock")}
             aria-pressed={locked}
-            onClick={toggleLock}
+            onClick={() => toggleLock(media)}
             className={cx(
               "mr-0.5 inline-flex size-6 shrink-0 touch:size-9 items-center justify-center rounded-md transition-colors",
               locked ? "text-accent hover:bg-hover" : "text-fg-3 hover:bg-hover hover:text-fg",
@@ -253,7 +254,7 @@ function ViewModeButtons() {
             type="button"
             aria-label={t(label)}
             aria-pressed={view === value}
-            onClick={() => setView(scope, value)}
+            onClick={() => setView(scope, value, media)}
             className={cx(
               "inline-flex size-6 shrink-0 touch:size-9 items-center justify-center rounded-md transition-colors",
               view === value ? "bg-active text-fg" : "text-fg-3 hover:bg-hover hover:text-fg",
@@ -273,7 +274,7 @@ function ViewModeButtons() {
  */
 function ViewControl() {
   const t = useT();
-  const view = useListView();
+  const view = useListView(useListMedia());
   const groupMode = useGroupMode();
   const setGroupMode = useUi((s) => s.setGroupMode);
   const cardSize = useUi((s) => s.cardSize);
@@ -715,7 +716,7 @@ export function ItemList({ width }: { width: number }) {
   const setSearchAll = useUi((s) => s.setSearchAll);
   const terms = useMemo(() => searchTerms(search), [search]);
   const { isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
-  const view = useListView();
+  const view = useListView(useListMedia());
   const cardSize = useUi((s) => s.cardSize);
   const space = useUi((s) => s.space);
   const here = listKey(scope, space);
@@ -1053,6 +1054,7 @@ export function ItemList({ width }: { width: number }) {
   };
 
   return (
+    <EpisodeQueue items={items}>
     <section
       className={cx("relative flex h-full shrink-0 flex-col bg-bg", !drawer && "border-l border-line")}
       style={{ width }}
@@ -1365,6 +1367,7 @@ export function ItemList({ width }: { width: number }) {
         }
       />
     </section>
+    </EpisodeQueue>
   );
 }
 
@@ -1384,7 +1387,7 @@ function ListMenu({
 }) {
   const t = useT();
   const ui = useUi();
-  const view = useListView();
+  const view = useListView(useListMedia());
   const style = useListStyle();
   const check = (on: boolean) => (on ? <Check size={14} /> : null);
   const oneLine = view === "list" && ui.density === "compact";
@@ -1864,6 +1867,7 @@ function Trailing({ item, group, time, onExpand, expandLabel, look }: RowProps) 
       {item.label && <LabelChip label={item.label} />}
       {group && onExpand && <CountPill count={group.items.length} onExpand={onExpand} label={expandLabel} />}
       {attachments && <Paperclip size={12} className="shrink-0 text-fg-3" />}
+      {!group && <EpisodeChip item={item} size={look.m.summary.size} />}
       {starred && <Star size={12} className="shrink-0 fill-warning text-warning" />}
       <span className="tabular shrink-0 text-fg-3" style={{ fontSize: Math.min(look.m.summary.size, 13) }}>
         {time}

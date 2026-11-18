@@ -18,6 +18,7 @@ const GROUPS: { title: MessageKey; keys: [string[], MessageKey][] }[] = [
       [["X"], "reader.hintSelect"],
       [["/", `${MOD}F`], "reader.hintSearch"],
       [[`${MOD}K`], "commands.title"],
+      [["1", "2", "3", "4"], "shortcuts.feedKind"],
       [["R"], "action.refresh"],
       [["Esc"], "shortcuts.escape"],
     ],
@@ -41,6 +42,8 @@ const GROUPS: { title: MessageKey; keys: [string[], MessageKey][] }[] = [
       [["W"], "reader.hintWeb"],
       [["A"], "reader.hintAi"],
       [["+", "−", "0"], "reader.hintSize"],
+      [["P"], "shortcuts.playPause"],
+      [["⇧←", "⇧→"], "shortcuts.skip"],
     ],
   },
   {

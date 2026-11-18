@@ -181,7 +181,7 @@ interface UiState {
   readerLayout: ReaderLayout;
   setReaderLayout: (layout: ReaderLayout) => void;
   /** 锁定或解锁当前列表的视图。锁定时把现在的样子记下来。 */
-  toggleViewLock: () => void;
+  toggleViewLock: (media?: MediaList) => void;
   setRememberViews: (on: boolean) => void;
   /** 卡片的最小宽度。按住 Ctrl 滚动滚轮调整。 */
   cardSize: number;
@@ -271,7 +271,10 @@ interface UiState {
   toggleFolder: (folder: string) => void;
   toggleAccountFolders: (accountId: string) => void;
   setTranslateTo: (code: string | null) => void;
-  setListView: (scope: ListScope, view: ListView) => void;
+  /** `media`：这是视频或播客的列表（见 useListMedia），它们各有一套共用的视图。 */
+  setListView: (scope: ListScope, view: ListView, media?: MediaList) => void;
+  /** 视频、播客列表共用的视图，和文章分开：视频默认卡片，播客默认列表。 */
+  mediaViews: Partial<Record<"video" | "podcast", ListView>>;
   setCardSize: (size: number) => void;
   toggleSection: (section: SidebarSection) => void;
   toggleAiPanel: () => void;
@@ -384,6 +387,7 @@ export const useUi = create<UiState>()(
       setComposeRich: (composeRich) => set({ composeRich }),
       translateTo: null,
       sharedView: "list",
+      mediaViews: {},
       sharedGroup: "none",
       listViews: {},
       groupModes: {},
@@ -393,7 +397,7 @@ export const useUi = create<UiState>()(
       readerLayout: "pane",
       feedKind: "all",
       hiddenViews: DEFAULT_HIDDEN_VIEWS,
-      toggleViewLock: () =>
+      toggleViewLock: (media) =>
         set((s) => {
           const key = listKey(s.scope, s.space);
           if (s.lockedLists.includes(key)) {
@@ -404,7 +408,7 @@ export const useUi = create<UiState>()(
           }
           return {
             lockedLists: [...s.lockedLists, key],
-            listViews: { ...s.listViews, [key]: s.listViews[key] ?? s.sharedView },
+            listViews: { ...s.listViews, [key]: s.listViews[key] ?? sharedViewOf(s, media) },
             groupModes: { ...s.groupModes, [key]: s.groupModes[key] ?? s.sharedGroup },
           };
         }),
@@ -563,10 +567,11 @@ export const useUi = create<UiState>()(
             : [...s.collapsedFolders, folder],
         })),
       setTranslateTo: (translateTo) => set({ translateTo }),
-      setListView: (scope, view) =>
+      setListView: (scope, view, media) =>
         set((s) => {
           const key = listKey(scope, s.space);
-          return ownsView(s, key) ? { listViews: { ...s.listViews, [key]: view } } : { sharedView: view };
+          if (ownsView(s, key)) return { listViews: { ...s.listViews, [key]: view } };
+          return media ? { mediaViews: { ...s.mediaViews, [media]: view } } : { sharedView: view };
         }),
       toggleListTranslate: () => set((s) => ({ listTranslate: !s.listTranslate })),
       setReaderTranslate: (readerTranslate) => set({ readerTranslate }),
@@ -669,6 +674,7 @@ export const useUi = create<UiState>()(
         space: s.space,
         translateTo: s.translateTo,
         sharedView: s.sharedView,
+        mediaViews: s.mediaViews,
         sharedGroup: s.sharedGroup,
         listViews: s.listViews,
         groupModes: s.groupModes,
@@ -774,10 +780,21 @@ export function useViewLocked(): boolean {
 }
 
 /** 当前列表的显示方式。 */
-export function useListView(): ListView {
+/** 视频或播客的列表；文章、邮件是 undefined。 */
+export type MediaList = "video" | "podcast" | undefined;
+
+/** 视频默认卡片（看得到缩略图），播客默认列表（时长一目了然）。 */
+const MEDIA_VIEW_DEFAULT: Record<"video" | "podcast", ListView> = { video: "cards", podcast: "list" };
+
+function sharedViewOf(s: Pick<UiState, "sharedView" | "mediaViews">, media: MediaList): ListView {
+  return media ? (s.mediaViews[media] ?? MEDIA_VIEW_DEFAULT[media]) : s.sharedView;
+}
+
+/** 当前列表的视图。`media` 见 useListMedia。 */
+export function useListView(media?: MediaList): ListView {
   return useUi((s) => {
     const key = listKey(s.scope, s.space);
-    return (ownsView(s, key) ? s.listViews[key] : undefined) ?? s.sharedView;
+    return (ownsView(s, key) ? s.listViews[key] : undefined) ?? sharedViewOf(s, media);
   });
 }
 

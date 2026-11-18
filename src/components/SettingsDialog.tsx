@@ -18,14 +18,14 @@ import {
 import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 // 更新说明随应用打包，关于页里不联网也能看到这个版本改了什么
 import CHANGELOG from "../../CHANGELOG.md?raw";
-import { api } from "../lib/api";
+import { api, type View } from "../lib/api";
 import { compareVersions, parseChangelog } from "../lib/changelog";
 import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
-import { type Density, type ReaderLayout, type SettingsPage, type ThemePref, useUi } from "../lib/store";
+import { type Density, type ReaderLayout, type SettingsPage, type Space, type ThemePref, useUi, viewLabelKey } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
 import { CatalogOnlineSetting } from "./FeedCatalog";
 import { INTERVALS, intervalLabel } from "./FeedDialogs";
@@ -220,6 +220,8 @@ export function SettingsDialog() {
         <SettingRow label={t("settings.rememberViews")} hint={t("settings.rememberViewsHint")}>
           <Switch label={t("settings.rememberViews")} checked={rememberViews} onChange={setRememberViews} />
         </SettingRow>
+        <ShownViews space="mail" />
+        {showFeeds && <ShownViews space="feeds" />}
         <SettingsHeading>{t("settings.groupMail")}</SettingsHeading>
         <SettingRow label={t("settings.undoSend")} hint={t("settings.undoSendHint")}>
           <Select
@@ -673,5 +675,37 @@ function UpdateCheck() {
         {t("settings.checkUpdates")}
       </Button>
     </>
+  );
+}
+
+/** 侧栏里这一边显示哪几个视图。和右键侧栏「视图」标题是同一个设置。 */
+function ShownViews({ space }: { space: Space }) {
+  const t = useT();
+  const hidden = useUi((s) => s.hiddenViews[space]) ?? [];
+  const toggle = useUi((s) => s.toggleViewShown);
+  const views: View[] = ["inbox", "today", "unread", "starred", "snoozed", "archived"];
+  const label = t(space === "mail" ? "settings.viewsMail" : "settings.viewsFeeds");
+  return (
+    <SettingRow label={label} hint={t(space === "mail" ? "settings.viewsMailHint" : "settings.viewsFeedsHint")}>
+      <div role="group" aria-label={label} className="flex max-w-[300px] flex-wrap justify-end gap-1">
+        {views.map((view) => {
+          const shown = !hidden.includes(view);
+          return (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={shown}
+              onClick={() => toggle(space, view)}
+              className={cx(
+                "h-6 rounded-full border px-2 text-[12px] transition-colors touch:h-9 touch:px-3",
+                shown ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-fg-3 hover:text-fg-2",
+              )}
+            >
+              {t(viewLabelKey(view, space))}
+            </button>
+          );
+        })}
+      </div>
+    </SettingRow>
   );
 }

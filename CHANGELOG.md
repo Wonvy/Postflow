@@ -11,12 +11,24 @@ that heading into the version number and date.
 - Feeds are now sorted into articles, videos and podcasts. Once you have more than one type, a row of icons at the top of Feeds shows one type at a time, with a dot when a type has unread items. Change a feed's type in its Edit dialog if the automatic choice is wrong.
 - A tidier Feeds sidebar: the views sit under a Views header that you can collapse, and right-clicking it chooses which views to show. Feeds shows only Today and Starred by default; with nothing selected you see all articles, and clicking the selected feed, folder or view again (or the Feeds tab) goes back there. Mail keeps all its views.
 - Articles no longer offer Archive or Snooze while those views are hidden in Feeds: the buttons and menu items are gone, E and swiping left mark an article read instead, and H does nothing on articles. Show Archived or Snoozed again (right-click Views) and they come back. Mail is unchanged.
+- Podcast episodes in the list show their length (or how much is left) with a play button; click it to play without opening the episode.
+- Video feeds open as cards and podcasts as a list by default; each keeps its own view, separate from articles.
+- Player shortcuts: P plays or pauses (the open episode if nothing is playing), Shift ← / Shift → go back 15 s or forward 30 s. A sleep timer in the speed menu pauses after 15, 30 or 60 minutes, or at the end of the episode.
+- Keys 1–4 switch Feeds between everything, articles, videos and podcasts.
+- Settings → General can choose which views Mail and Feeds show, the same as right-clicking the sidebar's Views header.
+- Releases: a version that finishes building late no longer becomes the "latest" release over a newer one, so the in-app update always offers the newest version.
 
 ### 中文
 - 播客：在「添加订阅 → 播客」里按节目名搜索，或者在「发现」新增的「播客」分类里挑。单集在阅读区里播放，换条目时列表底下的迷你播放器接着放：后退 15 秒、前进 30 秒、0.8×–3× 倍速，每一期记住听到哪里。听完自动标为已读，打开「播完接着放下一期」可以连着听。带视频附件的条目在阅读区里直接播放。
 - 订阅源分成文章、视频、播客三类。有两类以上时，订阅顶上一排图标，一次只看一类，有未读的那一类显示一个小点。自动判断不对时，可以在「编辑订阅」里改。
 - 订阅的侧栏更简洁：视图放在可以收起的「视图」标题下，右键它选显示哪几个。订阅默认只显示「今天」和「星标」；什么都没选就是全部文章，再点一下选中的订阅源、文件夹或视图（或者「订阅」切换）就回到全部文章。邮件那边的视图不变。
 - 订阅那边藏起了「已归档」「稍后提醒」视图时，文章不再提供归档和稍后提醒：按钮和菜单项都去掉了，E 和往左滑改成标为已读，H 对文章不起作用。右键「视图」重新打开这两个视图，它们就回来了。邮件不变。
+- 列表里的播客单集显示时长（听过的显示还剩多久）和播放按钮，点一下就放，不用打开。
+- 视频类默认用卡片视图，播客类默认用列表，和文章各记各的。
+- 播放器快捷键：P 播放 / 暂停（没有在放时放打开的这一期），Shift ← / Shift → 后退 15 秒、前进 30 秒。倍速菜单里有睡眠定时：15、30、60 分钟后暂停，或者这一期放完就停。
+- 数字键 1–4 在订阅里切换全部、文章、视频、播客。
+- 设置 → 通用 里可以选邮件和订阅各显示哪几个视图，和右键侧栏「视图」标题是同一个设置。
+- 发版：后打完的旧版本不会再抢走「最新版」，应用里的在线更新总是给最新的版本。
 
 ## 0.1.28 — 2026-11-18
 

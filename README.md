@@ -215,6 +215,9 @@ download page instead.
 | `E` | Archive (in Archive, Spam or Trash, move back to the inbox) |
 | `S` | Star |
 | `H` | Snooze (pick a time with 1–5) |
+| `P` | Podcast: play / pause (plays the open episode if nothing is playing) |
+| `Shift ←` / `Shift →` | Podcast: back 15 s / forward 30 s |
+| `1`–`4` | Feeds: everything / articles / videos / podcasts |
 | `U` | Read / unread |
 | `V` | Open the original page in your browser |
 | `X` | Select the current item for a bulk action |

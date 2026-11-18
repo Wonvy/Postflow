@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import type { Feed, FeedKind } from "./api";
 import type { MessageKey } from "./i18n";
 import { useNav } from "./queries";
-import { useUi } from "./store";
+import { type MediaList, useUi } from "./store";
 
 export const FEED_KINDS: FeedKind[] = ["article", "video", "podcast"];
 
@@ -40,4 +40,18 @@ export function useFeedKind(): FeedKind | "all" {
   const chosen = useUi((s) => s.feedKind);
   const feeds = useNav().data?.feeds;
   return useMemo(() => resolveFeedKind(chosen, feeds ?? []), [chosen, feeds]);
+}
+
+/**
+ * 当前列表是视频还是播客的列表（它们的视图和文章分开记）：订阅那边选了视频、播客这一类，
+ * 或者打开的是一个视频、播客订阅源。其他（文章、邮件、全部）是 undefined。
+ */
+export function useListMedia(): MediaList {
+  const scope = useUi((s) => s.scope);
+  const space = useUi((s) => s.space);
+  const kind = useFeedKind();
+  const feeds = useNav().data?.feeds;
+  if (space !== "feeds") return undefined;
+  const k = scope.kind === "feed" ? feeds?.find((f) => f.id === scope.feedId)?.kind : kind;
+  return k === "video" || k === "podcast" ? k : undefined;
 }

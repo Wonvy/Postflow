@@ -6,8 +6,8 @@
 // 播放本身在 lib/player.ts。
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Gauge, Pause, Play, RotateCcw, RotateCw, X } from "lucide-react";
-import { type CSSProperties, useEffect, useMemo } from "react";
+import { Check, Gauge, Moon, Pause, Play, RotateCcw, RotateCw, X } from "lucide-react";
+import { createContext, type CSSProperties, type ReactNode, useContext, useEffect, useMemo } from "react";
 import { api, type Item } from "../lib/api";
 import { formatLength } from "../lib/duration";
 import { useLang, useT } from "../lib/i18n";
@@ -23,6 +23,7 @@ import {
   savedPosition,
   seek,
   setEndedHandler,
+  setSleep,
   skip,
   stop,
   toggle,
@@ -66,6 +67,8 @@ function RateMenu({ compact = false }: { compact?: boolean }) {
   const setRate = usePlayer((s) => s.setRate);
   const autoNext = usePlayer((s) => s.autoNext);
   const setAutoNext = usePlayer((s) => s.setAutoNext);
+  const sleep = usePlayer((s) => s.sleep);
+  const lang = useLang();
   const mark = (on: boolean) => (on ? <Check size={14} /> : <span className="inline-block size-[14px]" />);
   return (
     <Menu
@@ -79,7 +82,11 @@ function RateMenu({ compact = false }: { compact?: boolean }) {
             compact && "px-1",
           )}
         >
-          {!compact && <Gauge size={14} strokeWidth={1.75} />}
+          {sleep !== null ? (
+            <Moon size={13} strokeWidth={1.75} className="text-accent" />
+          ) : (
+            !compact && <Gauge size={14} strokeWidth={1.75} />
+          )}
           {rate}×
         </button>
       }
@@ -93,6 +100,24 @@ function RateMenu({ compact = false }: { compact?: boolean }) {
       <MenuItem icon={mark(autoNext)} onSelect={() => setAutoNext(!autoNext)}>
         {t("player.autoNext")}
       </MenuItem>
+      <MenuSeparator />
+      {/* 睡眠定时：到时间暂停，或者这一期放完就停 */}
+      <MenuItem icon={mark(sleep === null)} onSelect={() => setSleep(null)}>
+        {t("player.sleepOff")}
+      </MenuItem>
+      {[15, 30, 60].map((m) => (
+        <MenuItem key={m} icon={mark(false)} onSelect={() => setSleep(m)}>
+          {t("player.sleepIn", { time: formatLength(m * 60, lang === "zh" ? "zh" : "en") })}
+        </MenuItem>
+      ))}
+      <MenuItem icon={mark(sleep === "end")} onSelect={() => setSleep("end")}>
+        {t("player.sleepEnd")}
+      </MenuItem>
+      {typeof sleep === "number" && (
+        <p className="px-2 pb-1 pt-0.5 text-[11px] text-fg-3">
+          {t("player.sleepAt", { time: new Date(sleep).toLocaleTimeString(lang === "zh" ? "zh-CN" : "en", { hour: "2-digit", minute: "2-digit" }) })}
+        </p>
+      )}
     </Menu>
   );
 }
@@ -120,6 +145,66 @@ function PlayButton({ episode, queue, size = "md" }: { episode: Episode; queue: 
       ) : (
         <Play size={big ? 18 : 14} fill="currentColor" strokeWidth={0} className="translate-x-px" />
       )}
+    </button>
+  );
+}
+
+/** 列表把自己能放的几期传给每一行，从列表里点播放也能「播完接着放下一期」。 */
+const QueueContext = createContext<Episode[]>([]);
+
+export function EpisodeQueue({ items, children }: { items: readonly Item[]; children: ReactNode }) {
+  const queue = useMemo(() => items.map(episodeOf).filter((e): e is Episode => e !== null), [items]);
+  return <QueueContext.Provider value={queue}>{children}</QueueContext.Provider>;
+}
+
+/**
+ * 列表里播客单集右边的小按钮：播放 / 暂停，旁边是时长；听过一半的是还剩多久，正在放的是剩下的时间。
+ * 点它不会打开这一条。
+ */
+export function EpisodeChip({ item, size }: { item: Item; size: number }) {
+  const t = useT();
+  const lang = useLang();
+  const queue = useContext(QueueContext);
+  const episode = useMemo(() => episodeOf(item), [item]);
+  const current = usePlayer((s) => s.current?.id === item.id);
+  const playing = usePlayer((s) => s.playing && s.current?.id === item.id);
+  const left = usePlayer((s) =>
+    s.current?.id === item.id && s.duration > 0 ? Math.max(0, s.duration - s.position) : null,
+  );
+  if (!episode) return null;
+  const total = episode.media.duration ?? 0;
+  const saved = savedPosition(item.id);
+  const zh = lang === "zh" ? "zh" : "en";
+  const label =
+    left !== null
+      ? `-${formatTime(left)}`
+      : saved > 0 && total > saved
+        ? t("player.left", { time: formatLength(total - saved, zh) })
+        : total > 0
+          ? formatLength(total, zh)
+          : "";
+  return (
+    <button
+      type="button"
+      aria-label={playing ? t("player.pause") : t("player.play")}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (current) toggle();
+        else play(episode, queue);
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      className={cx(
+        "tabular inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border pl-1 pr-1.5 leading-none transition-colors touch:h-7 touch:pl-1.5 touch:pr-2",
+        current ? "border-accent text-accent" : "border-line-strong text-fg-2 hover:border-accent hover:text-accent",
+      )}
+      style={{ fontSize: Math.min(size, 12) }}
+    >
+      {playing ? (
+        <Pause size={10} fill="currentColor" strokeWidth={0} />
+      ) : (
+        <Play size={10} fill="currentColor" strokeWidth={0} />
+      )}
+      {label}
     </button>
   );
 }

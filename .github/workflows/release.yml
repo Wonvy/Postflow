@@ -194,6 +194,13 @@ jobs:
             "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" \
             > /dev/null
 
+      # 应用的在线更新读的是「最新版」（releases/latest）里的 latest.json。两个版本同时在打包、
+      # 旧版本后打完时，不能让它抢走「最新版」：只有版本号比所有已发布的都高时才标成最新版
       - name: 去掉草稿状态
         run: |
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false --jq .html_url
+          highest=$( (gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+                        --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name'; echo "$TAG") \
+                     | sed 's/^v//' | sort -V | tail -n1)
+          if [ "v$highest" = "$TAG" ] && [[ "$TAG" != *-* ]]; then latest=true; else latest=false; fi
+          echo "make_latest=$latest (highest published: v$highest)"
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=$latest --jq .html_url
