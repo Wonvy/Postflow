@@ -23,7 +23,6 @@ export const TOOL_DEFAULTS: Record<ToolbarId, ToolbarLayout> = {
     { id: "markAllRead", place: "top" },
     { id: "refresh", place: "top" },
     { id: "view", place: "status" },
-    { id: "group", place: "status" },
     { id: "translate", place: "status" },
   ],
   reader: [

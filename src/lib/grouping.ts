@@ -5,7 +5,7 @@
 
 import type { Item } from "./api";
 
-export type GroupMode = "none" | "thread" | "sender";
+export type GroupMode = "none" | "thread" | "sender" | "mailbox";
 
 export interface Group {
   key: string;
@@ -59,10 +59,14 @@ function keyOf(item: Item, mode: GroupMode): string | null {
         return item.sender_address ? `s:${item.sender_address.toLowerCase()}` : null;
       }
       return `f:${item.source_id}`;
+    case "mailbox":
+      // 邮件按所属邮箱合并；订阅文章没有邮箱，仍按单条显示。
+      return item.kind === "mail" ? `a:${item.source_id}` : null;
   }
 }
 
-function personOf(item: Item): string {
+function personOf(item: Item, mode: GroupMode): string {
+  if (mode === "mailbox" && item.kind === "mail") return item.source_title || item.source_id;
   return item.kind === "mail" ? item.author || item.sender_address || "" : item.source_title;
 }
 
@@ -82,7 +86,7 @@ export function groupItems(items: Item[], mode: GroupMode): Group[] {
     if (!item.read) group.unread += 1;
     if (item.starred) group.starred = true;
     if (item.has_attachments) group.hasAttachments = true;
-    const person = personOf(item);
+    const person = personOf(item, mode);
     if (person && !group.people.includes(person)) group.people.push(person);
   }
   return groups;

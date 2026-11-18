@@ -91,8 +91,7 @@ impl Core {
         let mut same = Vec::new();
         let mut todo: Vec<(ItemSummary, String)> = Vec::new();
         for item in items {
-            let sample = format!("{}\n{}", item.title, item.summary);
-            match detect::detect(&sample) {
+            match item_language(&item.title, &item.summary) {
                 Some(from) if !same_language(&from, &to) => todo.push((item, from)),
                 _ => same.push(item.id.clone()),
             }
@@ -229,5 +228,17 @@ impl Core {
                 _ => None,
             })
             .collect())
+    }
+}
+
+/// 标题和摘要各自识别后再决定来源语言。订阅描述常混有英文站点名、引用或模板文字；
+/// 合并识别会把整条内容误判成另一种语言，进而要求用户下载不需要的模型。
+fn item_language(title: &str, summary: &str) -> Option<String> {
+    match (detect::detect(title), detect::detect(summary)) {
+        (Some(title), Some(summary)) if same_language(&title, &summary) => Some(title),
+        // 两部分互相矛盾，无法可靠代表整条内容，跳过以免提示错误语言模型。
+        (Some(_), Some(_)) => None,
+        (Some(language), None) | (None, Some(language)) => Some(language),
+        (None, None) => None,
     }
 }

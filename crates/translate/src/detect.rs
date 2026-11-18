@@ -4,6 +4,8 @@ use whatlang::Lang;
 
 /// 最多看这么多字。邮件后面常是引用和签名，前面的正文更能代表它的语言。
 const SAMPLE_CHARS: usize = 2000;
+/// 很短的主题和片段容易被误判成罕见语言，先要求足够的语言文字证据。
+const MIN_LANGUAGE_LETTERS: usize = 8;
 
 pub fn detect(text: &str) -> Option<String> {
     let end = text
@@ -15,6 +17,17 @@ pub fn detect(text: &str) -> Option<String> {
         return None;
     }
     let info = whatlang::detect(sample)?;
+    // 英语邮件常只有一句话，保留虚词规则来补足 whatlang 对短句的低置信度判断。
+    let english = info.script() == whatlang::Script::Latin
+        && (looks_english(sample) || english_beats(sample, info.lang()));
+    let letters = sample.chars().filter(|c| c.is_alphabetic()).count();
+    if letters < MIN_LANGUAGE_LETTERS && !english {
+        return None;
+    }
+    // 不把 whatlang 的猜测当作事实，否则短标题或签名会触发无关语言包下载。
+    if !info.is_reliable() && !english {
+        return None;
+    }
     let code = match info.lang() {
         Lang::Cmn => {
             return Some(
@@ -28,11 +41,7 @@ pub fn detect(text: &str) -> Option<String> {
         }
         // whatlang 对短句不太准，一句英文常被认成丹麦语、荷兰语。邮件里英文最常见，先单独认一下
         Lang::Eng => "en",
-        lang if info.script() == whatlang::Script::Latin
-            && (looks_english(sample) || english_beats(sample, lang)) =>
-        {
-            "en"
-        }
+        _ if english => "en",
         lang => to_code(lang)?,
     };
     Some(code.to_string())

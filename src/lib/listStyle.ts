@@ -12,6 +12,8 @@ export interface ListStyle {
   gap: number;
   /** 每一行里面的上下留白；左右留白比它多 2px。 */
   padding: number;
+  /** 整个列表区域与边缘之间的留白。 */
+  listPadding: number;
   /** 摘要视图里摘要显示几行。 */
   summaryLines: number;
   showSummary: boolean;
@@ -29,6 +31,7 @@ export const LIST_STYLE_DEFAULT: ListStyle = {
   summarySize: 12,
   gap: 1,
   padding: 8,
+  listPadding: 6,
   summaryLines: 2,
   showSummary: true,
   showIcon: true,
@@ -43,6 +46,7 @@ export const LIST_STYLE_RANGE = {
   summarySize: [10, 16],
   gap: [0, 12],
   padding: [2, 16],
+  listPadding: [0, 24],
   summaryLines: [1, 4],
 } as const satisfies Partial<Record<keyof ListStyle, readonly [number, number]>>;
 
@@ -67,6 +71,7 @@ export function normalizeListStyle(raw: unknown): ListStyle {
     summarySize: num("summarySize"),
     gap: num("gap"),
     padding: num("padding"),
+    listPadding: num("listPadding"),
     summaryLines: num("summaryLines"),
     showSummary: bool("showSummary"),
     showIcon: bool("showIcon"),

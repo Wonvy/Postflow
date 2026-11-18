@@ -96,6 +96,7 @@ function Row({
   depth,
   leading,
   label,
+  title,
   trailing,
   drag,
   drop,
@@ -108,6 +109,8 @@ function Row({
   depth?: number;
   leading: ReactNode;
   label: string;
+  /** 可选的悬停说明。 */
+  title?: string;
   trailing?: ReactNode;
   drag?: DragHandlers;
   /** 拖到这一行上时放下的位置：上方、下方，或者放进去。 */
@@ -120,6 +123,7 @@ function Row({
       role="button"
       tabIndex={0}
       aria-current={active || undefined}
+      title={title}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -333,6 +337,7 @@ function AccountRow({
           onClick={() => setScope({ kind: "account", accountId: account.id })}
           drag={drag}
           drop={drop}
+          title={label.trim().toLowerCase() === account.email.trim().toLowerCase() ? undefined : account.email}
           leading={
             hasProviderIcon(provider) ? (
               <ProviderIcon id={provider} size={16} />
@@ -972,7 +977,7 @@ export function Sidebar({ width }: { width: number }) {
         </Menu>
       </header>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <div className="shrink-0 px-2">
         <div className="flex flex-col gap-px">
           {VIEWS.map(({ view, icon: Icon, label }) => (
             <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
@@ -1049,6 +1054,10 @@ export function Sidebar({ width }: { width: number }) {
             menu={tab === "mail" ? mailMenu : feedsMenu}
           />
         )}
+
+      </div>
+
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
 
         {(
           <>

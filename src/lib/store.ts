@@ -145,6 +145,8 @@ interface UiState {
   toolbars: Partial<Record<ToolbarId, ToolbarLayout>>;
   /** 中间列表是滚动还是一页一页翻。 */
   listPaging: "scroll" | "pages";
+  /** 列表行悬停时显示摘要；主要用于单行列表。 */
+  listHoverSummary: boolean;
   /** 阅读区最大化：藏起侧栏和列表，阅读区占满整个窗口（看视频、长文章）。不保存。 */
   readerMaximized: boolean;
   /** 在这台设备上启用的插件 ID。插件只有手动启用才会加载。 */
@@ -202,6 +204,7 @@ interface UiState {
   setSenderLogos: (on: boolean) => void;
   setToolbar: (id: ToolbarId, layout: ToolbarLayout | null) => void;
   setListPaging: (mode: "scroll" | "pages") => void;
+  setListHoverSummary: (on: boolean) => void;
   setReaderMaximized: (on: boolean) => void;
   setPluginEnabled: (id: string, on: boolean) => void;
   /** 打开新手引导，或者翻到第 `step` 步。 */
@@ -277,6 +280,7 @@ export const useUi = create<UiState>()(
       senderLogos: true,
       toolbars: {},
       listPaging: "scroll",
+      listHoverSummary: true,
       readerMaximized: false,
       enabledPlugins: [],
       pluginReload: 0,
@@ -289,15 +293,18 @@ export const useUi = create<UiState>()(
 
       // 换列表时收起搜索
       setScope: (scope) =>
-        set({
+        set((s) => ({
           scope,
+          ...(scope.kind === "view" && scope.view === "inbox"
+            ? { kindFilter: "mail" as const, ...(s.sidebarTabs ? { sidebarTab: "mail" as const } : {}) }
+            : {}),
           mainView: "list",
           openId: null,
           selection: [],
           expandedGroups: [],
           searchOpen: false,
           searchQuery: "",
-        }),
+        })),
       setMainView: (mainView) => set({ mainView }),
       open: (id) => set({ openId: id }),
       setSelection: (ids) => set({ selection: ids }),
@@ -357,6 +364,7 @@ export const useUi = create<UiState>()(
           return { toolbars };
         }),
       setListPaging: (listPaging) => set({ listPaging }),
+      setListHoverSummary: (listHoverSummary) => set({ listHoverSummary }),
       setReaderMaximized: (readerMaximized) => set({ readerMaximized }),
       setPluginEnabled: (id, on) =>
         set((s) => ({
@@ -376,8 +384,41 @@ export const useUi = create<UiState>()(
             ? s.collapsedSections.filter((x) => x !== section)
             : [...s.collapsedSections, section],
         })),
-      setSidebarTabs: (sidebarTabs) => set({ sidebarTabs }),
-      setSidebarTab: (sidebarTab) => set({ sidebarTab }),
+      setSidebarTabs: (sidebarTabs) =>
+        set((s) =>
+          sidebarTabs
+            ? {
+                sidebarTabs,
+                kindFilter: s.sidebarTab === "mail" ? "mail" : "article",
+                openId: null,
+                selection: [],
+                expandedGroups: [],
+                mainView: "list",
+              }
+            : {
+                sidebarTabs,
+                ...(s.scope.kind === "view" && s.scope.view === "inbox" ? { kindFilter: "mail" as const } : {}),
+              },
+        ),
+      setSidebarTab: (sidebarTab) =>
+        set((s) => {
+          // 在邮箱、订阅源或邮件专属文件夹里切换时，回到收件箱，让右侧内容也切换。
+          const scope =
+            s.scope.kind === "view" && (sidebarTab === "mail" || !isMailOnlyView(s.scope.view))
+              ? s.scope
+              : { kind: "view" as const, view: "inbox" as const };
+          return {
+            sidebarTab,
+            scope,
+            kindFilter: sidebarTab === "mail" ? "mail" : "article",
+            openId: null,
+            selection: [],
+            expandedGroups: [],
+            mainView: "list",
+            searchOpen: false,
+            searchQuery: "",
+          };
+        }),
       setCardSize: (size) => set({ cardSize: clamp(size, CARD_MIN, CARD_MAX) }),
       requestTranslate: () => set((s) => ({ translateRequest: s.translateRequest + 1 })),
       openSearch: () => set((s) => ({ searchOpen: true, searchFocus: s.searchFocus + 1, mainView: "list" })),
@@ -392,7 +433,14 @@ export const useUi = create<UiState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<UiState> & { sidebarLayout?: string; tab?: string; tabScopes?: unknown };
         const { sidebarLayout, tab: _tab, tabScopes: _tabScopes, ...rest } = saved;
-        return { ...current, ...rest, ...(sidebarLayout === "tabs" ? { kindFilter: null } : {}) };
+        const merged = { ...current, ...rest, ...(sidebarLayout === "tabs" ? { kindFilter: null } : {}) };
+        // 邮箱 / 订阅选项卡负责决定收件箱内容，避免旧的独立筛选状态混入另一类条目。
+        if (merged.sidebarTabs) {
+          merged.kindFilter = merged.sidebarTab === "mail" ? "mail" : "article";
+        } else if (merged.scope.kind === "view" && merged.scope.view === "inbox") {
+          merged.kindFilter = "mail";
+        }
+        return merged;
       },
       partialize: (s) => ({
         theme: s.theme,
@@ -427,6 +475,7 @@ export const useUi = create<UiState>()(
         senderLogos: s.senderLogos,
         toolbars: s.toolbars,
         listPaging: s.listPaging,
+        listHoverSummary: s.listHoverSummary,
         enabledPlugins: s.enabledPlugins,
         welcomeDone: s.welcomeDone,
         examplePluginsSeeded: s.examplePluginsSeeded,
@@ -444,6 +493,11 @@ export function isArchiveLike(view: View | "all" | undefined): boolean {
 /** 只有邮件才有的视图：草稿、已发送、垃圾邮件和已删除。 */
 export function isMailOnlyView(view: View): boolean {
   return view === "junk" || view === "trash" || view === "drafts" || view === "sent";
+}
+
+/** Type filtering is only available for built-in views that can contain mail and articles. */
+export function supportsKindFilter(scope: ListScope): boolean {
+  return scope.kind === "view" && !isMailOnlyView(scope.view);
 }
 
 export function scopeKey(scope: ListScope): string {
@@ -466,7 +520,8 @@ export function scopeKey(scope: ListScope): string {
 /** 记住显示方式用的键。内置视图在只看邮件或只看订阅时各记各的，选项卡因此也各记各的。 */
 export function listKey(scope: ListScope, kind: ItemKind | null): string {
   const base = scopeKey(scope);
-  return scope.kind === "view" && kind ? `${base}:${kind}` : base;
+  const activeKind = supportsKindFilter(scope) ? (kind ?? (scope.kind === "view" && scope.view === "inbox" ? "mail" : null)) : null;
+  return activeKind ? `${base}:${activeKind}` : base;
 }
 
 /** 当前列表的显示方式。 */
@@ -484,12 +539,20 @@ export function useGroupMode(): GroupMode {
  * 只看邮件、只看订阅的切换仍然有效。
  */
 export function searchFilterOf(scope: ListScope, kind: ItemKind | null, query: string, all: boolean): ItemFilter {
-  const base: ItemFilter = all ? { view: "all", ...(kind ? { kind } : {}) } : filterOf(scope, kind);
+  const activeKind = supportsKindFilter(scope)
+    ? (kind ?? (scope.kind === "view" && scope.view === "inbox" ? "mail" : null))
+    : null;
+  const base: ItemFilter = all
+    ? { view: "all", ...(activeKind ? { kind: activeKind } : {}) }
+    : filterOf(scope, activeKind);
   return { ...base, query };
 }
 
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */
 export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFilter {
+  const activeKind = supportsKindFilter(scope)
+    ? (kind ?? (scope.kind === "view" && scope.view === "inbox" ? "mail" : null))
+    : null;
   switch (scope.kind) {
     case "feed":
       return { view: "inbox", source_id: scope.feedId };
@@ -500,11 +563,13 @@ export function filterOf(scope: ListScope, kind: ItemKind | null = null): ItemFi
     case "folder":
       return { view: "inbox", folder: scope.folder };
     case "label":
-      return kind ? { view: "inbox", label: scope.label, kind } : { view: "inbox", label: scope.label };
+      return activeKind
+        ? { view: "inbox", label: scope.label, kind: activeKind }
+        : { view: "inbox", label: scope.label };
     case "view": {
       const filter: ItemFilter =
         scope.view === "today" ? { view: "today", since: startOfToday() } : { view: scope.view };
-      if (kind) filter.kind = kind;
+      if (activeKind) filter.kind = activeKind;
       return filter;
     }
   }

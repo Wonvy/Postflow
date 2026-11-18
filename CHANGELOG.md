@@ -7,8 +7,16 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Mail and feeds: the inbox stays on mail in the Mail tab, while the Feeds tab shows subscriptions. Mail can be grouped by mailbox, and hovering an account shows its full address.
+- Lists: switch between list, summary and cards directly from the bottom bar. Grouping moved into List style, which now has area-padding and spacing sliders, wheel-adjustable values, and simpler checkmark options.
+- Translation: language detection is less likely to request unrelated offline models for short or mixed-language items; missing-model prompts refresh when the list or translation settings change.
+- Layout: keep the main navigation and categories fixed while the sidebar list scrolls, avoid clipping cards in paged lists, and optionally show summaries when hovering over single-line rows.
 
 ### 中文
+- 邮件和订阅：「邮箱」选项卡的收件箱只显示邮件，「订阅」选项卡显示订阅内容；邮件可按邮箱分组，悬停邮箱时可查看完整地址。
+- 列表：底栏可直接切换列表、摘要和卡片视图。分组设置并入「列表样式」，新增列表区域边距和间距滑块，数值可悬停滚轮调整，开关改为简洁的勾选样式。
+- 翻译：改进短文本和中英混合内容的语言判断，减少误提示下载无关离线模型；切换列表或翻译设置后会刷新缺失模型提示。
+- 布局：侧栏顶部导航和分类固定显示、下方列表独立滚动；修复分页时卡片被裁剪，并可设置单行列表悬停显示摘要。
 
 ## 0.1.17 — 2026-11-17
 

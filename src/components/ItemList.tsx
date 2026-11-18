@@ -15,7 +15,6 @@ import {
   LayoutGrid,
   Layers,
   List,
-  ListCollapse,
   type LucideIcon,
   Mail,
   MailOpen,
@@ -36,6 +35,7 @@ import {
   type DragEvent,
   type MouseEvent,
   type ReactNode,
+  type WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -47,7 +47,11 @@ import { useActions } from "../lib/actions";
 import { requestAbstracts, useAbstracts } from "../lib/ai";
 import { api } from "../lib/api";
 import { formatSize } from "../lib/platform";
-import { requestListTranslations, useListTranslations } from "../lib/listTranslate";
+import {
+  requestListTranslations,
+  setListTranslationContext,
+  useListTranslations,
+} from "../lib/listTranslate";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateTarget } from "../lib/translate";
 import type { Item, ItemKind, OlderTarget } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
@@ -81,6 +85,7 @@ import {
   useListStyle,
   useListView,
   useUi,
+  supportsKindFilter,
 } from "../lib/store";
 import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
@@ -94,14 +99,13 @@ import {
   cx,
   ICON,
   IconButton,
-  Menu,
   MenuItem,
   MenuSeparator,
   MenuSub,
   Modal,
   Segmented,
+  Slider,
   Spinner,
-  Switch,
   Tip,
   useHoverOpen,
 } from "./ui";
@@ -110,6 +114,8 @@ import {
 const HEADER_HEIGHT = 30;
 /** 按日期分段时每段的标题行。 */
 const SECTION_HEIGHT = 30;
+/** 虚拟列表容器上下各留 6px；分页要把底部空隙从可用高度里扣掉。 */
+const LIST_VERTICAL_GUTTER = 6;
 /** 每个列表上次滚到的位置，只在这次打开应用期间记着。 */
 const scrollPositions = new Map<string, number>();
 
@@ -124,6 +130,19 @@ type Line =
   | { kind: "header"; group: Group }
   | { kind: "row"; row: Row }
   | { kind: "cards"; rows: Row[] };
+
+/** 每一页从完整行开始，留出列表底部边距，避免卡片被滚动窗裁掉。 */
+function pageStartsOf(items: readonly { start: number; end: number }[], height: number, gutter = LIST_VERTICAL_GUTTER): number[] {
+  const starts = [0];
+  let start = 0;
+  for (;;) {
+    const next = items.find((item) => item.end > start + height - gutter);
+    if (!next || next.start <= start) break;
+    start = next.start;
+    starts.push(start);
+  }
+  return starts;
+}
 
 /** 一行代表的条目的时间：组用最新的那一条。 */
 const rowTime = (row: Row) => (row.kind === "item" ? row.item : row.group.lead).published_at;
@@ -187,15 +206,43 @@ const VIEW_OPTIONS: { value: ListView; icon: LucideIcon; label: "view.list" | "v
   { value: "cards", icon: LayoutGrid, label: "view.cards" },
 ];
 
-/**
- * 工具栏里的显示方式和列表样式：列表、摘要、卡片，以及字号、间距、显示哪些部分。
- * 改动立即生效，所有列表共用一套样式。
- */
-function ViewControl() {
+/** 底部固定显示三种视图，省去每次打开样式菜单再切换的步骤。 */
+function ViewModeButtons() {
   const t = useT();
   const scope = useUi((s) => s.scope);
   const view = useListView();
   const setView = useUi((s) => s.setListView);
+  return (
+    <div role="group" aria-label={t("listStyle.view")} className="flex items-center gap-0.5">
+      {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => (
+        <Tip key={value} label={t(label)} side="top">
+          <button
+            type="button"
+            aria-label={t(label)}
+            aria-pressed={view === value}
+            onClick={() => setView(scope, value)}
+            className={cx(
+              "inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors",
+              view === value ? "bg-active text-fg" : "text-fg-3 hover:bg-hover hover:text-fg",
+            )}
+          >
+            <Icon size={14} strokeWidth={1.75} />
+          </button>
+        </Tip>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 工具栏里的列表样式：字号、间距、显示哪些部分。
+ * 改动立即生效，所有列表共用一套样式。
+ */
+function ViewControl() {
+  const t = useT();
+  const view = useListView();
+  const groupMode = useGroupMode();
+  const setGroupMode = useUi((s) => s.setGroupMode);
   const cardSize = useUi((s) => s.cardSize);
   const setCardSize = useUi((s) => s.setCardSize);
   const density = useUi((s) => s.density);
@@ -204,12 +251,19 @@ function ViewControl() {
   const set = useUi((s) => s.setListStyle);
   const paging = useUi((s) => s.listPaging);
   const setPaging = useUi((s) => s.setListPaging);
-  const Icon = VIEW_OPTIONS.find((o) => o.value === view)?.icon ?? List;
+  const hoverSummary = useUi((s) => s.listHoverSummary);
+  const setHoverSummary = useUi((s) => s.setListHoverSummary);
   // 单行的列表只有标题，没有摘要可调
   const oneLine = view === "list" && density === "compact";
 
   const step = (key: keyof typeof LIST_STYLE_RANGE, label: MessageKey, by = 1) => (
-    <StyleLine label={t(label)}>
+    <StyleLine
+      label={t(label)}
+      onWheel={(event) =>
+        adjustByWheel(event, style[key], LIST_STYLE_RANGE[key][0], LIST_STYLE_RANGE[key][1], by, (value) =>
+          set({ [key]: value }),
+        )}
+    >
       <Stepper
         value={style[key]}
         min={LIST_STYLE_RANGE[key][0]}
@@ -220,9 +274,7 @@ function ViewControl() {
     </StyleLine>
   );
   const toggle = (key: "showSummary" | "showIcon" | "showSource" | "showImage" | "dateSections", label: MessageKey) => (
-    <StyleLine label={t(label)}>
-      <Switch label={t(label)} checked={style[key]} onChange={(on) => set({ [key]: on })} />
-    </StyleLine>
+    <StyleCheck label={t(label)} checked={style[key]} onChange={(on) => set({ [key]: on })} />
   );
 
   // 鼠标移上去就打开，不用点
@@ -237,7 +289,7 @@ function ViewControl() {
             aria-label={t("listStyle.title")}
             className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover data-[state=open]:text-fg"
           >
-            <Icon {...ICON} />
+            <Settings2 {...ICON} />
           </button>
         </Popover.Trigger>
       </Tip>
@@ -248,59 +300,130 @@ function ViewControl() {
           collisionPadding={8}
           aria-label={t("listStyle.title")}
           {...hover}
-          className="anim-pop z-50 flex max-h-[var(--radix-popover-content-available-height)] w-[296px] flex-col gap-2.5 overflow-y-auto rounded-lg bg-surface p-3 shadow-pop outline-none"
+          className="anim-pop z-50 flex max-h-[var(--radix-popover-content-available-height)] w-[348px] flex-col gap-3 overflow-y-auto rounded-lg bg-surface p-3.5 shadow-pop outline-none"
         >
-          <StyleLine label={t("listStyle.view")}>
-            <Segmented<ListView>
-              value={view}
-              onChange={(v) => setView(scope, v)}
-              options={VIEW_OPTIONS.map(({ value, label }) => ({ value, label: t(label) }))}
-            />
-          </StyleLine>
-          {view === "list" && (
-            <StyleLine label={t("listStyle.lines")}>
-              <Segmented<Density>
-                value={density}
-                onChange={setDensity}
+          <div className="flex flex-col gap-2">
+            {view === "list" && (
+              <StyleLine label={t("listStyle.lines")}>
+                <Segmented<Density>
+                  value={density}
+                  onChange={setDensity}
+                  options={[
+                    { value: "compact", label: t("listStyle.oneLine") },
+                    { value: "comfortable", label: t("listStyle.twoLines") },
+                  ]}
+                />
+              </StyleLine>
+            )}
+            <StyleLine label={t("listStyle.paging")}>
+              <Segmented<"scroll" | "pages">
+                value={paging}
+                onChange={setPaging}
                 options={[
-                  { value: "compact", label: t("listStyle.oneLine") },
-                  { value: "comfortable", label: t("listStyle.twoLines") },
+                  { value: "scroll", label: t("listStyle.pagingScroll") },
+                  { value: "pages", label: t("listStyle.pagingPages") },
                 ]}
               />
             </StyleLine>
-          )}
-          <StyleLine label={t("listStyle.paging")}>
-            <Segmented<"scroll" | "pages">
-              value={paging}
-              onChange={setPaging}
-              options={[
-                { value: "scroll", label: t("listStyle.pagingScroll") },
-                { value: "pages", label: t("listStyle.pagingPages") },
-              ]}
-            />
-          </StyleLine>
-          {view === "cards" && (
-            <div>
-              <StyleLine label={t("view.cardSize")}>
-                <Stepper value={cardSize} min={CARD_MIN} max={CARD_MAX} by={40} onChange={setCardSize} />
-              </StyleLine>
-              <div className="mt-1 text-right text-[11px] text-fg-3">
+          </div>
+
+          <StyleSection title={t("listStyle.sectionGroup")}>
+            <div role="radiogroup" aria-label={t("listStyle.sectionGroup")} className="grid grid-cols-2 gap-1">
+              {GROUP_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={groupMode === value}
+                  onClick={() => setGroupMode(value)}
+                  className={cx(
+                    "flex h-7 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-[12px] transition-colors",
+                    groupMode === value ? "bg-active text-fg" : "text-fg-2 hover:bg-hover",
+                  )}
+                >
+                  <span
+                    className={cx(
+                      "flex size-4 shrink-0 items-center justify-center rounded border",
+                      groupMode === value ? "border-accent bg-accent text-white" : "border-line-strong text-transparent",
+                    )}
+                  >
+                    <Check size={11} strokeWidth={2.5} />
+                  </span>
+                  <span className="truncate">{t(label)}</span>
+                </button>
+              ))}
+            </div>
+          </StyleSection>
+
+          <StyleSection title={t("listStyle.sectionSpacing")}>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+              {view === "cards" && (
+                <SliderSetting
+                  label={t("view.cardSize")}
+                  value={cardSize}
+                  min={CARD_MIN}
+                  max={CARD_MAX}
+                  step={10}
+                  defaultValue={260}
+                  onChange={setCardSize}
+                />
+              )}
+              <SliderSetting
+                label={t("listStyle.listPadding")}
+                value={style.listPadding}
+                min={LIST_STYLE_RANGE.listPadding[0]}
+                max={LIST_STYLE_RANGE.listPadding[1]}
+                step={1}
+                defaultValue={LIST_STYLE_DEFAULT.listPadding}
+                onChange={(value) => set({ listPadding: value })}
+              />
+              <SliderSetting
+                label={t("listStyle.gap")}
+                value={style.gap}
+                min={LIST_STYLE_RANGE.gap[0]}
+                max={LIST_STYLE_RANGE.gap[1]}
+                step={1}
+                defaultValue={LIST_STYLE_DEFAULT.gap}
+                onChange={(value) => set({ gap: value })}
+              />
+              <SliderSetting
+                label={t("listStyle.padding")}
+                value={style.padding}
+                min={LIST_STYLE_RANGE.padding[0]}
+                max={LIST_STYLE_RANGE.padding[1]}
+                step={1}
+                defaultValue={LIST_STYLE_DEFAULT.padding}
+                onChange={(value) => set({ padding: value })}
+              />
+            </div>
+            {view === "cards" && (
+              <div className="text-right text-[11px] text-fg-3">
                 {t("view.cardSizeHint", { key: isMac ? "⌘" : "Ctrl" })}
               </div>
+            )}
+          </StyleSection>
+
+          <StyleSection title={t("listStyle.sectionText")}>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              {step("titleSize", "listStyle.titleSize")}
+              {!oneLine && step("summarySize", "listStyle.summarySize")}
+              {view === "summary" && style.showSummary && step("summaryLines", "listStyle.summaryLines")}
             </div>
-          )}
-          <div className="my-0.5 h-px bg-line" />
-          {step("titleSize", "listStyle.titleSize")}
-          {!oneLine && step("summarySize", "listStyle.summarySize")}
-          {step("gap", "listStyle.gap")}
-          {step("padding", "listStyle.padding")}
-          {view === "summary" && style.showSummary && step("summaryLines", "listStyle.summaryLines")}
-          <div className="my-0.5 h-px bg-line" />
-          {toggle("dateSections", "listStyle.dateSections")}
-          {!oneLine && toggle("showSummary", "listStyle.showSummary")}
-          {toggle("showIcon", "listStyle.showIcon")}
-          {toggle("showSource", "listStyle.showSource")}
-          {view !== "list" && toggle("showImage", "listStyle.showImage")}
+          </StyleSection>
+
+          <StyleSection title={t("listStyle.sectionDisplay")}>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              {toggle("dateSections", "listStyle.dateSections")}
+              {view === "list" && (
+                <StyleCheck label={t("listStyle.hoverSummary")} checked={hoverSummary} onChange={setHoverSummary} />
+              )}
+              {!oneLine && toggle("showSummary", "listStyle.showSummary")}
+              {toggle("showIcon", "listStyle.showIcon")}
+              {toggle("showSource", "listStyle.showSource")}
+              {view !== "list" && toggle("showImage", "listStyle.showImage")}
+            </div>
+          </StyleSection>
+
           <div className="flex justify-end border-t border-line pt-2">
             <button
               type="button"
@@ -317,12 +440,93 @@ function ViewControl() {
   );
 }
 
-function StyleLine({ label, children }: { label: string; children: ReactNode }) {
+function StyleSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-7 items-center justify-between gap-3">
+    <section className="flex flex-col gap-1.5 border-t border-line pt-2.5">
+      <h3 className="text-[11px] font-medium text-fg-3">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function StyleLine({
+  label,
+  children,
+  onWheel,
+}: {
+  label: string;
+  children: ReactNode;
+  onWheel?: (event: ReactWheelEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div className="flex min-h-7 items-center justify-between gap-2" onWheel={onWheel}>
       <span className="text-[13px] text-fg-2">{label}</span>
       {children}
     </div>
+  );
+}
+
+function adjustByWheel(
+  event: ReactWheelEvent<HTMLDivElement>,
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+  onChange: (value: number) => void,
+) {
+  if (event.deltaY === 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  onChange(Math.min(max, Math.max(min, value + (event.deltaY < 0 ? step : -step))));
+}
+
+function SliderSetting({
+  label,
+  value,
+  min,
+  max,
+  step,
+  defaultValue,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  defaultValue: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1" onWheel={(event) => adjustByWheel(event, value, min, max, step, onChange)}>
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="truncate text-[12px] text-fg-2">{label}</span>
+        <output className="tabular shrink-0 text-[11px] text-fg-3">{value}px</output>
+      </div>
+      <Slider label={label} value={value} min={min} max={max} step={step} defaultValue={defaultValue} onChange={onChange} />
+    </div>
+  );
+}
+
+function StyleCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex min-h-7 min-w-0 items-center gap-1.5 rounded-md px-1 text-left text-[12px] text-fg-2 transition-colors hover:bg-hover"
+    >
+      <span
+        className={cx(
+          "flex size-4 shrink-0 items-center justify-center rounded border",
+          checked ? "border-accent bg-accent text-white" : "border-line-strong text-transparent",
+        )}
+      >
+        <Check size={11} strokeWidth={2.5} />
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 
@@ -465,44 +669,15 @@ function KindFilter() {
   );
 }
 
-const GROUP_OPTIONS: { value: GroupMode; label: "group.none" | "group.thread" | "group.sender" }[] = [
+const GROUP_OPTIONS: {
+  value: GroupMode;
+  label: "group.none" | "group.thread" | "group.sender" | "group.mailbox";
+}[] = [
   { value: "none", label: "group.none" },
   { value: "thread", label: "group.thread" },
   { value: "sender", label: "group.sender" },
+  { value: "mailbox", label: "group.mailbox" },
 ];
-
-/** 工具栏里的「折叠相同邮件」：不折叠、按会话、按发件人。 */
-function GroupControl() {
-  const t = useT();
-  const mode = useGroupMode();
-  const setMode = useUi((s) => s.setGroupMode);
-  return (
-    <Menu
-      align="end"
-      hover
-      trigger={
-        <button
-          type="button"
-          aria-label={t("group.label")}
-          title={t("group.label")}
-          className={cx(
-            "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover",
-            mode === "none" ? "text-fg-2" : "bg-accent-soft text-accent",
-          )}
-        >
-          <ListCollapse {...ICON} />
-        </button>
-      }
-    >
-      <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">{t("group.label")}</div>
-      {GROUP_OPTIONS.map(({ value, label }) => (
-        <MenuItem key={value} icon={mode === value ? <Check size={14} /> : null} onSelect={() => setMode(value)}>
-          {t(label)}
-        </MenuItem>
-      ))}
-    </Menu>
-  );
-}
 
 /** 一行代表的位置 ID：单条是它自己，组是组里最新的那一条。 */
 function rowId(row: Row): string {
@@ -537,9 +712,17 @@ export function ItemList({ width }: { width: number }) {
   const showAbstracts = settings.data?.["ai.list_abstracts"] === true && view !== "list";
   const abstracts = useAbstracts((s) => s.byKey);
   const listTranslate = useUi((s) => s.listTranslate);
+  const listHoverSummary = useUi((s) => s.listHoverSummary);
   const toggleListTranslate = useUi((s) => s.toggleListTranslate);
   const translateTo = useTranslateTarget();
   const engine = useTranslateEngine();
+  const translationScope = JSON.stringify([
+    here,
+    searchOpen ? search : "",
+    searchOpen && searchAll,
+    engine,
+    translateTo,
+  ]);
   const translations = useListTranslations((s) => s.byKey);
   const style = useListStyle();
   const metrics = useMemo(() => listMetrics(style), [style]);
@@ -553,12 +736,12 @@ export function ItemList({ width }: { width: number }) {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const update = () => setInner(el.clientWidth - 12);
+    const update = () => setInner(Math.max(1, el.clientWidth - style.listPadding * 2));
     update();
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [style.listPadding]);
   const cardGap = metrics.cardGap;
   const columns = Math.max(1, Math.floor((inner + cardGap) / (cardSize + cardGap)));
   const cardWidth = Math.floor((inner - cardGap * (columns - 1)) / columns);
@@ -631,23 +814,15 @@ export function ItemList({ width }: { width: number }) {
       const items = virtualizer.measurementsCache;
       const top = el.scrollTop;
       const height = el.clientHeight;
-      // 列表外面有 6px 的边距（my-1.5）
-      const pad = 6;
-      let target: number;
-      if (dir === 1) {
-        // 第一行没有完整露出来的，成为下一页的第一行
-        const next = items.find((v) => v.end + pad > top + height + 1);
-        if (!next) return;
-        target = next.start;
-      } else {
-        // 往上数，放得下一整页的最早那一行
-        const from = top - height + pad;
-        const prev = items.find((v) => v.start >= from - 1);
-        target = prev && prev.start < top ? prev.start : Math.max(0, top - height);
-      }
+      const starts = pageStartsOf(items, height, style.listPadding);
+      const target =
+        dir === 1
+          ? starts.find((start) => start > top + 1)
+          : [...starts].reverse().find((start) => start < top - 1);
+      if (target === undefined) return;
       el.scrollTo({ top: Math.max(0, target) });
     },
-    [virtualizer],
+    [style.listPadding, virtualizer],
   );
   useEffect(() => {
     const el = scroller.current;
@@ -678,14 +853,7 @@ export function ItemList({ width }: { width: number }) {
     const update = () => {
       const height = Math.max(1, el.clientHeight);
       const items = virtualizer.measurementsCache;
-      const starts = [0];
-      let start = 0;
-      for (;;) {
-        const next = items.find((v) => v.end + 6 > start + height + 1);
-        if (!next || next.start <= start) break;
-        start = next.start;
-        starts.push(start);
-      }
+      const starts = pageStartsOf(items, height, style.listPadding);
       const pages = starts.length;
       const page = Math.max(1, starts.filter((s) => s <= el.scrollTop + 1).length);
       setPageInfo((old) =>
@@ -700,7 +868,7 @@ export function ItemList({ width }: { width: number }) {
       el.removeEventListener("scroll", update);
       observer.disconnect();
     };
-  }, [paging, lines.length, virtualizer]);
+  }, [paging, lines, rowHeight, metrics.gap, cardHeight, cardGap, columns, style.listPadding, virtualizer]);
 
   // 卡片换了列数时，让原来最上面的那张还在最上面
   const topId = useRef<string | null>(null);
@@ -755,6 +923,10 @@ export function ItemList({ width }: { width: number }) {
       return (line.kind === "row" ? [line.row] : line.rows).map((r) => (r.kind === "item" ? r.item.id : r.group.lead.id));
     })
     .join(",");
+
+  useEffect(() => {
+    setListTranslationContext(listTranslate ? translationScope : null);
+  }, [listTranslate, translationScope]);
   useEffect(() => {
     if (!showAbstracts || !visibleIds) return;
     const timer = setTimeout(() => requestAbstracts(visibleIds.split(","), lang), 400);
@@ -764,9 +936,12 @@ export function ItemList({ width }: { width: number }) {
   // 翻译模式：看得到的条目的标题和摘要
   useEffect(() => {
     if (!listTranslate || !visibleIds) return;
-    const timer = setTimeout(() => requestListTranslations(visibleIds.split(","), translateTo, engine), 300);
+    const timer = setTimeout(
+      () => requestListTranslations(visibleIds.split(","), translateTo, engine, translationScope),
+      300,
+    );
     return () => clearTimeout(timer);
-  }, [engine, listTranslate, translateTo, visibleIds]);
+  }, [engine, listTranslate, translateTo, translationScope, visibleIds]);
 
   // 拖到侧栏的视图上：勾选着的就拖勾选的那些，否则拖这一行代表的条目
   const onDragStart = (e: DragEvent, id: string, label: string) => {
@@ -823,7 +998,8 @@ export function ItemList({ width }: { width: number }) {
 
   /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。 */
   const tools = {
-    kindFilter: scope.kind === "view" ? <KindFilter /> : null,
+    kindFilter:
+      supportsKindFilter(scope) && !(scope.kind === "view" && scope.view === "inbox") ? <KindFilter /> : null,
     search: (
       <IconButton
         label={t("search.label")}
@@ -840,7 +1016,6 @@ export function ItemList({ width }: { width: number }) {
       </IconButton>
     ),
     view: <ViewControl />,
-    group: <GroupControl />,
     markAllRead: (
       <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={confirmMarkAllRead}>
         <CheckCheck {...ICON} />
@@ -911,7 +1086,7 @@ export function ItemList({ width }: { width: number }) {
             onAddFeed={() => setDialog({ type: "add-feed" })}
           />
         ) : (
-          <div className="relative mx-1.5 my-1.5" style={{ height: virtualizer.getTotalSize() }}>
+          <div className="relative" style={{ height: virtualizer.getTotalSize(), margin: style.listPadding }}>
             {virtualRows.map((virtual) => {
               const line = lines[virtual.index];
               if (!line) return null;
@@ -938,10 +1113,11 @@ export function ItemList({ width }: { width: number }) {
               if (line.kind === "header") {
                 const group = line.group;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={`h:${group.key}`}
-                    role="button"
-                    tabIndex={-1}
+                    aria-expanded="true"
+                    aria-label={t("group.collapse")}
                     onClick={() => setGroupExpanded(group.key, false)}
                     className="absolute inset-x-0 top-0 flex items-center gap-2 rounded-md px-2.5 text-[12px] text-fg-3 hover:bg-hover hover:text-fg-2"
                     style={{ ...position, height: HEADER_HEIGHT - 1 }}
@@ -951,7 +1127,7 @@ export function ItemList({ width }: { width: number }) {
                       {groupMode === "thread" ? group.lead.title || t("reader.untitled") : group.people[0]}
                     </span>
                     <span className="tabular shrink-0">{t("group.count", { n: group.items.length })}</span>
-                  </div>
+                  </button>
                 );
               }
 
@@ -980,7 +1156,12 @@ export function ItemList({ width }: { width: number }) {
                 };
                 return {
                   id,
-                  tooltip: translated ? original.title : undefined,
+                  tooltip: [
+                    translated ? original.title : undefined,
+                    view === "list" && listHoverSummary ? tooltipExcerpt(item.summary) : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n") || undefined,
                   key: group ? `g:${group.key}` : item.id,
                   props,
                   opened: id === openId,
@@ -1092,6 +1273,7 @@ export function ItemList({ width }: { width: number }) {
       <StatusBar
         toolbar="list"
         tools={tools}
+        quickTools={<ViewModeButtons />}
         info={
           <>
             <span>
@@ -1128,7 +1310,7 @@ export function ItemList({ width }: { width: number }) {
   );
 }
 
-/** 列表空白处的右键菜单：常用操作，以及工具栏「列表样式」「折叠」里的常用设置。 */
+/** 列表空白处的右键菜单：常用操作和列表显示设置。 */
 function ListMenu({
   hasUnread,
   searchOpen,
@@ -1145,7 +1327,6 @@ function ListMenu({
   const t = useT();
   const ui = useUi();
   const view = useListView();
-  const groupMode = useGroupMode();
   const style = useListStyle();
   const check = (on: boolean) => (on ? <Check size={14} /> : null);
   const oneLine = view === "list" && ui.density === "compact";
@@ -1168,32 +1349,20 @@ function ListMenu({
         {searchOpen ? t("search.close") : t("search.label")}
       </MenuItem>
       <MenuSeparator />
-      <MenuSub icon={<List size={14} />} label={t("listStyle.view")}>
-        {VIEW_OPTIONS.map(({ value, label }) => (
-          <MenuItem key={value} icon={check(view === value)} onSelect={() => ui.setListView(ui.scope, value)}>
-            {t(label)}
+      {view === "list" && (
+        <MenuSub icon={<List size={14} />} label={t("listStyle.lines")}>
+          <MenuItem icon={check(ui.density === "compact")} onSelect={() => ui.setDensity("compact")}>
+            {t("listStyle.oneLine")}
           </MenuItem>
-        ))}
-        {view === "list" && (
-          <>
-            <MenuSeparator />
-            <MenuItem icon={check(ui.density === "compact")} onSelect={() => ui.setDensity("compact")}>
-              {t("listStyle.oneLine")}
-            </MenuItem>
-            <MenuItem icon={check(ui.density === "comfortable")} onSelect={() => ui.setDensity("comfortable")}>
-              {t("listStyle.twoLines")}
-            </MenuItem>
-          </>
-        )}
-      </MenuSub>
-      <MenuSub icon={<ListCollapse size={14} />} label={t("group.label")}>
-        {GROUP_OPTIONS.map(({ value, label }) => (
-          <MenuItem key={value} icon={check(groupMode === value)} onSelect={() => ui.setGroupMode(value)}>
-            {t(label)}
+          <MenuItem icon={check(ui.density === "comfortable")} onSelect={() => ui.setDensity("comfortable")}>
+            {t("listStyle.twoLines")}
           </MenuItem>
-        ))}
-      </MenuSub>
-      {ui.scope.kind === "view" && (
+          <MenuItem icon={check(ui.listHoverSummary)} onSelect={() => ui.setListHoverSummary(!ui.listHoverSummary)}>
+            {t("listStyle.hoverSummary")}
+          </MenuItem>
+        </MenuSub>
+      )}
+      {supportsKindFilter(ui.scope) && !(ui.scope.kind === "view" && ui.scope.view === "inbox") && (
         <MenuSub icon={<Layers size={14} />} label={t("listMenu.show")}>
           {KIND_OPTIONS.map(({ value, label }) => (
             <MenuItem key={label} icon={check(ui.kindFilter === value)} onSelect={() => ui.setKindFilter(value)}>
@@ -1361,6 +1530,14 @@ function SearchSnippet({ item, look }: { item: Item; look: Look }) {
       <Hl text={item.snippet} terms={look.terms} />
     </span>
   );
+}
+
+/** 浏览器悬停提示太长时截断，避免整封邮件占满提示框。 */
+function tooltipExcerpt(text: string): string | undefined {
+  const clean = text.trim();
+  if (!clean) return undefined;
+  const chars = Array.from(clean);
+  return chars.length > 600 ? `${chars.slice(0, 600).join("")}…` : clean;
 }
 
 /**
@@ -1612,7 +1789,7 @@ function Trailing({ item, group, time, onExpand, expandLabel, look }: RowProps) 
 
 /** 邮件这一行左边显示谁：单封是发件人，一个会话是参与的人。 */
 function senderLabel(item: Item, group: Group | undefined, groupMode: GroupMode): string {
-  if (group && groupMode === "thread") return group.people.join(", ");
+  if (group && (groupMode === "thread" || groupMode === "mailbox")) return group.people.join(", ");
   return item.author || item.sender_address || "";
 }
 
