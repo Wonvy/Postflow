@@ -82,9 +82,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 一个安装包同时支持 Apple 芯片和 Intel
+          # 一个安装包同时支持 Apple 芯片和 Intel（在 Intel 机器上交叉编译出 Apple 芯片的部分）。
+          # 用 Intel 的 runner：GitHub 的 Apple 芯片 runner 经常排不上，等 15 分钟后整个任务被取消
+          # （v0.1.19、v0.1.20、v0.1.22、v0.1.26 都卡在这里）。macos-15-intel 大约到 2027 年秋天停用，
+          # 到时换回 macos-latest。
           - name: macOS
-            os: macos-latest
+            os: macos-15-intel
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: --target universal-apple-darwin
           - name: Windows
