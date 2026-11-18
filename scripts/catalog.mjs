@@ -31,8 +31,9 @@ function save() {
   writeFileSync(FILE, `${JSON.stringify(catalog, null, 2)}\n`);
   console.log(`Saved ${FILE} (updated ${catalog.updated}).`);
 }
-// Same as the app, so sites that treat readers differently answer the way they will in Postflow
-const FEED_UA = "Postflow (+https://github.com/Wonvy/Postflow)";
+// Same as the app (crates/feed/src/client.rs sends "Postflow/<version>"), so sites that treat readers differently
+// answer the way they will in Postflow
+const FEED_UA = `Postflow/${JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version}`;
 const PAGE_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 const STALE_DAYS = 180;

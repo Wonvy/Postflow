@@ -6,6 +6,9 @@ import { ArrowRight, Check, LayoutGrid, List, Plus, Search } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import {
+  groupCounts,
+  PODCAST_GROUPS,
+  type PodcastGroup,
   browseCatalog,
   CATALOG_CATEGORIES,
   type CatalogCategory,
@@ -111,6 +114,8 @@ export function DiscoverPane({
   const prefer = catalogLang(lang);
   const [query, setQuery] = useState("");
   const [section, setSection] = useState<CatalogSection>("featured");
+  // 播客再按小类看，「全部」是 null
+  const [group, setGroup] = useState<PodcastGroup | null>(null);
   const [langFilter, setLangFilter] = useState<LangFilter>("auto");
   const [byCategory, setByCategory] = useState(true);
   const catalog = useCatalog();
@@ -122,7 +127,11 @@ export function DiscoverPane({
   const counts = sectionCounts(langFilter, catalog.feeds);
   const sections = (["featured", ...CATALOG_CATEGORIES] as CatalogSection[]).filter((s) => (counts[s] ?? 0) > 0);
   const current = sections.includes(section) ? section : (sections[0] ?? "featured");
-  const list = browseCatalog({ section: current, prefer, langFilter, search }, catalog.feeds);
+  const groups = groupCounts(langFilter, catalog.feeds);
+  const shownGroups = PODCAST_GROUPS.filter((g) => (groups[g] ?? 0) > 0);
+  const showGroups = current === "podcasts" && !search && shownGroups.length > 1;
+  const activeGroup = showGroups && group && shownGroups.includes(group) ? group : undefined;
+  const list = browseCatalog({ section: current, prefer, langFilter, search, group: activeGroup }, catalog.feeds);
   const left = list.filter((f) => !subscribed.has(f.id) && !adding.has(f.id));
   const folderOf = (feed: CatalogFeed) => startFolder || (byCategory ? categoryName(t, feed.category) : "");
   const sectionLabel = (s: CatalogSection) => (s === "featured" ? t("catalog.featured") : categoryName(t, s));
@@ -200,6 +209,7 @@ export function DiscoverPane({
               aria-current={!search && s === current ? "true" : undefined}
               onClick={() => {
                 setSection(s);
+                setGroup(null);
                 setQuery("");
               }}
               className={cx(
@@ -215,6 +225,28 @@ export function DiscoverPane({
 
         {/* 源 */}
         <div className="min-w-0 flex-1 overflow-y-auto p-1.5">
+          {/* 播客的小类：新闻、科技、商业…… */}
+          {showGroups && (
+            <div role="group" aria-label={t("catalog.podcastGroups")} className="mb-1.5 flex flex-wrap gap-1 px-0.5">
+              {[null, ...shownGroups].map((g) => (
+                <button
+                  key={g ?? "all"}
+                  type="button"
+                  aria-pressed={(activeGroup ?? null) === g}
+                  onClick={() => setGroup(g)}
+                  className={cx(
+                    "h-6 rounded-full border px-2.5 text-[12px] transition-colors touch:h-9 touch:px-3",
+                    (activeGroup ?? null) === g
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-line-strong text-fg-2 hover:bg-hover hover:text-fg",
+                  )}
+                >
+                  {g ? t(`catalog.group.${g}`) : t("feedKind.all")}
+                  {g && <span className="tabular ml-1 text-fg-3">{groups[g]}</span>}
+                </button>
+              ))}
+            </div>
+          )}
           {looksLikeUrl(search) && (
             <button
               type="button"

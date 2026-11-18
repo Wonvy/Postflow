@@ -10,6 +10,7 @@ import {
   type CatalogFeed,
   catalogLang,
   feedKey,
+  groupCounts,
   newerCatalog,
   parseCatalog,
   sectionCounts,
@@ -152,4 +153,30 @@ test("starter feeds take a few per chosen category, in the interface language wh
     assert.ok(design.every((f) => f.lang === "en"));
   }
   assert.ok(CATALOG_CATEGORIES.length === 11);
+});
+
+test("podcasts are split into groups, and every podcast has one", () => {
+  const podcasts = CATALOG.filter((f) => f.category === "podcasts");
+  assert.ok(podcasts.length >= 50);
+  assert.ok(podcasts.every((f) => f.group), podcasts.filter((f) => !f.group).map((f) => f.id).join(", "));
+  assert.ok(CATALOG.filter((f) => f.category !== "podcasts").every((f) => !f.group));
+  const counts = groupCounts("zh", CATALOG);
+  assert.ok((counts.tech ?? 0) >= 5);
+  const tech = browseCatalog({ section: "podcasts", prefer: "zh", langFilter: "auto", group: "tech" }, CATALOG);
+  assert.ok(tech.length >= 5 && tech.every((f) => f.group === "tech"));
+  // 搜索时不管小类
+  const found = browseCatalog({ section: "podcasts", prefer: "zh", langFilter: "auto", group: "sports", search: "硅谷" }, CATALOG);
+  assert.ok(found.some((f) => f.group === "tech"));
+  // 不认识的小类不要
+  const parsed = parseCatalog(
+    JSON.stringify({
+      schema: 1,
+      updated: "2026-01-01",
+      feeds: [
+        { id: "a", name: "A", url: "https://a.example/rss", site: "https://a.example", lang: "zh", category: "podcasts", group: "music", desc: { zh: "a", en: "a" } },
+      ],
+    }),
+    1,
+  );
+  assert.equal(parsed?.feeds[0]?.group, undefined);
 });

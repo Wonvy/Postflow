@@ -34,6 +34,32 @@ export const CATALOG_CATEGORIES: CatalogCategory[] = [
   "blogs",
 ];
 
+/** 播客再分的小类，和「声链」的中文播客分类一样。 */
+export type PodcastGroup =
+  | "news"
+  | "tech"
+  | "business"
+  | "education"
+  | "health"
+  | "story"
+  | "arts"
+  | "sports"
+  | "ent"
+  | "society";
+
+export const PODCAST_GROUPS: PodcastGroup[] = [
+  "news",
+  "tech",
+  "business",
+  "education",
+  "health",
+  "story",
+  "arts",
+  "sports",
+  "ent",
+  "society",
+];
+
 export interface CatalogFeed {
   id: string;
   /** 网站自己的名字。 */
@@ -45,6 +71,8 @@ export interface CatalogFeed {
   /** 内容的语言。 */
   lang: "zh" | "en";
   category: CatalogCategory;
+  /** 播客的小类（只有 category 是 podcasts 的才有）。旧版应用不认这个字段，照常显示。 */
+  group?: PodcastGroup;
   /** 一句话介绍，界面是中文时显示 zh，其他语言显示 en。 */
   desc: { zh: string; en: string };
   /** 放在「推荐」里，新手引导按分类订阅时也先选这些。 */
@@ -120,6 +148,9 @@ export function parseCatalog(text: string, minFeeds = 20): Catalog | null {
       category: f.category as CatalogCategory,
       desc: { zh: desc.zh, en: desc.en },
       ...(f.featured === true ? { featured: true } : {}),
+      ...(f.category === "podcasts" && PODCAST_GROUPS.includes(f.group as PodcastGroup)
+        ? { group: f.group as PodcastGroup }
+        : {}),
       // 只认 png、jpeg、webp 的 data 地址，别的（比如外部链接、svg）不显示
       ...(typeof f.icon === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(f.icon)
         ? { icon: f.icon }
@@ -149,6 +180,8 @@ export interface CatalogQuery {
   langFilter: LangFilter;
   /** 搜索词。有词时在全部分类里搜，不管 `section`。 */
   search?: string;
+  /** 看播客时只看这个小类。 */
+  group?: PodcastGroup;
 }
 
 const matchesLang = (feed: CatalogFeed, filter: LangFilter) => filter === "auto" || feed.lang === filter;
@@ -167,7 +200,9 @@ export function browseCatalog(query: CatalogQuery, feeds: readonly CatalogFeed[]
       const text = haystack(feed);
       return words.every((w) => text.includes(w));
     }
-    return query.section === "featured" ? feed.featured === true : feed.category === query.section;
+    if (query.section === "featured") return feed.featured === true;
+    if (feed.category !== query.section) return false;
+    return !query.group || feed.group === query.group;
   });
   const rank = (feed: CatalogFeed) => (feed.lang === query.prefer ? 0 : 2) + (feed.featured ? 0 : 1);
   return picked
@@ -230,4 +265,14 @@ export function starterFeeds(
     out.push(...sorted.slice(0, per));
   }
   return out;
+}
+
+/** 播客的每个小类在这个语言筛选下有几个，用来隐藏空的小类。 */
+export function groupCounts(langFilter: LangFilter, feeds: readonly CatalogFeed[]): Partial<Record<PodcastGroup, number>> {
+  const counts: Partial<Record<PodcastGroup, number>> = {};
+  for (const feed of feeds) {
+    if (feed.category !== "podcasts" || !feed.group || !matchesLang(feed, langFilter)) continue;
+    counts[feed.group] = (counts[feed.group] ?? 0) + 1;
+  }
+  return counts;
 }

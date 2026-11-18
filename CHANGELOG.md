@@ -7,8 +7,10 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Discover → Podcasts gains 56 popular Chinese shows, picked from Apple Podcasts' China charts with 声链 (shenglianfm.com) as a guide, and podcasts are now sorted into news, tech, business, education, health, stories, arts, sports, entertainment and society; pick one at the top of the list. Every feed was checked to work in Postflow.
 
 ### 中文
+- 「发现 → 播客」新增 56 个热门中文播客，参考「声链」（shenglianfm.com）的分类，按 Apple 播客中国区各分类榜单挑选；播客按新闻、科技、商业、教育、健康、故事、艺术、体育、娱乐、社会文化分类，在列表顶上选。每个源都确认过能在 Postflow 里正常订阅。
 
 ## 0.1.29 — 2026-11-18
 
