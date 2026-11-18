@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.19 — 2026-11-18
+
+### English
 - Mail and Feeds are now two separate spaces. Switch between them at the top of the sidebar; each has its own Inbox / All articles, Today, Unread, Starred and Archive, its own buttons (compose, sync mail and add account on the Mail side; stats, refresh feeds and add feed or folder on the Feeds side) and remembers the list you were on. The mail / articles filter and the stacked sidebar layout are gone.
 - Categories show on both sides, counting only that side's items; a category with nothing on one side is hidden there.
 - Feeds are optional: turn off Settings → Appearance → Show Feeds, or right-click the switch, to see only mail.
