@@ -55,7 +55,7 @@ import { keys, useItem } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
 import { useDrawerSidebar, useIsMobile, useReaderOverlay } from "../lib/mobile";
 import { SnoozeButton, snoozeTime } from "./Snooze";
-import { useReaderStyle, useToolbarLayout, useUi } from "../lib/store";
+import { canArchive, canSnooze, useArticleActions, useReaderStyle, useToolbarLayout, useUi } from "../lib/store";
 import { toolsAt } from "../lib/toolbars";
 import { fullTime } from "../lib/time";
 import { readingMinutes, totalWords, wordCount } from "../lib/wordCount";
@@ -73,6 +73,7 @@ import { PluginSections } from "./PluginSections";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import { useWindowControlsGap } from "./WindowControls";
 import { ItemMenuItems, useSetLabel } from "./ItemMenu";
+import { MediaAttachment } from "./Player";
 import { ReaderStyleMenu } from "./ReaderStyleMenu";
 import { AccountIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
@@ -381,6 +382,8 @@ function Article({ id }: { id: string }) {
 
   /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。用不上的是 null。 */
   const targets = summary ? (group.length > 0 ? group : [summary]) : [];
+  // 文章的归档、稍后提醒跟着订阅那边显示不显示这两个视图走
+  const allowed = useArticleActions();
   const tools = !summary
     ? {}
     : {
@@ -466,7 +469,8 @@ function Article({ id }: { id: string }) {
           </IconButton>
         ),
         label: <LabelMenu ids={targets.map((i) => i.id)} current={summary.label} />,
-        snooze: summary.draft || summary.sent ? null : <SnoozeButton item={summary} />,
+        snooze:
+          summary.draft || summary.sent || !canSnooze(targets, allowed) ? null : <SnoozeButton item={summary} />,
         ai: (
           <IconButton label={t("action.ai")} shortcut="A" active={aiPanel} onClick={toggleAiPanel}>
             <Sparkles {...ICON} />
@@ -508,7 +512,7 @@ function Article({ id }: { id: string }) {
           </IconButton>
         ),
         archive:
-          !summary.draft && !summary.sent ? (
+          !summary.draft && !summary.sent && canArchive(targets, allowed) ? (
             <IconButton
               label={all("archived") ? t("action.unarchive") : t("action.archive")}
               shortcut="E"
@@ -767,6 +771,8 @@ function ArticleView({
         <span aria-hidden>·</span>
         <time dateTime={new Date(item.published_at).toISOString()}>{fullTime(item.published_at, lang)}</time>
       </div>
+      {/* 播客的播放条、视频附件 */}
+      <MediaAttachment item={item} />
       {bar}
       <PluginSections item={item} mode={mode} />
       {fullError && (
@@ -1356,12 +1362,16 @@ function RestoreButton() {
 
 function Empty() {
   const t = useT();
+  // 订阅那边不用归档、稍后提醒时，E 是标为已读，H 不提示
+  const feeds = useUi((s) => s.space === "feeds");
+  const allowed = useArticleActions();
+  const archives = !feeds || allowed.archive;
   const hints: [string[], string][] = [
     [["J", "K"], t("reader.hintMove")],
     [["F", "⇧F"], t("reader.hintMaximize")],
-    [["E"], t("reader.hintArchive")],
+    [["E"], archives ? t("reader.hintArchive") : t("action.markRead")],
     [["S"], t("reader.hintStar")],
-    [["H"], t("snooze.title")],
+    ...(!feeds || allowed.snooze ? ([[["H"], t("snooze.title")]] as [string[], string][]) : []),
     [["U"], t("reader.hintRead")],
     [["V"], t("reader.hintOpen")],
     [["X"], t("reader.hintSelect")],

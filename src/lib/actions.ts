@@ -10,7 +10,7 @@ import type { ComposeMode } from "./compose";
 import { useListModel } from "./listModel";
 import { openExternal } from "./platform";
 import { keys, useMarkAllRead, useSetItems } from "./queries";
-import { isArchiveLike, type Space, useUi } from "./store";
+import { articleActions, canArchive, isArchiveLike, type Space, useUi } from "./store";
 
 type Flag = "read" | "starred" | "archived";
 
@@ -91,6 +91,11 @@ export function useActions() {
       // 草稿和已发送的信只在各自的文件夹里，不能归档
       const usable = flag === "archived" ? list.filter((i) => !i.draft && !i.sent) : list;
       if (usable.length === 0) return;
+      // 订阅那边不显示「已归档」时文章不归档：E、往左滑改成标为已读
+      if (flag === "archived" && !canArchive(usable, articleActions(useUi.getState().hiddenViews.feeds ?? []))) {
+        apply(usable, { read: true });
+        return;
+      }
       apply(usable, { [flag]: !usable.every((i) => i[flag]) });
     },
     [apply, targets],

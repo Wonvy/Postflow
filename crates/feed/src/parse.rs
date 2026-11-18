@@ -30,6 +30,26 @@ pub struct ParsedEntry {
     pub content: String,
     /// 源里明确给出的封面图：媒体缩略图或图片附件。
     pub image: Option<String>,
+    /// 播客、视频的音频或视频附件。
+    pub media: Option<ParsedMedia>,
+}
+
+/// 条目附带的音频或视频（RSS 的 `<enclosure>`、Media RSS、Atom 的 `rel="enclosure"`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedMedia {
+    pub url: String,
+    /// MIME 类型，比如 `audio/mpeg`。源里没写时按文件扩展名猜。
+    pub mime: String,
+    /// 时长，秒。
+    pub duration: Option<u64>,
+    /// 文件大小，字节。
+    pub size: Option<u64>,
+}
+
+impl ParsedMedia {
+    pub fn is_audio(&self) -> bool {
+        self.mime.starts_with("audio/")
+    }
 }
 
 /// 解析 RSS、Atom 或 JSON Feed。`base_url` 用来把相对链接补全。
@@ -47,11 +67,23 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
     let mut entries: Vec<ParsedEntry> = feed.entries.into_iter().map(convert_entry).collect();
     // feed-rs 只在有 media:content 时才保留缩略图。直接挂在条目下的 media:thumbnail
     // （新闻网站常这样写）从原文里补上；条目数对得上才用，免得张冠李戴
-    let thumbs = standalone_thumbnails(&String::from_utf8_lossy(bytes));
+    let xml = String::from_utf8_lossy(bytes);
+    let thumbs = standalone_thumbnails(&xml);
     if thumbs.len() == entries.len() {
         for (entry, thumb) in entries.iter_mut().zip(thumbs) {
             if entry.image.is_none() {
                 entry.image = thumb;
+            }
+        }
+    }
+    // 播客单集的时长同样从原文补
+    let durations = itunes_durations(&xml);
+    if durations.len() == entries.len() {
+        for (entry, duration) in entries.iter_mut().zip(durations) {
+            if let Some(media) = entry.media.as_mut()
+                && media.duration.is_none()
+            {
+                media.duration = duration;
             }
         }
     }
@@ -186,6 +218,7 @@ fn convert_entry(entry: Entry) -> ParsedEntry {
     }
 
     let image = media_image(&entry);
+    let media = media_attachment(&entry);
     ParsedEntry {
         guid,
         url,
@@ -195,11 +228,29 @@ fn convert_entry(entry: Entry) -> ParsedEntry {
         summary,
         content,
         image,
+        media,
     }
 }
 
 /// 按顺序列出每个条目（`<item>` 或 `<entry>`）里第一个 `media:thumbnail` 的地址。
 fn standalone_thumbnails(xml: &str) -> Vec<Option<String>> {
+    entry_blocks(xml)
+        .into_iter()
+        .map(|block| {
+            block.find("<media:thumbnail").and_then(|i| {
+                let tag = &block[i..];
+                let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+                let value = tag.split("url=").nth(1)?;
+                let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+                let url = value[1..].split(quote).next()?.replace("&amp;", "&");
+                (url.starts_with("https://") || url.starts_with("http://")).then_some(url)
+            })
+        })
+        .collect()
+}
+
+/// 原文里每个条目（`<item>` 或 `<entry>`）的内容，按顺序。
+fn entry_blocks(xml: &str) -> Vec<&str> {
     let (open, close) = if xml.contains("<item") {
         ("<item", "</item>")
     } else {
@@ -215,18 +266,121 @@ fn standalone_thumbnails(xml: &str) -> Vec<Option<String>> {
             continue;
         }
         let end = after.find(close).unwrap_or(after.len());
-        let block = &after[..end];
-        out.push(block.find("<media:thumbnail").and_then(|i| {
-            let tag = &block[i..];
-            let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
-            let value = tag.split("url=").nth(1)?;
-            let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'')?;
-            let url = value[1..].split(quote).next()?.replace("&amp;", "&");
-            (url.starts_with("https://") || url.starts_with("http://")).then_some(url)
-        }));
+        out.push(&after[..end]);
         rest = &after[end..];
     }
     out
+}
+
+/// 每个条目的 `<itunes:duration>`，秒。feed-rs 在条目没有别的 iTunes 信息时会把它丢掉，从原文补。
+fn itunes_durations(xml: &str) -> Vec<Option<u64>> {
+    entry_blocks(xml)
+        .into_iter()
+        .map(|block| {
+            let start = block.find("<itunes:duration>")? + "<itunes:duration>".len();
+            let text = &block[start..];
+            parse_duration(&text[..text.find('<')?])
+        })
+        .collect()
+}
+
+/// `1:02:03`、`62:03` 或者秒数。
+fn parse_duration(text: &str) -> Option<u64> {
+    let mut total = 0u64;
+    let parts: Vec<&str> = text.trim().split(':').collect();
+    if parts.len() > 3 {
+        return None;
+    }
+    for part in parts {
+        let n: f64 = part.trim().parse().ok()?;
+        if !n.is_finite() || n < 0.0 {
+            return None;
+        }
+        total = total * 60 + n as u64;
+    }
+    (total > 0).then_some(total)
+}
+
+/// 按文件扩展名猜音频、视频的 MIME 类型（有些源的附件不写 type）。
+fn mime_from_url(url: &str) -> Option<&'static str> {
+    let path = url
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(url)
+        .to_ascii_lowercase();
+    let ext = path.rsplit('.').next()?;
+    Some(match ext {
+        "mp3" => "audio/mpeg",
+        "m4a" | "m4b" => "audio/mp4",
+        "aac" => "audio/aac",
+        "ogg" | "oga" | "opus" => "audio/ogg",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        "mp4" | "m4v" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        _ => return None,
+    })
+}
+
+/// 音频或视频的 MIME 类型；别的类型（图片、网页、Flash）不算。
+fn playable_mime(declared: Option<&str>, url: &str) -> Option<String> {
+    let declared = declared
+        .map(|t| t.trim().to_ascii_lowercase())
+        .filter(|t| !t.is_empty());
+    match declared {
+        Some(t) if t.starts_with("audio/") || t.starts_with("video/") => Some(t),
+        // 写成 application/octet-stream 之类的，按扩展名再看一眼
+        Some(t) if t.starts_with("application/octet-stream") || t == "binary/octet-stream" => {
+            mime_from_url(url).map(str::to_string)
+        }
+        Some(_) => None,
+        None => mime_from_url(url).map(str::to_string),
+    }
+}
+
+/// 条目的音频或视频附件：先看媒体内容（RSS 的 enclosure 也在这里），再看 Atom 的附件链接。
+/// 时长取附件自己的，没有再取 iTunes 的 `<itunes:duration>`。
+fn media_attachment(entry: &Entry) -> Option<ParsedMedia> {
+    let web = |u: &str| u.starts_with("https://") || u.starts_with("http://");
+    let any_duration = entry
+        .media
+        .iter()
+        .find_map(|m| m.duration)
+        .map(|d| d.as_secs());
+    for media in &entry.media {
+        for c in &media.content {
+            let Some(url) = c.url.as_ref().map(|u| u.to_string()).filter(|u| web(u)) else {
+                continue;
+            };
+            let declared = c.content_type.as_ref().map(|t| t.to_string());
+            if let Some(mime) = playable_mime(declared.as_deref(), &url) {
+                return Some(ParsedMedia {
+                    url,
+                    mime,
+                    duration: c
+                        .duration
+                        .or(media.duration)
+                        .map(|d| d.as_secs())
+                        .or(any_duration)
+                        .filter(|s| *s > 0),
+                    size: c.size.filter(|s| *s > 0),
+                });
+            }
+        }
+    }
+    entry.links.iter().find_map(|l| {
+        if l.rel.as_deref() != Some("enclosure") || !web(&l.href) {
+            return None;
+        }
+        let mime = playable_mime(l.media_type.as_deref(), &l.href)?;
+        Some(ParsedMedia {
+            url: l.href.clone(),
+            mime,
+            duration: any_duration.filter(|s| *s > 0),
+            size: l.length.filter(|s| *s > 0),
+        })
+    })
 }
 
 /// 媒体缩略图、图片类型的媒体内容，或者图片附件。
@@ -538,5 +692,52 @@ mod tests {
         let t = truncate(&s, 280);
         assert_eq!(t.chars().count(), 281);
         assert!(t.ends_with('…'));
+    }
+
+    #[test]
+    fn podcast_enclosures() {
+        let rss = r#"<?xml version="1.0"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<channel><title>Show</title><link>https://show.example.com/</link>
+<item><title>Ep 2</title><guid>ep2</guid>
+  <enclosure url="https://cdn.example.com/ep2.mp3?x=1" length="31415926" type="audio/mpeg"/>
+  <itunes:duration>1:02:03</itunes:duration></item>
+<item><title>Ep 1</title><guid>ep1</guid>
+  <enclosure url="https://cdn.example.com/ep1.m4a" length="0"/></item>
+<item><title>Cover only</title><guid>img</guid>
+  <enclosure url="https://cdn.example.com/cover.jpg" type="image/jpeg"/></item>
+</channel></rss>"#;
+        let feed = parse_feed(rss.as_bytes(), "https://show.example.com/feed").unwrap();
+        let ep2 = feed.entries[0].media.clone().unwrap();
+        assert_eq!(ep2.url, "https://cdn.example.com/ep2.mp3?x=1");
+        assert_eq!(ep2.mime, "audio/mpeg");
+        assert_eq!(ep2.duration, Some(3723));
+        assert_eq!(ep2.size, Some(31415926));
+        assert!(ep2.is_audio());
+        // 没写类型的按扩展名猜，大小 0 当作不知道
+        let ep1 = feed.entries[1].media.clone().unwrap();
+        assert_eq!(ep1.mime, "audio/mp4");
+        assert_eq!(ep1.size, None);
+        // 图片附件不是音视频
+        assert_eq!(feed.entries[2].media, None);
+    }
+
+    #[test]
+    fn atom_video_enclosure() {
+        let atom = r#"<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Clips</title><id>c</id><updated>2026-01-01T00:00:00Z</updated>
+<entry><title>Clip</title><id>c1</id><updated>2026-01-01T00:00:00Z</updated>
+  <link rel="alternate" href="https://clips.example.com/1"/>
+  <link rel="enclosure" type="video/mp4" length="1234" href="https://clips.example.com/1.mp4"/></entry>
+</feed>"#;
+        let feed = parse_feed(atom.as_bytes(), "https://clips.example.com/atom").unwrap();
+        let media = feed.entries[0].media.clone().unwrap();
+        assert_eq!(media.url, "https://clips.example.com/1.mp4");
+        assert_eq!(media.mime, "video/mp4");
+        assert!(!media.is_audio());
+        assert_eq!(
+            feed.entries[0].url.as_deref(),
+            Some("https://clips.example.com/1")
+        );
     }
 }

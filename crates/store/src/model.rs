@@ -50,7 +50,38 @@ pub struct Article {
     /// 源里明确给出的封面图（媒体缩略图、图片附件）。没有时从正文里找。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// 播客、视频的音频或视频附件。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media: Option<Media>,
 }
+
+/// 条目附带的音频或视频。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Media {
+    pub url: String,
+    /// MIME 类型，比如 `audio/mpeg`。
+    pub mime: String,
+    /// 时长，秒。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<u64>,
+    /// 文件大小，字节。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+}
+
+impl Media {
+    /// 存进索引、用来判断订阅源类型的 `audio` 或 `video`。
+    pub fn kind(&self) -> &'static str {
+        if self.mime.starts_with("video/") {
+            "video"
+        } else {
+            "audio"
+        }
+    }
+}
+
+/// 订阅源的类型：文章、视频、播客。界面按它分成几类。
+pub const FEED_KINDS: [&str; 3] = ["article", "video", "podcast"];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Feed {
@@ -59,6 +90,10 @@ pub struct Feed {
     pub title: String,
     pub site_url: Option<String>,
     pub icon_url: Option<String>,
+    /// 类型（`FEED_KINDS` 之一）：用户在「编辑订阅」里选的，没选时按内容自动判断。
+    pub kind: String,
+    /// 用户选的类型；`None` 表示自动。
+    pub kind_set: Option<String>,
     pub folder: String,
     pub interval_min: Option<i64>,
     pub added_at: i64,
@@ -90,6 +125,9 @@ pub struct FeedPatch {
     /// `Some(None)` 表示恢复默认刷新间隔。
     #[serde(default, deserialize_with = "double_option")]
     pub interval_min: Option<Option<i64>>,
+    /// 类型（`FEED_KINDS` 之一）。`Some(None)` 表示恢复自动判断。
+    #[serde(default, deserialize_with = "double_option")]
+    pub kind: Option<Option<String>>,
 }
 
 fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
@@ -167,6 +205,8 @@ pub struct ItemFilter {
     pub label: Option<String>,
     /// 全文搜索：标题、发件人、作者和正文里都要有这些词。
     pub query: Option<String>,
+    /// 只看某一类订阅源（`FEED_KINDS` 之一）的文章。
+    pub feed_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -208,6 +248,9 @@ pub struct ItemSummary {
     /// 搜索时，正文里命中搜索词的那一小段。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
+    /// 播客、视频的音频或视频附件。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media: Option<Media>,
 }
 
 #[derive(Debug, Clone, Serialize)]

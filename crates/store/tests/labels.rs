@@ -33,6 +33,7 @@ fn setup() -> (TempDir, Store, Vec<String>) {
             summary: String::new(),
             content: String::new(),
             image: None,
+            media: None,
         })
         .collect();
     let ids: Vec<String> = articles.iter().map(|a| a.id.clone()).collect();

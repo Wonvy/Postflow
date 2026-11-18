@@ -3,6 +3,7 @@
 
 import { useMemo } from "react";
 import { groupItems, rowsOf, type Stop, stopOf } from "./grouping";
+import { useFeedKind } from "./feedKinds";
 import { useItems } from "./queries";
 import { filterOf, searchFilterOf, useGroupMode, useUi } from "./store";
 
@@ -15,9 +16,10 @@ export function useListModel() {
   // 搜索栏开着、输入了词时，列表换成搜索结果
   const search = useUi((s) => (s.searchOpen ? s.searchQuery.trim() : ""));
   const searchAll = useUi((s) => s.searchAll);
+  const feedKind = useFeedKind();
   const filter = useMemo(
-    () => (search ? searchFilterOf(scope, space, search, searchAll) : filterOf(scope, space)),
-    [scope, space, search, searchAll],
+    () => (search ? searchFilterOf(scope, space, search, searchAll, feedKind) : filterOf(scope, space, feedKind)),
+    [scope, space, search, searchAll, feedKind],
   );
   const query = useItems(filter);
   // 顶部：提醒时间刚到、还没读的稍后提醒，按日期本来排在后面，这里提到最前。
@@ -29,7 +31,7 @@ export function useListModel() {
       scope.kind === "feed" ||
       scope.kind === "folder" ||
       scope.kind === "label");
-  const reminders = useItems({ ...filterOf(scope, space), view: "reminders" }, pinReminders);
+  const reminders = useItems({ ...filterOf(scope, space, feedKind), view: "reminders" }, pinReminders);
   const items = useMemo(() => {
     if (!pinReminders || reminders.items.length === 0) return query.items;
     const pinned = new Set(reminders.items.map((i) => i.id));

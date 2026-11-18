@@ -28,6 +28,7 @@ fn article(feed_id: &str, guid: &str, title: &str, content: &str, published: i64
         summary: String::new(),
         content: content.into(),
         image: None,
+        media: None,
     }
 }
 

@@ -32,12 +32,39 @@ export interface Status {
   error: string | null;
 }
 
+/** 搜到的一个播客节目。 */
+export interface PodcastResult {
+  title: string;
+  author: string;
+  feed_url: string;
+  artwork: string | null;
+  genre: string | null;
+  episodes: number | null;
+}
+
+/** 订阅源的类型：文章、视频、播客。 */
+export type FeedKind = "article" | "video" | "podcast";
+
+/** 条目附带的音频或视频。 */
+export interface Media {
+  url: string;
+  /** MIME 类型，比如 audio/mpeg。 */
+  mime: string;
+  /** 时长，秒。 */
+  duration?: number;
+  size?: number;
+}
+
 export interface Feed {
   id: string;
   url: string;
   title: string;
   site_url: string | null;
   icon_url: string | null;
+  /** 类型：用户选的，没选时按内容自动判断。 */
+  kind: FeedKind;
+  /** 用户选的类型；null 表示自动。 */
+  kind_set: FeedKind | null;
   folder: string;
   interval_min: number | null;
   added_at: number;
@@ -129,6 +156,8 @@ export interface Item {
   snoozed_until?: number | null;
   /** 搜索时，正文里命中搜索词的那一小段。 */
   snippet?: string | null;
+  /** 播客、视频的音频或视频附件。 */
+  media?: Media | null;
 }
 
 export interface Mailbox {
@@ -328,6 +357,8 @@ export interface ItemFilter {
   label?: string;
   /** 全文搜索：标题、发件人、作者和正文里都要有这些词。 */
   query?: string;
+  /** 只看某一类订阅源的文章。 */
+  feed_kind?: FeedKind;
 }
 
 export interface ItemPage {
@@ -544,13 +575,23 @@ export const api = {
     rpc<Feed>("feeds.add", { url, folder, ...extra }),
   updateFeed: (
     id: string,
-    patch: { title?: string; folder?: string; interval_min?: number | null; url?: string },
+    patch: {
+      title?: string;
+      folder?: string;
+      interval_min?: number | null;
+      url?: string;
+      /** null 表示按内容自动判断。 */
+      kind?: FeedKind | null;
+    },
   ) => rpc<void>("feeds.update", { id, ...patch }),
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
   /** 下载在线的推荐订阅源目录（地址固定，见核心的 `catalog.fetch`）。 */
   catalogFetch: () => rpc<{ text: string; url: string }>("catalog.fetch"),
+  /** 按节目名搜播客（苹果播客目录）。`country` 是两个字母的地区代码。 */
+  searchPodcasts: (term: string, country: string) =>
+    rpc<PodcastResult[]>("podcasts.search", { term, country }),
   /** 刷新订阅源；不给 `id` 时全部刷新，邮箱也一起收，除非 `feedsOnly`。 */
   refresh: (id?: string, feedsOnly = false) =>
     rpc<{ count: number }>("feeds.refresh", feedsOnly ? { id, feeds_only: true } : { id }),

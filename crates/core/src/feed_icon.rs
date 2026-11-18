@@ -110,6 +110,8 @@ mod tests {
             title: String::new(),
             site_url: site.map(String::from),
             icon_url: icon.map(String::from),
+            kind: "article".into(),
+            kind_set: None,
             folder: String::new(),
             interval_min: None,
             added_at: 0,

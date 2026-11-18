@@ -42,6 +42,7 @@ fn article(feed: &str, n: usize, days_ago: i64, len: usize) -> Article {
         summary: String::new(),
         content: "x".repeat(len),
         image: None,
+        media: None,
     }
 }
 

@@ -90,6 +90,14 @@ click **More info → Run anyway**.
   you can see what you're subscribing to. Sites that offer several feeds let you pick one.
 - YouTube channels and playlists: paste an address like `https://www.youtube.com/@name` to subscribe to the channel's
   new videos, with the channel's avatar as the feed icon.
+- Podcasts: search for a show by name under Add feed → Podcasts (results from Apple's public podcast directory; you
+  subscribe to the show's own RSS feed). Episodes play in the reader and keep playing in a small player under the
+  list while you move around: back 15 s, forward 30 s, 0.8×–3× speed, and each episode remembers where you stopped
+  (on this device). Finished episodes are marked read; turn on "Play the next episode when done" in the speed menu to
+  keep going. Video attachments play in the reader.
+- Feeds are sorted into articles, videos and podcasts automatically (mostly audio means podcast; video sites or video
+  attachments mean video), and you can change a feed's type in its Edit dialog. Once you have more than one type, a
+  row of icons at the top of Feeds shows one type at a time.
 - The folder field lists your recently used folders first; type to filter or to create a new folder. A folder's menu
   in the sidebar has "Add a feed here".
 - Folders, per-feed refresh intervals, OPML import and export. Drag feeds to reorder them: drop one on the middle of a

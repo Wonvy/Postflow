@@ -470,3 +470,59 @@
     transition: none;
   }
 }
+
+/* 播放器的进度条：已经放过的部分用强调色。--played 由组件设置 */
+.player-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+.player-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-accent) var(--played, 0%), var(--color-line-strong) var(--played, 0%));
+}
+.player-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-accent) var(--played, 0%), var(--color-line-strong) var(--played, 0%));
+}
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  border: 0;
+}
+.player-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  border: 0;
+}
+.player-range:disabled {
+  cursor: default;
+}
+/* 迷你播放器顶上那一条：细，拖动点只在悬停时出现 */
+.player-range-flat {
+  height: 6px;
+  margin: -3px 0;
+}
+.player-range-flat::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 0;
+}
+.player-range-flat::-webkit-slider-thumb {
+  margin-top: -3px;
+  width: 8px;
+  height: 8px;
+  opacity: 0;
+}
+.player-range-flat:hover::-webkit-slider-thumb {
+  opacity: 1;
+}

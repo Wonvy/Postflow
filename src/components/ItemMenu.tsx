@@ -28,7 +28,7 @@ import { useT } from "../lib/i18n";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { copyText, openExternal } from "../lib/platform";
 import { keys } from "../lib/queries";
-import { useUi } from "../lib/store";
+import { canArchive, canSnooze, useArticleActions, useUi } from "../lib/store";
 import { SnoozeSubMenu } from "./Snooze";
 import { SourceIcon } from "./SourceIcon";
 import { MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./ui";
@@ -128,6 +128,7 @@ function MoveTargets({ items, accountId }: { items: Item[]; accountId: string })
 export function ItemMenuItems({ items }: { items: Item[] }) {
   const t = useT();
   const { toggle, goToSource, compose, deleteDrafts } = useActions();
+  const allowed = useArticleActions();
   const lead = items[0];
   if (!lead) return null;
   const all = (flag: "read" | "starred" | "archived") => items.every((i) => i[flag]);
@@ -173,7 +174,7 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
       >
         {all("starred") ? t("action.unstar") : t("action.star")}
       </MenuItem>
-      {!lead.draft && !lead.sent && (
+      {!lead.draft && !lead.sent && canArchive(items, allowed) && (
         <MenuItem
           icon={all("archived") ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           onSelect={() => toggle("archived", items)}
@@ -181,7 +182,7 @@ export function ItemMenuItems({ items }: { items: Item[] }) {
           {all("archived") ? t("action.unarchive") : t("action.archive")}
         </MenuItem>
       )}
-      {!lead.draft && !lead.sent && <SnoozeSubMenu items={items} />}
+      {!lead.draft && !lead.sent && canSnooze(items, allowed) && <SnoozeSubMenu items={items} />}
       <LabelSub items={items} />
       <MoveSub items={items} />
       <MenuSeparator />

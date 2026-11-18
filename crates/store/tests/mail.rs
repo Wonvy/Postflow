@@ -477,6 +477,7 @@ fn mail_state_stays_local_and_survives_index_rebuild() {
             summary: String::new(),
             content: String::new(),
             image: None,
+            media: None,
         }])
         .unwrap();
 

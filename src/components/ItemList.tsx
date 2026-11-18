@@ -63,7 +63,9 @@ import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
 import { IS_TABLET } from "../lib/device";
+import { useFeedKind } from "../lib/feedKinds";
 import { useDrawerSidebar, useIsTouch, useReaderOverlay } from "../lib/mobile";
+import { MiniPlayer } from "./Player";
 import { useWindowControlsGap } from "./WindowControls";
 import {
   isDefaultListStyle,
@@ -94,6 +96,8 @@ import {
   useViewLocked,
   viewLabelKey,
   type Space,
+  canArchive,
+  useArticleActions,
 } from "../lib/store";
 import { useLabelColor } from "../lib/labels";
 import { shortTime } from "../lib/time";
@@ -734,6 +738,7 @@ export function ItemList({ width }: { width: number }) {
   const style = useListStyle();
   // 手指操作时行再高一点，一行至少 44 像素左右，好点
   const touch = useIsTouch();
+  const articleAllowed = useArticleActions();
   const metrics = useMemo(
     () => listMetrics(touch ? { ...style, padding: Math.max(style.padding, 12) } : style),
     [style, touch],
@@ -1266,6 +1271,7 @@ export function ItemList({ width }: { width: number }) {
                   enabled={touch}
                   style={{ ...position, height: rowHeight }}
                   read={d.props.group ? d.props.group.unread === 0 : d.props.item.read}
+                  leftArchives={d.props.item.kind === "mail" || articleAllowed.archive}
                   onLeft={() => toggle("archived", swipeItems())}
                   onRight={() => toggle("read", swipeItems())}
                 >
@@ -1321,6 +1327,7 @@ export function ItemList({ width }: { width: number }) {
       </div>
       </ContextMenu>
       {selection.length > 0 && <SelectionBar count={selection.length} />}
+      <MiniPlayer />
       <StatusBar
         toolbar="list"
         tools={tools}
@@ -1525,7 +1532,8 @@ export function MarkAllReadDialog() {
   const { items, query } = useListModel();
   const { markAllRead: markCurrent } = useActions();
   const markAll = useMarkAllRead();
-  const markAllRead = () => (isCurrent ? markCurrent() : markAll.mutate(filterOf(scope, space)));
+  const feedKind = useFeedKind();
+  const markAllRead = () => (isCurrent ? markCurrent() : markAll.mutate(filterOf(scope, space, feedKind)));
   const unread = items.filter((i) => !i.read).length;
   // 列表还有没加载的部分时说不准有多少条，不写数字
   const counted = isCurrent && !query.hasNextPage;
@@ -1733,6 +1741,7 @@ function SelectionBar({ count }: { count: number }) {
   const t = useT();
   const { targets, toggle } = useActions();
   const setSelection = useUi((s) => s.setSelection);
+  const allowed = useArticleActions();
   const list = targets();
   const all = (flag: "read" | "starred" | "archived") => list.length > 0 && list.every((i) => i[flag]);
 
@@ -1761,14 +1770,16 @@ function SelectionBar({ count }: { count: number }) {
         >
           <Star {...ICON} className={cx(all("starred") && "fill-warning text-warning")} />
         </IconButton>
-        <IconButton
-          label={all("archived") ? t("action.unarchive") : t("action.archive")}
-          shortcut="E"
-          tipSide="top"
-          onClick={() => toggle("archived")}
-        >
-          {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
-        </IconButton>
+        {canArchive(list, allowed) && (
+          <IconButton
+            label={all("archived") ? t("action.unarchive") : t("action.archive")}
+            shortcut="E"
+            tipSide="top"
+            onClick={() => toggle("archived")}
+          >
+            {all("archived") ? <ArchiveRestore {...ICON} /> : <Archive {...ICON} />}
+          </IconButton>
+        )}
         <span className="mx-1 h-4 w-px bg-line-strong" />
         <IconButton label={t("action.clearSelection")} shortcut="Esc" tipSide="top" onClick={() => setSelection([])}>
           <X {...ICON} />
@@ -2160,6 +2171,7 @@ function SwipeRow({
   enabled,
   style,
   read,
+  leftArchives = true,
   onLeft,
   onRight,
   children,
@@ -2168,6 +2180,8 @@ function SwipeRow({
   style: CSSProperties;
   /** 这一行已经读过：往右滑是标为未读。 */
   read: boolean;
+  /** 往左滑是归档；订阅里不用归档时是标为已读。 */
+  leftArchives?: boolean;
   onLeft: () => void;
   onRight: () => void;
   children: ReactNode;
@@ -2251,7 +2265,7 @@ function SwipeRow({
             dx < 0 ? (dx <= -THRESHOLD ? "bg-accent" : "bg-accent/60") : dx >= THRESHOLD ? "bg-warning" : "bg-warning/60",
           )}
         >
-          {dx < 0 ? t("action.archive") : read ? t("action.markUnread") : t("action.markRead")}
+          {dx < 0 ? (leftArchives ? t("action.archive") : t("action.markRead")) : read ? t("action.markUnread") : t("action.markRead")}
         </div>
       )}
       <div

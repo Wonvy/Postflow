@@ -66,7 +66,9 @@ CREATE TABLE IF NOT EXISTS feeds (
     deleted      INTEGER NOT NULL DEFAULT 0,
     added_at     INTEGER NOT NULL DEFAULT 0,
     -- 在侧栏里的顺序。没拖动过的为空，排在后面按名称排
-    position     REAL
+    position     REAL,
+    -- 用户选的类型：article、video、podcast。为空表示按内容自动判断
+    kind         TEXT
 ) WITHOUT ROWID;
 
 -- 邮箱账户的配置。密码不在这里，在系统钥匙串里。
@@ -107,7 +109,10 @@ CREATE TABLE IF NOT EXISTS items (
     read         INTEGER NOT NULL DEFAULT 0,
     starred      INTEGER NOT NULL DEFAULT 0,
     archived     INTEGER NOT NULL DEFAULT 0,
-    image        TEXT
+    image        TEXT,
+    -- 播客、视频的附件（JSON）和它是 audio 还是 video
+    media        TEXT,
+    media_kind   TEXT
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS items_by_time ON items (published_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS items_by_source ON items (source_id, published_at DESC, id DESC);
@@ -248,10 +253,11 @@ pub(crate) const ITEM_COLUMNS: &str = "i.id, i.kind, i.source_id, \
      f.icon_url, i.url, i.title, i.author, i.summary, i.published_at, i.read, i.starred, i.archived, \
      m.from_address, COALESCE(m.has_attachments, 0), i.image, NULLIF(l.label, ''), \
      NULLIF((SELECT CAST(s.value AS INTEGER) FROM lww s \
-             WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until'), 0)";
+             WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until'), 0), \
+     i.media";
 
 /// `ITEM_COLUMNS` 有几列。在它后面再选别的列时，从这个序号开始读。
-pub(crate) const ITEM_COLUMN_COUNT: usize = 18;
+pub(crate) const ITEM_COLUMN_COUNT: usize = 19;
 
 /// 这一条正稍后提醒着、还没到时间：收件箱、今天、未读、各个来源和计数里都先不算它。
 /// 提醒时间存在同步日志里（kind = snooze），邮件和文章都一样，所以其他设备也知道。
@@ -465,6 +471,10 @@ impl Store {
         if let Some(interval) = patch.interval_min {
             set.insert("interval_min".into(), json!(interval));
         }
+        if let Some(kind) = patch.kind {
+            let kind = kind.filter(|k| FEED_KINDS.contains(&k.as_str()));
+            set.insert("kind".into(), json!(kind));
+        }
         self.set_fields("feed", &[id.to_string()], set)
     }
 
@@ -594,12 +604,21 @@ impl Store {
         let mut seen = HashSet::new();
         let mut lines = Vec::new();
         {
-            let mut exists = inner
+            // 已经有的跳过；但以前入库时没存附件、这次带着附件的，再记一次好补上
+            let mut has_media = inner
                 .conn
-                .prepare_cached("SELECT 1 FROM items WHERE id = ?1")?;
+                .prepare_cached("SELECT media IS NOT NULL FROM items WHERE id = ?1")?;
             for article in &articles {
-                if !seen.insert(article.id.as_str()) || exists.exists([&article.id])? {
+                if !seen.insert(article.id.as_str()) {
                     continue;
+                }
+                let existing: Option<bool> = has_media
+                    .query_row([&article.id], |r| r.get(0))
+                    .optional()?;
+                match existing {
+                    Some(true) => continue,
+                    Some(false) if article.media.is_none() => continue,
+                    _ => {}
                 }
                 lines.push(serde_json::to_string(article)?);
             }
@@ -932,6 +951,10 @@ fn migrate(conn: &Connection) -> Result<()> {
     if add_column(conn, "items", "image", "TEXT")? {
         backfill_images(conn)?;
     }
+    // 以前入库的播客单集没有附件，下次抓到同一条时补上（见 add_articles）
+    add_column(conn, "items", "media", "TEXT")?;
+    add_column(conn, "items", "media_kind", "TEXT")?;
+    add_column(conn, "feeds", "kind", "TEXT")?;
     Ok(())
 }
 
@@ -1092,8 +1115,8 @@ fn materialize_feed(conn: &Connection, id: &str) -> Result<()> {
     };
     conn.execute(
         "INSERT OR REPLACE INTO feeds \
-         (id, url, title, site_url, icon_url, folder, interval_min, deleted, added_at, position) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         (id, url, title, site_url, icon_url, folder, interval_min, deleted, added_at, position, kind) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             id,
             url,
@@ -1108,6 +1131,7 @@ fn materialize_feed(conn: &Connection, id: &str) -> Result<()> {
                 .unwrap_or(false),
             fields.get("added_at").and_then(Value::as_i64).unwrap_or(0),
             fields.get("position").and_then(Value::as_f64),
+            text("kind").filter(|k| FEED_KINDS.contains(&k.as_str())),
         ],
     )?;
     Ok(())
@@ -1131,8 +1155,9 @@ fn insert_article(conn: &Connection, a: &Article) -> Result<bool> {
     let inserted = conn
         .prepare_cached(
             "INSERT OR IGNORE INTO items \
-             (id, kind, source_id, guid, url, title, author, summary, published_at, fetched_at, image) \
-             VALUES (?1, 'article', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+             (id, kind, source_id, guid, url, title, author, summary, published_at, fetched_at, image, \
+              media, media_kind) \
+             VALUES (?1, 'article', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         )?
         .execute(params![
             a.id,
@@ -1145,14 +1170,28 @@ fn insert_article(conn: &Connection, a: &Article) -> Result<bool> {
             a.published,
             a.fetched,
             article_image(a),
+            media_json(a),
+            a.media.as_ref().map(Media::kind),
         ])?;
     if inserted == 0 {
+        // 早先入库时还不认附件的单集：这次带着附件来了，补上
+        if let Some(media) = &a.media {
+            conn.prepare_cached(
+                "UPDATE items SET media = ?2, media_kind = ?3 \
+                 WHERE id = ?1 AND kind = 'article' AND media IS NULL",
+            )?
+            .execute(params![a.id, media_json(a), media.kind()])?;
+        }
         return Ok(false);
     }
     conn.prepare_cached("INSERT OR REPLACE INTO item_content (id, html) VALUES (?1, ?2)")?
         .execute(params![a.id, a.content])?;
     materialize_item(conn, &a.id)?;
     Ok(true)
+}
+
+fn media_json(a: &Article) -> Option<String> {
+    a.media.as_ref().and_then(|m| serde_json::to_string(m).ok())
 }
 
 /// 文章的封面：源里给了就用，否则从正文里找。
@@ -1217,6 +1256,15 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         args.push(SqlValue::Text(label.clone()));
         conds.push_str(&format!(" AND l.label = ?{}", args.len()));
     }
+    if let Some(feed_kind) = &filter.feed_kind {
+        args.push(SqlValue::Text(feed_kind.clone()));
+        conds.push_str(&format!(
+            " AND i.kind = 'article' AND i.source_id IN \
+               (SELECT fk.id FROM feeds fk WHERE {} = ?{})",
+            feed_kind_sql("fk"),
+            args.len()
+        ));
+    }
     if let Some(query) = filter.query.as_deref().filter(|q| !q.trim().is_empty()) {
         match crate::search::match_query(query) {
             Some(expr) => {
@@ -1234,16 +1282,31 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
     conds
 }
 
+/// 订阅源 `f` 的类型：用户选的；没选时，一半以上的条目带音频算播客，带视频或者是视频网站的源算视频，
+/// 其他是文章。YouTube 的条目附件不是视频文件，按地址认。
+pub(crate) fn feed_kind_sql(f: &str) -> String {
+    format!(
+        "COALESCE({f}.kind, CASE \
+           WHEN (SELECT COUNT(*) FROM items k WHERE k.source_id = {f}.id AND k.media_kind = 'audio') * 2 \
+                > (SELECT COUNT(*) FROM items k WHERE k.source_id = {f}.id) THEN 'podcast' \
+           WHEN {f}.url LIKE '%youtube.com/%' OR {f}.url LIKE '%bilibili%' OR {f}.url LIKE '%vimeo.com/%' \
+             OR (SELECT COUNT(*) FROM items k WHERE k.source_id = {f}.id AND k.media_kind = 'video') * 2 \
+                > (SELECT COUNT(*) FROM items k WHERE k.source_id = {f}.id) THEN 'video' \
+           ELSE 'article' END)"
+    )
+}
+
 fn feed_sql(cond: &str) -> String {
     format!(
         "SELECT f.id, f.url, f.title, f.site_url, f.icon_url, f.folder, f.interval_min, f.added_at, \
                 (SELECT COUNT(*) FROM items i \
                   WHERE i.source_id = f.id AND i.read = 0 AND i.archived = 0 AND NOT {snoozed}), \
-                ff.last_fetch_at, ff.error \
+                ff.last_fetch_at, ff.error, {kind}, f.kind \
          FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
          WHERE {cond} \
          ORDER BY f.folder COLLATE NOCASE, f.position IS NULL, f.position, f.title COLLATE NOCASE",
-        snoozed = snoozed_now()
+        snoozed = snoozed_now(),
+        kind = feed_kind_sql("f"),
     )
 }
 
@@ -1260,6 +1323,8 @@ fn feed_from_row(r: &Row<'_>) -> rusqlite::Result<Feed> {
         unread: r.get(8)?,
         last_fetch_at: r.get(9)?,
         error: r.get(10)?,
+        kind: r.get(11)?,
+        kind_set: r.get(12)?,
     })
 }
 
@@ -1287,5 +1352,8 @@ pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
         label: r.get(16)?,
         snoozed_until: r.get(17)?,
         snippet: None,
+        media: r
+            .get::<_, Option<String>>(18)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
     })
 }

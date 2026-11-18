@@ -2,6 +2,7 @@ import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { OutboxDialog } from "./components/Outbox";
 import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
+import { PlayerBridge } from "./components/Player";
 import { useCanHover, useLayout, useReaderOverlay } from "./lib/mobile";
 import { Unplug } from "lucide-react";
 import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
@@ -243,6 +244,7 @@ function Shell() {
       <ShortcutsDialog />
       <SnoozeDialog />
       <OutboxDialog />
+      <PlayerBridge />
       <Toaster />
     </>
   );

@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 
 use futures::StreamExt;
 use postflow_feed::{Conditional, FetchResult, ParsedEntry, ParsedFeed, favicon_url};
-use postflow_store::{Article, FeedPatch, FetchTarget, Store, hlc, ids};
+use postflow_store::{Article, FeedPatch, FetchTarget, Media, Store, hlc, ids};
 use serde_json::{Map, Value, json};
 
 use crate::{Core, DEFAULT_INTERVAL_MIN, Event, Scope, Session};
@@ -201,6 +201,12 @@ pub(crate) fn to_articles(feed_id: &str, entries: Vec<ParsedEntry>, now: i64) ->
             summary: e.summary,
             content: e.content,
             image: e.image,
+            media: e.media.map(|m| Media {
+                url: m.url,
+                mime: m.mime,
+                duration: m.duration,
+                size: m.size,
+            }),
         })
         .collect()
 }

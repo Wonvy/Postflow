@@ -309,6 +309,17 @@ impl Core {
             // RSSHub 路由：搜索、按网址猜、重新下载目录
             m if m.starts_with("rsshub.") => return self.rsshub_rpc(m, params).await,
             // 内置订阅源目录的在线版本。地址是固定的，界面不能指定
+            // 搜索播客：按节目名找订阅地址
+            "podcasts.search" => {
+                #[derive(Deserialize)]
+                struct Search {
+                    term: String,
+                    #[serde(default)]
+                    country: String,
+                }
+                let p: Search = parse(params)?;
+                return reply(self.search_podcasts(&p.term, &p.country).await?);
+            }
             "catalog.fetch" => {
                 let mut last = RpcError::new("network", "no catalog source answered");
                 for url in CATALOG_URLS {

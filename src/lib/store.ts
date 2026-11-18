@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ItemFilter, ItemKind, View } from "./api";
+import type { FeedKind, ItemFilter, ItemKind, View } from "./api";
 import type { ComposeMode } from "./compose";
 import type { GroupMode } from "./grouping";
 import { IS_TABLET } from "./device";
@@ -26,7 +26,7 @@ export type ThemePref = "system" | "dark" | "light";
 export type ListView = "list" | "summary" | "cards";
 
 /** 侧栏里能折叠的几组：邮箱账户、订阅源、分类。 */
-export type SidebarSection = "mail" | "feeds" | "labels";
+export type SidebarSection = "mail" | "feeds" | "labels" | "views-mail" | "views-feeds";
 
 /**
  * 邮件和订阅是两块独立的空间：侧栏顶部切换，各有自己的视图（收件箱、未读、星标……）、
@@ -171,6 +171,12 @@ interface UiState {
   /** 鼠标停在侧栏、列表、阅读区中的一栏上时，另外两栏变淡。 */
   focusPane: boolean;
   setFocusPane: (on: boolean) => void;
+  /** 侧栏里每一边不显示的内置视图（收件箱、今天、未读、星标、稍后提醒、归档）。右键视图那一组可以改。 */
+  hiddenViews: Record<Space, View[]>;
+  toggleViewShown: (space: Space, view: View) => void;
+  /** 订阅里只看哪一类源：全部、文章、视频、播客。 */
+  feedKind: FeedKind | "all";
+  setFeedKind: (kind: FeedKind | "all") => void;
   /** 阅读区放在列表右边（三栏），还是打开条目时弹出来盖在上面（两栏）。手机上一直是一次一栏。 */
   readerLayout: ReaderLayout;
   setReaderLayout: (layout: ReaderLayout) => void;
@@ -298,6 +304,40 @@ interface UiState {
   setSearchAll: (all: boolean) => void;
 }
 
+/**
+ * 默认不显示的视图。订阅那边：什么都没选就是「全部文章」，再点一下选中的那一行也回到它，所以不单列；
+ * 未读、稍后提醒、归档对订阅用处不大，需要时右键视图那一组打开。邮件那边全部显示。
+ */
+export const DEFAULT_HIDDEN_VIEWS: Record<Space, View[]> = {
+  mail: [],
+  feeds: ["inbox", "unread", "snoozed", "archived"],
+};
+
+const NO_HIDDEN: View[] = [];
+
+/**
+ * 文章能不能归档、稍后提醒：订阅那边显示着「已归档」「稍后提醒」视图时才能，不然归档、提醒了的文章没处找。
+ * 邮件总能。已经归档、提醒着的文章照样能撤销。
+ */
+export function articleActions(hidden: readonly View[]): { archive: boolean; snooze: boolean } {
+  return { archive: !hidden.includes("archived"), snooze: !hidden.includes("snoozed") };
+}
+
+export function useArticleActions(): { archive: boolean; snooze: boolean } {
+  const hidden = useUi((s) => s.hiddenViews.feeds ?? NO_HIDDEN);
+  return useMemo(() => articleActions(hidden), [hidden]);
+}
+
+/** 这些条目能不能归档（有邮件、或者文章能归档、或者都已经归档了要撤销）。 */
+export function canArchive(items: readonly { kind: string; archived: boolean }[], allowed: { archive: boolean }): boolean {
+  return allowed.archive || items.some((i) => i.kind === "mail") || (items.length > 0 && items.every((i) => i.archived));
+}
+
+/** 这些条目能不能稍后提醒。 */
+export function canSnooze(items: readonly { kind: string }[], allowed: { snooze: boolean }): boolean {
+  return allowed.snooze || items.some((i) => i.kind === "mail");
+}
+
 /** 阅读区的位置：列表右边一栏，或者弹出来。 */
 export type ReaderLayout = "pane" | "overlay";
 
@@ -351,6 +391,8 @@ export const useUi = create<UiState>()(
       rememberViews: false,
       focusPane: true,
       readerLayout: "pane",
+      feedKind: "all",
+      hiddenViews: DEFAULT_HIDDEN_VIEWS,
       toggleViewLock: () =>
         set((s) => {
           const key = listKey(s.scope, s.space);
@@ -369,6 +411,26 @@ export const useUi = create<UiState>()(
       setRememberViews: (rememberViews) => set({ rememberViews }),
       setFocusPane: (focusPane) => set({ focusPane }),
       setReaderLayout: (readerLayout) => set({ readerLayout }),
+      toggleViewShown: (space, view) =>
+        set((s) => {
+          const hidden = s.hiddenViews[space] ?? [];
+          return {
+            hiddenViews: {
+              ...s.hiddenViews,
+              [space]: hidden.includes(view) ? hidden.filter((v) => v !== view) : [...hidden, view],
+            },
+          };
+        }),
+      // 换一类时，停在某个订阅源或文件夹上的回到「全部文章」，免得列表和侧栏对不上
+      setFeedKind: (feedKind) =>
+        set((s) => ({
+          feedKind,
+          selection: [],
+          expandedGroups: [],
+          ...(s.space === "feeds" && (s.scope.kind === "feed" || s.scope.kind === "folder")
+            ? { scope: { kind: "view", view: "inbox" } as ListScope, openId: null }
+            : {}),
+        })),
       cardSize: 260,
       collapsedSections: [],
       showFeeds: true,
@@ -614,6 +676,8 @@ export const useUi = create<UiState>()(
         rememberViews: s.rememberViews,
         focusPane: s.focusPane,
         readerLayout: s.readerLayout,
+        feedKind: s.feedKind,
+        hiddenViews: s.hiddenViews,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,
@@ -726,13 +790,26 @@ export function useGroupMode(): GroupMode {
 }
 
 /** 搜索时的查询条件：在当前列表里搜，或者在当前空间的全部内容（收件箱和归档）里搜。 */
-export function searchFilterOf(scope: ListScope, space: Space, query: string, all: boolean): ItemFilter {
-  const base: ItemFilter = all ? { view: "all", kind: kindOfSpace(space) } : filterOf(scope, space);
+export function searchFilterOf(
+  scope: ListScope,
+  space: Space,
+  query: string,
+  all: boolean,
+  feedKind: FeedKind | "all" = "all",
+): ItemFilter {
+  const base: ItemFilter = all
+    ? withFeedKind({ view: "all", kind: kindOfSpace(space) }, space, feedKind)
+    : filterOf(scope, space, feedKind);
   return { ...base, query };
 }
 
+/** 订阅那边选了某一类源时，只看这一类。 */
+function withFeedKind(filter: ItemFilter, space: Space, feedKind: FeedKind | "all"): ItemFilter {
+  return space === "feeds" && feedKind !== "all" ? { ...filter, feed_kind: feedKind } : filter;
+}
+
 /** 把列表范围换算成查询条件。订阅源、文件夹和邮箱里显示的是未归档的条目。 */
-export function filterOf(scope: ListScope, space: Space): ItemFilter {
+export function filterOf(scope: ListScope, space: Space, feedKind: FeedKind | "all" = "all"): ItemFilter {
   const kind = kindOfSpace(space);
   switch (scope.kind) {
     case "feed":
@@ -742,14 +819,15 @@ export function filterOf(scope: ListScope, space: Space): ItemFilter {
     case "mailbox":
       return { view: "folder", source_id: scope.accountId, mailbox: scope.mailbox };
     case "folder":
-      return { view: "inbox", folder: scope.folder };
+      return withFeedKind({ view: "inbox", folder: scope.folder }, space, feedKind);
     case "label":
-      return { view: "inbox", label: scope.label, kind };
+      return withFeedKind({ view: "inbox", label: scope.label, kind }, space, feedKind);
     case "view": {
       const filter: ItemFilter =
         scope.view === "today" ? { view: "today", since: startOfToday() } : { view: scope.view };
-      if (!isMailOnlyView(scope.view)) filter.kind = kind;
-      return filter;
+      if (isMailOnlyView(scope.view)) return filter;
+      filter.kind = kind;
+      return withFeedKind(filter, space, feedKind);
     }
   }
 }

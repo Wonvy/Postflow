@@ -130,6 +130,7 @@ fn articles_get_a_cover_image() {
         summary: String::new(),
         content: content.into(),
         image: image.map(String::from),
+        media: None,
     };
     store
         .add_articles(vec![
@@ -182,6 +183,7 @@ fn an_old_index_gains_the_new_columns_without_losing_mail() {
                 summary: String::new(),
                 content: r#"<img src="https://x.example/a.jpg">"#.into(),
                 image: None,
+                media: None,
             }])
             .unwrap();
         let account = store

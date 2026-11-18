@@ -13,7 +13,7 @@ import { useFolders } from "../lib/folders";
 import { useT } from "../lib/i18n";
 import { useCategories } from "../lib/labels";
 import { keys, useNav } from "../lib/queries";
-import { type Space, useUi, viewLabelKey } from "../lib/store";
+import { articleActions, canArchive, canSnooze, type Space, useUi, viewLabelKey } from "../lib/store";
 import { SETTINGS_PAGES } from "./SettingsDialog";
 import { cx, Kbd } from "./ui";
 
@@ -52,10 +52,14 @@ function useCommands(): Command[] {
 
   // 打开的这一条
   const open = ui.openId ? actions.itemsOf([ui.openId])[0] : undefined;
+  // 文章的归档、稍后提醒跟着订阅那边显示不显示这两个视图走
+  const allowed = articleActions(ui.hiddenViews.feeds ?? []);
   if (open) {
     const mail = open.kind === "mail";
+    if (canArchive([open], allowed)) {
+      list.push({ id: "item:archive", group: item, label: open.archived ? t("action.unarchive") : t("action.archive"), shortcut: "E", run: () => actions.toggle("archived") });
+    }
     list.push(
-      { id: "item:archive", group: item, label: open.archived ? t("action.unarchive") : t("action.archive"), shortcut: "E", run: () => actions.toggle("archived") },
       { id: "item:star", group: item, label: open.starred ? t("action.unstar") : t("action.star"), shortcut: "S", run: () => actions.toggle("starred") },
       { id: "item:read", group: item, label: open.read ? t("action.markUnread") : t("action.markRead"), shortcut: "U", run: () => actions.toggle("read") },
     );
@@ -68,7 +72,7 @@ function useCommands(): Command[] {
     }
     if (open.url) list.push({ id: "item:original", group: item, label: t("action.openOriginal"), shortcut: "V", run: actions.openOriginal });
     if (!open.draft && !open.sent) {
-      for (const p of snoozePresets(new Date())) {
+      for (const p of canSnooze([open], allowed) ? snoozePresets(new Date()) : []) {
         list.push({
           id: `item:snooze:${p.key}`,
           group: item,
@@ -121,7 +125,8 @@ function useCommands(): Command[] {
   // 前往：两个空间的视图、邮箱、订阅源、文件夹、分类
   const spaces: Space[] = showFeeds ? ["mail", "feeds"] : ["mail"];
   for (const s of spaces) {
-    for (const view of SPACE_VIEWS) {
+    // 侧栏里藏起来的视图这里也不列（「全部文章」除外，什么都没选时就是它）
+    for (const view of SPACE_VIEWS.filter((v) => v === "inbox" || !(ui.hiddenViews[s] ?? []).includes(v))) {
       list.push({
         id: `go:${s}:${view}`,
         group: go,

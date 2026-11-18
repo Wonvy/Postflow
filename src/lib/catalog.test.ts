@@ -151,5 +151,5 @@ test("starter feeds take a few per chosen category, in the interface language wh
   if (!CATALOG.some((f) => f.category === "design" && f.lang === "zh")) {
     assert.ok(design.every((f) => f.lang === "en"));
   }
-  assert.ok(CATALOG_CATEGORIES.length === 10);
+  assert.ok(CATALOG_CATEGORIES.length === 11);
 });

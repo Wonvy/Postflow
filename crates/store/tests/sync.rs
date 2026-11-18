@@ -68,6 +68,7 @@ fn article(feed_id: &str, guid: &str, published: i64) -> Article {
         summary: "summary".into(),
         content: "<p>content</p>".into(),
         image: None,
+        media: None,
     }
 }
 

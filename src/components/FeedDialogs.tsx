@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, TriangleAlert } from "lucide-react";
 import { siYoutube } from "simple-icons";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { api, type Candidate, type Feed, type FeedPreview, type Preview } from "../lib/api";
+import { api, type Candidate, type Feed, type FeedKind, type FeedPreview, type Preview } from "../lib/api";
 import { errorText, type Translate, useLang, useT } from "../lib/i18n";
 import { useFolders } from "../lib/folders";
 import { openExternal } from "../lib/platform";
@@ -18,6 +18,8 @@ import { DiscoverPane } from "./FeedCatalog";
 import { QuickForm, QuickGrid } from "./QuickSources";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { RsshubStatus } from "./RsshubServer";
+import { PodcastSearch } from "./PodcastSearch";
+import { FEED_KIND_LABEL, FEED_KINDS } from "../lib/feedKinds";
 import { Button, cx, Favicon, Field, Modal, Segmented, Select, Spinner, TextInput } from "./ui";
 
 /** 可选的刷新间隔，单位分钟。 */
@@ -67,7 +69,7 @@ function hostOf(url: string | null): string {
 }
 
 /** 添加订阅的三页：发现（内置目录）、网址、高级（RSSHub）。 */
-type AddMode = "discover" | "url" | "rsshub";
+type AddMode = "discover" | "podcast" | "url" | "rsshub";
 
 /** 看起来像一个网址：带点、没有空格。 */
 const looksLikeUrl = (text: string) => /^\S+\.\S+$/.test(text.trim());
@@ -412,12 +414,15 @@ export function AddFeedDialog() {
           onChange={switchMode}
           options={[
             { value: "discover", label: t("add.modeDiscover") },
+            { value: "podcast", label: t("add.modePodcast") },
             { value: "url", label: t("add.modeUrl") },
             { value: "rsshub", label: t("add.modeAdvanced") },
           ]}
         />
       </div>
-      {mode === "discover" ? (
+      {mode === "podcast" ? (
+        <PodcastSearch folder={startFolder} onDone={() => setDialog(null)} />
+      ) : mode === "discover" ? (
         <DiscoverPane
           startFolder={startFolder}
           onUrl={(target) => {
@@ -702,6 +707,7 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
   const [title, setTitle] = useState(feed.title);
   const [folder, setFolder] = useState(feed.folder);
   const [interval, setIntervalMin] = useState<number | null>(feed.interval_min);
+  const [kind, setKind] = useState<FeedKind | null>(feed.kind_set);
   const [url, setUrl] = useState(feed.url);
   const urlChanged = url.trim() !== "" && url.trim() !== feed.url;
   const [saving, setSaving] = useState(false);
@@ -724,6 +730,7 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
         rememberFolder(folder);
       }
       if (interval !== feed.interval_min) patch.interval_min = interval;
+      if (kind !== feed.kind_set) patch.kind = kind;
       // 新地址由核心先抓一次，确认能用才换；订阅源本身不变，已读和以前的文章都在
       if (urlChanged) patch.url = url.trim();
       if (Object.keys(patch).length > 0) {
@@ -758,6 +765,20 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
           {INTERVALS.map((m) => (
             <option key={m} value={m}>
               {intervalLabel(t, m)}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label={t("edit.kind")} hint={t("edit.kindHint")}>
+        <Select value={kind ?? ""} onChange={(e) => setKind(e.target.value === "" ? null : (e.target.value as FeedKind))}>
+          <option value="">
+            {feed.kind_set === null
+              ? t("edit.kindAutoNow", { kind: t(FEED_KIND_LABEL[feed.kind]) })
+              : t("edit.kindAuto")}
+          </option>
+          {FEED_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {t(FEED_KIND_LABEL[k])}
             </option>
           ))}
         </Select>

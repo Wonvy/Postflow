@@ -11,6 +11,7 @@ mod mail;
 mod mail_rpc;
 mod oauth;
 mod plugins;
+mod podcasts;
 mod refresh;
 mod reminders;
 mod rpc;

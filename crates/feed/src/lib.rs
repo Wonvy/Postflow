@@ -18,7 +18,7 @@ mod youtube;
 pub use client::{Client, Conditional, FetchResult, Fetched};
 pub use discover::Candidate;
 pub use frame::FramePolicy;
-pub use parse::{ParsedEntry, ParsedFeed, parse_feed};
+pub use parse::{ParsedEntry, ParsedFeed, ParsedMedia, parse_feed};
 pub use preview::{FeedPreview, Preview, PreviewEntry};
 pub use sanitize::{html_to_paragraphs, html_to_text, sanitize_html, with_player};
 pub use site_icon::valid_domain;

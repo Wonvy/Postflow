@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useActions } from "./actions";
 import { IS_TABLET } from "./device";
 import { normalizeReaderStyle, readerDefault } from "./readerStyle";
-import { useUi } from "./store";
+import { articleActions, useUi } from "./store";
 import { setFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 
 function isTyping(target: EventTarget | null): boolean {
@@ -121,6 +121,8 @@ export function useShortcuts() {
           // 稍后提醒：打开选时间的对话框，作用于勾选的、没勾选时是打开的这一条
           const ids = ui.selection.length > 0 ? ui.selection : ui.openId ? [ui.openId] : [];
           if (ids.length === 0) return;
+          // 订阅那边不显示「稍后提醒」时文章不提醒
+          if (ui.space === "feeds" && !articleActions(ui.hiddenViews.feeds ?? []).snooze) return;
           ui.setDialog({ type: "snooze", ids });
           break;
         }

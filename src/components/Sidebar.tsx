@@ -3,6 +3,7 @@ import {
   AlarmClock,
   Archive,
   ChartColumn,
+  Check,
   CheckCheck,
   ChevronRight,
   ChevronsDownUp,
@@ -34,7 +35,8 @@ import {
 } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { refreshSpace, useActions } from "../lib/actions";
-import { type Account, api, type Feed, type ItemPatch, type Nav, type View } from "../lib/api";
+import { type Account, api, type Feed, type FeedKind, type ItemPatch, type Nav, type View } from "../lib/api";
+import { FEED_KIND_ICON, FEED_KIND_LABEL, kindsIn, useFeedKind } from "../lib/feedKinds";
 import { type DragPayload, type DropPosition, dropPosition, endDrag, isOurs, moveInList, startDrag, useDrag } from "../lib/dnd";
 import { moveTop, type TopEntry } from "../lib/feedTree";
 import { useFolderActions, useTopLevel } from "../lib/folders";
@@ -68,6 +70,22 @@ import {
 } from "./ui";
 
 /** 两个空间都有的视图，各自只看自己那一类。名字见 `viewLabelKey`（订阅那边的收件箱叫「全部文章」）。 */
+/**
+ * 在侧栏里点一行。订阅那边再点一下已经选中的那一行，回到「全部文章」：
+ * 「全部文章」那一行默认不显示，什么都没选就是全部文章。
+ */
+function useChooseScope() {
+  const setScope = useUi((s) => s.setScope);
+  return (target: ListScope) => {
+    const { space, scope } = useUi.getState();
+    const all: ListScope = { kind: "view", view: "inbox" };
+    if (space === "feeds" && sameScope(scope, target) && !sameScope(target, all)) setScope(all);
+    else setScope(target);
+  };
+}
+
+const NO_VIEWS: View[] = [];
+
 const VIEWS: { view: View; icon: LucideIcon }[] = [
   { view: "inbox", icon: Inbox },
   { view: "today", icon: Sun },
@@ -205,6 +223,7 @@ function FeedRow({
   const t = useT();
   const qc = useQueryClient();
   const setScope = useUi((s) => s.setScope);
+  const choose = useChooseScope();
   const setDialog = useUi((s) => s.setDialog);
 
   const unsubscribe = async () => {
@@ -239,7 +258,7 @@ function FeedRow({
       <Row
         active={active}
         indent={indent}
-        onClick={() => setScope({ kind: "feed", feedId: feed.id })}
+        onClick={() => choose({ kind: "feed", feedId: feed.id })}
         drag={drag}
         drop={drop}
         groupEnd={groupEnd}
@@ -519,10 +538,12 @@ function SectionHeader({
   onToggle,
   unread = 0,
   menu,
+  first = false,
 }: {
   label: string;
-  addLabel: string;
-  onAdd: () => void;
+  /** 标题右边悬停时出现的「+」。没有就不显示。 */
+  addLabel?: string;
+  onAdd?: () => void;
   drag?: DragHandlers;
   highlight?: boolean;
   extra?: ReactNode;
@@ -532,6 +553,8 @@ function SectionHeader({
   unread?: number;
   /** 右键菜单里另外的条目，排在「展开/收起」前面。 */
   menu?: ReactNode;
+  /** 紧挨着上面的切换条，不用再空出一段。 */
+  first?: boolean;
 }) {
   const t = useT();
   return (
@@ -550,7 +573,8 @@ function SectionHeader({
     <div
       {...drag}
       className={cx(
-        "group/section mb-1 mt-3 flex h-6 items-center justify-between rounded-md pl-1 pr-0.5 transition-colors touch:h-9",
+        "group/section mb-1 flex h-6 items-center justify-between rounded-md pl-1 pr-0.5 transition-colors touch:h-9",
+        first ? "mt-0" : "mt-3",
         highlight && "bg-accent-soft ring-1 ring-inset ring-accent/60",
       )}
     >
@@ -569,22 +593,66 @@ function SectionHeader({
       </button>
       {collapsed && <Count n={unread} />}
       {extra}
-      <Tip label={addLabel} side="right">
-        <button
-          type="button"
-          aria-label={addLabel}
-          onClick={onAdd}
-          className="flex size-5 items-center justify-center rounded text-fg-3 opacity-0 hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100"
-        >
-          <Plus size={14} strokeWidth={2} />
-        </button>
-      </Tip>
+      {addLabel && onAdd && (
+        <Tip label={addLabel} side="right">
+          <button
+            type="button"
+            aria-label={addLabel}
+            onClick={onAdd}
+            className="flex size-5 items-center justify-center rounded text-fg-3 opacity-0 hover:bg-active hover:text-fg focus-visible:opacity-100 group-hover/section:opacity-100"
+          >
+            <Plus size={14} strokeWidth={2} />
+          </button>
+        </Tip>
+      )}
     </div>
     </ContextMenu>
   );
 }
 
 /** 侧栏顶部「邮件 | 订阅」的切换条。不在的那一边显示未读数；右键可以隐藏订阅。 */
+/**
+ * 订阅那边顶上的一排图标：全部、文章、视频、播客。只显示图标，悬停看名字；没选中的那一类有未读时右上角一个小点。
+ * 订阅源只有一类时不显示。
+ */
+function FeedKindBar({ feeds }: { feeds: readonly Feed[] }) {
+  const t = useT();
+  const chosen = useFeedKind();
+  const setFeedKind = useUi((s) => s.setFeedKind);
+  const present = kindsIn(feeds);
+  if (present.length < 2) return null;
+  const options: (FeedKind | "all")[] = ["all", ...present];
+  return (
+    <div role="tablist" aria-label={t("feedKind.bar")} className="mb-2 flex gap-0.5">
+      {options.map((kind) => {
+        const Icon = FEED_KIND_ICON[kind];
+        const label = t(FEED_KIND_LABEL[kind]);
+        const unread = kind === "all" ? 0 : feeds.reduce((sum, f) => (f.kind === kind ? sum + f.unread : sum), 0);
+        return (
+          <Tip key={kind} label={label} side="bottom">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={chosen === kind}
+              aria-label={label}
+              onClick={() => setFeedKind(kind)}
+              className={cx(
+                "relative flex h-7 min-w-0 flex-1 items-center justify-center rounded-md transition-colors touch:h-10",
+                chosen === kind ? "bg-active text-fg" : "text-fg-3 hover:bg-hover hover:text-fg-2",
+              )}
+            >
+              <Icon size={15} strokeWidth={1.75} />
+              {chosen !== kind && unread > 0 && (
+                <span aria-hidden className="absolute left-[calc(50%+6px)] top-1 size-1.5 rounded-full bg-accent" />
+              )}
+            </button>
+          </Tip>
+        );
+      })}
+    </div>
+  );
+}
+
 function SpaceSwitch({
   space,
   onSpace,
@@ -618,7 +686,12 @@ function SpaceSwitch({
             type="button"
             role="tab"
             aria-selected={space === key}
-            onClick={() => onSpace(key)}
+            // 已经在订阅里时再点一下「订阅」，回到全部文章
+            onClick={() =>
+              space === key
+                ? key === "feeds" && useUi.getState().setScope({ kind: "view", view: "inbox" })
+                : onSpace(key)
+            }
             className={cx(
               "flex h-6 min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 text-[12px] font-medium transition-colors touch:h-9 touch:text-[14px]",
               // 当前空间用强调色，和侧栏里选中的行（灰底）区分开
@@ -655,12 +728,24 @@ export function Sidebar({ width }: { width: number }) {
   const showFeeds = useUi((s) => s.showFeeds);
   const setShowFeeds = useUi((s) => s.setShowFeeds);
   const mail = space === "mail";
+  const choose = useChooseScope();
+  // 这一边显示哪几个内置视图
+  const hiddenViews = useUi((s) => s.hiddenViews[space] ?? NO_VIEWS);
+  const toggleViewShown = useUi((s) => s.toggleViewShown);
+  const shownViews = VIEWS.filter(({ view }) => !hiddenViews.includes(view));
+  const viewsSection: SidebarSection = space === "mail" ? "views-mail" : "views-feeds";
   const qc = useQueryClient();
   const { applyTo, compose, itemsOf, moveTo } = useActions();
   const hasAccounts = (nav.data?.accounts.length ?? 0) > 0;
   const folderActions = useFolderActions();
 
-  const feeds = nav.data?.feeds;
+  const allFeeds = nav.data?.feeds;
+  // 订阅那边选了某一类时，侧栏里只列这一类的源
+  const feedKind = useFeedKind();
+  const feeds = useMemo(
+    () => (feedKind === "all" ? allFeeds : allFeeds?.filter((f) => f.kind === feedKind)),
+    [allFeeds, feedKind],
+  );
   const accounts = nav.data?.accounts;
   const counts = nav.data?.counts;
   const categories = useCategories();
@@ -854,6 +939,10 @@ export function Sidebar({ width }: { width: number }) {
   const isActive = (target: ListScope) => sameScope(scope, target);
   const countFor = (view: View) => {
     if (!counts) return 0;
+    // 只看某一类源时，「全部文章」的数字是这一类源的未读加起来；「今天」不单独算，不显示数字
+    if (!mail && feedKind !== "all") {
+      return view === "inbox" ? (feeds ?? []).reduce((sum, f) => sum + f.unread, 0) : 0;
+    }
     if (view === "inbox") return mail ? counts.unread_mail : counts.unread_article;
     if (view === "today") return mail ? counts.today_mail : counts.today_article;
     return 0;
@@ -966,22 +1055,42 @@ export function Sidebar({ width }: { width: number }) {
             feedsUnread={counts?.unread_article ?? 0}
           />
         )}
+        {!mail && <FeedKindBar feeds={allFeeds ?? []} />}
 
-        <div className="flex flex-col gap-px">
-          {VIEWS.map(({ view, icon: Icon }) => (
-            <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
-              <Row
-                active={isActive({ kind: "view", view })}
-                onClick={() => setScope({ kind: "view", view })}
-                drag={viewTarget(view)}
-                drop={dropAt(`view:${view}`)}
-                leading={<Icon {...ICON} />}
-                label={t(viewLabelKey(view, space))}
-                trailing={<Count n={countFor(view)} />}
-              />
-            </ContextMenu>
+        {/* 内置视图：可以收起来给下面的列表腾地方，右键选显示哪几个 */}
+        <SectionHeader
+          first
+          label={t("nav.views")}
+          collapsed={isCollapsed(viewsSection)}
+          onToggle={() => toggleSection(viewsSection)}
+          unread={shownViews.some((v) => v.view === "inbox") ? countFor("inbox") : 0}
+          menu={VIEWS.map(({ view, icon: Icon }) => (
+            <MenuItem
+              key={view}
+              icon={hiddenViews.includes(view) ? <Icon size={14} className="opacity-40" /> : <Check size={14} />}
+              onSelect={() => toggleViewShown(space, view)}
+            >
+              {t(viewLabelKey(view, space))}
+            </MenuItem>
           ))}
-        </div>
+        />
+        {!isCollapsed(viewsSection) && (
+          <div className="flex flex-col gap-px">
+            {shownViews.map(({ view, icon: Icon }) => (
+              <ContextMenu key={view} items={<MarkAllReadItem scope={{ kind: "view", view }} />}>
+                <Row
+                  active={isActive({ kind: "view", view })}
+                  onClick={() => choose({ kind: "view", view })}
+                  drag={viewTarget(view)}
+                  drop={dropAt(`view:${view}`)}
+                  leading={<Icon {...ICON} />}
+                  label={t(viewLabelKey(view, space))}
+                  trailing={<Count n={countFor(view)} />}
+                />
+              </ContextMenu>
+            ))}
+          </div>
+        )}
 
         {shownLabels.length > 0 && (
           <>
@@ -1018,7 +1127,7 @@ export function Sidebar({ width }: { width: number }) {
                   >
                     <Row
                       active={isActive({ kind: "label", label })}
-                      onClick={() => setScope({ kind: "label", label })}
+                      onClick={() => choose({ kind: "label", label })}
                       drag={labelTarget(label)}
                       drop={dropAt(`label:${label}`)}
                       leading={<span aria-hidden className="size-2 rounded-full" style={{ background: labelColor(label) }} />}
@@ -1116,6 +1225,8 @@ export function Sidebar({ width }: { width: number }) {
                   }
                   const folder = entry.name;
                   const list = byFolder.get(folder) ?? [];
+                  // 只看某一类时，里面没有这一类源的文件夹不显示
+                  if (feedKind !== "all" && list.length === 0) return null;
                   const open = !collapsed.includes(folder);
                   const folderDrop = dropAt(`folder:${folder}`);
                   // 展开着的文件夹，排到它后面时提示线画在整组下面
@@ -1125,7 +1236,7 @@ export function Sidebar({ width }: { width: number }) {
                       <ContextMenu items={<FolderMenuItems folder={folder} />}>
                         <Row
                           active={isActive({ kind: "folder", folder })}
-                          onClick={() => setScope({ kind: "folder", folder })}
+                          onClick={() => choose({ kind: "folder", folder })}
                           drag={{ ...source({ kind: "folder", name: folder }, folder), ...folderTarget(folder) }}
                           drop={afterGroup ? null : folderDrop}
                           leading={
@@ -1172,7 +1283,7 @@ export function Sidebar({ width }: { width: number }) {
                     )}
                   </div>
                 )}
-                {feeds && feeds.length === 0 && (
+                {allFeeds && allFeeds.length === 0 && (
                   <button
                     type="button"
                     onClick={() => setDialog({ type: "add-feed" })}

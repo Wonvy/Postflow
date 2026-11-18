@@ -17,6 +17,7 @@ export type CatalogCategory =
   | "gaming"
   | "culture"
   | "life"
+  | "podcasts"
   | "blogs";
 
 export const CATALOG_CATEGORIES: CatalogCategory[] = [
@@ -29,6 +30,7 @@ export const CATALOG_CATEGORIES: CatalogCategory[] = [
   "gaming",
   "culture",
   "life",
+  "podcasts",
   "blogs",
 ];
 
