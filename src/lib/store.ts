@@ -168,6 +168,9 @@ interface UiState {
   groupModes: Record<string, GroupMode>;
   lockedLists: string[];
   rememberViews: boolean;
+  /** 鼠标停在侧栏、列表、阅读区中的一栏上时，另外两栏变淡。 */
+  focusPane: boolean;
+  setFocusPane: (on: boolean) => void;
   /** 锁定或解锁当前列表的视图。锁定时把现在的样子记下来。 */
   toggleViewLock: () => void;
   setRememberViews: (on: boolean) => void;
@@ -340,6 +343,7 @@ export const useUi = create<UiState>()(
       groupModes: {},
       lockedLists: [],
       rememberViews: false,
+      focusPane: true,
       toggleViewLock: () =>
         set((s) => {
           const key = listKey(s.scope, s.space);
@@ -356,6 +360,7 @@ export const useUi = create<UiState>()(
           };
         }),
       setRememberViews: (rememberViews) => set({ rememberViews }),
+      setFocusPane: (focusPane) => set({ focusPane }),
       cardSize: 260,
       collapsedSections: [],
       showFeeds: true,
@@ -599,6 +604,7 @@ export const useUi = create<UiState>()(
         groupModes: s.groupModes,
         lockedLists: s.lockedLists,
         rememberViews: s.rememberViews,
+        focusPane: s.focusPane,
         cardSize: s.cardSize,
         collapsedSections: s.collapsedSections,
         showFeeds: s.showFeeds,

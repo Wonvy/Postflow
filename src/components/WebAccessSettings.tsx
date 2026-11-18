@@ -11,7 +11,7 @@ import { useUpdateWebAccess, useWebAccess, type WebAccessUpdate } from "../lib/w
 import { SettingRow } from "./SettingsParts";
 import { toast } from "./Toast";
 import { useUi } from "../lib/store";
-import { Button, cx, IconButton, Select, Spinner, Switch, TextInput, useHoverOpen } from "./ui";
+import { Button, IconButton, Select, Spinner, Switch, TextInput, useHoverOpen } from "./ui";
 
 /** 一个带访问密钥的地址：显示时把密钥藏起来，复制和打开时用完整的。 */
 function UrlRow({ url }: { url: string }) {
@@ -204,12 +204,11 @@ export function PhoneAccessButton() {
             setOpen(false);
             setDialog({ type: "settings", page: "web" });
           }}
-          className={cx(
-            "ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-hover hover:text-fg",
-            ready ? "text-accent" : "text-fg-2",
-          )}
+          className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg touch:size-10"
         >
           <Smartphone size={16} strokeWidth={1.75} />
+          {/* 局域网链接准备好了：右上角一个小点，图标本身不抢眼 */}
+          {ready && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
         </button>
       </Popover.Trigger>
       <Popover.Portal>

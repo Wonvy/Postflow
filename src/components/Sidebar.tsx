@@ -1193,22 +1193,25 @@ export function Sidebar({ width }: { width: number }) {
         <IconButton label={t("action.settings")} tipSide="top" onClick={() => setDialog({ type: "settings" })}>
           <Settings {...ICON} />
         </IconButton>
-        <IconButton
-          label={t("commands.title")}
-          shortcut={isMac ? "⌘K" : "Ctrl K"}
-          tipSide="top"
-          onClick={() => setDialog({ type: "commands" })}
-        >
-          <Command {...ICON} />
-        </IconButton>
         {refreshing > 0 && (
           <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-3">
             <Spinner size={12} />
             <span className="truncate">{t("status.refreshing", { n: refreshing })}</span>
           </span>
         )}
-        {/* 最右边：手机扫码打开（网页访问），只有桌面应用有 */}
-        {isTauri && <PhoneAccessButton />}
+        {/* 右边是次要的入口，颜色比设置淡：命令面板，最右边是手机扫码打开（网页访问，只有桌面应用有） */}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <IconButton
+            label={t("commands.title")}
+            shortcut={isMac ? "⌘K" : "Ctrl K"}
+            tipSide="top"
+            muted
+            onClick={() => setDialog({ type: "commands" })}
+          >
+            <Command {...ICON} />
+          </IconButton>
+          {isTauri && <PhoneAccessButton />}
+        </div>
       </footer>
       <FolderDialog />
     </aside>

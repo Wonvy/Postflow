@@ -7,8 +7,14 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- No more white flash when moving between items in the web page view: the page stays hidden until it has loaded (at most 2.5 seconds), with a spinner on the theme background meanwhile.
+- Focus mode for the three columns: when the pointer is over the sidebar, the list or the reader, the other columns fade. On by default; turn it off in Settings → Appearance. Only with a mouse or trackpad.
+- The command palette button moved to the right of the sidebar footer, next to the phone icon; both are lighter than Settings, and the phone icon shows a small dot when the phone link is ready.
 
 ### 中文
+- 原网页模式下切换条目不再白屏闪一下：新网页加载出来（最多等 2.5 秒）才显示，之前是跟着主题的底色和转圈。
+- 三栏聚焦：鼠标停在侧栏、列表或阅读区上时，另外两栏变淡。默认开启，可以在设置 → 外观里关掉；只在用鼠标或触控板时起作用。
+- 命令面板按钮移到侧栏底部右边、手机图标左边，两个图标都比设置淡一些；手机链接准备好时手机图标右上角显示一个小点。
 
 ## 0.1.26 — 2026-11-18
 

@@ -457,3 +457,16 @@
   height: 160px;
   background: transparent;
 }
+
+/* 聚焦鼠标所在的一栏（设置 → 外观）：另外两栏变淡。见 App.tsx 的 Pane */
+[data-pane] > * {
+  transition: opacity 160ms ease;
+}
+[data-pane][data-dim] > * {
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-pane] > * {
+    transition: none;
+  }
+}

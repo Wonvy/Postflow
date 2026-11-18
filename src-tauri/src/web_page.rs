@@ -5,6 +5,8 @@
 //! 它加载的是网上的页面，不在任何权限配置里，调不了应用的命令。
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder};
@@ -16,6 +18,9 @@ use tauri_plugin_opener::OpenerExt;
 
 /// 网页视图加载状态在界面一侧的事件名。
 const EVENT_NAME: &str = "postflow:web";
+
+/// 换页面时网页视图先收着，新页面加载完再显示，免得先闪一下空白页。加载太慢时最多等这么久。
+const REVEAL_AFTER: Duration = Duration::from_millis(2500);
 
 /// 阅读区里放网页的那块地方，单位是逻辑像素，相对窗口左上角。
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -46,6 +51,52 @@ struct Current {
 pub struct WebPageState {
     current: Mutex<Option<Current>>,
     serial: Mutex<u32>,
+    /// 正在等新页面加载出来再显示：这一次等待的编号。收起时清掉，迟到的「加载完了」不会再把它显示出来。
+    reveal: Mutex<Option<u64>>,
+    reveals: AtomicU64,
+}
+
+/// 先收着网页视图，等新页面加载完（或者等了 `REVEAL_AFTER`）再显示。
+fn reveal_when_loaded<R: Runtime>(app: &AppHandle<R>, state: &WebPageState) {
+    let ticket = state.reveals.fetch_add(1, Ordering::Relaxed) + 1;
+    if let Ok(mut pending) = state.reveal.lock() {
+        *pending = Some(ticket);
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(REVEAL_AFTER);
+        reveal(&app, Some(ticket));
+    });
+}
+
+/// 把在等的网页视图显示出来。`ticket` 是超时那一路带的编号，只认这一次等待；页面加载完时不带。
+fn reveal<R: Runtime>(app: &AppHandle<R>, ticket: Option<u64>) {
+    let state = app.state::<WebPageState>();
+    {
+        let Ok(mut pending) = state.reveal.lock() else {
+            return;
+        };
+        match (*pending, ticket) {
+            (None, _) => return,
+            (Some(waiting), Some(t)) if waiting != t => return,
+            _ => *pending = None,
+        }
+    }
+    if let Some(webview) = current(app, &state) {
+        let _ = webview.show();
+    }
+}
+
+/// 还在等新页面加载，先别显示。
+fn revealing(state: &WebPageState) -> bool {
+    state.reveal.lock().map(|p| p.is_some()).unwrap_or(false)
+}
+
+/// 不等了：收起时调用。
+fn cancel_reveal(state: &WebPageState) {
+    if let Ok(mut pending) = state.reveal.lock() {
+        *pending = None;
+    }
 }
 
 fn web_url(url: &str) -> Result<Url, String> {
@@ -98,15 +149,22 @@ pub async fn web_show<R: Runtime>(
     };
 
     if let (Some(webview), true) = (&existing, same_agent) {
-        // 同一个地址再要一次（比如回到原网页模式）时不重新加载，留在用户点进去的页面上
-        if !same_url {
-            webview.navigate(url.clone()).map_err(|e| e.to_string())?;
-            if let Some(c) = state.current.lock().map_err(|e| e.to_string())?.as_mut() {
-                c.url = url;
-            }
-        }
         place(webview, frame).map_err(|e| e.to_string())?;
-        return webview.show().map_err(|e| e.to_string());
+        // 同一个地址再要一次（比如回到原网页模式）时不重新加载，留在用户点进去的页面上
+        if same_url {
+            if revealing(&state) {
+                return Ok(());
+            }
+            return webview.show().map_err(|e| e.to_string());
+        }
+        // 换了地址：收着等它加载出来，不显示上一页或者空白页
+        webview.hide().map_err(|e| e.to_string())?;
+        webview.navigate(url.clone()).map_err(|e| e.to_string())?;
+        if let Some(c) = state.current.lock().map_err(|e| e.to_string())?.as_mut() {
+            c.url = url;
+        }
+        reveal_when_loaded(&app, &state);
+        return Ok(());
     }
 
     if let Some(old) = existing {
@@ -134,6 +192,10 @@ pub async fn web_show<R: Runtime>(
             inside
         })
         .on_page_load(|webview, payload| {
+            let finished = matches!(payload.event(), PageLoadEvent::Finished);
+            if finished && payload.url().scheme() != "about" {
+                reveal(webview.app_handle(), None);
+            }
             let _ = webview.app_handle().emit_to(
                 "main",
                 EVENT_NAME,
@@ -154,11 +216,14 @@ pub async fn web_show<R: Runtime>(
         )
         .map_err(|e| e.to_string())?;
     let _ = webview.set_zoom(frame.zoom.clamp(0.1, 4.0));
+    // 新建的网页视图一开始是白的，同样等页面加载出来再显示
+    let _ = webview.hide();
     *state.current.lock().map_err(|e| e.to_string())? = Some(Current {
         label,
         user_agent,
         url,
     });
+    reveal_when_loaded(&app, &state);
     Ok(())
 }
 
@@ -174,7 +239,8 @@ pub async fn web_frame<R: Runtime>(
         return Ok(());
     };
     place(&webview, frame).map_err(|e| e.to_string())?;
-    if show == Some(true) {
+    // 还在等新页面加载时不显示，加载完会自己出来
+    if show == Some(true) && !revealing(&state) {
         webview.show().map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -189,6 +255,7 @@ pub async fn web_hide<R: Runtime>(
     state: State<'_, WebPageState>,
     clear: Option<bool>,
 ) -> Result<(), String> {
+    cancel_reveal(&state);
     let Some(webview) = current(&app, &state) else {
         return Ok(());
     };

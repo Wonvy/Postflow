@@ -69,6 +69,8 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
   shortcut?: string;
   active?: boolean;
+  /** 次要的按钮：图标颜色淡一些。 */
+  muted?: boolean;
   tipSide?: "top" | "bottom" | "left" | "right";
 }
 
@@ -76,6 +78,7 @@ export function IconButton({
   label,
   shortcut,
   active,
+  muted,
   tipSide,
   className,
   children,
@@ -91,7 +94,9 @@ export function IconButton({
           "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors touch:size-10",
           "disabled:pointer-events-none disabled:opacity-40",
           // 开着的开关（自动翻译、全文模式、AI 面板）一眼能看出来：强调色底和图标
-          active ? "bg-accent-soft text-accent" : "text-fg-2 hover:bg-hover hover:text-fg",
+          active
+            ? "bg-accent-soft text-accent"
+            : cx(muted ? "text-fg-3" : "text-fg-2", "hover:bg-hover hover:text-fg"),
           className,
         )}
         {...rest}

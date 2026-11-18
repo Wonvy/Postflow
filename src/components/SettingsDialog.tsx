@@ -81,6 +81,8 @@ export function SettingsDialog() {
   const undoSendSeconds = useUi((s) => s.undoSendSeconds);
   const keepRunning = useUi((s) => s.keepRunning);
   const rememberViews = useUi((s) => s.rememberViews);
+  const focusPane = useUi((s) => s.focusPane);
+  const setFocusPane = useUi((s) => s.setFocusPane);
   const setRememberViews = useUi((s) => s.setRememberViews);
   const setKeepRunning = useUi((s) => s.setKeepRunning);
   const setUndoSendSeconds = useUi((s) => s.setUndoSendSeconds);
@@ -189,6 +191,9 @@ export function SettingsDialog() {
         </SettingRow>
         <SettingRow label={t("settings.senderLogos")} hint={t("settings.senderLogosHint")}>
           <Switch label={t("settings.senderLogos")} checked={senderLogos} onChange={setSenderLogos} />
+        </SettingRow>
+        <SettingRow label={t("settings.focusPane")} hint={t("settings.focusPaneHint")}>
+          <Switch label={t("settings.focusPane")} checked={focusPane} onChange={setFocusPane} />
         </SettingRow>
         <LanguageSettings />
       </>

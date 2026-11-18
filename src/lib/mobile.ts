@@ -31,17 +31,24 @@ export function useDrawerSidebar(): boolean {
   return useLayout() !== "desktop";
 }
 
-const TOUCH_QUERY = "(pointer: coarse)";
-
-/** 主要用手指操作（手机、平板）：行和按钮要加高。 */
-export function useIsTouch(): boolean {
+function useMedia(query: string): boolean {
   return useSyncExternalStore(
     (onChange) => {
-      const media = window.matchMedia(TOUCH_QUERY);
+      const media = window.matchMedia(query);
       media.addEventListener("change", onChange);
       return () => media.removeEventListener("change", onChange);
     },
-    () => window.matchMedia(TOUCH_QUERY).matches,
+    () => window.matchMedia(query).matches,
     () => false,
   );
+}
+
+/** 主要用手指操作（手机、平板）：行和按钮要加高。 */
+export function useIsTouch(): boolean {
+  return useMedia("(pointer: coarse)");
+}
+
+/** 有鼠标或触控板，能「停在」某处（悬停效果只在这时有意义）。 */
+export function useCanHover(): boolean {
+  return useMedia("(hover: hover) and (pointer: fine)");
 }

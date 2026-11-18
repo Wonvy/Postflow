@@ -206,6 +206,7 @@ export function WebPage({ url, onShowContent }: { url: string; onShowContent: ()
               userAgent={userAgent}
               frame={frame}
               device={Boolean(device.size)}
+              loading={loading}
               reloads={reloads}
               onLoading={(busy, at) => {
                 setLoading(busy);
@@ -227,17 +228,38 @@ export function WebPage({ url, onShowContent }: { url: string; onShowContent: ()
   );
 }
 
-/** 模拟设备时外面的那圈圆角边框；桌面直接铺满。 */
-function Screen({ frame, device, children }: { frame: Frame; device: boolean; children?: ReactNode }) {
+/**
+ * 模拟设备时外面的那圈圆角边框；桌面直接铺满。底色跟着主题，网页加载出来之前显示转圈，
+ * 换页面时不会先闪一下白。
+ */
+function Screen({
+  frame,
+  device,
+  loading,
+  children,
+}: {
+  frame: Frame;
+  device: boolean;
+  loading: boolean;
+  children?: ReactNode;
+}) {
   return (
     <div
-      className={cx("relative shrink-0 overflow-hidden bg-white", device && "rounded-[14px] shadow-pop ring-1 ring-line-strong")}
+      className={cx("relative shrink-0 overflow-hidden bg-bg", device && "rounded-[14px] shadow-pop ring-1 ring-line-strong")}
       style={{ width: Math.round(frame.width * frame.scale), height: Math.round(frame.height * frame.scale) }}
     >
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center text-fg-3">
+          <Spinner size={16} />
+        </div>
+      )}
       {children}
     </div>
   );
 }
+
+/** 网页加载太慢时最多等这么久就显示出来（和桌面端 web_page.rs 里的一样）。 */
+const REVEAL_AFTER_MS = 2500;
 
 function IframeFrame({
   url,
@@ -262,6 +284,13 @@ function IframeFrame({
     retry: false,
   });
   const blocked = check.data?.embeddable === false;
+  // 网页加载完再显示，之前是主题底色和转圈
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(false);
+    const timer = setTimeout(() => setReady(true), REVEAL_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [url, reloads]);
   // 不让嵌入的网页不会加载，上面的转圈要停
   useEffect(() => {
     if (blocked) onLoaded();
@@ -287,7 +316,7 @@ function IframeFrame({
     );
   }
   return (
-    <Screen frame={frame} device={device}>
+    <Screen frame={frame} device={device} loading={!ready}>
       <iframe
         key={reloads}
         title={hostOf(url)}
@@ -295,8 +324,11 @@ function IframeFrame({
         // 网页在自己的源里运行，不能跳转顶层窗口，弹出的新窗口不受限制
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
         referrerPolicy="no-referrer"
-        onLoad={onLoaded}
-        className="absolute left-0 top-0 block border-0 bg-white"
+        onLoad={() => {
+          setReady(true);
+          onLoaded();
+        }}
+        className={cx("absolute left-0 top-0 block border-0 bg-white", !ready && "opacity-0")}
         style={{
           width: frame.width,
           height: frame.height,
@@ -377,6 +409,7 @@ function NativeFrame({
   userAgent,
   frame,
   device,
+  loading,
   reloads,
   onLoading,
 }: {
@@ -384,6 +417,8 @@ function NativeFrame({
   userAgent: string | null;
   frame: Frame;
   device: boolean;
+  /** 网页视图在等页面加载时是收着的，这里显示转圈。 */
+  loading: boolean;
   reloads: number;
   onLoading: (loading: boolean, url?: string) => void;
 }) {
@@ -496,7 +531,7 @@ function NativeFrame({
   );
 
   return (
-    <Screen frame={frame} device={device}>
+    <Screen frame={frame} device={device} loading={loading}>
       <div ref={slot} className="absolute inset-0" />
     </Screen>
   );

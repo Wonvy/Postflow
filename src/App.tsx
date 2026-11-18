@@ -2,9 +2,9 @@ import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { OutboxDialog } from "./components/Outbox";
 import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
-import { useLayout } from "./lib/mobile";
+import { useCanHover, useLayout } from "./lib/mobile";
 import { Unplug } from "lucide-react";
-import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
 import { AddFeedDialog, EditFeedDialog } from "./components/FeedDialogs";
 import { ItemList, MarkAllReadDialog } from "./components/ItemList";
@@ -108,6 +108,38 @@ function Resizer({ width, onResize }: { width: number; onResize: (width: number)
   );
 }
 
+type PaneId = "sidebar" | "list" | "reader";
+
+/**
+ * 一栏的外壳：不占布局（display: contents），只记下鼠标进了哪一栏。`dim` 时里面那一栏变淡，
+ * 样式见 styles.css 的 [data-pane]。
+ */
+function Pane({ id, dim, onEnter, children }: { id: PaneId; dim: boolean; onEnter: (id: PaneId) => void; children: ReactNode }) {
+  return (
+    <div className="contents" data-pane={id} data-dim={dim ? "" : undefined} onPointerEnter={() => onEnter(id)}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 「聚焦鼠标所在的一栏」：鼠标停在哪一栏，另外几栏就变淡。只在有鼠标或触控板时起作用；
+ * 鼠标经过分栏的拖拽条时保持原样，移出窗口、移到弹出的菜单和对话框上（它们不在栏里）时都恢复。
+ */
+function usePaneFocus() {
+  const enabled = useUi((s) => s.focusPane);
+  const canHover = useCanHover();
+  const [hovered, setHovered] = useState<PaneId | null>(null);
+  const active = enabled && canHover && hovered !== null;
+  return {
+    /** `shown`：现在显示着的几栏。只剩一栏，或者鼠标记着的那一栏已经不在（比如刚用快捷键最大化）时都不变淡。 */
+    dim: (id: PaneId, shown: readonly PaneId[]) =>
+      active && shown.length > 1 && shown.includes(hovered) && hovered !== id,
+    enter: setHovered,
+    leave: () => setHovered(null),
+  };
+}
+
 function Shell() {
   useShortcuts();
   useMailCatchUp();
@@ -138,6 +170,19 @@ function Shell() {
   // 阅读区最大化（或全屏）时只留阅读区
   const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats";
   const layout = useLayout();
+  const focus = usePaneFocus();
+  const shownPanes: PaneId[] = maximized
+    ? ["reader"]
+    : mainView === "stats"
+      ? ["sidebar", "list"]
+      : layout === "tablet"
+        ? ["list", "reader"]
+        : ["sidebar", "list", "reader"];
+  const pane = (id: PaneId, node: ReactNode) => (
+    <Pane id={id} dim={focus.dim(id, shownPanes)} onEnter={focus.enter}>
+      {node}
+    </Pane>
+  );
   const openId = useUi((s) => s.openId);
   const drawerOpen = useUi((s) => s.drawerOpen);
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
@@ -195,18 +240,21 @@ function Shell() {
     const tabletListMax = Math.max(LIST_MIN, viewport - READER_MIN);
     const tabletList = Math.min(listWidth, tabletListMax);
     return (
-      <div className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+      <div
+        className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
+        onPointerLeave={focus.leave}
+      >
         {mainView === "stats" ? (
           <StatsPage />
         ) : (
           <>
             {!maximized && (
               <>
-                <ItemList width={tabletList} />
+                {pane("list", <ItemList width={tabletList} />)}
                 <Resizer width={tabletList} onResize={(w) => setListWidth(Math.min(w, tabletListMax))} />
               </>
             )}
-            <Reader />
+            {pane("reader", <Reader />)}
           </>
         )}
         {drawer}
@@ -216,24 +264,24 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full" onPointerLeave={focus.leave}>
       {!maximized && (
         <>
-          <Sidebar width={sidebarWidth} />
+          {pane("sidebar", <Sidebar width={sidebarWidth} />)}
           <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
         </>
       )}
       {mainView === "stats" ? (
-        <StatsPage />
+        pane("list", <StatsPage />)
       ) : (
         <>
           {!maximized && (
             <>
-              <ItemList width={listShown} />
+              {pane("list", <ItemList width={listShown} />)}
               <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
             </>
           )}
-          <Reader />
+          {pane("reader", <Reader />)}
         </>
       )}
       {dialogs}
