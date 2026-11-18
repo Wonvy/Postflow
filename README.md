@@ -8,6 +8,15 @@ An open-source, cross-platform client for your email and RSS feeds, each in its 
 - **Sync on your terms.** Your data is a folder of append-only logs. Keep it in sync between devices with Syncthing, iCloud Drive, Dropbox or any file-sync tool.
 - **Keyboard first.** A calm three-pane layout where every frequent action has a single key.
 
+<p align="center">
+  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg"><img alt="Download for macOS" src="https://img.shields.io/badge/Download-macOS-7533e8?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows-7533e8?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage"><img alt="Download for Linux" src="https://img.shields.io/badge/Download-Linux-7533e8?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <br>
+  <a href="https://github.com/Wonvy/Postflow/releases/latest"><img alt="Latest version" src="https://img.shields.io/github/v/release/Wonvy/Postflow?label=latest&color=7533e8"></a>
+  <a href="https://github.com/Wonvy/Postflow/releases">All versions and release notes</a>
+</p>
+
 ![Mail inbox grouped by sender, with the Mail and Feeds switch at the top of the sidebar](docs/screenshots/en/inbox.png)
 
 ## Screenshots
@@ -16,18 +25,23 @@ An open-source, cross-platform client for your email and RSS feeds, each in its 
 |---|---|
 | ![Reading a plain-text message with an attachment](docs/screenshots/en/mail.png) | ![Reading a feed article](docs/screenshots/en/article.png) |
 | Mail with attachments, in the light theme | Articles from your feeds |
-| ![Choosing a mail provider from a grid of icons](docs/screenshots/en/add-account.png) | ![Selecting several items for a bulk action](docs/screenshots/en/selection.png) |
-| Pick your provider, or add any IMAP account | Select several items and act on them at once |
+| ![A podcast episode with a play button and show notes](docs/screenshots/en/podcast.png) | ![Selecting several items for a bulk action](docs/screenshots/en/selection.png) |
+| Podcasts, with episode lengths and show notes | Select several items and act on them at once |
+| ![Choosing a mail provider from a grid of icons](docs/screenshots/en/add-account.png) | ![Settings, Appearance page with theme and accent colour](docs/screenshots/en/appearance.png) |
+| Pick your provider, or add any IMAP account | Light or dark theme, and an accent colour of your choice |
 
 ## Download
 
-Get the installer for your system from [Releases](https://github.com/Wonvy/Postflow/releases):
+Click your system to download the latest version. Installers for every version are on the
+[Releases](https://github.com/Wonvy/Postflow/releases) page (on GitHub it's also the **Releases** box on the right of the repository page).
 
-| System | File |
+| System | Download |
 |---|---|
-| macOS (Apple silicon and Intel) | `.dmg` |
-| Windows 10 / 11 | `-setup.exe` or `.msi` |
-| Linux | `.deb`, `.rpm` or `.AppImage` |
+| macOS (one app for Apple silicon and Intel) | [Postflow-macOS.dmg](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg) |
+| Windows 10 / 11 | [Postflow-Windows-setup.exe](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe) (recommended) or [.msi](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows.msi) |
+| Linux (x86-64) | [.AppImage](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage), [.deb](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.deb) (Debian, Ubuntu) or [.rpm](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.rpm) (Fedora, openSUSE) |
+
+Postflow updates itself: when a new version is out, it offers to install it.
 
 The installers are not yet signed by Apple or Microsoft. On macOS, the first time you open the app go to
 **System Settings → Privacy & Security** and click **Open Anyway**. On Windows, when SmartScreen appears,
@@ -372,7 +386,7 @@ your real data.
 
 ### Demo data
 
-You don't need a real mailbox to try things out. This starts two fake IMAP servers and three feeds on your machine,
+You don't need a real mailbox to try things out. This starts two fake IMAP servers, three feeds and a podcast on your machine,
 all with fictional content, and delivers a new message every minute:
 
 ```bash
@@ -432,7 +446,8 @@ git push --follow-tags
 
 The first command sets version 0.2.0 in `package.json`, `Cargo.toml` and both lock files, commits, and tags
 `v0.2.0`. Pushing the tag starts GitHub Actions, which builds the installers on macOS, Windows and Linux and
-publishes the release once all three succeed. A version with a hyphen, such as `0.2.0-beta.1`, is published as a
+publishes the release once all three succeed. Each installer also gets a copy without the version in its name (`Postflow-macOS.dmg` and so
+on), which the download links at the top of this README point to. A version with a hyphen, such as `0.2.0-beta.1`, is published as a
 pre-release.
 
 Every release also contains signed update packages and a `latest.json`, which installed copies of Postflow check

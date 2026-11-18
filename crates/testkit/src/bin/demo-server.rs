@@ -492,6 +492,107 @@ const CN_WEEKLY: &[Post] = &[
     },
 ];
 
+struct Episode {
+    slug: &'static str,
+    title: &'static str,
+    ago: i64,
+    /// 秒
+    duration: u32,
+    notes: &'static str,
+}
+
+/// 一档虚构的播客。音频文件不存在，只为让「播客」这一类和节目页有内容可看。
+const PODCAST: &[Episode] = &[
+    Episode {
+        slug: "local-first-two-years-later",
+        title: "Local-first, two years later",
+        ago: 5 * HOUR,
+        duration: 48 * 60 + 12,
+        notes: "<p>Two years after moving everything onto their own devices, Mira and Jonas look back at what \
+got easier, what got harder, and what they would do differently.</p>\
+<ul><li>00:00 Hello again</li><li>04:30 Sync folders instead of servers</li>\
+<li>21:15 When two laptops disagree</li><li>39:40 Listener questions</li></ul>",
+    },
+    Episode {
+        slug: "why-inboxes-feel-loud",
+        title: "Why inboxes feel loud",
+        ago: 7 * DAY + 2 * HOUR,
+        duration: 41 * 60 + 5,
+        notes: "<p>Notifications, badges and bold rows: a tour of everything an inbox does to get your attention, \
+and the few things worth keeping.</p>",
+    },
+    Episode {
+        slug: "designing-for-the-keyboard",
+        title: "Designing for the keyboard",
+        ago: 14 * DAY + 5 * HOUR,
+        duration: 52 * 60 + 30,
+        notes: "<p>Single-key shortcuts, discoverable hints, and why the best shortcut is the one shown next to \
+the button.</p>",
+    },
+    Episode {
+        slug: "reading-on-your-own-terms",
+        title: "Reading on your own terms",
+        ago: 21 * DAY + 3 * HOUR,
+        duration: 37 * 60 + 48,
+        notes: "<p>Feeds, newsletters and read-later lists: how to keep up with the writing you care about without \
+an algorithm in between.</p>",
+    },
+];
+
+fn podcast() -> String {
+    let base = format!("http://127.0.0.1:{FEED_PORT}/podcast");
+    let items: String = PODCAST
+        .iter()
+        .map(|e| {
+            format!(
+                "<item><guid>{base}/{s}</guid><title>{t}</title><link>{base}/{s}</link>\
+                 <pubDate>{d}</pubDate><description>{n}</description>\
+                 <enclosure url=\"{base}/{s}.mp3\" type=\"audio/mpeg\" length=\"{len}\"/>\
+                 <itunes:duration>{dur}</itunes:duration></item>",
+                s = e.slug,
+                t = escape(e.title),
+                d = mail_date(e.ago),
+                n = escape(e.notes),
+                len = e.duration * 16_000,
+                dur = e.duration,
+            )
+        })
+        .collect();
+    format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\
+         <rss version=\"2.0\" xmlns:itunes=\"http://www.itunes.com/dtds/podcast-1.0.dtd\"><channel>\
+         <title>Slow Signals</title><link>{base}/</link>\
+         <description>Conversations about calm, personal software. A fictional show for the Postflow demo.</description>\
+         <itunes:author>Mira &amp; Jonas</itunes:author>\
+         <itunes:image href=\"{base}/artwork.svg\"/>\
+         <image><url>{base}/artwork.svg</url><title>Slow Signals</title><link>{base}/</link></image>\
+         {items}</channel></rss>"
+    )
+}
+
+/// 节目封面：方形渐变上一个声波图案。
+fn podcast_artwork() -> String {
+    let bars: String = [40, 90, 140, 70, 160, 110, 60, 120, 80]
+        .iter()
+        .enumerate()
+        .map(|(i, h)| {
+            format!(
+                "<rect x=\"{}\" y=\"{}\" width=\"22\" height=\"{h}\" rx=\"11\" fill=\"#fff\" fill-opacity=\"0.85\"/>",
+                64 + i * 32,
+                200 - h / 2
+            )
+        })
+        .collect();
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 400\">\
+         <defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\
+         <stop offset=\"0\" stop-color=\"#6b4fbb\"/><stop offset=\"1\" stop-color=\"#e0789a\"/></linearGradient></defs>\
+         <rect width=\"400\" height=\"400\" fill=\"url(#g)\"/>{bars}\
+         <text x=\"200\" y=\"350\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"34\" font-weight=\"700\" \
+         fill=\"#fff\" text-anchor=\"middle\">SLOW SIGNALS</text></svg>"
+    )
+}
+
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -604,6 +705,8 @@ fn route(path: &str) -> Option<(&'static str, String)> {
         ),
         "/weekly/atom.xml" => (xml, atom("Interface Weekly", "weekly", "weekly", WEEKLY)),
         "/cn/atom.xml" => (xml, atom("开源周刊", "cn", "cn", CN_WEEKLY)),
+        "/podcast/rss.xml" => ("application/rss+xml; charset=utf-8", podcast()),
+        "/podcast/artwork.svg" => (svg, podcast_artwork()),
         "/icons/field-notes.svg" => (svg, icon("F", "#3f7d6b")),
         "/icons/weekly.svg" => (svg, icon("I", "#b4553c")),
         "/icons/cn.svg" => (svg, icon("开", "#4b5fb8")),
@@ -894,7 +997,12 @@ async fn main() {
     println!("  sending (SMTP)    port {SMTP_PORT}, chosen automatically");
     println!();
     println!("Feeds:");
-    for path in ["field-notes/atom.xml", "weekly/atom.xml", "cn/atom.xml"] {
+    for path in [
+        "field-notes/atom.xml",
+        "weekly/atom.xml",
+        "cn/atom.xml",
+        "podcast/rss.xml",
+    ] {
         println!("  http://127.0.0.1:{FEED_PORT}/{path}");
     }
     println!();

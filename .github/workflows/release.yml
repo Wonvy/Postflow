@@ -194,6 +194,10 @@ jobs:
             "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" \
             > /dev/null
 
+      # README 的下载链接指向 releases/latest/download/Postflow-macOS.dmg 这样不带版本号的文件名
+      - name: 加一份固定文件名的安装包
+        run: bash .github/scripts/stable-names.sh "$RELEASE_ID"
+
       # 应用的在线更新读的是「最新版」（releases/latest）里的 latest.json。两个版本同时在打包、
       # 旧版本后打完时，不能让它抢走「最新版」：只有版本号比所有已发布的都高时才标成最新版
       - name: 去掉草稿状态

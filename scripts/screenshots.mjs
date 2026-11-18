@@ -28,13 +28,15 @@ const UNREAD = new Set([
   "Photos from the trip",
   "Syncing without a server: append-only logs",
   "Quiet interfaces",
+  "Local-first, two years later",
+  "Why inboxes feel loud",
   "开源周刊第 48 期：本地优先的软件",
 ]);
 const STARRED = new Set(["Re: Design review notes", "Designing keyboard-first tools"]);
 
 const LABELS = {
-  en: { addAccount: "Add mail account" },
-  zh: { addAccount: "添加邮箱" },
+  en: { addAccount: "Add mail account", settings: "Settings", appearance: "Appearance" },
+  zh: { addAccount: "添加邮箱", settings: "设置", appearance: "外观" },
 };
 
 // Categories for the sidebar, with the items filed under each. Mail and articles share them, and each side of the
@@ -144,6 +146,9 @@ async function shot(browser, lang, name, prefs, act) {
     collapsedFolders: [],
     space: prefs.space ?? "mail",
     groupModes: { "view:inbox:mail": prefs.groupMode ?? "none" },
+    feedKind: prefs.feedKind ?? "all",
+    // 鼠标所在的一栏会突出、另外两栏变淡；截图里三栏都要看清
+    focusPane: false,
   };
   await context.addInitScript((s) => {
     localStorage.setItem("postflow.ui", JSON.stringify({ state: s, version: 0 }));
@@ -153,6 +158,8 @@ async function shot(browser, lang, name, prefs, act) {
   await page.goto(BASE);
   await page.getByRole("option").first().waitFor();
   await act(page);
+  // 鼠标移到阅读区，列表里不留悬停效果
+  await page.mouse.move(1000, 500);
   await sleep(600);
   const file = join(OUT, lang, `${name}.png`);
   await page.screenshot({ path: file });
@@ -197,6 +204,7 @@ async function main() {
       ["field-notes/atom.xml", "Engineering"],
       ["weekly/atom.xml", "Design"],
       ["cn/atom.xml", ""],
+      ["podcast/rss.xml", ""],
     ]) {
       await rpc("feeds.add", { url: `${FEEDS}/${path}`, folder });
     }
@@ -228,10 +236,22 @@ async function main() {
           await page.locator("main .article pre").waitFor();
         });
 
+        await shot(browser, lang, "podcast", { theme: "light", space: "feeds", feedKind: "podcast" }, async (page) => {
+          await open(page, "Local-first, two years later");
+          await page.locator("main .article").waitFor();
+        });
+
         // 第一步：所有服务商的图标，下面是已经添加的邮箱
         await shot(browser, lang, "add-account", { theme: "dark" }, async (page) => {
           await page.getByRole("button", { name: L.addAccount }).first().click();
           await page.getByRole("dialog").locator("section").first().waitFor();
+        });
+
+        // 设置 → 外观：主题、主题色
+        await shot(browser, lang, "appearance", { theme: "dark" }, async (page) => {
+          await page.getByRole("button", { name: L.settings, exact: true }).first().click();
+          await page.getByRole("tab", { name: L.appearance }).click();
+          await page.getByRole("tabpanel").waitFor();
         });
 
         await shot(browser, lang, "selection", { theme: "light", density: "comfortable" }, async (page) => {

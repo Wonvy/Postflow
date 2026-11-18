@@ -8,6 +8,15 @@
 - **同步交给你自己**：数据是一个装着只追加日志的文件夹，用 Syncthing、iCloud、坚果云之类的工具同步即可。
 - **键盘优先**：安静的三栏界面，常用操作都有单键快捷键。
 
+<p align="center">
+  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg"><img alt="下载 macOS 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-macOS-7533e8?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe"><img alt="下载 Windows 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows-7533e8?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage"><img alt="下载 Linux 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Linux-7533e8?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <br>
+  <a href="https://github.com/Wonvy/Postflow/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/Wonvy/Postflow?label=%E6%9C%80%E6%96%B0%E7%89%88&color=7533e8"></a>
+  <a href="https://github.com/Wonvy/Postflow/releases">所有版本和更新说明</a>
+</p>
+
 ![按发件人折叠的邮件收件箱，侧栏顶部是「邮件 | 订阅」切换条](docs/screenshots/zh/inbox.png)
 
 ## 截图
@@ -16,18 +25,23 @@
 |---|---|
 | ![阅读带附件的纯文本邮件](docs/screenshots/zh/mail.png) | ![阅读订阅文章](docs/screenshots/zh/article.png) |
 | 带附件的邮件，浅色主题 | 订阅源里的文章 |
-| ![从服务商图标里选择邮箱](docs/screenshots/zh/add-account.png) | ![多选后批量操作](docs/screenshots/zh/selection.png) |
-| 选择服务商，或添加任意 IMAP 邮箱 | 多选后一次处理 |
+| ![播客单集，带播放按钮和节目说明](docs/screenshots/zh/podcast.png) | ![多选后批量操作](docs/screenshots/zh/selection.png) |
+| 播客：每集的时长和节目说明 | 多选后一次处理 |
+| ![从服务商图标里选择邮箱](docs/screenshots/zh/add-account.png) | ![设置里的外观页：主题和主题色](docs/screenshots/zh/appearance.png) |
+| 选择服务商，或添加任意 IMAP 邮箱 | 浅色、深色主题，主题色自己挑 |
 
 ## 下载
 
-到 [Releases](https://github.com/Wonvy/Postflow/releases) 下载对应系统的安装包：
+点击你的系统直接下载最新版。所有版本的安装包都在 [Releases](https://github.com/Wonvy/Postflow/releases) 页面（也就是 GitHub 仓库页面右边的
+**Releases** 一栏）。
 
-| 系统 | 文件 |
+| 系统 | 下载 |
 |---|---|
-| macOS（Apple 芯片和 Intel 通用） | `.dmg` |
-| Windows 10 / 11 | `-setup.exe` 或 `.msi` |
-| Linux | `.deb`、`.rpm` 或 `.AppImage` |
+| macOS（Apple 芯片和 Intel 通用） | [Postflow-macOS.dmg](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg) |
+| Windows 10 / 11 | [Postflow-Windows-setup.exe](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe)（推荐）或 [.msi](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows.msi) |
+| Linux（x86-64） | [.AppImage](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage)、[.deb](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.deb)（Debian、Ubuntu）或 [.rpm](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.rpm)（Fedora、openSUSE） |
+
+装好以后 Postflow 会自己检查更新，有新版本时提示安装。
 
 安装包还没有经过苹果和微软的开发者签名。macOS 第一次打开时，到「系统设置 → 隐私与安全性」里点「仍要打开」；
 Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
@@ -311,7 +325,7 @@ npm run dev
 
 ### 演示数据
 
-试用不需要真实邮箱。下面这条命令会在本机起两个假的 IMAP 服务器和三个订阅源，内容都是虚构的，
+试用不需要真实邮箱。下面这条命令会在本机起两个假的 IMAP 服务器、三个订阅源和一个播客，内容都是虚构的，
 每分钟还会投递一封新邮件：
 
 ```bash
@@ -368,7 +382,7 @@ git push --follow-tags
 ```
 
 第一条命令把 `package.json`、`Cargo.toml` 和两个锁文件里的版本号改成 0.2.0，提交并打上 `v0.2.0` 标签。
-推送标签后，GitHub Actions 会在 macOS、Windows、Linux 上分别打包，三个都成功后自动发布 Release。
+推送标签后，GitHub Actions 会在 macOS、Windows、Linux 上分别打包，三个都成功后自动发布 Release。每个安装包还会多一份文件名不带版本号的副本（`Postflow-macOS.dmg` 等），本文开头的下载链接指向它们。
 带横线的版本号（例如 `0.2.0-beta.1`）会发布成预发布版本。
 
 每个 Release 里还有签过名的更新包和一个 `latest.json`，已安装的 Postflow 靠它们在线更新。
