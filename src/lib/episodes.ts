@@ -11,7 +11,7 @@ import { isTauri } from "./transport";
 const KEY = ["episodes"] as const;
 
 /** 本机文件给 <audio> 用的地址。 */
-function localUrl(id: string, file: string): string {
+export function localUrl(id: string, file: string): string {
   if (isTauri) {
     const internals = (window as unknown as { __TAURI_INTERNALS__?: { convertFileSrc?: (p: string, s: string) => string } })
       .__TAURI_INTERNALS__;

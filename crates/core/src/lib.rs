@@ -22,6 +22,7 @@ mod rules;
 mod secrets;
 mod sender_icon;
 mod storage;
+mod subtitles;
 mod translate_rpc;
 
 use std::collections::{HashMap, HashSet};
@@ -32,6 +33,7 @@ use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use postflow_feed::Client;
+use postflow_speech::Speech;
 use postflow_store::{Store, ids};
 use postflow_translate::Translator;
 use serde::{Deserialize, Serialize};
@@ -56,6 +58,8 @@ pub enum Error {
     Feed(#[from] postflow_feed::Error),
     #[error("{0}")]
     Translate(#[from] postflow_translate::Error),
+    #[error("{0}")]
+    Speech(#[from] postflow_speech::Error),
 }
 
 /// 推给界面的事件。
@@ -96,6 +100,38 @@ pub enum Event {
         /// 失败时的错误码。
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+    },
+    /// 语音识别模型的下载进度。
+    SpeechModel {
+        id: String,
+        received: u64,
+        total: u64,
+        state: ModelState,
+        /// 失败时的错误码。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// 一期节目的字幕有了进展：新转出来的几句，和现在转到哪儿了。
+    Subtitles {
+        id: String,
+        state: subtitles::SubtitleState,
+        /// 新出来的句子。`from`、`to` 给了的话，落在这段时间里的旧句子由它们替换。
+        cues: Vec<postflow_speech::Cue>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        from: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        to: Option<f64>,
+        /// 已经转过的时间段。
+        covered: postflow_speech::Covered,
+        duration: Option<f64>,
+        complete: bool,
+        /// 等这一期下载到本机时的进度。
+        received: u64,
+        total: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
     },
     /// 一个 AI 请求的进展：流式输出的一段文字，或者结束（带结果或错误）。
     Ai {
@@ -261,6 +297,10 @@ pub struct Core {
     pub(crate) rules_state: rules::RulesState,
     /// 下载下来离线听的播客单集，见 episodes.rs。
     pub(crate) episodes: episodes::Episodes,
+    /// 语音识别：模型和转写出来的字幕放在 `local_dir/speech` 下。
+    pub(crate) speech: Arc<Speech>,
+    /// 正在进行的转写，见 subtitles.rs。
+    pub(crate) subtitles: subtitles::Subtitles,
 }
 
 impl Core {
@@ -278,7 +318,10 @@ impl Core {
         std::fs::create_dir_all(&local_dir)?;
         let (events, _) = broadcast::channel(256);
         let translator = Arc::new(Translator::new(local_dir.join("translation"))?);
+        let speech = Arc::new(Speech::new(local_dir.join("speech"))?);
         let core = Arc::new(Core {
+            speech,
+            subtitles: Default::default(),
             sender_icons: sender_icon::SenderIcons::new(&local_dir),
             rsshub: rsshub::Rsshub::new(&local_dir),
             rules_state: rules::RulesState::new(&local_dir),
@@ -475,6 +518,7 @@ impl Core {
         {
             session.stop();
         }
+        self.subtitles.stop(None);
     }
 }
 
@@ -510,7 +554,7 @@ pub(crate) fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn expand_home(path: &str) -> PathBuf {
+pub(crate) fn expand_home(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"))
         && let Some(home) = home_dir()
     {

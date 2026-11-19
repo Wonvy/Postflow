@@ -69,6 +69,61 @@ export interface Newsletter {
   total: number;
 }
 
+/** 目录里的一个语音识别模型。 */
+export interface SpeechModel {
+  id: string;
+  name: string;
+  kind: string;
+  /** 能识别的语言代码；`multi` 表示很多种。 */
+  languages: string[];
+  /** 推荐给这些界面语言的用户先装。 */
+  recommended: string[];
+  license: string;
+  license_url: string;
+  homepage: string;
+  desc: Record<string, string>;
+  /** 要下载多少字节。 */
+  size: number;
+  installed: boolean;
+  /** 这个版本的 Postflow 能不能加载它。 */
+  supported: boolean;
+  /** 目录里已经撤掉了（本机还装着）。 */
+  retired: boolean;
+  /** 正在下载的话，已经下了多少。 */
+  received: number | null;
+}
+
+export interface SpeechOverview {
+  models: SpeechModel[];
+  selected: string | null;
+  /** 模型放在哪儿。 */
+  dir: string;
+}
+
+/** 一句字幕，时间是秒。 */
+export interface SubtitleCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface SubtitleSnapshot {
+  id: string;
+  state: "idle" | "downloading" | "loading" | "running" | "failed";
+  /** 用哪个模型转的。 */
+  model: string;
+  duration: number | null;
+  /** 已经转过的时间段。 */
+  covered: [number, number][];
+  complete: boolean;
+  cues: SubtitleCue[];
+  /** 等这一期下载到本机时的进度。 */
+  received: number;
+  total: number | null;
+  error: string | null;
+  message: string | null;
+}
+
 /** 条目附带的音频或视频。 */
 export interface Media {
   url: string;
@@ -740,6 +795,26 @@ export const api = {
   removeEpisode: (id: string) => rpc<void>("episodes.remove", { id }),
   /** 取播客的章节、文字稿文件（由核心去取）。 */
   mediaText: (url: string) => rpc<{ text: string }>("media.text", { url }),
+  /** 语音识别模型：目录里有哪些、装了哪些、现在用哪个。 */
+  speechOverview: () => rpc<SpeechOverview>("speech.overview"),
+  /** 在后台下载一个识别模型，进度通过 speech_model 事件来。 */
+  speechDownload: (id: string) => rpc<void>("speech.download", { id }),
+  speechRemove: (id: string) => rpc<SpeechOverview>("speech.remove", { id }),
+  speechSelect: (id: string) => rpc<SpeechOverview>("speech.select", { id }),
+  /** 从本机的一个文件夹装模型（文件照样校验）。 */
+  speechImport: (id: string, path: string) => rpc<SpeechOverview>("speech.import", { id, path }),
+  /** 这一期在本机转写出来的字幕（没有就是空的）。 */
+  subtitlesGet: (id: string) => rpc<SubtitleSnapshot>("subtitles.get", { id }),
+  /**
+   * 开始（或者接着）转写这一期，优先从 `position` 秒往后；已经在转的话只是告诉它现在放到哪儿了。
+   * 音频还没下载到本机会先下载，本机一共留 `keep` 期。
+   */
+  subtitlesStart: (id: string, position: number, keep: number) =>
+    rpc<SubtitleSnapshot>("subtitles.start", { id, position, keep }),
+  subtitlesStop: (id: string) => rpc<SubtitleSnapshot>("subtitles.stop", { id }),
+  /** 删掉这一期的字幕（换个模型重新转之前）。 */
+  subtitlesRemove: (id: string) => rpc<SubtitleSnapshot>("subtitles.remove", { id }),
+  subtitlesClear: () => rpc<void>("subtitles.clear"),
   /** 按节目名搜播客（苹果播客目录）。`country` 是两个字母的地区代码。 */
   searchPodcasts: (term: string, country: string) =>
     rpc<PodcastResult[]>("podcasts.search", { term, country }),
@@ -920,7 +995,7 @@ export const api = {
 };
 
 export interface StoragePart {
-  key: "articles" | "oplog" | "index" | "translation" | "logs" | "icons" | "rsshub" | "other";
+  key: "articles" | "oplog" | "index" | "translation" | "speech" | "episodes" | "logs" | "icons" | "rsshub" | "other";
   bytes: number;
 }
 

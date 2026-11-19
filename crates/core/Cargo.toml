@@ -13,6 +13,7 @@ notify = "8"
 postflow-ai = { version = "0.1.0", path = "../ai" }
 postflow-feed = { workspace = true }
 postflow-mail = { version = "0.1.0", path = "../mail" }
+postflow-speech = { version = "0.1.0", path = "../speech" }
 postflow-store = { workspace = true }
 postflow-translate = { version = "0.1.0", path = "../translate" }
 regex = "1.13.1"

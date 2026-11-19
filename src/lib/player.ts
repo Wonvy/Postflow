@@ -147,6 +147,36 @@ let localFiles: Record<string, string> = {};
 export function setLocalFiles(files: Record<string, string>) {
   localFiles = files;
 }
+
+/** 现在放的是哪个地址。 */
+let playingSrc: string | null = null;
+
+/** 现在放到第几秒，比状态里的 `position`（一秒变一次）细；没在放是 null。字幕用它对时间。 */
+export function playbackTime(): number | null {
+  return audio && usePlayer.getState().current ? audio.currentTime : null;
+}
+
+/**
+ * 正在放的这一期刚下载到了本机：换成放本机文件，接着刚才的位置。
+ * 本机转写的字幕是照着下载的那份文件转的。有的节目每次请求插的广告不一样，在线听到的和下载的
+ * 那份时间对不上，换过来字幕才跟得准。
+ */
+export function switchToLocal(id: string, url: string): void {
+  const el = audio;
+  const s = usePlayer.getState();
+  if (!el || s.current?.id !== id || playingSrc === url) return;
+  const at = el.currentTime;
+  const wasPlaying = !el.paused;
+  playingSrc = url;
+  el.src = url;
+  el.playbackRate = s.rate;
+  const seekOnce = () => {
+    el.currentTime = at;
+    el.removeEventListener("loadedmetadata", seekOnce);
+  };
+  el.addEventListener("loadedmetadata", seekOnce);
+  if (wasPlaying) void el.play().catch(() => undefined);
+}
 let lastSaved = 0;
 let onEnded: ((episode: Episode) => void) | null = null;
 
@@ -225,7 +255,8 @@ export function play(episode: Episode, queue: Episode[] = [], at?: number) {
     waiting: true,
   });
   // 下载过的放本机文件，不用联网
-  el.src = localFiles[episode.id] ?? episode.media.url;
+  playingSrc = localFiles[episode.id] ?? episode.media.url;
+  el.src = playingSrc;
   el.playbackRate = s.rate;
   const start = at ?? savedPosition(episode.id);
   lastSaved = start;
@@ -272,6 +303,7 @@ export function stop() {
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
+    playingSrc = null;
   }
   usePlayer.setState({ current: null, playing: false, waiting: false, position: 0, duration: 0, error: null });
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = null;

@@ -22,6 +22,10 @@ opt-level = 1
 # 翻译推理全是数值计算，不优化要慢几十倍
 opt-level = 3
 
+[profile.dev.package.postflow-speech]
+# 解码出来的音频要逐个样本混成单声道、喂给人声检测，不优化的话开发时转写会慢好几倍
+opt-level = 3
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

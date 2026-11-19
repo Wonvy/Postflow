@@ -3,11 +3,12 @@
 //   带视频附件的直接显示视频。
 // - 列表底下的迷你播放器：换条目、切到邮件都在，点标题回到那一期。
 // - PlayerBridge：播完标为已读。
+// - 字幕：开着的时候播放条和迷你播放器下面多一行，声音放到哪儿显示哪一句（lib/subtitles.ts）。
 // 播放本身在 lib/player.ts。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleCheck, Download, Gauge, Moon, Pause, Play, RotateCcw, RotateCw, X } from "lucide-react";
-import { createContext, type CSSProperties, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { Captions, Check, CircleCheck, Download, Gauge, Moon, Pause, Play, RotateCcw, RotateCw, X } from "lucide-react";
+import { createContext, type CSSProperties, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, type Item } from "../lib/api";
 import { formatLength } from "../lib/duration";
 import { useDownloadActions, useDownloads } from "../lib/episodes";
@@ -20,6 +21,7 @@ import {
   FORWARD_SECONDS,
   formatTime,
   play,
+  playbackTime,
   RATES,
   savedPosition,
   seek,
@@ -31,6 +33,8 @@ import {
   usePlayer,
 } from "../lib/player";
 import { keys } from "../lib/queries";
+import { coveredPercent, cueAt, isCovered } from "../lib/subtitleCues";
+import { redoLocal, startLocal, useSubtitles } from "../lib/subtitles";
 import { activeIndex, parseChapters, parseTranscript } from "../lib/transcript";
 import { useUi } from "../lib/store";
 import { toast } from "./Toast";
@@ -346,10 +350,12 @@ function EpisodeBar({ item }: { item: Item }) {
             <IconButton label={t("player.forward", { n: FORWARD_SECONDS })} onClick={() => skip(FORWARD_SECONDS)}>
               <RotateCw size={16} strokeWidth={1.75} />
             </IconButton>
+            <SubtitleToggle />
             <RateMenu />
           </div>
         )}
       </div>
+      {current && <SubtitleLine id={item.id} />}
       {error && (
         <p className="mt-2 text-[12px] text-danger">
           {t("player.error")}{" "}
@@ -402,11 +408,126 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-/** 章节和文字稿：节目提供了才有。点一条就从那里放。 */
+/** 字幕开关。开着的时候放哪一期就准备哪一期的字幕。 */
+function SubtitleToggle({ size = 16 }: { size?: number }) {
+  const t = useT();
+  const on = useSubtitles((s) => s.on);
+  const setOn = useSubtitles((s) => s.setOn);
+  return (
+    <IconButton label={on ? t("subtitles.turnOff") : t("subtitles.turnOn")} active={on} aria-pressed={on} onClick={() => setOn(!on)}>
+      <Captions size={size} strokeWidth={1.75} />
+    </IconButton>
+  );
+}
+
+/**
+ * 字幕行：声音放到哪儿显示哪一句。还没准备好的时候说明在等什么（下载这一期、加载模型、正在识别），
+ * 没装识别模型就给一个去下载的入口。关着字幕、或者不是正在放的这一期时什么都不显示。
+ */
+function SubtitleLine({ id, compact = false }: { id: string; compact?: boolean }) {
+  const t = useT();
+  const on = useSubtitles((s) => s.on);
+  const entry = useSubtitles((s) => (s.entry?.id === id ? s.entry : null));
+  const needsModel = useSubtitles((s) => s.needsModel);
+  const position = usePlayer((s) => (s.current?.id === id ? s.position : -1));
+  const playing = usePlayer((s) => s.playing && s.current?.id === id);
+  const setDialog = useUi((s) => s.setDialog);
+  const cues = entry?.cues;
+  // 状态里的播放位置一秒才变一次，字幕要更细：放着的时候每秒看五次确切的时间，换了一句才重画
+  const [index, setIndex] = useState(-1);
+  useEffect(() => {
+    if (!on || !cues || position < 0) {
+      setIndex(-1);
+      return;
+    }
+    const update = () => setIndex(cueAt(cues, playbackTime() ?? position));
+    update();
+    if (!playing) return;
+    const timer = setInterval(update, 200);
+    return () => clearInterval(timer);
+  }, [on, cues, playing, position]);
+  if (!on || position < 0) return null;
+
+  const text = index >= 0 ? cues?.[index]?.text : undefined;
+  let status: ReactNode = null;
+  if (needsModel) {
+    status = (
+      <button
+        type="button"
+        className="underline decoration-dotted underline-offset-2 hover:text-accent"
+        onClick={() => setDialog({ type: "settings", page: "subtitles" })}
+      >
+        {t("subtitles.needsModel")}
+      </button>
+    );
+  } else if (!entry) {
+    status = t("subtitles.preparing");
+  } else if (entry.state === "failed") {
+    status = (
+      <>
+        <span className="text-danger">{errorText(t, { code: entry.error ?? "unknown" })}</span>{" "}
+        <button type="button" className="underline decoration-dotted underline-offset-2 hover:text-accent" onClick={() => void startLocal(id)}>
+          {t("action.retry")}
+        </button>
+      </>
+    );
+  } else if (entry.state === "downloading") {
+    const percent = entry.total ? Math.floor((entry.received / entry.total) * 100) : null;
+    status = percent === null ? t("subtitles.downloadingEpisode") : t("subtitles.downloadingEpisodeAt", { n: percent });
+  } else if (entry.state === "loading") {
+    status = t("subtitles.loadingModel");
+  } else if (!text && entry.source === "local" && entry.state === "running" && !isCovered(entry.covered, position)) {
+    status = t("subtitles.recognizing");
+  }
+
+  if (compact) {
+    return (
+      <div
+        className="truncate px-3 pt-1.5 text-center text-[12px] leading-snug text-fg touch:text-[13px]"
+        aria-live="off"
+        title={text}
+      >
+        {text ?? <span className="text-fg-3">{status ?? "\u00a0"}</span>}
+      </div>
+    );
+  }
+  return (
+    <div
+      className="mt-2 flex min-h-[44px] items-center justify-center px-2 text-center text-[15px] leading-snug text-fg"
+      aria-live="off"
+    >
+      {text ? <span className="select-text">{text}</span> : <span className="text-[12px] text-fg-3">{status}</span>}
+    </div>
+  );
+}
+
+/** 这一期在本机转写出来的字幕：正在放的用实时的，别的去核心问一次。 */
+function useLocalTranscript(id: string) {
+  const live = useSubtitles((s) => (s.entry?.id === id && s.entry.source === "local" ? s.entry : null));
+  const saved = useQuery({
+    queryKey: ["subtitles", id],
+    queryFn: () => api.subtitlesGet(id),
+    enabled: !live,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return live ?? saved.data ?? null;
+}
+
+/** 章节和文字稿：节目提供了才有；没有文字稿的，本机转写过也算。点一条就从那里放。 */
 function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] }) {
   const t = useT();
+  const qc = useQueryClient();
   const [panel, setPanel] = useState<"chapters" | "transcript" | null>(null);
   const { chapters: chaptersUrl, transcript } = episode.media;
+  const local = useLocalTranscript(episode.id);
+  const hasLocal = !transcript && (local?.cues.length ?? 0) > 0;
+  const speech = useQuery({
+    queryKey: ["speech"],
+    queryFn: api.speechOverview,
+    enabled: hasLocal && panel === "transcript",
+    staleTime: 60_000,
+  });
   const chapters = useQuery({
     queryKey: ["media-text", chaptersUrl],
     queryFn: () => api.mediaText(chaptersUrl ?? "").then((r) => parseChapters(r.text)),
@@ -423,7 +544,25 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
   });
   const position = usePlayer((s) => (s.current?.id === episode.id ? s.position : -1));
   const hasChapters = (chapters.data?.length ?? 0) > 0;
-  if (!hasChapters && !transcript) return null;
+  const shown: { start: number | null; speaker?: string; text: string }[] | undefined = transcript
+    ? cues.data
+    : hasLocal
+      ? local?.cues
+      : undefined;
+  const activeCue = panel === "transcript" && shown && position >= 0 ? activeIndex(shown, position) : -1;
+  const activeRef = useRef<HTMLParagraphElement>(null);
+  // 正在放的那一句跟着滚进面板里（只在面板里滚，不带着整页动）
+  useEffect(() => {
+    if (activeCue < 0) return;
+    const el = activeRef.current;
+    const box = el?.parentElement;
+    if (!el || !box) return;
+    const top = el.offsetTop - box.offsetTop;
+    if (top < box.scrollTop || top + el.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTo({ top: Math.max(0, top - box.clientHeight / 3), behavior: "smooth" });
+    }
+  }, [activeCue]);
+  if (!hasChapters && !transcript && !hasLocal) return null;
   const jump = (at: number) => play(episode, queue, at);
   const tab = (key: "chapters" | "transcript", label: string) => (
     <button
@@ -443,7 +582,7 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
     <div className="mt-2 border-t border-line pt-2">
       <div className="flex gap-1">
         {hasChapters && tab("chapters", t("player.chapters", { n: chapters.data?.length ?? 0 }))}
-        {transcript && tab("transcript", t("player.transcript"))}
+        {(transcript || hasLocal) && tab("transcript", t("player.transcript"))}
       </div>
       {panel === "chapters" && hasChapters && (
         <ol className="mt-1 max-h-72 overflow-y-auto">
@@ -466,19 +605,20 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
       )}
       {panel === "transcript" && (
         <div className="mt-1 max-h-96 overflow-y-auto pr-1">
-          {cues.isFetching && !cues.data ? (
+          {transcript && cues.isFetching && !cues.data ? (
             <div className="flex justify-center py-4 text-fg-3">
               <Spinner size={14} />
             </div>
-          ) : cues.error || (cues.data && cues.data.length === 0) ? (
+          ) : transcript && (cues.error || (cues.data && cues.data.length === 0)) ? (
             <p className="px-2 py-2 text-[12px] text-fg-3">{t("player.transcriptFailed")}</p>
           ) : (
-            cues.data?.map((c, i) => (
+            shown?.map((c, i) => (
               <p
                 key={`${i}:${c.start}`}
+                ref={i === activeCue ? activeRef : undefined}
                 className={cx(
                   "select-text rounded-md px-2 py-1 text-[13px] leading-relaxed",
-                  i === current(cues.data ?? []) ? "bg-accent-soft text-fg" : "text-fg-2",
+                  i === activeCue ? "bg-accent-soft text-fg" : "text-fg-2",
                 )}
               >
                 {c.start !== null && (
@@ -494,6 +634,29 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
                 {c.text}
               </p>
             ))
+          )}
+          {hasLocal && local && (
+            <p className="sticky bottom-0 flex flex-wrap items-center gap-x-2 bg-surface px-2 pb-0.5 pt-2 text-[11px] text-fg-3">
+              <span>
+                {t("subtitles.madeBy", {
+                  model: speech.data?.models.find((m) => m.id === local.model)?.name ?? local.model,
+                })}
+                {!local.complete &&
+                  coveredPercent(local.covered, local.duration) !== null &&
+                  ` · ${t("subtitles.progress", { n: coveredPercent(local.covered, local.duration) ?? 0 })}`}
+              </span>
+              <button
+                type="button"
+                className="underline decoration-dotted underline-offset-2 hover:text-accent"
+                onClick={() =>
+                  void redoLocal(episode.id)
+                    .catch((err) => toast(errorText(t, err)))
+                    .finally(() => void qc.invalidateQueries({ queryKey: ["subtitles", episode.id] }))
+                }
+              >
+                {t("subtitles.redo")}
+              </button>
+            </p>
           )}
         </div>
       )}
@@ -515,6 +678,7 @@ export function MiniPlayer() {
   return (
     <div className="shrink-0 border-t border-line bg-surface">
       <Scrubber position={position} duration={total} className="player-range-flat block" />
+      <SubtitleLine id={current.id} compact />
       <div className="flex items-center gap-1.5 py-1.5 pl-2.5 pr-1.5 touch:py-2">
         <button
           type="button"
@@ -546,6 +710,7 @@ export function MiniPlayer() {
         <IconButton label={t("player.forward", { n: FORWARD_SECONDS })} onClick={() => skip(FORWARD_SECONDS)}>
           <RotateCw size={15} strokeWidth={1.75} />
         </IconButton>
+        <SubtitleToggle size={15} />
         <RateMenu compact />
         <IconButton label={t("player.close")} onClick={stop}>
           <X size={15} strokeWidth={1.75} />

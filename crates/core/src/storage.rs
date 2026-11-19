@@ -81,6 +81,8 @@ impl Core {
                         &[
                             ("index", &["index.db", "index.db-wal", "index.db-shm"]),
                             ("translation", &["translation"]),
+                            ("speech", &["speech"]),
+                            ("episodes", &["episodes"]),
                             ("logs", &["logs"]),
                             ("icons", &["sender-icons.json"]),
                             ("rsshub", &["rsshub-routes.json"]),

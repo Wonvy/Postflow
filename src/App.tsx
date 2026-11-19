@@ -4,6 +4,7 @@ import { SnoozeDialog } from "./components/Snooze";
 import { CommandPalette } from "./components/CommandPalette";
 import { PlayerBridge } from "./components/Player";
 import { DownloadsBridge } from "./lib/episodes";
+import { SubtitlesBridge } from "./lib/subtitles";
 import { accentVars } from "./lib/accent";
 import { useCanHover, useLayout, useReaderOverlay } from "./lib/mobile";
 import { Unplug } from "lucide-react";
@@ -265,6 +266,7 @@ function Shell() {
       <OutboxDialog />
       <PlayerBridge />
       <DownloadsBridge />
+      <SubtitlesBridge />
       <Toaster />
     </>
   );

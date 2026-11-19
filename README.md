@@ -136,6 +136,10 @@ click **More info → Run anyway**.
   keep going. Video attachments play in the reader. Shows that publish chapters or transcripts (Podcasting 2.0) list
   them under the play bar; click one to play from there. Episodes can be downloaded for offline listening; the files
   stay on this device, and Settings → General sets how many to keep.
+- Subtitles for podcasts: the CC button in the player shows what is being said as it plays. Shows with a timed
+  transcript use it; the rest are transcribed on your own computer, starting where you're listening and running well
+  ahead of playback, so the audio never leaves your device. Speech recognition models are downloaded on demand in
+  Settings → Subtitles and you can switch between them. See [Subtitles](docs/subtitles.md).
 - Newsletters: right-click a mail and choose "Read with feeds" to read that sender's mail in Feeds, one row per sender
   under Newsletters, instead of in Mail. Right-click the sender to move it back.
 - Feeds are sorted into articles, videos and podcasts automatically (mostly audio means podcast; video sites or video

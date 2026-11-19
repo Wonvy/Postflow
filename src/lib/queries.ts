@@ -24,6 +24,7 @@ import { isArchiveLike, useUi } from "./store";
 import { useAiStreams } from "./ai";
 import { retryBlocked } from "./listTranslate";
 import { useModelDownloads } from "./translate";
+import { onSpeechModelEvent, onSubtitlesEvent } from "./subtitles";
 import { notifyNewMail, notifyReminders } from "./notify";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
@@ -179,6 +180,13 @@ export function useCoreEvents() {
           if (event.state !== "downloading") void qc.invalidateQueries({ queryKey: ["translate"] });
           // 列表里因为缺模型没翻成的，模型装好以后重新翻
           if (event.state === "installed") retryBlocked();
+          break;
+        case "speech_model":
+          onSpeechModelEvent(event);
+          if (event.state !== "downloading") void qc.invalidateQueries({ queryKey: ["speech"] });
+          break;
+        case "subtitles":
+          onSubtitlesEvent(event);
           break;
         case "changed":
           // 自己发起的修改已经乐观更新过了

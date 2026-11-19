@@ -306,6 +306,8 @@ impl Core {
                 let p: LoggingParams = parse(params)?;
                 return reply(json!({ "ok": crate::logging::set_verbose(p.verbose) }));
             }
+            // 语音识别模型：列出、下载、删除、选用
+            m if m.starts_with("speech.") => return self.speech_rpc(m, params).await,
             // 插件：列出本机插件目录里的插件、读出插件的代码
             m if m.starts_with("plugins.") => return self.plugins_rpc(m, params).await,
             // RSSHub 路由：搜索、按网址猜、重新下载目录
@@ -863,6 +865,8 @@ impl Core {
             }
 
             m if m.starts_with("storage.") => self.storage_rpc(m, params, &session).await,
+            // 字幕：在本机把播客单集转成文字
+            m if m.starts_with("subtitles.") => self.subtitles_rpc(&session, m, params).await,
             m if m.starts_with("rules.") => self.rules_rpc(m, params, &session).await,
             "index.rebuild" => {
                 let stats = session.db(|s| s.rebuild_index()).await?;

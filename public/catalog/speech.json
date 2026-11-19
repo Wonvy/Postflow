@@ -1,0 +1,190 @@
+{
+  "schema": 1,
+  "updated": "2026-11-19T00:00:00Z",
+  "models": [
+    {
+      "id": "sense-voice-small",
+      "name": "SenseVoice Small",
+      "kind": "sense_voice",
+      "languages": ["zh", "yue", "en", "ja", "ko"],
+      "recommended": ["zh"],
+      "options": { "use_itn": "true" },
+      "license": "FunASR Model License 1.1",
+      "license_url": "https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE",
+      "homepage": "https://github.com/FunAudioLLM/SenseVoice",
+      "desc": {
+        "zh": "阿里 FunAudioLLM 的模型。中文和粤语最准，带标点，速度很快。",
+        "en": "From Alibaba's FunAudioLLM. Best for Mandarin and Cantonese, adds punctuation, very fast."
+      },
+      "files": [
+        {
+          "name": "model.int8.onnx",
+          "role": "model",
+          "size": 239233841,
+          "sha256": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx"
+          ]
+        },
+        {
+          "name": "tokens.txt",
+          "role": "tokens",
+          "size": 315894,
+          "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "whisper-small",
+      "name": "Whisper Small",
+      "kind": "whisper",
+      "languages": ["multi"],
+      "recommended": ["en"],
+      "license": "MIT",
+      "license_url": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "homepage": "https://github.com/openai/whisper",
+      "desc": {
+        "zh": "OpenAI 的模型，支持近百种语言，英文和其他语言用它。比 SenseVoice 慢，中文常常没有标点。",
+        "en": "From OpenAI. Covers about a hundred languages; the one to pick for English and most other languages."
+      },
+      "files": [
+        {
+          "name": "small-encoder.int8.onnx",
+          "role": "encoder",
+          "size": 112442483,
+          "sha256": "4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-encoder.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-encoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "small-decoder.int8.onnx",
+          "role": "decoder",
+          "size": 262226114,
+          "sha256": "acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-decoder.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-decoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "small-tokens.txt",
+          "role": "tokens",
+          "size": 816730,
+          "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-tokens.txt",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-tokens.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "whisper-base",
+      "name": "Whisper Base",
+      "kind": "whisper",
+      "languages": ["multi"],
+      "license": "MIT",
+      "license_url": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "homepage": "https://github.com/openai/whisper",
+      "desc": {
+        "zh": "Whisper 的小号：下载小、速度快，准确度比 Small 差一些。",
+        "en": "The smaller Whisper: a lighter download and faster, but less accurate than Small."
+      },
+      "files": [
+        {
+          "name": "base-encoder.int8.onnx",
+          "role": "encoder",
+          "size": 29120534,
+          "sha256": "0b8fb1304b6109976038efff5ace81720e00386f3ff6b54ee8c75291ca0a1e11",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-encoder.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-encoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "base-decoder.int8.onnx",
+          "role": "decoder",
+          "size": 130672026,
+          "sha256": "9759d217388a01b3a4c7c15533201067b48ae819c4daafc8624e64b9409dc02d",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-decoder.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-decoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "base-tokens.txt",
+          "role": "tokens",
+          "size": 816730,
+          "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-tokens.txt",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-tokens.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "parakeet-tdt-v3",
+      "name": "Parakeet TDT 0.6B v3",
+      "kind": "transducer",
+      "languages": ["en", "es", "fr", "de", "it", "pt", "nl", "pl", "ru", "uk", "sv", "da", "fi", "cs", "sk", "sl", "hr", "bg", "ro", "hu", "el", "et", "lv", "lt", "mt"],
+      "options": { "model_type": "nemo_transducer" },
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "homepage": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+      "desc": {
+        "zh": "NVIDIA 的模型，英文和 24 种欧洲语言，准确度高，带标点和大小写。不支持中文。",
+        "en": "From NVIDIA. English and 24 other European languages with high accuracy, punctuation and capitalization."
+      },
+      "files": [
+        {
+          "name": "encoder.int8.onnx",
+          "role": "encoder",
+          "size": 652282294,
+          "sha256": "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/encoder.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/encoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "decoder.int8.onnx",
+          "role": "decoder",
+          "size": 11845274,
+          "sha256": "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/decoder.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/decoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "joiner.int8.onnx",
+          "role": "joiner",
+          "size": 6355277,
+          "sha256": "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/joiner.int8.onnx",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/joiner.int8.onnx"
+          ]
+        },
+        {
+          "name": "tokens.txt",
+          "role": "tokens",
+          "size": 93939,
+          "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+          "urls": [
+            "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt",
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt"
+          ]
+        }
+      ]
+    }
+  ]
+}
