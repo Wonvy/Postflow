@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.32 — 2026-11-19
+
+### English
 - Linux: copies installed from the `.deb` or `.rpm` package now update themselves like the AppImage. Your system asks for your administrator password to install the update.
 - Showing only podcasts, videos, articles or newsletters, the list is titled with that type instead of "All articles".
 - Settings → Translation lists the models you skipped, and "Ask again" brings back the download prompt for one.
