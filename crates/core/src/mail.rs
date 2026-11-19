@@ -258,12 +258,17 @@ impl Core {
         }
         mails.sort_by_key(|m| std::cmp::Reverse(m.date));
         let total = mails.len();
+        let senders = mails
+            .iter()
+            .map(|m| m.address.clone().unwrap_or_default())
+            .collect();
         mails.truncate(NOTIFY_LIST);
         tracing::debug!(account = %account_id, total, "new mail");
         self.emit(Event::NewMail {
             account_id: account_id.to_string(),
             mails,
             total,
+            senders,
         });
     }
 
@@ -1000,7 +1005,7 @@ async fn sync_folder(
         mailbox,
         uidvalidity: info.uidvalidity,
     };
-    let mails = fetch_mails(conn, &place, &new, &known, started_at).await?;
+    let (mails, parts) = fetch_mails(conn, &place, &new, &known, started_at).await?;
 
     let sync = MailSync {
         uidvalidity: info.uidvalidity,
@@ -1011,7 +1016,11 @@ async fn sync_folder(
     };
     let (id, name) = (account_id.to_string(), mailbox.to_string());
     session
-        .db(move |s| s.apply_folder_sync(&id, folder, &name, sync))
+        .db(move |s| {
+            let stats = s.apply_folder_sync(&id, folder, &name, sync)?;
+            save_parts(s, &parts)?;
+            Ok(stats)
+        })
         .await
         .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))
 }
@@ -1024,14 +1033,25 @@ struct Place<'a> {
     uidvalidity: u32,
 }
 
-/// 取回这些邮件的原文（大邮件只取信头），整理成要存的样子。
+/// 只取了信头的大邮件，从邮件结构里认出来的附件：记下来，附件总览里先列出名字。
+type Parts = Vec<(String, Vec<postflow_store::AttachmentMeta>)>;
+
+fn save_parts(s: &postflow_store::Store, parts: &Parts) -> postflow_store::Result<()> {
+    for (id, list) in parts {
+        s.set_structure_attachments(id, list)?;
+    }
+    Ok(())
+}
+
+/// 取回这些邮件的原文（大邮件只取信头和结构），整理成要存的样子。
 async fn fetch_mails(
     conn: &mut Connection,
     place: &Place<'_>,
     listing: &[&Listing],
     known: &[postflow_store::KnownMail],
     now: i64,
-) -> Result<Vec<NewMail>, postflow_mail::Error> {
+) -> Result<(Vec<NewMail>, Parts), postflow_mail::Error> {
+    let mut parts: Parts = Vec::new();
     // 同一个 Message-ID 在收件箱里出现两次时，给后来的那封换个 ID，免得互相覆盖
     let mut taken: HashMap<String, u32> = known.iter().map(|k| (k.id.clone(), k.uid)).collect();
     let mut mails = Vec::with_capacity(listing.len());
@@ -1040,16 +1060,30 @@ async fn fetch_mails(
     for (group, header_only) in [(small, false), (large, true)] {
         for chunk in group.chunks(FETCH_BATCH) {
             let uids: Vec<u32> = chunk.iter().map(|l| l.uid).collect();
-            let fetched: HashMap<u32, Vec<u8>> = conn
-                .fetch_raw(&uids, header_only)
-                .await?
-                .into_iter()
-                .collect();
+            let mut structure: HashMap<u32, Vec<postflow_mail::AttachmentInfo>> = HashMap::new();
+            let fetched: HashMap<u32, Vec<u8>> = if header_only {
+                match conn.fetch_headers(&uids).await {
+                    Ok(list) => list
+                        .into_iter()
+                        .map(|(uid, raw, found)| {
+                            structure.insert(uid, found);
+                            (uid, raw)
+                        })
+                        .collect(),
+                    // 有的服务器给的结构读不懂：只取信头，附件等打开邮件再说
+                    Err(e) => {
+                        tracing::info!("mail structure unavailable, fetching headers only: {e}");
+                        conn.fetch_raw(&uids, true).await?.into_iter().collect()
+                    }
+                }
+            } else {
+                conn.fetch_raw(&uids, false).await?.into_iter().collect()
+            };
             for l in chunk {
                 let Some(raw) = fetched.get(&l.uid) else {
                     continue;
                 };
-                mails.push(new_mail(
+                let mail = new_mail(
                     place.account_id,
                     place.folder,
                     place.mailbox,
@@ -1059,11 +1093,26 @@ async fn fetch_mails(
                     !header_only,
                     now,
                     &mut taken,
-                ));
+                );
+                if let Some(found) = structure.remove(&l.uid).filter(|f| !f.is_empty()) {
+                    parts.push((
+                        mail.id.clone(),
+                        found
+                            .into_iter()
+                            .map(|a| postflow_store::AttachmentMeta {
+                                index: a.index,
+                                name: a.name,
+                                mime: a.mime,
+                                size: a.size as u64,
+                            })
+                            .collect(),
+                    ));
+                }
+                mails.push(mail);
             }
         }
     }
-    Ok(mails)
+    Ok((mails, parts))
 }
 
 /// 「加载更早的邮件」从哪个文件夹取。
@@ -1120,7 +1169,7 @@ async fn load_older(
         uidvalidity: info.uidvalidity,
     };
     let refs: Vec<&Listing> = listing.iter().collect();
-    let mails = fetch_mails(conn, &place, &refs, &known, started_at).await?;
+    let (mails, parts) = fetch_mails(conn, &place, &refs, &known, started_at).await?;
     let added = mails.len();
     let sync = MailSync {
         uidvalidity: info.uidvalidity,
@@ -1131,7 +1180,10 @@ async fn load_older(
     };
     let (id, name) = (account_id.to_string(), mailbox.clone());
     session
-        .db(move |s| s.apply_folder_sync(&id, folder, &name, sync))
+        .db(move |s| {
+            s.apply_folder_sync(&id, folder, &name, sync)?;
+            save_parts(s, &parts)
+        })
         .await
         .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
     conn.select(INBOX).await?;

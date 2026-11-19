@@ -213,7 +213,11 @@ export function AttachmentsPage() {
                         </span>
                       </span>
                     </button>
-                    <span className="hidden w-16 shrink-0 text-right text-[12px] tabular-nums text-fg-3 sm:block">
+                    <span
+                      className="hidden w-20 shrink-0 text-right text-[12px] tabular-nums text-fg-3 sm:block"
+                      title={f.downloaded ? undefined : t("files.notYet")}
+                    >
+                      {f.downloaded ? "" : "≈ "}
                       {formatSize(f.size)}
                     </span>
                     <span className="w-24 shrink-0 text-right text-[12px] tabular-nums text-fg-3">

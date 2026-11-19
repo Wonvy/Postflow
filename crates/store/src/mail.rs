@@ -857,6 +857,38 @@ impl Store {
         self.set_fields("followup", std::slice::from_ref(&f.message_id), set)
     }
 
+    /// 这封信（按 Message-ID）的「没回复就提醒」。取消了的（时间是 0）算没有。
+    pub fn follow_up(&self, message_id: &str) -> Result<Option<FollowUp>> {
+        let guard = self.lock();
+        let f = lww_fields(&guard.conn, "followup", message_id)?;
+        let until = f.get("until").and_then(Value::as_i64).unwrap_or_default();
+        if until <= 0 {
+            return Ok(None);
+        }
+        let text = |k: &str| {
+            f.get(k)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+        Ok(Some(FollowUp {
+            message_id: message_id.to_string(),
+            account_id: text("account"),
+            subject: text("subject"),
+            to: f
+                .get("to")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            sent_at: f.get("sent_at").and_then(Value::as_i64).unwrap_or_default(),
+            until,
+        }))
+    }
+
     /// 取消「没回复就提醒」。
     pub fn cancel_follow_up(&self, message_id: &str) -> Result<()> {
         let mut set = Map::new();

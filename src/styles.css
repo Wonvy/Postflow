@@ -190,6 +190,11 @@
   color: var(--fg);
   overflow-wrap: break-word;
 }
+/* 朗读：正在念的那一句 */
+::highlight(pf-speech) {
+  background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 /* 划线：正文里的高亮，带笔记的下面多一条虚线 */
 .article mark.pf-hl {
   background: color-mix(in srgb, var(--warning) 30%, transparent);

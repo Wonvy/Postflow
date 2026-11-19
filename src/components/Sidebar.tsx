@@ -24,6 +24,7 @@ import {
   KeyRound,
   type LucideIcon,
   Mail,
+  Hourglass,
   Paperclip,
   Pencil,
   Plus,
@@ -1342,6 +1343,17 @@ export function Sidebar({ width }: { width: number }) {
                       />
                     </ContextMenu>
                   ))}
+                {accounts &&
+                  accounts.length > 0 &&
+                  ((counts?.waiting ?? 0) > 0 || isActive({ kind: "view", view: "waiting" })) && (
+                    <Row
+                      active={isActive({ kind: "view", view: "waiting" })}
+                      onClick={() => setScope({ kind: "view", view: "waiting" })}
+                      leading={<Hourglass {...ICON} />}
+                      label={t("nav.waiting")}
+                      trailing={<Count n={counts?.waiting ?? 0} />}
+                    />
+                  )}
                 {accounts && accounts.length > 0 && <OutboxRow />}
                 {accounts && accounts.length === 0 && (
                   <button

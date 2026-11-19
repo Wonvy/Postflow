@@ -87,10 +87,12 @@ click **More info → Run anyway**.
   sidebar.
 - Each mailbox can have a signature (in its settings), added below what you write and above the quote in replies.
 - Quick reply templates: replies you write often, inserted with the Templates button while writing. Save what you're
-  writing as a template, or add and edit them in Settings → General. They sync to your other devices.
+  writing as a template, or add and edit them in Settings → General. `{name}`, `{first}`, `{me}` and `{date}` are
+  filled in when you insert one. They sync to your other devices.
 - Remind me if no reply (the bell next to Attach while writing): if nobody answers in 1, 3 or 7 days, the message
   comes back to the Reminders at the top of your inbox. A message from any recipient on the same subject counts as a
-  reply.
+  reply. Until then it's listed under Waiting for reply, and the message says when you'll be reminded, with a Cancel
+  button.
 - Meeting invitations show as a card above the message: time in your time zone, place, organizer and who's coming.
   Accept, Maybe or Decline sends the organizer a standard reply, so their calendar updates; Join opens the online
   meeting, and Add to calendar hands the invitation to your calendar app. Cancellations and other people's replies
@@ -99,7 +101,8 @@ click **More info → Run anyway**.
   few, and buttons to write to them, search all their mail, or mark them as important.
 - Attachments (under the Mail views, or in the command palette): every file from your mail in one list, filtered by
   type (images, PDF, documents, spreadsheets, presentations, archives) and searchable by file name, subject or sender.
-  Save a file or jump to its message. Large messages whose files haven't been downloaded yet are listed below.
+  Save a file or jump to its message. Files in large messages that haven't been downloaded yet are listed too (saving
+  one downloads the message first).
 - Notifications for important senders only (Settings → General): mark people as important from their card, and only
   their mail notifies you. The list syncs to your other devices.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
@@ -160,13 +163,15 @@ click **More info → Run anyway**.
   article or message and choose "Save to Read later". The page is saved with its text, so it stays readable even if the
   original changes or disappears, and it syncs to your other devices. Saved pages stay out of All articles; archive one
   when you're done. "Import" brings in a Pocket or Instapaper export (CSV or HTML) or browser bookmarks; archived
-  items stay archived, and their text is fetched when you open them.
-- Highlights and notes: select text in an article and click Highlight or Note. Highlights show in the text and are
+  items stay archived, and their text is fetched when you open them. The bookmark button next to Import gives you a
+  "Save to Postflow" button to drag to your browser's bookmarks bar.
+- Highlights and notes: select text in an article or message and click Highlight or Note. Highlights show in the text and are
   listed under the article, where you can write notes, delete them, or copy them as Markdown. "Export all highlights
   and notes" in the command palette copies everything as Markdown, grouped by article. They sync to your other
   devices.
 - Read aloud (next to the date under an article's title): your system's voice reads the article, or its translation
-  when that's showing. Pause, skip sentences and change the speed. Needs a system voice, so it isn't offered where
+  when that's showing, marking the sentence it's on. Pause, skip sentences and change the speed; it keeps going when
+  you open another article, with controls under the list. Needs a system voice, so it isn't offered where
   there is none (most Linux desktops).
 - Feed stats (the chart icon on the Feeds heading): how often each feed posts, how many of its posts carry the full
   article, and how much of it you actually read — articles opened, read to the end, and reading time, measured from
@@ -214,8 +219,9 @@ click **More info → Run anyway**.
   articles and mail, Chinese included. Search the current list or everything, including archived items; results show
   where the words appear and highlight them. Enter opens the first result. The index stays on this device and is
   built in the background. Narrow it down with `from:`, `to:`, `subject:`, `has:attachment`, `is:unread`,
-  `is:starred`, `after:2026-01-01` and `before:2026-02` (dates in your time zone), and put `-` before a word or
-  condition to leave it out. The filter button in the search bar inserts them for you.
+  `is:starred`, `in:sent` (or inbox, archive, drafts, junk, trash), `after:2026-01-01` and `before:2026-02` (dates in
+  your time zone); put `OR` between two words to find either, and `-` before a word or condition to leave it out. The
+  filter button in the search bar inserts them for you.
 - Offline translation for mail and articles. The translate button in the reader (or `T`) is a switch: while it is on,
   every message and article you open is translated on your device as it opens, keeping its layout and links; turn it
   off for the original. The language is detected for you, and models for more than 50 languages download once (about

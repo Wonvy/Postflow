@@ -270,6 +270,8 @@ pub enum View {
     Reminders,
     /// 「稍后读」里还没归档的网页。
     Later,
+    /// 发出去、设了「没回复就提醒」、还没到时间的信。
+    Waiting,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -370,6 +372,8 @@ pub struct ItemDetail {
 pub struct Counts {
     /// 「稍后读」里的未读数。
     pub later: i64,
+    /// 设了「没回复就提醒」、还在等回复的信。
+    pub waiting: i64,
     /// 收件箱里的未读数。（不算「稍后读」）
     pub unread: i64,
     /// 今天发布的未读数。

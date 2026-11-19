@@ -73,7 +73,7 @@ pub(crate) fn init(conn: &Connection) -> Result<()> {
         conn.execute_batch("DROP TABLE IF EXISTS search;")?;
         conn.execute_batch(FTS_TABLE)?;
         conn.execute_batch(
-            "DELETE FROM search_docs; DELETE FROM search_dirty; DELETE FROM mail_attachments;
+            "DELETE FROM search_docs; DELETE FROM search_dirty; DELETE FROM mail_attachments WHERE idx < 10000;
              INSERT OR IGNORE INTO search_dirty (id) SELECT id FROM items;",
         )?;
         conn.execute(
@@ -194,7 +194,12 @@ pub struct AttachmentRow {
     pub from_address: Option<String>,
     pub published_at: i64,
     pub account_id: String,
+    /// 正文已经下载了。没下载的（大邮件）是从邮件结构里认出来的，保存时先下载正文。
+    pub downloaded: bool,
 }
+
+/// 从邮件结构认出来的附件，编号从这里开始，和收录正文时取出的真附件分开。
+pub const STRUCTURE_INDEX: u32 = 10_000;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AttachmentOverview {
@@ -213,6 +218,9 @@ pub(crate) enum Filter {
     /// 日期，按当地时间那一天的零点：`before:` 之前、`after:` 当天起。毫秒。
     Before(i64),
     After(i64),
+    /// `in:`：只在这个文件夹里找（items.archived 的值：0 收件箱、1 归档、2 垃圾邮件、3 已删除、
+    /// 4 草稿、5 已发送）。不受当前列表的范围限制。
+    In(i64),
 }
 
 /// 拆开以后的搜索：要出现的、不能出现的（FTS5 查询）和其他条件（`negated` 为真表示前面有 `-`）。
@@ -294,17 +302,27 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 /// - `has:attachment` 带附件，`is:unread` / `is:read` / `is:starred`
 /// - `before:2026-01-01`、`after:2025-12`、`after:2025`（按当地时间，`tz_offset_min` 是当地比 UTC 快几分钟）
 /// - 前面加 `-` 表示排除，比如 `-from:newsletter`、`-广告`
+/// - `in:sent`、`in:archive` 之类：只在那个文件夹里找
+/// - 两个词之间写 `OR`（或者 `或`）：有其中一个就行
 ///
-/// 中文也行：`发件人:`、`收件人:`、`标题:`、`有:附件`、`是:未读`、`早于:`、`晚于:`。
+/// 中文也行：`发件人:`、`收件人:`、`标题:`、`有:附件`、`是:未读`、`早于:`、`晚于:`、`在:已发送`。
 /// 不认得的写法（比如网址里的冒号）当普通的词搜。
 pub(crate) fn parse(input: &str, tz_offset_min: i64) -> Parsed {
     let mut out = Parsed::default();
-    let mut include = Vec::new();
+    let mut include: Vec<String> = Vec::new();
+    // 上一个是 OR：下一个要出现的词和前一个合成「其中一个」
+    let mut or_next = false;
     for raw in split_terms(input) {
+        if raw == "OR" || raw == "或" || raw == "|" {
+            or_next = !include.is_empty();
+            continue;
+        }
         let (negated, term) = match raw.strip_prefix('-') {
             Some(rest) if !rest.is_empty() => (true, rest),
             _ => (false, raw.as_str()),
         };
+        // 「OR 后面跟一个排除」说不通，当它没写
+        or_next &= !negated;
         let (key, value) = match term.split_once([':', '：']) {
             Some((k, v)) if !v.is_empty() => (k.to_lowercase(), v),
             _ => (String::new(), term),
@@ -318,6 +336,10 @@ pub(crate) fn parse(input: &str, tz_offset_min: i64) -> Parsed {
         let mut push_fts = |expr: String| {
             if negated {
                 out.exclude.push(expr);
+            } else if std::mem::take(&mut or_next)
+                && let Some(prev) = include.pop()
+            {
+                include.push(format!("({prev} OR {expr})"));
             } else {
                 include.push(expr);
             }
@@ -338,6 +360,18 @@ pub(crate) fn parse(input: &str, tz_offset_min: i64) -> Parsed {
             ("before" | "早于", d) => match date_range(d, tz_offset_min) {
                 Some((start, _)) => Some(Filter::Before(start)),
                 None => {
+                    out.impossible = true;
+                    continue;
+                }
+            },
+            ("in" | "在", folder) => match folder {
+                "inbox" | "收件箱" => Some(Filter::In(0)),
+                "archive" | "archived" | "归档" | "已归档" => Some(Filter::In(1)),
+                "junk" | "spam" | "垃圾邮件" | "垃圾" => Some(Filter::In(2)),
+                "trash" | "deleted" | "已删除" | "废纸篓" => Some(Filter::In(3)),
+                "drafts" | "draft" | "草稿" => Some(Filter::In(4)),
+                "sent" | "已发送" => Some(Filter::In(5)),
+                _ => {
                     out.impossible = true;
                     continue;
                 }
@@ -604,7 +638,7 @@ impl Store {
         };
         let sql = format!(
             "SELECT x.item_id, x.idx, x.name, x.mime, x.size, i.title, m.from_name, m.from_address, \
-                    i.published_at, i.source_id \
+                    i.published_at, i.source_id, x.idx < 10000 \
              FROM {ITEM_FROM} JOIN mail_attachments x ON x.item_id = i.id \
              WHERE i.archived NOT IN (2, 3) AND {ALIVE} {cond} \
              ORDER BY i.published_at DESC, x.item_id, x.idx LIMIT ?1"
@@ -622,6 +656,7 @@ impl Store {
                 from_address: r.get(7)?,
                 published_at: r.get(8)?,
                 account_id: r.get(9)?,
+                downloaded: r.get(10)?,
             })
         };
         let files = match &like {
@@ -632,7 +667,8 @@ impl Store {
         let pending_sql = format!(
             "SELECT {ITEM_COLUMNS} FROM {ITEM_FROM} \
              WHERE i.kind = 'mail' AND m.has_attachments = 1 AND i.archived NOT IN (2, 3) AND {ALIVE} \
-               AND NOT EXISTS (SELECT 1 FROM mail_body b WHERE b.id = i.id) {} \
+               AND NOT EXISTS (SELECT 1 FROM mail_body b WHERE b.id = i.id) \
+               AND NOT EXISTS (SELECT 1 FROM mail_attachments x WHERE x.item_id = i.id) {} \
              ORDER BY i.published_at DESC LIMIT 50",
             if like.is_some() {
                 "AND (i.title LIKE ?1 ESCAPE '\\' OR m.from_name LIKE ?1 ESCAPE '\\' \
@@ -651,6 +687,45 @@ impl Store {
             files,
             not_downloaded,
         })
+    }
+
+    /// 只取了信头的大邮件：记下从邮件结构里认出来的附件。正文已经下载了的不管（收录时会换成真的）。
+    pub fn set_structure_attachments(&self, item_id: &str, list: &[AttachmentMeta]) -> Result<()> {
+        let guard = self.lock();
+        let has_body: bool = guard
+            .conn
+            .query_row("SELECT 1 FROM mail_body WHERE id = ?1", [item_id], |_| {
+                Ok(true)
+            })
+            .optional()?
+            .unwrap_or(false);
+        if has_body {
+            return Ok(());
+        }
+        guard.conn.execute(
+            "DELETE FROM mail_attachments WHERE item_id = ?1 AND idx >= 10000",
+            [item_id],
+        )?;
+        for (i, a) in list.iter().enumerate() {
+            guard.conn.execute(
+                "INSERT OR REPLACE INTO mail_attachments (item_id, idx, name, mime, size) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![item_id, STRUCTURE_INDEX + i as u32, a.name, a.mime, a.size as i64],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// 从邮件结构认出来的那个附件叫什么（保存时用名字在下载下来的正文里找）。
+    pub fn structure_attachment_name(&self, item_id: &str, index: u32) -> Result<Option<String>> {
+        Ok(self
+            .lock()
+            .conn
+            .query_row(
+                "SELECT name FROM mail_attachments WHERE item_id = ?1 AND idx = ?2",
+                params![item_id, index],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 
     /// 还有多少条等着收录。
@@ -701,6 +776,18 @@ mod tests {
         assert!(parse("before:yesterday", 0).impossible);
         // 不认得的写法当普通的词
         assert_eq!(parse("note:1", 0).words, vec!["note:1"]);
+        // OR 和文件夹
+        let p = parse("budget OR 预算 from:mei in:sent", 0);
+        assert_eq!(
+            p.include.as_deref(),
+            Some(r#"("budget"* OR "预算"*) AND people : "mei"*"#)
+        );
+        assert_eq!(p.filters, vec![(Filter::In(5), false)]);
+        assert_eq!(
+            parse("OR budget", 0).include.as_deref(),
+            Some(r#""budget"*"#)
+        );
+        assert!(parse("in:nowhere", 0).impossible);
     }
 
     #[test]

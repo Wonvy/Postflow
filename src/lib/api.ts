@@ -21,7 +21,9 @@ export type View =
   /** 提醒时间刚到、还没读的：收件箱顶部单独列出来。 */
   | "reminders"
   /** 稍后读：自己存下来的网页（只在订阅那边）。 */
-  | "later";
+  | "later"
+  /** 发出去、设了「没回复就提醒」、还在等回复的信。 */
+  | "waiting";
 
 export interface Status {
   configured: boolean;
@@ -104,6 +106,8 @@ export interface Feed {
 export interface Counts {
   /** 稍后读里的未读数。 */
   later: number;
+  /** 设了「没回复就提醒」、还在等回复的信。 */
+  waiting?: number;
   unread: number;
   today: number;
   starred: number;
@@ -171,6 +175,8 @@ export interface AttachmentRow {
   from_address: string | null;
   published_at: number;
   account_id: string;
+  /** 正文已经下载了。没下载的（大邮件）保存时先下载正文。 */
+  downloaded: boolean;
 }
 
 /** 文章里的一段划线，可以带一条笔记。 */
@@ -264,6 +270,8 @@ export interface MailDetail {
   invite?: Invite | null;
   /** 我对这个邀请的回复：ACCEPTED、TENTATIVE、DECLINED。 */
   rsvp?: string | null;
+  /** 已发送的信设了「没回复就提醒」：提醒的时间（毫秒）。 */
+  follow_up?: number | null;
 }
 
 /** 邮件里的会议邀请。时间是 UTC 毫秒；算不出时区时只有 `start_local`。 */
@@ -281,6 +289,9 @@ export interface Invite {
   organizer: Mailbox | null;
   attendees: { name: string | null; address: string; status: string }[];
   url: string | null;
+  /** 周期会议；`occurrence`：周期会议里单独改过的某一次。 */
+  recurring: boolean;
+  occurrence: boolean;
 }
 
 export interface ItemDetail extends Item {
@@ -696,6 +707,8 @@ export const api = {
   addHighlight: (h: Omit<Highlight, "created_at">) => rpc<Highlight>("highlights.add", h),
   setHighlightNote: (id: string, note: string) => rpc<void>("highlights.note", { id, note }),
   removeHighlight: (id: string) => rpc<void>("highlights.remove", { id }),
+  /** 取消一封已发送邮件的「没回复就提醒」。 */
+  cancelFollowUp: (id: string) => rpc<void>("mail.follow_up_cancel", { id }),
   /** 回复会议邀请：ACCEPTED、TENTATIVE、DECLINED。 */
   rsvp: (id: string, status: "ACCEPTED" | "TENTATIVE" | "DECLINED") => rpc<{ status: string }>("mail.rsvp", { id, status }),
   /** 邀请的 .ics：`save` 时存到本机临时目录给出路径（桌面应用），否则给出文字。 */

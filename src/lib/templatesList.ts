@@ -30,3 +30,42 @@ export function insertAt(text: string, at: number, insert: string): { text: stri
   const pos = Math.max(0, Math.min(at, text.length));
   return { text: text.slice(0, pos) + insert + text.slice(pos), caret: pos + insert.length };
 }
+
+/** 「Mira Chen <mira@x.com>」里的名字；只有地址时用 @ 前面那段。 */
+export function personName(recipient: string): string {
+  const r = recipient.trim();
+  const lt = r.indexOf("<");
+  const name = (lt > 0 ? r.slice(0, lt) : "").trim().replace(/^"|"$/g, "");
+  if (name) return name;
+  const address = (lt >= 0 ? r.slice(lt + 1).replace(/>.*$/, "") : r).trim();
+  return address.split("@")[0] ?? address;
+}
+
+/**
+ * 模板里的占位：`{name}`（第一个收件人的名字）、`{first}`（名字的第一个词）、`{me}`（我的名字）、
+ * `{date}`（今天）。中文写法 `{名字}`、`{名}`、`{我}`、`{日期}` 也行。没有收件人时 `{name}` 留空。
+ */
+export function fillTemplate(
+  body: string,
+  ctx: { to: readonly string[]; me: string; now: Date; lang: "zh" | "en" },
+): string {
+  const name = ctx.to[0] ? personName(ctx.to[0]) : "";
+  // 中文名不拆；西文取第一个词
+  const first = /[一-鿿]/.test(name) ? name : (name.split(/\s+/)[0] ?? "");
+  const date = ctx.now.toLocaleDateString(ctx.lang === "zh" ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const values: Record<string, string> = {
+    name,
+    名字: name,
+    first,
+    名: first,
+    me: ctx.me,
+    我: ctx.me,
+    date,
+    日期: date,
+  };
+  return body.replace(/\{([^{}\s]{1,8})\}/g, (whole, key: string) => values[key.toLowerCase()] ?? values[key] ?? whole);
+}

@@ -1,10 +1,11 @@
-// 划线和笔记：在文章正文里选中一段，点浮出来的「划线」或「笔记」记下来。
+// 划线和笔记：在文章或邮件正文里选中一段，点浮出来的「划线」或「笔记」记下来。
+// HTML 邮件在沙箱 iframe 里，划线包在 iframe 的文档里，浮出的按钮按 iframe 的位置和缩放换算。
 // 划线存在同步日志里（核心的 highlights.*），所有设备都有；位置按引文和前后文记（见 lib/highlightsText.ts）。
 // 正文下面列出这篇的全部划线，可以写笔记、删除、复制成 Markdown。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Highlighter, NotebookPen, Trash2 } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, type Highlight, type ItemDetail } from "../lib/api";
 import { locate, quoteAt, toMarkdown } from "../lib/highlightsText";
@@ -17,7 +18,7 @@ const MARK = "pf-hl";
 
 /** 正文里一个位置之前有多少个字（和 textContent 一样数）。 */
 function offsetIn(root: HTMLElement, node: Node, offset: number): number {
-  const range = document.createRange();
+  const range = root.ownerDocument.createRange();
   range.setStart(root, 0);
   range.setEnd(node, offset);
   return range.toString().length;
@@ -33,7 +34,8 @@ function unwrap(root: HTMLElement) {
 
 /** 把 [start, end) 这一段文字包上划线标记。跨了好几个元素的，每一小段各包一个。 */
 function wrap(root: HTMLElement, start: number, end: number, id: string, note: boolean) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
   let pos = 0;
@@ -45,7 +47,7 @@ function wrap(root: HTMLElement, start: number, end: number, id: string, note: b
       let target = node;
       if (from > pos) target = target.splitText(from - pos);
       if (to < pos + len) target.splitText(to - from);
-      const mark = document.createElement("mark");
+      const mark = doc.createElement("mark");
       mark.className = MARK;
       mark.dataset.hl = id;
       if (note) mark.dataset.note = "1";
@@ -66,23 +68,36 @@ export function useHighlights(itemId: string, enabled = true) {
   });
 }
 
+/** iframe 里的文档没有我们的样式表：放一份划线的样式进去。 */
+const FRAME_STYLE =
+  "mark.pf-hl{background:rgba(217,160,63,.35);color:inherit;border-radius:2px;cursor:pointer}" +
+  "mark.pf-hl[data-note]{border-bottom:2px dotted #d9a03f}";
+
 /**
- * 正文上的划线：包上标记、选中文字时浮出按钮。`body` 是放正文的那个元素，`html` 变了就重新包。
+ * 正文上的划线：包上标记、选中文字时浮出按钮、点划线跳到笔记。`root` 是放正文的那个元素
+ * （HTML 邮件是 iframe 里的 body，这时 `frame` 给出 iframe 和缩放），`html` 变了就重新包。
  * `enabled` 为假时（比如正在看译文）不显示也不能划。
  */
 export function HighlightLayer({
   item,
-  body,
+  root,
+  frame,
   html,
   enabled,
   onFocusNote,
 }: {
   item: ItemDetail;
-  body: RefObject<HTMLDivElement | null>;
+  root: HTMLElement | null;
+  frame?: { el: HTMLIFrameElement | null; zoom: number };
   html: string;
   enabled: boolean;
   onFocusNote: (id: string) => void;
 }) {
+  const body = { current: root };
+  const focusRef = useRef(onFocusNote);
+  focusRef.current = onFocusNote;
+  const frameRef = useRef(frame);
+  frameRef.current = frame;
   const t = useT();
   const qc = useQueryClient();
   const list = useHighlights(item.id, enabled);
@@ -90,8 +105,14 @@ export function HighlightLayer({
 
   // 包上划线
   useEffect(() => {
-    const root = body.current;
     if (!root) return;
+    const doc = root.ownerDocument;
+    if (doc !== document && !doc.getElementById("pf-hl-style")) {
+      const style = doc.createElement("style");
+      style.id = "pf-hl-style";
+      style.textContent = FRAME_STYLE;
+      doc.head?.appendChild(style);
+    }
     unwrap(root);
     if (!enabled) return;
     const text = root.textContent ?? "";
@@ -99,15 +120,27 @@ export function HighlightLayer({
       const at = locate(text, h.quote, h.prefix, h.suffix);
       if (at >= 0) wrap(root, at, at + h.quote.length, h.id, !!h.note.trim());
     }
-  }, [body, html, list.data, enabled]);
+  }, [root, html, list.data, enabled]);
+
+  // 点正文里的划线：跳到下面它的笔记
+  useEffect(() => {
+    if (!root || !enabled) return;
+    const onClick = (e: Event) => {
+      const mark = (e.target as { closest?: (s: string) => HTMLElement | null } | null)?.closest?.("mark[data-hl]");
+      const id = mark?.dataset.hl;
+      if (id && !root.ownerDocument.getSelection()?.toString()) focusRef.current(id);
+    };
+    root.addEventListener("click", onClick);
+    return () => root.removeEventListener("click", onClick);
+  }, [root, enabled]);
 
   // 选中正文里的一段：浮出按钮
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !root) return;
+    const doc = root.ownerDocument;
     const onUp = () => {
       setTimeout(() => {
-        const root = body.current;
-        const sel = window.getSelection();
+        const sel = doc.getSelection();
         if (!root || !sel || sel.rangeCount === 0 || sel.isCollapsed) {
           setBar(null);
           return;
@@ -117,7 +150,12 @@ export function HighlightLayer({
           setBar(null);
           return;
         }
-        const rect = range.getBoundingClientRect();
+        const r = range.getBoundingClientRect();
+        // iframe 里的位置：加上 iframe 在窗口里的位置，乘上缩放
+        const f = frameRef.current;
+        const box = f?.el?.getBoundingClientRect();
+        const z = f?.zoom ?? 1;
+        const rect = box ? { left: box.left + r.left * z, top: box.top + r.top * z, width: r.width * z } : r;
         setBar({
           x: rect.left + rect.width / 2,
           y: rect.top,
@@ -127,15 +165,20 @@ export function HighlightLayer({
       }, 0);
     };
     const onScroll = () => setBar(null);
-    document.addEventListener("mouseup", onUp);
-    document.addEventListener("keyup", onUp);
-    document.addEventListener("scroll", onScroll, true);
+    const docs = doc === document ? [document] : [document, doc];
+    for (const d of docs) {
+      d.addEventListener("mouseup", onUp);
+      d.addEventListener("keyup", onUp);
+      d.addEventListener("scroll", onScroll, true);
+    }
     return () => {
-      document.removeEventListener("mouseup", onUp);
-      document.removeEventListener("keyup", onUp);
-      document.removeEventListener("scroll", onScroll, true);
+      for (const d of docs) {
+        d.removeEventListener("mouseup", onUp);
+        d.removeEventListener("keyup", onUp);
+        d.removeEventListener("scroll", onScroll, true);
+      }
     };
-  }, [body, enabled]);
+  }, [root, enabled]);
 
   const add = async (withNote: boolean) => {
     const root = body.current;
@@ -146,7 +189,7 @@ export function HighlightLayer({
     while (start < end && /\s/.test(text[start] ?? "")) start++;
     while (end > start && /\s/.test(text[end - 1] ?? "")) end--;
     setBar(null);
-    window.getSelection()?.removeAllRanges();
+    root.ownerDocument.getSelection()?.removeAllRanges();
     if (start >= end) return;
     try {
       const saved = await api.addHighlight({

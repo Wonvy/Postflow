@@ -198,6 +198,10 @@ fn finds_articles_and_mail_by_title_people_and_body() {
         titles("after:2000-13").is_empty(),
         "a date we can't read finds nothing"
     );
+    assert_eq!(titles("align OR migration").len(), 2);
+    assert_eq!(titles("在:收件箱 budget"), vec!["Q4 budget for review"]);
+    assert!(titles("in:sent budget").is_empty());
+    assert!(titles("in:archive").is_empty());
     // 网址里的冒号不是条件
     assert!(titles("https://example.com").is_empty());
 

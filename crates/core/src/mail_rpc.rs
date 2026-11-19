@@ -169,6 +169,8 @@ impl Core {
                 Err(e) => Err(e),
             },
             "mail.attachment" => self.attachment(params, session).await,
+            // 取消一封已发送邮件的「没回复就提醒」
+            "mail.follow_up_cancel" => self.cancel_follow_up(params, session).await,
             "mail.folders" => self.folders(params, session).await,
             "mail.move" => self.move_mail(params, session).await,
             "mail.load_older" => self.load_older(params, session).await,
@@ -648,6 +650,23 @@ impl Core {
             },
         )
         .ok_or_else(|| RpcError::new("mail_parse", "this message could not be read"))?;
+        // 已发送的信设了「没回复就提醒」：阅读区上方说什么时候提醒，可以取消
+        let follow_up = if item.sent {
+            let id = item.id.clone();
+            match session
+                .db(move |s| s.mail_ref(&id))
+                .await?
+                .and_then(|r| r.message_id)
+            {
+                Some(mid) => session
+                    .db(move |s| s.follow_up(&mid))
+                    .await?
+                    .map(|f| f.until),
+                None => None,
+            }
+        } else {
+            None
+        };
         let invite = postflow_mail::calendar::invite(&raw);
         let rsvp = if invite.is_some() {
             let id = item.id.clone();
@@ -659,6 +678,7 @@ impl Core {
         value["mail"] = json!({
             "invite": invite,
             "rsvp": rsvp,
+            "follow_up": follow_up,
             "body_kind": rendered.kind,
             "body": rendered.body,
             "has_remote_content": rendered.has_remote_content,
@@ -672,6 +692,22 @@ impl Core {
             "unsubscribe": postflow_mail::unsubscribe(&raw),
         });
         Ok(value)
+    }
+
+    async fn cancel_follow_up(
+        &self,
+        params: Value,
+        session: &Arc<Session>,
+    ) -> Result<Value, RpcError> {
+        let p: Id = parse(params)?;
+        let message_id = session
+            .db(move |s| s.mail_ref(&p.id))
+            .await?
+            .and_then(|r| r.message_id)
+            .ok_or_else(|| RpcError::new("not_found", "no such message"))?;
+        session.db(move |s| s.cancel_follow_up(&message_id)).await?;
+        self.emit_changed(&[Scope::Items], None);
+        reply(json!({}))
     }
 
     /// 一键退订：替用户向邮件列表发退订请求。不支持一键退订的，界面改为打开网页或写信。
@@ -695,8 +731,22 @@ impl Core {
     }
 
     async fn attachment(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
-        let p: Attachment = parse(params)?;
+        let mut p: Attachment = parse(params)?;
         let raw = self.raw_mail(session, &p.id).await?;
+        // 附件总览里大邮件的附件是从邮件结构认出来的：正文下载下来以后按名字找到真正的那一个
+        if p.index >= postflow_store::STRUCTURE_INDEX {
+            let (id, index) = (p.id.clone(), p.index);
+            let name = session
+                .db(move |s| s.structure_attachment_name(&id, index))
+                .await?
+                .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
+            p.index = postflow_mail::search_text(&raw)
+                .2
+                .into_iter()
+                .find(|a| a.name == name)
+                .map(|a| a.index)
+                .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
+        }
         let (name, mime, bytes) = postflow_mail::attachment(&raw, p.index)
             .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
         match p.path {

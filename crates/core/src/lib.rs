@@ -76,6 +76,9 @@ pub enum Event {
         account_id: String,
         mails: Vec<postflow_store::FreshMail>,
         total: usize,
+        /// 全部新邮件（不止列出的那几封）的发件人地址，小写，从新到旧。界面「只通知重要联系人」时
+        /// 按它数有几封是重要联系人的。
+        senders: Vec<String>,
     },
     /// 稍后提醒到时间了，这些条目回到了收件箱。界面据此弹提醒；只列最早的几条，`total` 是总数。
     Reminders {

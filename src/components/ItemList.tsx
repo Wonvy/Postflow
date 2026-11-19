@@ -105,6 +105,7 @@ import { shortTime } from "../lib/time";
 import { ItemMenuItems } from "./ItemMenu";
 import { SenderIcon, useMixedAccounts } from "./SourceIcon";
 import { PluginMenuItems } from "./PluginMenu";
+import { SpeechBar } from "./ReadAloud";
 import { LaterBar, LaterEmpty } from "./ReadLater";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import {
@@ -1172,7 +1173,9 @@ export function ItemList({ width }: { width: number }) {
                 ? "list.mailboxHint"
                 : scope.kind !== "view" || !isMailOnlyView(scope.view)
                   ? null
-                  : scope.view === "drafts"
+                  : scope.view === "waiting"
+                    ? "list.waitingHint"
+                    : scope.view === "drafts"
                     ? "list.draftsHint"
                     : scope.view === "sent"
                       ? "list.sentHint"
@@ -1394,6 +1397,7 @@ export function ItemList({ width }: { width: number }) {
       </ContextMenu>
       {selection.length > 0 && <SelectionBar count={selection.length} />}
       <MiniPlayer />
+      <SpeechBar />
       <StatusBar
         toolbar="list"
         tools={tools}
@@ -1639,13 +1643,13 @@ export function MarkAllReadDialog() {
 
 /** 搜索里的条件写法（from:、has: 之类，和核心的 search.rs 一致），高亮时不算。 */
 const SEARCH_KEYS =
-  /^-?(from|to|cc|subject|title|has|is|before|after|发件人|作者|收件人|标题|主题|有|是|早于|晚于)[:：]/i;
+  /^-?(from|to|cc|subject|title|has|is|in|before|after|发件人|作者|收件人|标题|主题|有|是|在|早于|晚于)[:：]/i;
 
 /** 搜索框里的词：按空格拆开、去掉引号和条件写法，长的排前面，高亮时先匹配长的。 */
 function searchTerms(query: string): string[] {
   const words = query
     .split(/\s+/)
-    .filter((w) => !SEARCH_KEYS.test(w) && !w.startsWith("-"))
+    .filter((w) => !SEARCH_KEYS.test(w) && !w.startsWith("-") && w !== "OR" && w !== "或")
     .map((w) => w.replace(/^"+|"+$/g, ""))
     .filter(Boolean);
   return [...new Set(words)].sort((a, b) => b.length - a.length);
@@ -1808,6 +1812,13 @@ function SearchSyntaxMenu({ onPick }: { onPick: (token: string) => void }) {
     { token: "is:starred", label: "search.syntax.starred" },
     { token: `after:${ymd(monthAgo)}`, label: "search.syntax.after" },
     { token: `before:${ymd(today)}`, label: "search.syntax.before" },
+    ...(space === "mail"
+      ? [
+          { token: "in:sent", label: "search.syntax.sent" as const },
+          { token: "in:archive", label: "search.syntax.archive" as const },
+        ]
+      : []),
+    { token: "OR", label: "search.syntax.or" },
     { token: "-", label: "search.syntax.exclude" },
   ];
   return (
@@ -2262,7 +2273,7 @@ function EmptyList({
   caughtUp: boolean;
   /** 垃圾邮件和已删除：提醒服务器可能没让邮件应用看到这个文件夹。 */
   /** 邮箱文件夹空着时的说明。 */
-  folderHint: "list.folderHint" | "list.draftsHint" | "list.mailboxHint" | "list.sentHint" | null;
+  folderHint: "list.folderHint" | "list.draftsHint" | "list.mailboxHint" | "list.sentHint" | "list.waitingHint" | null;
   onAddAccount: () => void;
   onAddFeed: () => void;
 }) {

@@ -795,7 +795,7 @@ export function isArchiveLike(view: View | "all" | undefined): boolean {
 
 /** 只有邮件才有的视图：草稿、已发送、垃圾邮件和已删除。 */
 export function isMailOnlyView(view: View): boolean {
-  return view === "junk" || view === "trash" || view === "drafts" || view === "sent";
+  return view === "junk" || view === "trash" || view === "drafts" || view === "sent" || view === "waiting";
 }
 
 /** 内置视图和分类两个空间都有，按当前空间只看那一类；邮件专属的视图本来就只有邮件。 */

@@ -9,6 +9,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use async_imap::extensions::idle::IdleResponse;
+use async_imap::imap_proto::BodyStructure;
 use async_imap::types::{Fetch, Flag, NameAttribute};
 use async_imap::{Client, Session};
 use futures::TryStreamExt;
@@ -466,6 +467,36 @@ impl Connection {
                 .filter_map(|f| {
                     let bytes = if header_only { f.header() } else { f.body() }?;
                     Some((f.uid?, bytes.to_vec()))
+                })
+                .collect())
+        })
+        .await
+    }
+
+    /// 取一批大邮件的信头，顺便要一份结构（BODYSTRUCTURE），从里面认出附件的名字、类型和大小。
+    /// 附件总览靠它列出还没下载正文的大邮件里的附件。
+    pub async fn fetch_headers(
+        &mut self,
+        uids: &[u32],
+    ) -> Result<Vec<(u32, Vec<u8>, Vec<crate::AttachmentInfo>)>> {
+        if uids.is_empty() {
+            return Ok(Vec::new());
+        }
+        timed(async {
+            let fetches: Vec<Fetch> = self
+                .session
+                .uid_fetch(uid_set(uids), "(UID BODY.PEEK[HEADER] BODYSTRUCTURE)")
+                .await?
+                .try_collect()
+                .await?;
+            Ok(fetches
+                .iter()
+                .filter_map(|f| {
+                    let parts = f
+                        .bodystructure()
+                        .map(structure_attachments)
+                        .unwrap_or_default();
+                    Some((f.uid?, f.header()?.to_vec(), parts))
                 })
                 .collect())
         })
@@ -1023,9 +1054,91 @@ fn quote(s: &str) -> String {
     format!("\"{}\"", cleaned.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
+/// 从邮件结构里认出附件：说了是附件的、或者带着文件名的单个部分。正文（没有文件名的文字）和
+/// 带 Content-ID 的内嵌部分（多半是正文里的图片）不算。大小按传输编码估算解码后的大小。
+fn structure_attachments(bs: &BodyStructure<'_>) -> Vec<crate::AttachmentInfo> {
+    fn params(
+        p: &Option<Vec<(std::borrow::Cow<'_, str>, std::borrow::Cow<'_, str>)>>,
+    ) -> Vec<(String, String)> {
+        p.iter()
+            .flatten()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+    fn walk(bs: &BodyStructure<'_>, out: &mut Vec<crate::AttachmentInfo>) {
+        let (common, other) = match bs {
+            BodyStructure::Multipart { bodies, .. } => {
+                for b in bodies {
+                    walk(b, out);
+                }
+                return;
+            }
+            BodyStructure::Basic { common, other, .. }
+            | BodyStructure::Text { common, other, .. }
+            | BodyStructure::Message { common, other, .. } => (common, other),
+        };
+        let mut all = params(&common.ty.params);
+        let disposition = common.disposition.as_ref();
+        if let Some(d) = disposition {
+            all.extend(params(&d.params));
+        }
+        let name = crate::message::structure_name(&all);
+        let attachment = disposition.is_some_and(|d| d.ty.eq_ignore_ascii_case("attachment"));
+        let inline_with_id = other.id.is_some() && !attachment;
+        if inline_with_id || (!attachment && name.is_none()) {
+            return;
+        }
+        let octets = other.octets as usize;
+        let base64 = matches!(
+            other.transfer_encoding,
+            async_imap::imap_proto::ContentEncoding::Base64
+        );
+        let index = out.len() as u32;
+        out.push(crate::AttachmentInfo {
+            index,
+            name: name.unwrap_or_else(|| format!("attachment-{}", index + 1)),
+            mime: format!("{}/{}", common.ty.ty, common.ty.subtype).to_ascii_lowercase(),
+            size: if base64 { octets * 3 / 4 } else { octets },
+        });
+    }
+    let mut out = Vec::new();
+    walk(bs, &mut out);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attachments_from_the_mail_structure() {
+        use async_imap::imap_proto::{AttributeValue, Response};
+        // multipart/mixed：正文（纯文本和 HTML）、一张内嵌图片（有 Content-ID）、一个 PDF 附件、一个 RFC 2231 中文名
+        let line = b"* 1 FETCH (UID 7 BODYSTRUCTURE (((\"TEXT\" \"PLAIN\" (\"CHARSET\" \"utf-8\") NIL NIL \"7BIT\" 12 1 NIL NIL NIL)(\"TEXT\" \"HTML\" (\"CHARSET\" \"utf-8\") NIL NIL \"7BIT\" 30 1 NIL NIL NIL) \"ALTERNATIVE\" (\"BOUNDARY\" \"a\") NIL NIL)(\"IMAGE\" \"PNG\" (\"NAME\" \"logo.png\") \"<logo@x>\" NIL \"BASE64\" 400 NIL (\"INLINE\" (\"FILENAME\" \"logo.png\")) NIL)(\"APPLICATION\" \"PDF\" (\"NAME\" \"report.pdf\") NIL NIL \"BASE64\" 4000000 NIL (\"ATTACHMENT\" (\"FILENAME\" \"report.pdf\")) NIL)(\"APPLICATION\" \"VND.MS-EXCEL\" NIL NIL NIL \"BASE64\" 800 NIL (\"ATTACHMENT\" (\"FILENAME*\" \"utf-8''%E9%A2%84%E7%AE%97.xls\")) NIL) \"MIXED\" (\"BOUNDARY\" \"b\") NIL NIL))\r\n";
+        let (_, resp) = Response::parse(line).expect("parses");
+        let Response::Fetch(_, attrs) = resp else {
+            panic!("not a fetch")
+        };
+        let bs = attrs
+            .iter()
+            .find_map(|a| match a {
+                AttributeValue::BodyStructure(bs) => Some(bs),
+                _ => None,
+            })
+            .unwrap();
+        let found = structure_attachments(bs);
+        let names: Vec<_> = found
+            .iter()
+            .map(|a| (a.name.as_str(), a.mime.as_str(), a.size))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("report.pdf", "application/pdf", 3_000_000),
+                ("预算.xls", "application/vnd.ms-excel", 600)
+            ]
+        );
+    }
 
     #[test]
     fn uid_sets() {

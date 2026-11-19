@@ -1,6 +1,7 @@
 // 朗读文章：用系统自带的语音（浏览器的 speechSynthesis），不用下载模型。
 // 正文切成一句一句排队念（见 speechText.ts），可以暂停、上一句、下一句、调语速。
-// 换一篇文章就停。Linux 上的系统网页视图多半没有语音合成，这时不显示朗读按钮。
+// 换一篇文章也接着念，列表底下有一条小控制条（SpeechBar）。Linux 上的系统网页视图多半没有语音合成，
+// 这时不显示朗读按钮。
 
 import { create } from "zustand";
 import { chunks, guessLang } from "./speechText";
@@ -21,12 +22,13 @@ export function speechSupported(): boolean {
 interface Speech {
   /** 正在念的是哪一篇。 */
   itemId: string | null;
+  title: string;
   parts: string[];
   index: number;
   playing: boolean;
   lang: string;
   rate: number;
-  start: (itemId: string, text: string) => void;
+  start: (itemId: string, title: string, text: string) => void;
   toggle: () => void;
   jump: (delta: number) => void;
   stop: () => void;
@@ -65,7 +67,7 @@ function speakFrom(index: number) {
   synth.cancel();
   const text = s.parts[index];
   if (text === undefined) {
-    useSpeech.setState({ playing: false, index: 0, itemId: null, parts: [] });
+    useSpeech.setState({ playing: false, index: 0, itemId: null, parts: [], title: "" });
     return;
   }
   const u = new SpeechSynthesisUtterance(text);
@@ -87,15 +89,16 @@ function speakFrom(index: number) {
 
 export const useSpeech = create<Speech>()((set, get) => ({
   itemId: null,
+  title: "",
   parts: [],
   index: 0,
   playing: false,
   lang: "en-US",
   rate: savedRate(),
-  start: (itemId, text) => {
-    const parts = chunks(text);
+  start: (itemId, title, text) => {
+    const parts = chunks(`${title}。\n${text}`);
     if (parts.length === 0) return;
-    set({ itemId, parts, index: 0, lang: LANG_TAGS[guessLang(text)] });
+    set({ itemId, title, parts, index: 0, lang: LANG_TAGS[guessLang(text)] });
     speakFrom(0);
   },
   toggle: () => {
@@ -120,7 +123,7 @@ export const useSpeech = create<Speech>()((set, get) => ({
   stop: () => {
     generation++;
     if (speechSupported()) window.speechSynthesis.cancel();
-    set({ itemId: null, parts: [], index: 0, playing: false });
+    set({ itemId: null, title: "", parts: [], index: 0, playing: false });
   },
   setRate: (rate) => {
     try {

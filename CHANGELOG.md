@@ -7,8 +7,26 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Read later has a "Save to Postflow" button for your browser's bookmarks bar (the bookmark button next to Import). In the desktop app it opens a postflow:// link; in the browser version it opens Postflow in a new tab.
+- Search: `OR` between two words finds either, and `in:inbox`, `in:archive`, `in:sent`, `in:drafts`, `in:junk` or `in:trash` searches just that folder.
+- Waiting for reply: messages sent with "Remind me if no reply" are listed under Mail, and the message shows when you'll be reminded, with a button to cancel.
+- Templates fill in `{name}`, `{first}`, `{me}` and `{date}`.
+- Notifications for important senders only now count every new message, not just the newest few.
+- Meeting times follow the invitation's own daylight-saving rules, so they're right on changeover days, and recurring meetings are marked.
+- Highlights and notes work in mail too.
+- The Attachments page lists the files in large messages that haven't been downloaded yet; saving one downloads the message first.
+- Read aloud marks the sentence it's reading and keeps going when you open another article, with controls under the list.
 
 ### 中文
+- 稍后读多了一个可以拖到浏览器书签栏的「存到 Postflow」按钮（「导入」旁边的书签按钮）。桌面版通过 postflow:// 链接把网页交给 Postflow；网页版在新标签页里打开 Postflow 存下。
+- 搜索：两个词之间写 `OR` 表示其中一个就行；`in:inbox`、`in:archive`、`in:sent`、`in:drafts`、`in:junk`、`in:trash` 只在那个文件夹里找。
+- 等回复：设了「没回复就提醒」的已发送邮件列在邮件那边的「等回复」里，打开时显示什么时候提醒，可以取消。
+- 模板里的 `{名字}`、`{名}`、`{我}`、`{日期}`（或英文写法）插入时会自动填好。
+- 「只通知重要联系人」现在会数到每一封新邮件，不只是最新的几封。
+- 会议时间按邀请里写的夏令时规则换算，切换当天也对；周期会议会标出来。
+- 邮件里也可以划线和写笔记了。
+- 附件总览也列出还没下载正文的大邮件里的附件，保存时先下载那封邮件。
+- 朗读会标出正在念的那一句；打开别的文章也接着念，列表底下有控制条。
 
 ## 0.1.33 — 2026-11-19
 

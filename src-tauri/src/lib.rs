@@ -9,6 +9,8 @@ use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(desktop)]
+mod deep_link;
+#[cfg(desktop)]
 mod edge_hide;
 #[cfg(desktop)]
 mod elevated_update;
@@ -92,6 +94,7 @@ fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
         save_text_file,
         updater_supported,
         update_needs_password,
+        deep_link::pending_saves,
         elevated_update::install_dir_writable,
         elevated_update::install_update_elevated,
         web_page::web_show,
@@ -118,6 +121,8 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         tray::show_main(app)
     }));
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_deep_link::init());
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -131,6 +136,7 @@ pub fn run() {
         .manage(web_access::WebAccess::default())
         .manage(tray::TrayState::default())
         .manage(edge_hide::EdgeHide::default())
+        .manage(deep_link::PendingSaves::default())
         // 关窗口时留在后台（托盘常驻）
         .on_window_event(tray::on_window_event);
 
@@ -182,6 +188,9 @@ pub fn run() {
             // 靠边自动隐藏：后台看着窗口，设置打开后才动它
             #[cfg(desktop)]
             edge_hide::start(app.handle());
+            // postflow://save?url=… ：浏览器书签按钮存网页
+            #[cfg(desktop)]
+            deep_link::setup(app.handle());
 
             app.manage(AppState { core });
             Ok(())

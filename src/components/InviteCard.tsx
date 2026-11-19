@@ -3,7 +3,7 @@
 // 加入线上会议，或者交给系统的日历应用。取消通知和别人的回复只显示状态。
 
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CalendarPlus, CalendarX2, Check, HelpCircle, MapPin, Users, Video, X } from "lucide-react";
+import { CalendarClock, CalendarPlus, CalendarX2, Check, HelpCircle, MapPin, Repeat, Users, Video, X } from "lucide-react";
 import { useState } from "react";
 import type { Invite, ItemDetail } from "../lib/api";
 import { api } from "../lib/api";
@@ -96,7 +96,15 @@ export function InviteCard({ item }: { item: ItemDetail }) {
             </p>
           )}
           <div className="mt-1 flex flex-col gap-0.5 text-[12px] text-fg-2">
-            <span>{inviteTime(inv, lang)}</span>
+            <span className="flex flex-wrap items-center gap-x-1.5">
+              {inviteTime(inv, lang)}
+              {(inv.recurring || inv.occurrence) && (
+                <span className="inline-flex items-center gap-0.5 text-fg-3">
+                  <Repeat size={11} />
+                  {t(inv.occurrence ? "invite.occurrence" : "invite.recurring")}
+                </span>
+              )}
+            </span>
             {inv.location && (
               <span className="flex min-w-0 items-center gap-1">
                 <MapPin size={12} className="shrink-0 text-fg-3" />

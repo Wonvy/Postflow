@@ -16,6 +16,8 @@ export interface NewMailEvent {
   /** `address`：发件人地址（小写），判断是不是重要联系人用。 */
   mails: { id: string; from: string; address?: string; subject: string; date: number }[];
   total: number;
+  /** 全部新邮件的发件人地址（不止列出的几封），从新到旧。 */
+  senders?: string[];
 }
 
 /** 一条通知的标题和正文：一封时是发件人和主题，几封时是「N 封新邮件」和前几封的主题。 */
@@ -59,12 +61,14 @@ async function show(title: string, body: string, onClick: () => void) {
 }
 
 /**
- * 只提醒重要联系人时，把一批新邮件减到他们的来信。核心最多带上前几封的详情，
- * 所以只看得到这几封里的；其余的不算。
+ * 只提醒重要联系人时，把一批新邮件减到他们的来信。核心只带前几封的详情，但给了全部的发件人地址，
+ * 所以封数是准的；列出来的是带着详情的那几封里重要联系人的。
  */
 export function vipEvent(event: NewMailEvent, vip: readonly string[]): NewMailEvent {
   const mails = vipOnly(event.mails, vip);
-  return { ...event, mails, total: mails.length };
+  const set = new Set(vip);
+  const total = event.senders ? event.senders.filter((a) => set.has(a.trim().toLowerCase())).length : mails.length;
+  return { ...event, mails, total: Math.max(total, mails.length) };
 }
 
 /** 核心说来了新邮件时调用。 */

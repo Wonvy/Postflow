@@ -310,6 +310,14 @@ pub fn later_feed_id() -> &'static str {
     ID.get_or_init(|| ids::feed_id(LATER_URL))
 }
 
+/// 已发送的信 `i`（连着 `m`）设了「没回复就提醒」，还没到时间。
+fn waiting_sql() -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM lww s WHERE s.kind = 'followup' AND s.id = m.message_id \
+         AND s.field = 'until' AND CAST(s.value AS INTEGER) > {NOW_MS})"
+    )
+}
+
 /// 条目 `i`（连着订阅源 `f`）不是「稍后读」里的。
 const NOT_LATER: &str = "COALESCE(f.url, '') <> 'postflow:later'";
 
@@ -823,8 +831,17 @@ impl Store {
             [],
             |r| r.get(0),
         )?;
+        let waiting = guard.conn.query_row(
+            &format!(
+                "SELECT COUNT(*) FROM {ITEM_FROM} WHERE i.archived = 5 AND {ALIVE} AND {}",
+                waiting_sql()
+            ),
+            [],
+            |r| r.get(0),
+        )?;
         Ok(Counts {
             later,
+            waiting,
             unread,
             today,
             starred,
@@ -1346,43 +1363,61 @@ fn article_image(a: &Article) -> Option<String> {
 }
 
 fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
-    let mut conds = match filter.view {
-        View::Inbox => format!("i.archived = 0 AND {ALIVE} AND NOT {}", snoozed_now()),
-        View::All => format!("i.archived < 2 AND {ALIVE}"),
-        View::Today => {
-            args.push(SqlValue::Integer(filter.since.unwrap_or(0)));
-            format!(
-                "i.archived = 0 AND {ALIVE} AND i.published_at >= ?{} AND NOT {}",
-                args.len(),
+    use crate::search::Filter;
+    let parsed = filter
+        .query
+        .as_deref()
+        .filter(|q| !q.trim().is_empty())
+        .map(|q| crate::search::parse(q, filter.tz_offset.unwrap_or(0)));
+    // 搜索里写了 in:文件夹：只在那个文件夹里找，不管现在看的是哪个列表
+    let folder = parsed.as_ref().and_then(|p| {
+        p.filters.iter().find_map(|(f, negated)| match f {
+            Filter::In(code) if !negated => Some(*code),
+            _ => None,
+        })
+    });
+    let mut conds = if let Some(code) = folder {
+        format!("i.archived = {code} AND {ALIVE}")
+    } else {
+        match filter.view {
+            View::Inbox => format!("i.archived = 0 AND {ALIVE} AND NOT {}", snoozed_now()),
+            View::All => format!("i.archived < 2 AND {ALIVE}"),
+            View::Today => {
+                args.push(SqlValue::Integer(filter.since.unwrap_or(0)));
+                format!(
+                    "i.archived = 0 AND {ALIVE} AND i.published_at >= ?{} AND NOT {}",
+                    args.len(),
+                    snoozed_now()
+                )
+            }
+            View::Unread => format!(
+                "i.read = 0 AND i.archived = 0 AND {ALIVE} AND NOT {}",
                 snoozed_now()
-            )
-        }
-        View::Unread => format!(
-            "i.read = 0 AND i.archived = 0 AND {ALIVE} AND NOT {}",
-            snoozed_now()
-        ),
-        // 星标的文章即使退订了也保留。垃圾邮件和已删除的不算
-        View::Starred => "i.starred = 1 AND i.archived < 2".to_string(),
-        View::Archived => format!("i.archived = 1 AND {ALIVE}"),
-        View::Junk => format!("i.archived = 2 AND {ALIVE}"),
-        View::Trash => format!("i.archived = 3 AND {ALIVE}"),
-        View::Drafts => format!("i.archived = 4 AND {ALIVE}"),
-        View::Sent => format!("i.archived = 5 AND {ALIVE}"),
-        View::Folder => format!("i.archived = 6 AND {ALIVE}"),
-        View::Snoozed => format!("i.archived < 2 AND {ALIVE} AND {}", snoozed_now()),
-        View::Later => format!(
-            "i.archived = 0 AND {ALIVE} AND f.url = 'postflow:later' AND NOT {}",
-            snoozed_now()
-        ),
-        // 稍后提醒刚到时间的；以及发出去的信「没回复就提醒」到了时间、还没回复的（提醒时标成了未读）
-        View::Reminders => format!(
-            "i.read = 0 AND {ALIVE} AND ((i.archived = 0 AND EXISTS (SELECT 1 FROM lww s \
+            ),
+            // 星标的文章即使退订了也保留。垃圾邮件和已删除的不算
+            View::Starred => "i.starred = 1 AND i.archived < 2".to_string(),
+            View::Archived => format!("i.archived = 1 AND {ALIVE}"),
+            View::Junk => format!("i.archived = 2 AND {ALIVE}"),
+            View::Trash => format!("i.archived = 3 AND {ALIVE}"),
+            View::Drafts => format!("i.archived = 4 AND {ALIVE}"),
+            View::Sent => format!("i.archived = 5 AND {ALIVE}"),
+            View::Folder => format!("i.archived = 6 AND {ALIVE}"),
+            View::Snoozed => format!("i.archived < 2 AND {ALIVE} AND {}", snoozed_now()),
+            View::Waiting => format!("i.archived = 5 AND {ALIVE} AND {}", waiting_sql()),
+            View::Later => format!(
+                "i.archived = 0 AND {ALIVE} AND f.url = 'postflow:later' AND NOT {}",
+                snoozed_now()
+            ),
+            // 稍后提醒刚到时间的；以及发出去的信「没回复就提醒」到了时间、还没回复的（提醒时标成了未读）
+            View::Reminders => format!(
+                "i.read = 0 AND {ALIVE} AND ((i.archived = 0 AND EXISTS (SELECT 1 FROM lww s \
              WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
              AND CAST(s.value AS INTEGER) BETWEEN {NOW_MS} - {REMINDER_WINDOW_MS} AND {NOW_MS})) \
              OR (i.archived = 5 AND EXISTS (SELECT 1 FROM lww s \
              WHERE s.kind = 'followup' AND s.id = m.message_id AND s.field = 'until' \
              AND CAST(s.value AS INTEGER) BETWEEN {NOW_MS} - {REMINDER_WINDOW_MS} AND {NOW_MS})))"
-        ),
+            ),
+        }
     };
     if let Some(source_id) = &filter.source_id {
         args.push(SqlValue::Text(source_id.clone()));
@@ -1430,9 +1465,7 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
             args.len()
         ));
     }
-    if let Some(query) = filter.query.as_deref().filter(|q| !q.trim().is_empty()) {
-        use crate::search::Filter;
-        let parsed = crate::search::parse(query, filter.tz_offset.unwrap_or(0));
+    if let Some(parsed) = parsed {
         let matching = |args: &mut Vec<SqlValue>, expr: String| {
             args.push(SqlValue::Text(expr));
             format!(
@@ -1457,6 +1490,7 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
                 Filter::Starred => "i.starred = 1".to_string(),
                 Filter::Before(at) => format!("i.published_at < {at}"),
                 Filter::After(at) => format!("i.published_at >= {at}"),
+                Filter::In(code) => format!("i.archived = {code}"),
             };
             conds.push_str(&format!(
                 " AND {}({cond})",

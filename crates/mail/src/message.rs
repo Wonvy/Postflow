@@ -1031,6 +1031,29 @@ fn find_url(s: &str) -> Option<usize> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn names_from_the_mail_structure() {
+        let p = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            structure_name(&p(&[("NAME", "report.pdf")])).as_deref(),
+            Some("report.pdf")
+        );
+        assert_eq!(
+            structure_name(&p(&[("filename*", "utf-8''%E9%A2%84%E7%AE%97.xlsx")])).as_deref(),
+            Some("预算.xlsx")
+        );
+        assert_eq!(
+            structure_name(&p(&[("filename", "=?utf-8?B?6aKE566XLnhsc3g=?=")])).as_deref(),
+            Some("预算.xlsx")
+        );
+        assert_eq!(structure_name(&p(&[("charset", "utf-8")])), None);
+    }
+
     const HTML_MAIL: &str = "From: \"Ada Lovelace\" <ada@example.com>\r\n\
 To: Bob <bob@example.com>, carol@example.com\r\n\
 Cc: dave@example.com\r\n\
@@ -1342,4 +1365,50 @@ mod forward_tests {
         );
         assert_eq!(base64_decode("not*base64"), None);
     }
+}
+
+/// BODYSTRUCTURE 里一个部分的文件名参数：`name="..."`、RFC 2231 的 `filename*=utf-8''%E6%8A...`，
+/// 以及 RFC 2047 编码的 `=?utf-8?B?...?=`。
+pub fn structure_name(params: &[(String, String)]) -> Option<String> {
+    let find = |keys: &[&str]| {
+        params
+            .iter()
+            .find(|(k, _)| keys.iter().any(|x| k.eq_ignore_ascii_case(x)))
+            .map(|(_, v)| v)
+    };
+    if let Some(v) = find(&["filename*", "name*"]) {
+        // charset'language'percent-encoded
+        let encoded = v.splitn(3, '\'').nth(2).unwrap_or(v);
+        let mut bytes = Vec::new();
+        let b = encoded.as_bytes();
+        let mut i = 0;
+        while i < b.len() {
+            if b[i] == b'%'
+                && i + 2 < b.len()
+                && let Ok(x) = u8::from_str_radix(&encoded[i + 1..i + 3], 16)
+            {
+                bytes.push(x);
+                i += 3;
+                continue;
+            }
+            bytes.push(b[i]);
+            i += 1;
+        }
+        let name = String::from_utf8_lossy(&bytes).trim().to_string();
+        if !name.is_empty() {
+            return Some(name);
+        }
+    }
+    let v = find(&["filename", "name"])?;
+    if v.contains("=?") {
+        // 借解析库解码 RFC 2047：拼一个只有主题的信头
+        let fake = format!("Subject: {v}\r\n\r\n");
+        if let Some(subject) = MessageParser::default()
+            .parse(fake.as_bytes())
+            .and_then(|m| m.subject().map(str::to_string))
+        {
+            return Some(clean_text(&subject)).filter(|n| !n.is_empty());
+        }
+    }
+    Some(clean_text(v)).filter(|n| !n.is_empty())
 }

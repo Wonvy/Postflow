@@ -37,6 +37,10 @@ pub struct Invite {
     pub attendees: Vec<Attendee>,
     /// 线上会议的链接（Teams、Zoom、Google Meet……）。
     pub url: Option<String>,
+    /// 周期会议（每周、每月……）。
+    pub recurring: bool,
+    /// 这是周期会议里单独改过的某一次（RECURRENCE-ID）。
+    pub occurrence: bool,
     /// 原始的 iCalendar 文字：「添加到日历」时原样交给日历应用。
     #[serde(skip)]
     pub ics: String,
@@ -167,30 +171,85 @@ fn mailto(v: &str) -> String {
         .to_string()
 }
 
-/// 一个时区：标准时间和夏令时的偏移（秒）和开始的月份。
+/// 时区里的一段（标准时间或夏令时）：从什么时候开始、偏移多少。
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
+struct Rule {
+    /// 这段时间里比 UTC 快多少秒。
+    offset: i64,
+    /// 每年从哪个月开始。
+    month: u32,
+    /// 那个月的第几个星期几（`(2, 0)` 是第二个星期日，`(-1, 0)` 是最后一个星期日）。没有时用 `day`。
+    by_day: Option<(i32, u32)>,
+    day: u32,
+    /// 在那一天的几点切换（当地时间，秒）。
+    at: i64,
+}
+
+impl Rule {
+    /// 这一年里切换的那一刻（当地时间，从 1970 年起的秒数）。
+    fn start(&self, year: i64) -> i64 {
+        let m = i64::from(self.month);
+        let first = days_from_civil(year, m, 1);
+        let next = if m == 12 {
+            days_from_civil(year + 1, 1, 1)
+        } else {
+            days_from_civil(year, m + 1, 1)
+        };
+        let weekday = |days: i64| (days + 4).rem_euclid(7); // 1970-01-01 是星期四，星期日记作 0
+        let day = match self.by_day {
+            Some((n, wd)) if n > 0 => {
+                first + (i64::from(wd) - weekday(first)).rem_euclid(7) + i64::from(n - 1) * 7
+            }
+            Some((n, wd)) => {
+                let last = next - 1;
+                last - (weekday(last) - i64::from(wd)).rem_euclid(7) - i64::from(-n - 1) * 7
+            }
+            None => first + i64::from(self.day.max(1)) - 1,
+        };
+        day * 86_400 + self.at
+    }
+}
+
+/// 一个时区：标准时间和夏令时各一段规则。
 #[derive(Default, Clone)]
 struct Zone {
-    standard: Option<(i64, u32)>,
-    daylight: Option<(i64, u32)>,
+    standard: Option<Rule>,
+    daylight: Option<Rule>,
 }
 
 impl Zone {
-    /// 这个月份用哪个偏移。按月份粗算：夏令时开始的月份到标准时间开始的月份之间算夏令时。
-    fn offset(&self, month: u32) -> i64 {
+    /// 当地时间 `local`（从 1970 年起的秒数，年份 `year`）用哪个偏移。按邀请里写的规则
+    /// （比如三月的第二个星期日两点）算出这一年夏令时的起止，切换当天也对。
+    fn offset(&self, year: i64, local: i64) -> i64 {
         match (self.standard, self.daylight) {
-            (Some((std, std_from)), Some((dst, dst_from))) => {
-                let in_dst = if dst_from < std_from {
-                    month >= dst_from && month < std_from
+            (Some(std), Some(dst)) => {
+                let (from, to) = (dst.start(year), std.start(year));
+                let in_dst = if from < to {
+                    local >= from && local < to
                 } else {
-                    month >= dst_from || month < std_from
+                    local >= from || local < to
                 };
-                if in_dst { dst } else { std }
+                if in_dst { dst.offset } else { std.offset }
             }
-            (Some((std, _)), None) => std,
-            (None, Some((dst, _))) => dst,
+            (Some(r), None) | (None, Some(r)) => r.offset,
             (None, None) => 0,
         }
     }
+}
+
+/// `BYDAY=2SU`、`-1SU` 这样的写法。
+fn by_day(v: &str) -> Option<(i32, u32)> {
+    let v = v.split(',').next()?.trim();
+    let (num, name) = v.split_at(v.len().checked_sub(2)?);
+    let wd = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+        .iter()
+        .position(|d| name.eq_ignore_ascii_case(d))? as u32;
+    let n = if num.is_empty() {
+        1
+    } else {
+        num.trim_start_matches('+').parse().ok()?
+    };
+    Some((n, wd))
 }
 
 /// `+0800`、`-0530` 变成秒。
@@ -254,7 +313,7 @@ fn when(
     }
     match line.param("TZID").map(|t| t.trim_matches('"')) {
         Some(tz) if zones.contains_key(tz) => {
-            let offset = zones[tz].offset(mo as u32);
+            let offset = zones[tz].offset(y, local_secs);
             (Some((local_secs - offset) * 1000), None, false)
         }
         Some(tz) if tz.eq_ignore_ascii_case("UTC") || tz.eq_ignore_ascii_case("Etc/UTC") => {
@@ -278,7 +337,8 @@ pub fn parse_ics(text: &str) -> Option<Invite> {
     let mut zone_id = None::<String>;
     let mut zone = Zone::default();
     let mut part = None::<String>;
-    let (mut offset, mut month) = (None::<i64>, None::<u32>);
+    let mut offset = None::<i64>;
+    let mut rule = Rule::default();
     for l in &all {
         match (l.name.as_str(), l.value.to_ascii_uppercase().as_str()) {
             ("BEGIN", "VTIMEZONE") => {
@@ -289,25 +349,37 @@ pub fn parse_ics(text: &str) -> Option<Invite> {
             ("BEGIN", p @ ("STANDARD" | "DAYLIGHT")) => {
                 part = Some(p.to_string());
                 offset = None;
-                month = None;
+                rule = Rule::default();
             }
             ("TZOFFSETTO", _) => offset = utc_offset(&l.value),
             ("DTSTART", _) if part.is_some() => {
-                month = month.or_else(|| date_parts(&l.value).map(|p| p.1 as u32));
+                if let Some((_, mo, d, h, mi, s, _)) = date_parts(&l.value) {
+                    if rule.month == 0 {
+                        rule.month = mo as u32;
+                    }
+                    rule.day = d as u32;
+                    rule.at = h * 3600 + mi * 60 + s;
+                }
             }
             ("RRULE", _) if part.is_some() => {
-                if let Some(m) = l
-                    .value
-                    .split(';')
-                    .find_map(|kv| kv.strip_prefix("BYMONTH="))
-                    .and_then(|m| m.split(',').next()?.parse().ok())
-                {
-                    month = Some(m);
+                for kv in l.value.split(';') {
+                    if let Some(m) = kv
+                        .strip_prefix("BYMONTH=")
+                        .and_then(|m| m.split(',').next()?.parse().ok())
+                    {
+                        rule.month = m;
+                    } else if let Some(d) = kv.strip_prefix("BYDAY=") {
+                        rule.by_day = by_day(d);
+                    }
                 }
             }
             ("END", p @ ("STANDARD" | "DAYLIGHT")) => {
                 if let Some(o) = offset {
-                    let entry = Some((o, month.unwrap_or(1)));
+                    let entry = Some(Rule {
+                        offset: o,
+                        month: rule.month.max(1),
+                        ..rule
+                    });
                     if p == "STANDARD" {
                         zone.standard = entry;
                     } else {
@@ -344,6 +416,8 @@ pub fn parse_ics(text: &str) -> Option<Invite> {
         organizer: None,
         attendees: Vec::new(),
         url: None,
+        recurring: false,
+        occurrence: false,
         ics: text.to_string(),
     };
     let mut in_event = false;
@@ -386,6 +460,8 @@ pub fn parse_ics(text: &str) -> Option<Invite> {
                 inv.all_day = all_day;
             }
             "DTEND" => inv.end = when(l, &zones).0,
+            "RRULE" => inv.recurring = true,
+            "RECURRENCE-ID" => inv.occurrence = true,
             "ORGANIZER" => {
                 inv.organizer = Some(Mailbox {
                     name: l.param("CN").map(|n| n.trim_matches('"').to_string()),
@@ -624,6 +700,52 @@ SEQUENCE:2\r\nLOCATION:Room 3\r\nBEGIN:VALARM\r\nDESCRIPTION:REMINDER\r\nTRIGGER
             inv.start,
             Some((days_from_civil(2026, 7, 1) * 86_400 + 16 * 3600) * 1000)
         );
+    }
+
+    #[test]
+    fn daylight_time_switches_on_the_right_day() {
+        // 2026 年美国夏令时从 3 月 8 日（第二个星期日）2 点开始，11 月 1 日（第一个星期日）结束
+        let at = |date: &str| {
+            let ics = OUTLOOK.replace(
+                "DTSTART;TZID=China Standard Time:20261120T100000",
+                &format!("DTSTART;TZID=Pacific Standard Time:{date}"),
+            );
+            parse_ics(&ics).unwrap().start.unwrap() / 1000
+        };
+        let utc = |y: i64, m: i64, d: i64, h: i64| days_from_civil(y, m, d) * 86_400 + h * 3600;
+        assert_eq!(at("20260307T090000"), utc(2026, 3, 7, 17)); // 还是 UTC-8
+        assert_eq!(at("20260308T090000"), utc(2026, 3, 8, 16)); // 已经是 UTC-7
+        assert_eq!(at("20261031T090000"), utc(2026, 10, 31, 16));
+        assert_eq!(at("20261101T090000"), utc(2026, 11, 1, 17));
+        assert_eq!(by_day("-1SU"), Some((-1, 0)));
+        assert_eq!(by_day("2SU"), Some((2, 0)));
+        // 最后一个星期日：2026 年 10 月是 25 日
+        let rule = Rule {
+            offset: 0,
+            month: 10,
+            by_day: Some((-1, 0)),
+            day: 1,
+            at: 3600,
+        };
+        assert_eq!(
+            rule.start(2026),
+            days_from_civil(2026, 10, 25) * 86_400 + 3600
+        );
+    }
+
+    #[test]
+    fn recurring_meetings_are_marked() {
+        let ics = OUTLOOK.replace(
+            "SEQUENCE:2\r\n",
+            "SEQUENCE:2\r\nRRULE:FREQ=WEEKLY;BYDAY=FR\r\n",
+        );
+        let inv = parse_ics(&ics).unwrap();
+        assert!(inv.recurring && !inv.occurrence);
+        let one = OUTLOOK.replace(
+            "SEQUENCE:2\r\n",
+            "SEQUENCE:2\r\nRECURRENCE-ID;TZID=China Standard Time:20261127T100000\r\n",
+        );
+        assert!(parse_ics(&one).unwrap().occurrence);
     }
 
     #[test]

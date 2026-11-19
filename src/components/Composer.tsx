@@ -38,7 +38,7 @@ import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { type SnoozePreset, snoozePresets, toLocalInput } from "../lib/snooze";
 import { useTemplates } from "../lib/templates";
-import { insertAt } from "../lib/templatesList";
+import { fillTemplate, insertAt } from "../lib/templatesList";
 import { RichEditor, type RichEditorHandle } from "./RichEditor";
 import { snoozeTime } from "./Snooze";
 import { toast } from "./Toast";
@@ -1004,7 +1004,13 @@ function Composer({
                 <TemplateMenu
                   disabled={!ready}
                   current={(rich ? rich.text : text).trim()}
-                  onInsert={(insert) => {
+                  onInsert={(template) => {
+                    const insert = fillTemplate(template, {
+                      to: everyone(to),
+                      me: senderName.trim() || fromAccount?.sender_name || fromAccount?.email || "",
+                      now: new Date(),
+                      lang: lang === "zh" ? "zh" : "en",
+                    });
                     if (rich) {
                       editor.current?.insertText(insert);
                       return;

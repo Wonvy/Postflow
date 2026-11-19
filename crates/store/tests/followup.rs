@@ -156,7 +156,61 @@ fn follow_ups_come_due_and_show_in_reminders() {
         .unwrap();
     assert_eq!(reminders(&store), vec!["Contract"]);
 
+    // 还没到时间的在「等回复」里
+    let waiting = |s: &Store| {
+        s.items(
+            &ItemFilter {
+                view: View::Waiting,
+                ..Default::default()
+            },
+            None,
+            10,
+        )
+        .unwrap()
+        .len()
+    };
+    assert_eq!(waiting(&store), 0);
+    store
+        .set_follow_up(&FollowUp {
+            until: now + 86_400_000,
+            ..follow.clone()
+        })
+        .unwrap();
+    assert_eq!(waiting(&store), 1);
+    assert_eq!(store.counts(0).unwrap().waiting, 1);
+    assert_eq!(
+        store.follow_up("abc@example.com").unwrap().map(|f| f.until),
+        Some(now + 86_400_000)
+    );
+
+    // 只取了信头的大邮件：从邮件结构认出来的附件先列在附件总览里，标着没下载
+    let sent_id = ids::mail_id(&account.id, "sent:abc@example.com");
+    store
+        .set_structure_attachments(
+            &sent_id,
+            &[postflow_store::AttachmentMeta {
+                index: 0,
+                name: "contract.pdf".into(),
+                mime: "application/pdf".into(),
+                size: 3_000_000,
+            }],
+        )
+        .unwrap();
+    let overview = store.attachments(None, 10).unwrap();
+    assert_eq!(overview.files.len(), 1);
+    assert!(!overview.files[0].downloaded);
+    assert_eq!(overview.files[0].index, postflow_store::STRUCTURE_INDEX);
+    assert_eq!(
+        store
+            .structure_attachment_name(&sent_id, postflow_store::STRUCTURE_INDEX)
+            .unwrap()
+            .as_deref(),
+        Some("contract.pdf")
+    );
+
     // 取消以后不再出现
     store.cancel_follow_up("abc@example.com").unwrap();
     assert!(reminders(&store).is_empty());
+    assert_eq!(waiting(&store), 0);
+    assert_eq!(store.follow_up("abc@example.com").unwrap(), None);
 }

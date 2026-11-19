@@ -3,6 +3,7 @@ import {
   AlarmClock,
   Archive,
   ArchiveRestore,
+  BellRing,
   Bookmark,
   BookOpenText,
   Check,
@@ -83,6 +84,7 @@ import { HighlightLayer, HighlightList } from "./Highlights";
 import { InviteCard } from "./InviteCard";
 import { ReadAloud } from "./ReadAloud";
 import { SenderCard } from "./SenderCard";
+import { toast } from "./Toast";
 import { WebPage } from "./WebPage";
 import {
   Button,
@@ -774,7 +776,8 @@ function ArticleView({
   const html = shown?.html ?? original;
   const style = useReaderStyle();
   // 划线：看译文时不显示（位置是按原文记的）
-  const body = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement | null>(null);
+  const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null);
   const highlightable = !shown?.html;
   const [noteFocus, setNoteFocus] = useState<{ id: string; n: number } | null>(null);
   const focusNote = (id: string) => setNoteFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
@@ -828,17 +831,15 @@ function ArticleView({
       )}
       {/* 内容在核心里已经净化过，见 postflow-feed 的 sanitize_html */}
       <div
-        ref={body}
-        className="article"
-        onClick={(e) => {
-          // 点正文里的划线：跳到下面它的笔记
-          const mark = (e.target as HTMLElement).closest<HTMLElement>("mark[data-hl]");
-          if (mark?.dataset.hl && !window.getSelection()?.toString()) focusNote(mark.dataset.hl);
-          interceptLinks(e);
+        ref={(el) => {
+          body.current = el;
+          setBodyEl(el);
         }}
+        className="article"
+        onClick={interceptLinks}
         dangerouslySetInnerHTML={{ __html: html }}
       />
-      <HighlightLayer item={item} body={body} html={html} enabled={highlightable} onFocusNote={focusNote} />
+      <HighlightLayer item={item} root={bodyEl} html={html} enabled={highlightable} onFocusNote={focusNote} />
       <HighlightList item={item} focus={noteFocus} enabled={highlightable} />
     </article>
   );
@@ -873,6 +874,14 @@ function MailView({
   const to = formatPeople(mail.to);
   const cc = formatPeople(mail.cc);
   const style = useReaderStyle();
+  // 划线：纯文本邮件就在页面里，HTML 邮件在 iframe 里（MailFrame 加载好以后告诉我们它的 body）
+  const [textBody, setTextBody] = useState<HTMLDivElement | null>(null);
+  const [frameBody, setFrameBody] = useState<{ body: HTMLElement; el: HTMLIFrameElement } | null>(null);
+  const [noteFocus, setNoteFocus] = useState<{ id: string; n: number } | null>(null);
+  const focusNote = (id: string) => setNoteFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
+  const bodyHtml = shown?.html ?? mail.body;
+  const highlightable = !shown?.html;
+  const isHtml = mail.body_kind === "html";
 
   const trust = async () => {
     if (!mail.from.address) return;
@@ -969,23 +978,71 @@ function MailView({
         </div>
       )}
 
+      <FollowUpBanner item={item} />
       <InviteCard item={item} />
       {bar}
       <PluginSections item={item} />
 
-      {mail.body_kind === "html" ? (
-        <MailFrame html={shown?.html ?? mail.body} zoom={mailZoom(style)} onContext={onContext} />
+      {isHtml ? (
+        <MailFrame
+          html={bodyHtml}
+          zoom={mailZoom(style)}
+          onContext={onContext}
+          onBody={(body, el) => setFrameBody(body && el ? { body, el } : null)}
+        />
       ) : (
         // 纯文本邮件在核心里已转义成安全的 HTML，见 postflow-mail 的 text_to_html
         <div
+          ref={setTextBody}
           className="article"
           onClick={interceptLinks}
-          dangerouslySetInnerHTML={{ __html: shown?.html ?? mail.body }}
+          dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />
       )}
+      <HighlightLayer
+        item={item}
+        root={isHtml ? (frameBody?.body ?? null) : textBody}
+        frame={isHtml ? { el: frameBody?.el ?? null, zoom: mailZoom(style) } : undefined}
+        html={bodyHtml}
+        enabled={highlightable}
+        onFocusNote={focusNote}
+      />
+      <HighlightList item={item} focus={noteFocus} enabled={highlightable} />
 
       {mail.attachments.length > 0 && <Attachments itemId={item.id} mail={mail} />}
     </article>
+  );
+}
+
+/** 已发送的信设了「没回复就提醒」：说什么时候提醒（或者已经到时间了），可以取消。 */
+function FollowUpBanner({ item }: { item: ItemDetail }) {
+  const t = useT();
+  const lang = useLang();
+  const qc = useQueryClient();
+  const until = item.mail?.follow_up;
+  if (!until) return null;
+  const due = until <= Date.now();
+  const cancel = async () => {
+    try {
+      await api.cancelFollowUp(item.id);
+      toast(t("followUp.cancelled"));
+      void qc.invalidateQueries({ queryKey: keys.item(item.id) });
+      void qc.invalidateQueries({ queryKey: ["items"] });
+      void qc.invalidateQueries({ queryKey: keys.nav });
+    } catch (err) {
+      toast(errorText(t, err));
+    }
+  };
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
+      <BellRing size={14} strokeWidth={1.75} className={cx("shrink-0", due ? "text-warning" : "text-fg-3")} />
+      <span className="min-w-0 flex-1">
+        {due ? t("followUp.due") : t("followUp.pending", { time: fullTime(until, lang) })}
+      </span>
+      <Button variant="ghost" className="h-6 px-2 text-[12px]" onClick={() => void cancel()}>
+        {t(due ? "followUp.done" : "followUp.cancel")}
+      </Button>
+    </div>
   );
 }
 
@@ -1078,11 +1135,16 @@ function MailFrame({
   html,
   zoom,
   onContext,
+  onBody,
 }: {
   html: string;
   zoom: number;
   onContext: (info: ContextInfo) => void;
+  /** 加载好以后给出 iframe 里的 body（划线用）。 */
+  onBody?: (body: HTMLElement | null, iframe: HTMLIFrameElement | null) => void;
 }) {
+  const onBodyRef = useRef(onBody);
+  onBodyRef.current = onBody;
   const ref = useRef<HTMLIFrameElement>(null);
   const onContextRef = useRef(onContext);
   onContextRef.current = onContext;
@@ -1104,6 +1166,7 @@ function MailFrame({
       const doc = iframe.contentDocument;
       if (!doc) return;
       doc.documentElement.style.zoom = String(zoomRef.current);
+      onBodyRef.current?.(doc.body, iframe);
       const measure = () => {
         const h = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight ?? 0);
         setHeight(Math.max(80, Math.ceil(h)));
@@ -1152,6 +1215,7 @@ function MailFrame({
     return () => {
       iframe.removeEventListener("load", onLoad);
       observer?.disconnect();
+      onBodyRef.current?.(null, null);
     };
   }, [html]);
 
