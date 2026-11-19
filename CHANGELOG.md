@@ -7,8 +7,16 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Read aloud can use natural-sounding local voices: open-source Kokoro models generated on your own computer, with about 100 Chinese and 30 English voices. Download a model in the new Settings → Read aloud page (about 350 MB, with a mirror for China), pick a voice for Chinese and for English, and preview it. Automatic uses a local voice when one is installed and the system voice otherwise. Local voices also work on Linux and in the browser on your phone, where the computer does the reading.
+- Before reading, abbreviations are spelled out, joined-up names like OpenAI are split, and numbers, dates, percentages and money are read as words, so news reads properly.
+- Pausing a local voice resumes mid-sentence, and starting to read pauses a podcast that's playing (and the other way round).
+- Listen to the news: the new headphones button above the list reads one article after another, starting with its source and headline. For each article it can read the full text, the feed's summary, an AI summary or just the headline. It marks each article as read when finished, follows along in the reader, and has a next-article button, a sleep timer, and keyboard and headphone controls. AI summaries are shared with the AI panel and only written for the article being read and the next one; if AI isn't available, the feed's summaries are read instead.
 
 ### 中文
+- 朗读可以用自然的本机声音：开源的 Kokoro 模型在你自己的电脑上合成，约 100 种中文、30 种英文声音。在新的「设置 → 朗读」里下载模型（约 350 MB，国内有镜像），给中文和英文各选一种声音，可以试听。「自动」装了本机声音就用它，没装用系统语音。本机声音在 Linux 上和手机浏览器里也能用（由电脑念好、手机来放）。
+- 念之前先整理文字：缩写逐个字母念，OpenAI 这样连写的名字拆开，数字、日期、百分比、金额念成字，新闻念起来更顺。
+- 本机声音暂停后从句子中间接着念；开始朗读时会暂停正在放的播客（反过来也一样）。
+- 听新闻：列表顶上新的耳机按钮一篇接一篇往下念，每篇先报来源和标题；可以念全文、订阅源的摘要、AI 总结或者只念标题，念完标为已读，阅读区跟着翻到下一篇；有「下一篇」按钮、定时停止，键盘和耳机上的按键也能控制。AI 总结和 AI 面板共用，只给正在念的和下一篇写；AI 用不了时改念订阅源的摘要。
 
 ## 0.1.37 — 2026-11-19
 

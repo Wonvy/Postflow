@@ -4322,6 +4322,7 @@ version = "0.1.37"
 dependencies = [
  "axum",
  "opus-decoder",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

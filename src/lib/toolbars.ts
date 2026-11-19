@@ -20,6 +20,8 @@ export const TOOL_DEFAULTS: Record<ToolbarId, ToolbarLayout> = {
   list: [
     { id: "search", place: "top" },
     { id: "markAllRead", place: "top" },
+    // 听这个列表：一篇接一篇地朗读（听新闻）
+    { id: "listen", place: "top" },
     // 侧栏顶部已经有刷新（还有快捷键 R 和右键菜单），列表这里默认不放
     { id: "refresh", place: "hidden" },
     { id: "view", place: "status" },

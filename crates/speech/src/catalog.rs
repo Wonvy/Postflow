@@ -1,6 +1,7 @@
-//! 语音识别模型的目录。
+//! 语音模型的目录：识别（`public/catalog/speech.json`）和朗读（`public/catalog/voices.json`）各一份。
 //!
-//! 目录是仓库里的一个文件（`public/catalog/speech.json`），编译时打进程序，运行时再联网看有没有新的。
+//! 目录是仓库里的文件，编译时打进程序，运行时再联网看有没有新的。朗读的单独放一个文件：
+//! 旧版本只读识别那份，不会在字幕设置里看到一堆「需要新版本」的朗读模型。
 //! 以后出了新模型，只要运行库认识它的类型（`kind`），往目录里加一条就行，不用发新版本。
 //! 模型文件放在别人的公开存储里（Hugging Face、GitHub），每个文件给几个下载地址和 SHA-256，
 //! 哪个地址下的都一样校验。
@@ -16,6 +17,13 @@ pub const BUILTIN: &str = include_str!("../../../public/catalog/speech.json");
 pub const CATALOG_URLS: &[&str] = &[
     "https://cdn.jsdelivr.net/gh/Wonvy/Postflow@main/public/catalog/speech.json",
     "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/speech.json",
+];
+
+/// 朗读模型的目录，随程序带的一份和在线版本。
+pub const VOICES_BUILTIN: &str = include_str!("../../../public/catalog/voices.json");
+pub const VOICE_CATALOG_URLS: &[&str] = &[
+    "https://cdn.jsdelivr.net/gh/Wonvy/Postflow@main/public/catalog/voices.json",
+    "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/voices.json",
 ];
 
 /// 这个版本的程序读得懂的目录格式。
@@ -38,11 +46,14 @@ pub const KINDS: &[&str] = &[
     "fire_red_asr_ctc",
     // 说话人的声纹（区分是谁在说），不是识别模型
     "speaker_embedding",
+    // 朗读（文字转语音），见 tts.rs
+    "kokoro",
 ];
 
 /// 模型是做什么的。
 pub const TASK_ASR: &str = "asr";
 pub const TASK_SPEAKER: &str = "speaker";
+pub const TASK_TTS: &str = "tts";
 
 /// 要下载的一个文件。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -128,6 +139,10 @@ pub struct Model {
     /// 一句话介绍，按界面语言。
     #[serde(default)]
     pub desc: BTreeMap<String, String>,
+    /// 朗读模型里的声音，按编号排（第几个就是运行库里的第几号）。名字按 Kokoro 的习惯：
+    /// 第一个字母是语言（`a` 美式英语、`b` 英式英语、`z` 中文……），第二个是 `f` 女声或 `m` 男声。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub speakers: Vec<String>,
 }
 
 fn one() -> u32 {
@@ -234,6 +249,10 @@ impl Catalog {
         Catalog::parse(BUILTIN.as_bytes()).expect("the built-in speech catalog is valid")
     }
 
+    pub fn builtin_voices() -> Catalog {
+        Catalog::parse(VOICES_BUILTIN.as_bytes()).expect("the built-in voice catalog is valid")
+    }
+
     pub fn get(&self, id: &str) -> Option<&Model> {
         self.models.iter().find(|m| m.id == id)
     }
@@ -281,6 +300,52 @@ mod tests {
                 "nothing recommended for {lang}"
             );
         }
+    }
+
+    #[test]
+    fn builtin_voice_catalog_is_valid_and_loadable() {
+        let raw: serde_json::Value = serde_json::from_str(VOICES_BUILTIN).unwrap();
+        let catalog = Catalog::builtin_voices();
+        assert_eq!(
+            catalog.models.len(),
+            raw["models"].as_array().unwrap().len()
+        );
+        assert!(!catalog.models.is_empty());
+        for m in &catalog.models {
+            assert!(m.supported(), "{} is not loadable by this build", m.id);
+            assert_eq!(m.task, TASK_TTS, "{}", m.id);
+            for role in ["model", "voices", "tokens", "lexicon"] {
+                assert!(m.file(role).is_some(), "{} has no {role} file", m.id);
+            }
+            assert!(!m.license.is_empty(), "{} has no license", m.id);
+            for lang in ["zh", "en"] {
+                assert!(
+                    m.desc.contains_key(lang),
+                    "{} has no {lang} description",
+                    m.id
+                );
+                // 默认的声音要在声音列表里，而且是这种语言的
+                let voice = &m.options[&format!("voice_{lang}")];
+                assert!(m.speakers.contains(voice), "{}: {voice}", m.id);
+                let prefix = if lang == "zh" { "z" } else { "a" };
+                assert!(
+                    voice.starts_with(prefix) || voice.starts_with('b'),
+                    "{}: {voice}",
+                    m.id
+                );
+            }
+        }
+        for lang in ["zh", "en"] {
+            assert!(
+                catalog
+                    .models
+                    .iter()
+                    .any(|m| m.recommended.iter().any(|l| l == lang)),
+                "nothing recommended for {lang}"
+            );
+        }
+        // 识别模型的目录里不能混进朗读模型（旧版本会把它当成识别模型列出来）
+        assert!(Catalog::builtin().models.iter().all(|m| m.task != TASK_TTS));
     }
 
     #[test]

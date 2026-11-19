@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  AudioLines,
   Captions,
   Check,
   Database,
@@ -47,6 +48,7 @@ import { PluginsSettings } from "./PluginsSettings";
 import { RsshubServer } from "./RsshubServer";
 import { WebAccessSettings } from "./WebAccessSettings";
 import { SubtitlesSettings } from "./SubtitlesSettings";
+import { VoiceSettings } from "./VoiceSettings";
 
 /** 设置的各页，按组排：常用的、AI、数据和应用本身。「网页访问」只有桌面应用里有。 */
 const ALL_PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint?: MessageKey; group: number }[] = [
@@ -55,6 +57,7 @@ const ALL_PAGES: { page: SettingsPage; icon: LucideIcon; label: MessageKey; hint
   { page: "feeds", icon: Rss, label: "settings.feeds", group: 0 },
   { page: "translation", icon: Languages, label: "settings.translation", group: 0 },
   { page: "subtitles", icon: Captions, label: "subtitles.title", group: 0 },
+  { page: "voices", icon: AudioLines, label: "voices.title", group: 0 },
   { page: "ai", icon: Sparkles, label: "settings.ai", group: 1 },
   { page: "categories", icon: Tags, label: "ai.categories", hint: "ai.categoriesHint", group: 1 },
   { page: "rules", icon: Workflow, label: "rules.title", group: 1 },
@@ -362,6 +365,7 @@ export function SettingsDialog() {
     ),
     translation: () => <TranslationSettings open={open} />,
     subtitles: () => <SubtitlesSettings open={open && page === "subtitles"} />,
+    voices: () => <VoiceSettings open={open && page === "voices"} />,
     ai: () => <AiSettings open={open} />,
     categories: () => <CategorySettings />,
     rules: () => <RulesSettings />,

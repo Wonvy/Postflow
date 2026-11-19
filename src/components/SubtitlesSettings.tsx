@@ -5,20 +5,21 @@
 // 目录来自仓库里的 public/catalog/speech.json，核心每天联网看一次有没有新的。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, FolderOpen } from "lucide-react";
+import { Check, FolderOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api, type SpeechModel } from "../lib/api";
 import { errorText, useLang, useT } from "../lib/i18n";
-import { formatSize, openExternal, pickDirectory, revealFolder } from "../lib/platform";
+import { revealFolder } from "../lib/platform";
 import { usePlayer } from "../lib/player";
 import { type Cue, cueAt } from "../lib/subtitleCues";
 import { startLocal, SUBTITLE_STYLES, type SubtitleStyle, useSubtitles } from "../lib/subtitles";
 import { languageName, useTranslateTarget } from "../lib/translate";
 import { isTauri } from "../lib/transport";
+import { ModelList } from "./ModelList";
 import { SettingRow, SettingsHeading } from "./SettingsParts";
 import { SubtitleView, useLoopClock } from "./SubtitleStyles";
 import { toast } from "./Toast";
-import { Button, cx, Spinner, Switch, TextInput } from "./ui";
+import { Button, cx, Spinner, Switch } from "./ui";
 
 /** 预览循环多长（秒）：两句话，两个人各说一句。 */
 const PREVIEW_PERIOD = 8;
@@ -110,8 +111,6 @@ export function SubtitlesSettings({ open }: { open: boolean }) {
     staleTime: 0,
   });
   const [busy, setBusy] = useState<string | null>(null);
-  const [importing, setImporting] = useState<string | null>(null);
-  const [folder, setFolder] = useState("");
 
   const run = async (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
@@ -137,25 +136,17 @@ export function SubtitlesSettings({ open }: { open: boolean }) {
     });
   };
 
-  const importFrom = async (m: SpeechModel, path: string) => {
-    if (!path.trim()) return;
+  const importFrom = async (m: SpeechModel, path: string): Promise<boolean> => {
+    let ok = false;
     await run(`import:${m.id}`, async () => {
-      await api.speechImport(m.id, path.trim());
-      setImporting(null);
-      setFolder("");
+      await api.speechImport(m.id, path);
+      ok = true;
       // 正等着模型的字幕接着开始
       const current = usePlayer.getState().current;
       if (useSubtitles.getState().needsModel && current) void startLocal(current.id);
     });
+    return ok;
   };
-
-  const languages = (m: SpeechModel) =>
-    m.languages.includes("multi")
-      ? t("subtitles.manyLanguages")
-      : m.languages
-          .slice(0, 6)
-          .map((code) => languageName(code, lang))
-          .join(lang === "zh" ? "、" : ", ") + (m.languages.length > 6 ? t("subtitles.andMore", { n: m.languages.length - 6 }) : "");
 
   const all = overview.data?.models ?? [];
   const models = all.filter((m) => (m.task ?? "asr") === "asr");
@@ -163,137 +154,17 @@ export function SubtitlesSettings({ open }: { open: boolean }) {
   const installed = models.filter((m) => m.installed);
 
   const modelList = (list: SpeechModel[], selectable: boolean) => (
-    <ul className="flex flex-col gap-1.5">
-      {list.map((m) => {
-        const d = downloads[m.id];
-        const downloading = !m.installed && (d?.state === "downloading" || m.received !== null);
-        const received = d?.state === "downloading" ? d.received : (m.received ?? 0);
-        const percent = m.size > 0 ? Math.min(100, Math.floor((received / m.size) * 100)) : 0;
-        const selected = selectable && overview.data?.selected === m.id;
-        const recommended = selectable && !m.installed && installed.length === 0 && m.recommended.includes(lang);
-        return (
-          <li key={m.id} className="rounded-md border border-line px-3 py-2">
-            <div className="flex items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-fg">
-                  {m.name}
-                  <span className="ml-1.5 text-[12px] font-normal text-fg-3">{formatSize(m.size)}</span>
-                  {recommended && (
-                    <span className="ml-1.5 rounded bg-accent-soft px-1.5 py-px text-[11px] font-normal text-accent">
-                      {t("subtitles.recommended")}
-                    </span>
-                  )}
-                  {selected && (
-                    <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] font-normal text-accent">
-                      <Check size={12} />
-                      {t("subtitles.inUse")}
-                    </span>
-                  )}
-                </p>
-                <p className="mt-0.5 text-[12px] leading-relaxed text-fg-3">
-                  {m.desc[lang] ?? m.desc.en ?? ""}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-fg-3">
-                  {languages(m)}
-                  {m.license && (
-                    <>
-                      {" · "}
-                      <button
-                        type="button"
-                        className="underline decoration-dotted underline-offset-2 hover:text-accent"
-                        onClick={() => void openExternal(m.license_url || m.homepage)}
-                      >
-                        {m.license}
-                      </button>
-                    </>
-                  )}
-                  {m.retired && ` · ${t("subtitles.retired")}`}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-                {!m.supported ? (
-                  <span className="text-[12px] text-fg-3">{t("subtitles.needsUpdate")}</span>
-                ) : m.installed ? (
-                  <>
-                    {selectable && !selected && (
-                      <Button
-                        className="h-6 px-2 text-[12px]"
-                        busy={busy === `select:${m.id}`}
-                        onClick={() => void run(`select:${m.id}`, () => api.speechSelect(m.id))}
-                      >
-                        {t("subtitles.use")}
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      className="h-6 px-2 text-[12px]"
-                      busy={busy === `remove:${m.id}`}
-                      onClick={() => void run(`remove:${m.id}`, () => api.speechRemove(m.id))}
-                    >
-                      {t("action.remove")}
-                    </Button>
-                  </>
-                ) : downloading ? (
-                  <span className="tabular inline-flex items-center gap-1.5 text-[12px] text-fg-3" aria-live="polite">
-                    <Spinner size={12} />
-                    {percent}%
-                  </span>
-                ) : (
-                  <>
-                    <Button
-                      variant={recommended ? "primary" : "secondary"}
-                      className="h-6 px-2 text-[12px]"
-                      onClick={() => download(m)}
-                    >
-                      <Download size={12} />
-                      {d?.state === "failed" ? t("action.retry") : t("action.download")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-6 px-2 text-[12px]"
-                      busy={busy === `import:${m.id}`}
-                      onClick={async () => {
-                        // 桌面应用里直接选文件夹；网页里文件夹在核心那台电脑上，只能填路径
-                        const picked = isTauri ? await pickDirectory() : null;
-                        if (picked) void importFrom(m, picked);
-                        else if (!isTauri) setImporting(importing === m.id ? null : m.id);
-                      }}
-                    >
-                      {t("subtitles.import")}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-            {d?.state === "failed" && !m.installed && (
-              <p className="mt-1.5 text-[12px] text-danger">
-                {errorText(t, { code: d.error ?? "speech_download_failed" })} {t("subtitles.importTip")}
-              </p>
-            )}
-            {importing === m.id && !m.installed && (
-              <form
-                className="mt-2 flex items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void importFrom(m, folder);
-                }}
-              >
-                <TextInput
-                  autoFocus
-                  className="h-7 flex-1"
-                  placeholder={t("subtitles.importPath")}
-                  value={folder}
-                  onChange={(e) => setFolder(e.target.value)}
-                />
-                <Button type="submit" className="h-7" busy={busy === `import:${m.id}`} disabled={!folder.trim()}>
-                  {t("subtitles.import")}
-                </Button>
-              </form>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <ModelList
+      models={list}
+      downloads={downloads}
+      busy={busy}
+      selected={selectable ? overview.data?.selected : null}
+      recommend={selectable && installed.length === 0}
+      onSelect={selectable ? (m) => void run(`select:${m.id}`, () => api.speechSelect(m.id)) : undefined}
+      onDownload={download}
+      onRemove={(m) => void run(`remove:${m.id}`, () => api.speechRemove(m.id))}
+      onImport={importFrom}
+    />
   );
 
   return (

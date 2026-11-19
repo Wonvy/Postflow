@@ -31,6 +31,7 @@ import {
   Maximize2,
   Ellipsis,
   Expand,
+  Headphones,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, type ReactElement, type ReactNode, useState } from "react";
@@ -54,6 +55,7 @@ const TOOL_META: Record<ToolbarId, Record<string, { label: MessageKey; icon: Luc
   list: {
     search: { label: "tool.search", icon: Search },
     markAllRead: { label: "tool.markAllRead", icon: CheckCheck },
+    listen: { label: "tool.listen", icon: Headphones },
     refresh: { label: "tool.refresh", icon: RefreshCw },
     view: { label: "tool.listStyle", icon: LayoutList },
     translate: { label: "tool.translateList", icon: Languages },

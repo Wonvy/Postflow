@@ -1,13 +1,62 @@
-// 朗读文章：标题下面的「朗读」，念的时候换成一条控制条（暂停、上一句、下一句、语速、停止）。
-// 念的是阅读区里现在显示的文字：开着全文就念全文，开着翻译就念译文。
+// 朗读和听新闻的控制：
+// - 文章标题下面的「朗读」，念的时候换成一条控制条（暂停、上一句、下一句、下一篇、语速、选项、停止）。
+// - 列表底下的小控制条（SpeechBar）：看着别的文章时也能控制。
+// - 列表工具栏上的「听这个列表」（ListenButton）：从打开的那篇（或者第一篇）开始，一篇接一篇往下念。
+// 每篇念什么、念完接不接着念、标不标已读在控制条的选项菜单和「设置 → 朗读」里选。用什么声音念也在设置里选。
 
-import { Check, Pause, Play, SkipBack, SkipForward, Square, Volume2 } from "lucide-react";
+import {
+  Check,
+  ChevronsRight,
+  Headphones,
+  Moon,
+  Pause,
+  Play,
+  Settings2,
+  SkipBack,
+  SkipForward,
+  SlidersHorizontal,
+  Square,
+  Volume2,
+} from "lucide-react";
 import { type RefObject, useEffect } from "react";
+import type { Item } from "../lib/api";
 import { locate } from "../lib/highlightsText";
-import { useT } from "../lib/i18n";
-import { SPEECH_RATES, speechSupported, useSpeech } from "../lib/speech";
+import { type MessageKey, useT } from "../lib/i18n";
+import { useListModel } from "../lib/listModel";
+import { LISTEN_CONTENTS, type ListenContent, nextInQueue } from "../lib/listenText";
+import {
+  listenItemOf,
+  listenQueueOf,
+  SPEECH_RATES,
+  useReadAloudAvailable,
+  useSpeech,
+  useSpeechBridge,
+} from "../lib/speech";
 import { useUi } from "../lib/store";
-import { cx, IconButton, Menu, MenuItem } from "./ui";
+import { useVoices, voiceOverview } from "../lib/voices";
+import { toast } from "./Toast";
+import { cx, ICON, IconButton, Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub, Spinner } from "./ui";
+
+/** 每种念法的名字，以及标题下面那个按钮上的字。 */
+export const CONTENT_LABEL: Record<ListenContent, MessageKey> = {
+  full: "listen.content.full",
+  summary: "listen.content.summary",
+  ai: "listen.content.ai",
+  title: "listen.content.title",
+};
+const BUTTON_LABEL: Record<ListenContent, MessageKey> = {
+  full: "speech.read",
+  summary: "speech.readSummary",
+  ai: "speech.readAi",
+  title: "speech.readTitle",
+};
+const SLEEP_MINUTES = [15, 30, 45, 60] as const;
+
+/** 播放 / 暂停按钮的图标：在准备文字、等本机声音念好这一句时转圈。 */
+function PlayIcon({ playing, waiting }: { playing: boolean; waiting: boolean }) {
+  if (waiting) return <Spinner size={14} />;
+  return playing ? <Pause size={15} fill="currentColor" strokeWidth={0} /> : <Play size={15} fill="currentColor" strokeWidth={0} />;
+}
 
 /** 正文里第 [start, end) 个字（和 textContent 一样数）的那一段。 */
 function rangeAt(root: HTMLElement, start: number, end: number): Range | null {
@@ -30,16 +79,125 @@ function rangeAt(root: HTMLElement, start: number, end: number): Range | null {
   return null;
 }
 
-export function ReadAloud({ itemId, title, body }: { itemId: string; title: string; body: RefObject<HTMLElement | null> }) {
+const check = (on: boolean) => (on ? <Check size={14} /> : <span className="inline-block size-[14px]" />);
+
+/** 选项：念什么、念完接着念、念完标为已读、定时停止。 */
+function ListenMenu() {
   const t = useT();
-  const mine = useSpeech((s) => s.itemId === itemId);
-  const playing = useSpeech((s) => s.playing && s.itemId === itemId);
+  const content = useVoices((s) => s.content);
+  const autoNext = useVoices((s) => s.autoNext);
+  const markRead = useVoices((s) => s.markRead);
+  const sleep = useSpeech((s) => s.sleep);
+  const aiCount = useSpeech((s) => s.aiCount);
+  const prefs = useVoices.getState();
+  const { setSleep, restart } = useSpeech.getState();
+  return (
+    <Menu
+      align="end"
+      trigger={
+        <IconButton label={t("listen.options")}>
+          <SlidersHorizontal size={14} strokeWidth={1.75} />
+        </IconButton>
+      }
+    >
+      <MenuLabel>{t("listen.content")}</MenuLabel>
+      {LISTEN_CONTENTS.map((c) => (
+        <MenuItem
+          key={c}
+          icon={check(c === content)}
+          onSelect={() => {
+            if (c === content) return;
+            prefs.setContent(c);
+            // 正在念的这一篇也换成新的念法
+            restart();
+          }}
+        >
+          {t(CONTENT_LABEL[c])}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuItem icon={check(autoNext)} onSelect={() => prefs.setAutoNext(!autoNext)}>
+        {t("listen.autoNext")}
+      </MenuItem>
+      <MenuItem icon={check(markRead)} onSelect={() => prefs.setMarkRead(!markRead)}>
+        {t("listen.markRead")}
+      </MenuItem>
+      <MenuSub icon={<Moon size={14} />} label={t("listen.sleep")}>
+        <MenuItem icon={check(sleep === null)} onSelect={() => setSleep(null)}>
+          {t("listen.sleepOff")}
+        </MenuItem>
+        {SLEEP_MINUTES.map((n) => (
+          <MenuItem key={n} icon={<span className="inline-block size-[14px]" />} onSelect={() => setSleep(n)}>
+            {t("listen.sleepMinutes", { n })}
+          </MenuItem>
+        ))}
+        <MenuItem icon={check(sleep === "item")} onSelect={() => setSleep("item")}>
+          {t("listen.sleepItem")}
+        </MenuItem>
+      </MenuSub>
+      {aiCount > 0 && (
+        <>
+          <MenuSeparator />
+          <MenuLabel>{t("listen.aiCount", { n: aiCount })}</MenuLabel>
+        </>
+      )}
+      <MenuSeparator />
+      <MenuItem
+        icon={<Settings2 size={14} />}
+        onSelect={() => useUi.getState().setDialog({ type: "settings", page: "voices" })}
+      >
+        {t("listen.settings")}
+      </MenuItem>
+    </Menu>
+  );
+}
+
+/** 定时停止开着时的小月亮，悬停看还剩多久。 */
+function SleepMark() {
+  const t = useT();
+  const sleep = useSpeech((s) => s.sleep);
+  if (sleep === null) return null;
+  const label =
+    sleep === "item" ? t("listen.sleepItem") : t("listen.sleepLeft", { n: Math.max(1, Math.round((sleep - Date.now()) / 60_000)) });
+  return (
+    <span title={label} aria-label={label} className="inline-flex shrink-0 text-accent">
+      <Moon size={13} strokeWidth={1.75} />
+    </span>
+  );
+}
+
+/** 第几句，或者正在准备文字。 */
+function Progress() {
+  const t = useT();
+  const preparing = useSpeech((s) => s.preparing);
   const index = useSpeech((s) => s.index);
   const total = useSpeech((s) => s.parts.length);
+  return <>{preparing ? t("listen.preparing") : t("speech.progress", { n: index + 1, total })}</>;
+}
+
+function useHasNext(): boolean {
+  return useSpeech((s) => (s.itemId ? nextInQueue(s.queue, s.itemId) !== undefined : false));
+}
+
+export function ReadAloud({ item, title, body }: { item: Item; title: string; body: RefObject<HTMLElement | null> }) {
+  const t = useT();
+  const itemId = item.id;
+  const mine = useSpeech((s) => s.itemId === itemId);
+  const playing = useSpeech((s) => s.playing && s.itemId === itemId);
+  const waiting = useSpeech((s) => (s.waiting || s.preparing) && s.itemId === itemId);
+  const available = useReadAloudAvailable();
   const rate = useSpeech((s) => s.rate);
-  const { start, toggle, jump, stop, setRate } = useSpeech.getState();
+  const content = useVoices((s) => s.content);
+  const hasNext = useHasNext();
+  const { items } = useListModel();
+  const { start, toggle, jump, next, stop, setRate } = useSpeech.getState();
 
   const part = useSpeech((s) => (s.itemId === itemId ? s.parts[s.index] : undefined));
+
+  // 看看核心那边装没装本机声音：没有系统语音的地方（Linux）装了也能朗读
+  useEffect(() => {
+    void voiceOverview().catch(() => undefined);
+  }, []);
 
   // 正文里标出正在念的那一句，并让它留在视野里
   useEffect(() => {
@@ -65,7 +223,7 @@ export function ReadAloud({ itemId, title, body }: { itemId: string; title: stri
     };
   }, [part, body]);
 
-  if (!speechSupported()) return null;
+  if (!available) return null;
 
   if (!mine) {
     return (
@@ -73,11 +231,14 @@ export function ReadAloud({ itemId, title, body }: { itemId: string; title: stri
         <span aria-hidden>·</span>
         <button
           type="button"
-          onClick={() => start(itemId, title, body.current?.innerText ?? "")}
+          onClick={() =>
+            // 念的是显示着的标题和正文（开着翻译就是译文）；念完按列表往下念
+            start({ ...listenItemOf(item), title }, body.current?.innerText ?? "", listenQueueOf(items))
+          }
           className="inline-flex items-center gap-1 rounded-md px-1 text-fg-3 transition-colors hover:text-fg"
         >
           <Volume2 size={13} strokeWidth={1.75} />
-          {t("speech.read")}
+          {t(BUTTON_LABEL[content])}
         </button>
       </>
     );
@@ -89,8 +250,8 @@ export function ReadAloud({ itemId, title, body }: { itemId: string; title: stri
       aria-label={t("speech.controls")}
       className="flex basis-full items-center gap-0.5 rounded-lg border border-line bg-surface px-1.5 py-1 text-fg-2"
     >
-      <IconButton label={playing ? t("speech.pause") : t("speech.play")} onClick={toggle}>
-        {playing ? <Pause size={15} fill="currentColor" strokeWidth={0} /> : <Play size={15} fill="currentColor" strokeWidth={0} />}
+      <IconButton label={waiting ? t("voices.preparing") : playing ? t("speech.pause") : t("speech.play")} onClick={toggle}>
+        <PlayIcon playing={playing} waiting={waiting} />
       </IconButton>
       <IconButton label={t("speech.previous")} onClick={() => jump(-1)}>
         <SkipBack size={14} strokeWidth={1.75} />
@@ -98,9 +259,15 @@ export function ReadAloud({ itemId, title, body }: { itemId: string; title: stri
       <IconButton label={t("speech.next")} onClick={() => jump(1)}>
         <SkipForward size={14} strokeWidth={1.75} />
       </IconButton>
+      {hasNext && (
+        <IconButton label={t("listen.nextArticle")} onClick={next}>
+          <ChevronsRight size={15} strokeWidth={1.75} />
+        </IconButton>
+      )}
       <span className="ml-1 min-w-0 flex-1 truncate text-[12px] tabular-nums text-fg-3" aria-live="polite">
-        {t("speech.progress", { n: index + 1, total })}
+        <Progress />
       </span>
+      <SleepMark />
       <Menu
         align="end"
         trigger={
@@ -114,11 +281,12 @@ export function ReadAloud({ itemId, title, body }: { itemId: string; title: stri
         }
       >
         {SPEECH_RATES.map((r) => (
-          <MenuItem key={r} icon={r === rate ? <Check size={14} /> : <span className="inline-block size-[14px]" />} onSelect={() => setRate(r)}>
+          <MenuItem key={r} icon={check(r === rate)} onSelect={() => setRate(r)}>
             <span className="tabular-nums">{r}×</span>
           </MenuItem>
         ))}
       </Menu>
+      <ListenMenu />
       <IconButton label={t("speech.stop")} onClick={stop}>
         <Square size={13} fill="currentColor" strokeWidth={0} />
       </IconButton>
@@ -129,13 +297,16 @@ export function ReadAloud({ itemId, title, body }: { itemId: string; title: stri
 /** 列表底下的朗读控制条：换了文章也接着念，点标题回到那一篇。 */
 export function SpeechBar() {
   const t = useT();
+  // 念完标为已读要用这里的查询缓存。这个组件一直挂着（不念的时候什么也不显示）
+  useSpeechBridge();
   const itemId = useSpeech((s) => s.itemId);
   const title = useSpeech((s) => s.title);
+  const source = useSpeech((s) => s.source);
   const playing = useSpeech((s) => s.playing);
-  const index = useSpeech((s) => s.index);
-  const total = useSpeech((s) => s.parts.length);
+  const waiting = useSpeech((s) => s.waiting || s.preparing);
   const openId = useUi((s) => s.openId);
-  const { toggle, jump, stop } = useSpeech.getState();
+  const hasNext = useHasNext();
+  const { toggle, jump, next, stop } = useSpeech.getState();
   // 正在看的就是这一篇时，控制条在文章里，这里不重复
   if (!itemId || openId === itemId) return null;
   return (
@@ -143,24 +314,61 @@ export function SpeechBar() {
       <button
         type="button"
         onClick={() => useUi.getState().open(itemId)}
-        title={title}
+        title={source ? `${source} · ${title}` : title}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left"
       >
         <Volume2 size={16} strokeWidth={1.75} className="shrink-0 text-accent" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12px] font-medium text-fg">{title}</span>
-          <span className="block truncate text-[11px] tabular-nums text-fg-3">{t("speech.progress", { n: index + 1, total })}</span>
+          <span className="block truncate text-[11px] tabular-nums text-fg-3">
+            {source && `${source} · `}
+            <Progress />
+          </span>
         </span>
       </button>
-      <IconButton label={playing ? t("speech.pause") : t("speech.play")} onClick={toggle}>
-        {playing ? <Pause size={15} fill="currentColor" strokeWidth={0} /> : <Play size={15} fill="currentColor" strokeWidth={0} />}
+      <SleepMark />
+      <IconButton label={waiting ? t("voices.preparing") : playing ? t("speech.pause") : t("speech.play")} onClick={toggle}>
+        <PlayIcon playing={playing} waiting={waiting} />
       </IconButton>
-      <IconButton label={t("speech.next")} onClick={() => jump(1)}>
-        <SkipForward size={14} strokeWidth={1.75} />
-      </IconButton>
+      {hasNext ? (
+        <IconButton label={t("listen.nextArticle")} onClick={next}>
+          <ChevronsRight size={15} strokeWidth={1.75} />
+        </IconButton>
+      ) : (
+        <IconButton label={t("speech.next")} onClick={() => jump(1)}>
+          <SkipForward size={14} strokeWidth={1.75} />
+        </IconButton>
+      )}
+      <ListenMenu />
       <IconButton label={t("speech.stop")} onClick={stop}>
         <Square size={13} fill="currentColor" strokeWidth={0} />
       </IconButton>
     </div>
+  );
+}
+
+/** 列表工具栏上的「听这个列表」：从打开的那篇（不在列表里就从第一篇）开始，一篇接一篇往下念。 */
+export function ListenButton({ items }: { items: readonly Item[] }) {
+  const t = useT();
+  const available = useReadAloudAvailable();
+  const listening = useSpeech((s) => s.itemId !== null && s.queue.length > 0);
+  useEffect(() => {
+    void voiceOverview().catch(() => undefined);
+  }, []);
+  if (!available) return null;
+  const listen = () => {
+    const queue = listenQueueOf(items);
+    if (queue.length === 0) {
+      toast(t("listen.empty"));
+      return;
+    }
+    const openId = useUi.getState().openId;
+    const first = queue.find((e) => e.id === openId) ?? queue[0];
+    if (first) useSpeech.getState().start(first, null, queue, true);
+  };
+  return (
+    <IconButton label={t("listen.fromHere")} active={listening} onClick={listen}>
+      <Headphones {...ICON} />
+    </IconButton>
   );
 }

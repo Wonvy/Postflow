@@ -804,7 +804,7 @@ function ArticleView({
         )}
         <span aria-hidden>·</span>
         <time dateTime={new Date(item.published_at).toISOString()}>{fullTime(item.published_at, lang)}</time>
-        {!item.media && <ReadAloud itemId={item.id} title={shown?.title || item.title} body={body} />}
+        {!item.media && <ReadAloud item={item} title={shown?.title || item.title} body={body} />}
       </div>
       {/* 播客的播放条、视频附件 */}
       <MediaAttachment item={item} />

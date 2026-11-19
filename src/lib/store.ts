@@ -76,6 +76,7 @@ export type SettingsPage =
   | "feeds"
   | "translation"
   | "subtitles"
+  | "voices"
   | "ai"
   | "categories"
   | "rules"

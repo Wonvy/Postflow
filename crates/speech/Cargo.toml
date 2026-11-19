@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 reqwest = "0.13.5"
+# 朗读前整理文字（数字、缩写、网址），见 speakable.rs
+regex = "1.13.1"
 # Symphonia 不支持 Opus：用这个纯 Rust 的解码器（没有 C 依赖，过了 RFC 8251 的一致性测试）
 opus-decoder = "0.1.1"
 serde = { version = "1.0.229", features = ["derive"] }

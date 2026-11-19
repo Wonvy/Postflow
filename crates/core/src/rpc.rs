@@ -308,6 +308,8 @@ impl Core {
             }
             // 语音识别模型：列出、下载、删除、选用
             m if m.starts_with("speech.") => return self.speech_rpc(m, params).await,
+            // 朗读的本机声音：模型的列出、下载、删除，和念一句
+            m if m.starts_with("voices.") => return self.voices_rpc(m, params).await,
             // 插件：列出本机插件目录里的插件、读出插件的代码
             m if m.starts_with("plugins.") => return self.plugins_rpc(m, params).await,
             // RSSHub 路由：搜索、按网址猜、重新下载目录

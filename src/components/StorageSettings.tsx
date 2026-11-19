@@ -23,6 +23,7 @@ const PART_LABEL: Record<StoragePart["key"], MessageKey> = {
   index: "storage.index",
   translation: "storage.translation",
   speech: "storage.speech",
+  voices: "storage.voices",
   episodes: "storage.episodes",
   logs: "storage.logs",
   icons: "storage.icons",

@@ -1,4 +1,4 @@
-//! 语音转文字：给没有文字稿的播客生成字幕。
+//! 语音转文字：给没有文字稿的播客生成字幕。也管朗读用的文字转语音模型（见 tts.rs）。
 //!
 //! 识别在本机完成（sherpa-onnx），音频不会离开这台电脑。模型不随安装包带，用户要用的时候再下载，
 //! 放在本机私有目录里，不参与同步：每台设备自己决定装哪个。可以装好几个，随时换。
@@ -13,14 +13,18 @@
 //!   models/<模型 ID>/        model.json（装的时候目录里的那一条）和模型文件
 //!   transcripts/<条目 ID>.json  转写出来的字幕
 //! ```
+//!
+//! 朗读模型用另一个 `Speech`（[`Speech::voices`]），放在 `本机目录/voices`，目录结构一样，只是没有字幕。
 
 pub mod audio;
 pub mod catalog;
 pub mod cues;
 pub mod engine;
 pub mod pitch;
+pub mod speakable;
 pub mod speakers;
 mod store;
+pub mod tts;
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -33,13 +37,14 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub use audio::AudioReader;
-pub use catalog::{Catalog, Model, RemoteFile, TASK_ASR, TASK_SPEAKER};
+pub use catalog::{Catalog, Model, RemoteFile, TASK_ASR, TASK_SPEAKER, TASK_TTS};
 pub use cues::{Covered, Cue};
 pub use engine::{Engine, Outcome, Step, default_threads};
 pub use speakers::{Gender, Speakers};
 pub use store::{Transcript, Transcripts};
 /// 自己实现的音频来源（比如还在下载的文件）要实现它，交给 `AudioReader::from_source`。
 pub use symphonia::core::io::MediaSource;
+pub use tts::Voice;
 
 /// 目录缓存多久以后联网更新一次。
 const CATALOG_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
@@ -78,6 +83,8 @@ pub enum Error {
     Load(String),
     #[error("cannot read the audio: {0}")]
     Audio(String),
+    #[error("cannot read this aloud: {0}")]
+    Speak(String),
     #[error("io: {0}")]
     Io(#[from] io::Error),
 }
@@ -94,6 +101,7 @@ impl Error {
             Error::MissingFile(_) => "speech_import_missing",
             Error::Load(_) => "speech_load_failed",
             Error::Audio(_) => "speech_audio_failed",
+            Error::Speak(_) => "voice_failed",
             Error::Io(_) => "io",
         }
     }
@@ -142,6 +150,8 @@ struct State {
 
 pub struct Speech {
     root: PathBuf,
+    /// 随程序带的目录（识别的或朗读的）。
+    builtin: &'static str,
     catalog_urls: Vec<String>,
     http: reqwest::Client,
     catalog: Mutex<Option<Arc<Catalog>>>,
@@ -164,8 +174,29 @@ impl Speech {
         )
     }
 
+    /// 朗读模型。`root` 是 `本机目录/voices`。
+    pub fn voices(root: impl Into<PathBuf>) -> Result<Speech> {
+        Self::with_catalogs(
+            root,
+            catalog::VOICES_BUILTIN,
+            catalog::VOICE_CATALOG_URLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        )
+    }
+
     /// 和 `new` 一样，但从别的地址取模型目录（空的话只用内置的）。测试用。
     pub fn with_catalog_urls(root: impl Into<PathBuf>, urls: Vec<String>) -> Result<Speech> {
+        Self::with_catalogs(root, catalog::BUILTIN, urls)
+    }
+
+    /// `builtin` 是随程序带的目录，`urls` 是它的在线版本。
+    pub fn with_catalogs(
+        root: impl Into<PathBuf>,
+        builtin: &'static str,
+        urls: Vec<String>,
+    ) -> Result<Speech> {
         let root = root.into();
         // 模型目录先建好：设置里的「打开模型文件夹」在下载第一个模型之前也能用
         std::fs::create_dir_all(root.join("models"))?;
@@ -176,6 +207,7 @@ impl Speech {
             .map_err(|e| Error::Download(e.to_string()))?;
         Ok(Speech {
             root,
+            builtin,
             catalog_urls: urls,
             http,
             catalog: Mutex::new(None),
@@ -222,7 +254,8 @@ impl Speech {
         {
             return catalog;
         }
-        let builtin = Catalog::builtin();
+        let builtin =
+            Catalog::parse(self.builtin.as_bytes()).expect("the built-in catalog is valid");
         let cached = std::fs::read(self.root.join(CATALOG_FILE))
             .ok()
             .and_then(|b| Catalog::parse(&b).ok())
@@ -767,6 +800,18 @@ impl Speech {
             speaker.as_ref().map(|(dir, m)| (dir.as_path(), m)),
             default_threads(),
         )
+    }
+
+    /// 加载一个装好的朗读模型。要一秒左右，放在阻塞线程里调用。
+    pub fn load_voice(&self, id: &str) -> Result<Voice> {
+        let model = self
+            .installed_model(id)
+            .filter(|m| m.task == TASK_TTS)
+            .ok_or_else(|| Error::NotInstalled(id.to_string()))?;
+        if !model.supported() {
+            return Err(Error::Unsupported(model.kind.clone()));
+        }
+        Voice::load(&self.model_dir(id), &model, default_threads())
     }
 
     /// 模型和字幕各占多少磁盘空间。

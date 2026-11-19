@@ -1,0 +1,424 @@
+{
+  "schema": 1,
+  "updated": "2026-11-19T20:00:00Z",
+  "models": [
+    {
+      "id": "kokoro-v1.1-zh",
+      "name": "Kokoro v1.1-zh",
+      "kind": "kokoro",
+      "task": "tts",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "recommended": [
+        "zh"
+      ],
+      "options": {
+        "voice_zh": "zf_094",
+        "voice_en": "af_maple"
+      },
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh",
+      "homepage": "https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh",
+      "desc": {
+        "zh": "中文为主：一百种中文声音（55 种女声、45 种男声），另有 3 种英文女声。中文念得最准，中英混排的新闻也能念。",
+        "en": "Chinese first: 100 Mandarin voices (55 female, 45 male) plus 3 English female voices. The one to pick for Chinese news."
+      },
+      "speakers": [
+        "af_maple",
+        "af_sol",
+        "bf_vale",
+        "zf_001",
+        "zf_002",
+        "zf_003",
+        "zf_004",
+        "zf_005",
+        "zf_006",
+        "zf_007",
+        "zf_008",
+        "zf_017",
+        "zf_018",
+        "zf_019",
+        "zf_021",
+        "zf_022",
+        "zf_023",
+        "zf_024",
+        "zf_026",
+        "zf_027",
+        "zf_028",
+        "zf_032",
+        "zf_036",
+        "zf_038",
+        "zf_039",
+        "zf_040",
+        "zf_042",
+        "zf_043",
+        "zf_044",
+        "zf_046",
+        "zf_047",
+        "zf_048",
+        "zf_049",
+        "zf_051",
+        "zf_059",
+        "zf_060",
+        "zf_067",
+        "zf_070",
+        "zf_071",
+        "zf_072",
+        "zf_073",
+        "zf_074",
+        "zf_075",
+        "zf_076",
+        "zf_077",
+        "zf_078",
+        "zf_079",
+        "zf_083",
+        "zf_084",
+        "zf_085",
+        "zf_086",
+        "zf_087",
+        "zf_088",
+        "zf_090",
+        "zf_092",
+        "zf_093",
+        "zf_094",
+        "zf_099",
+        "zm_009",
+        "zm_010",
+        "zm_011",
+        "zm_012",
+        "zm_013",
+        "zm_014",
+        "zm_015",
+        "zm_016",
+        "zm_020",
+        "zm_025",
+        "zm_029",
+        "zm_030",
+        "zm_031",
+        "zm_033",
+        "zm_034",
+        "zm_035",
+        "zm_037",
+        "zm_041",
+        "zm_045",
+        "zm_050",
+        "zm_052",
+        "zm_053",
+        "zm_054",
+        "zm_055",
+        "zm_056",
+        "zm_057",
+        "zm_058",
+        "zm_061",
+        "zm_062",
+        "zm_063",
+        "zm_064",
+        "zm_065",
+        "zm_066",
+        "zm_068",
+        "zm_069",
+        "zm_080",
+        "zm_081",
+        "zm_082",
+        "zm_089",
+        "zm_091",
+        "zm_095",
+        "zm_096",
+        "zm_097",
+        "zm_098",
+        "zm_100"
+      ],
+      "files": [
+        {
+          "name": "model.onnx",
+          "role": "model",
+          "size": 325561476,
+          "sha256": "99db0bc8fd0c5033d249fe922db16768b71b4a6b26cfd93d206fbf66c76efb5f",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/model.onnx"
+          ],
+          "alternates": [
+            {
+              "size": 325631784,
+              "sha256": "acc4adc175b9d9986106cd20060329673ad5a2e12ef3c557d2d3745b694f8b38",
+              "urls": [
+                "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/model.onnx"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "voices.bin",
+          "role": "voices",
+          "size": 53790720,
+          "sha256": "e64a5a581d8c2a350d848f51c3121657cd83aa07ed6109172177345874a7244c",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/voices.bin",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/voices.bin",
+            "https://www.modelscope.cn/models/journey0ad/kokoro-multi-lang-v1_1/resolve/master/voices.bin"
+          ]
+        },
+        {
+          "name": "tokens.txt",
+          "role": "tokens",
+          "size": 1111,
+          "sha256": "931ab2df2400cd65d580a22402024c2347ced8ae9ea300e545144b1aacc48e14",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/tokens.txt",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/tokens.txt",
+            "https://www.modelscope.cn/models/journey0ad/kokoro-multi-lang-v1_1/resolve/master/tokens.txt"
+          ]
+        },
+        {
+          "name": "lexicon-us-en.txt",
+          "role": "lexicon",
+          "size": 5956885,
+          "sha256": "7daaab53a181be9885b853a8582bf1838186317e5dadacbcef9c426d6fa0da14",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/lexicon-us-en.txt",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/lexicon-us-en.txt"
+          ]
+        },
+        {
+          "name": "lexicon-zh.txt",
+          "role": "lexicon",
+          "size": 2120131,
+          "sha256": "fea060803db3e59193987f1a3436f56917bda09f3b3595b6588e46ae60cebf93",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/lexicon-zh.txt"
+          ],
+          "alternates": [
+            {
+              "size": 2119465,
+              "sha256": "11111d8cd695fba2ace1367a1d0a708b586e6ef5c1f9be91da5d7eef129b651c",
+              "urls": [
+                "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/lexicon-zh.txt"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "phone-zh.fst",
+          "role": "rule_fst",
+          "size": 88630,
+          "sha256": "1ac2b6fa56b1442320c4de7db08353bab8963a2b57f365eebcdd3a2d3562f8d7",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/phone-zh.fst",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/phone-zh.fst",
+            "https://www.modelscope.cn/models/journey0ad/kokoro-multi-lang-v1_1/resolve/master/phone-zh.fst"
+          ]
+        },
+        {
+          "name": "date-zh.fst",
+          "role": "rule_fst",
+          "size": 59154,
+          "sha256": "eb8aa079ae3cb81d8f4404992f39d61a0cb990947512b5b8d1e54d1f6980e718",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/date-zh.fst",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/date-zh.fst",
+            "https://www.modelscope.cn/models/journey0ad/kokoro-multi-lang-v1_1/resolve/master/date-zh.fst"
+          ]
+        },
+        {
+          "name": "number-zh.fst",
+          "role": "rule_fst",
+          "size": 64482,
+          "sha256": "743f402181fcfebf76cc2f0546b71fa26476e626fbe4e460fb7b4c3a7a8bd5bd",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/number-zh.fst",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/number-zh.fst",
+            "https://www.modelscope.cn/models/journey0ad/kokoro-multi-lang-v1_1/resolve/master/number-zh.fst"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kokoro-v1.0",
+      "name": "Kokoro v1.0",
+      "kind": "kokoro",
+      "task": "tts",
+      "languages": [
+        "en",
+        "zh"
+      ],
+      "recommended": [
+        "en"
+      ],
+      "options": {
+        "voice_zh": "zf_xiaoxiao",
+        "voice_en": "af_heart"
+      },
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/hexgrad/Kokoro-82M",
+      "homepage": "https://huggingface.co/hexgrad/Kokoro-82M",
+      "desc": {
+        "zh": "英文为主：28 种美式、英式英文声音，念英文最自然；另有 8 种中文声音，但中文不如 v1.1-zh 准。",
+        "en": "English first: 28 American and British voices, the most natural for English. Also has 8 Mandarin voices, less accurate than v1.1-zh."
+      },
+      "speakers": [
+        "af_alloy",
+        "af_aoede",
+        "af_bella",
+        "af_heart",
+        "af_jessica",
+        "af_kore",
+        "af_nicole",
+        "af_nova",
+        "af_river",
+        "af_sarah",
+        "af_sky",
+        "am_adam",
+        "am_echo",
+        "am_eric",
+        "am_fenrir",
+        "am_liam",
+        "am_michael",
+        "am_onyx",
+        "am_puck",
+        "am_santa",
+        "bf_alice",
+        "bf_emma",
+        "bf_isabella",
+        "bf_lily",
+        "bm_daniel",
+        "bm_fable",
+        "bm_george",
+        "bm_lewis",
+        "ef_dora",
+        "em_alex",
+        "ff_siwis",
+        "hf_alpha",
+        "hf_beta",
+        "hm_omega",
+        "hm_psi",
+        "if_sara",
+        "im_nicola",
+        "jf_alpha",
+        "jf_gongitsune",
+        "jf_nezumi",
+        "jf_tebukuro",
+        "jm_kumo",
+        "pf_dora",
+        "pm_alex",
+        "pm_santa",
+        "zf_xiaobei",
+        "zf_xiaoni",
+        "zf_xiaoxiao",
+        "zf_xiaoyi",
+        "zm_yunjian",
+        "zm_yunxi",
+        "zm_yunxia",
+        "zm_yunyang",
+        "em_santa"
+      ],
+      "files": [
+        {
+          "name": "model.onnx",
+          "role": "model",
+          "size": 325560556,
+          "sha256": "b40f62b166ac8164b0627ef48a0b358eda0985e272fb03ef5252e7206305da11",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/model.onnx"
+          ],
+          "alternates": [
+            {
+              "size": 325630829,
+              "sha256": "c436dc6a842b62aba06af67e40bafcfb9c60ac3af895358f1974ad9a7f7c026b",
+              "urls": [
+                "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/model.onnx"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "voices.bin",
+          "role": "voices",
+          "size": 28200960,
+          "sha256": "1c5a5b983d3d50d8586d437a51f3faa2da7919ce76a013c081e65671a3447c29",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/voices.bin"
+          ],
+          "alternates": [
+            {
+              "size": 27678720,
+              "sha256": "8a77c0d397026208d22211f37670b5b3b11e03f190756b25a1d24041fced82a9",
+              "urls": [
+                "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/voices.bin"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "tokens.txt",
+          "role": "tokens",
+          "size": 687,
+          "sha256": "6ebb6bb288f20f3ae8d004d3c2ca27697da27c037d75e81a60e2a6a663f95425",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/tokens.txt",
+            "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/tokens.txt"
+          ]
+        },
+        {
+          "name": "lexicon-us-en.txt",
+          "role": "lexicon",
+          "size": 5956885,
+          "sha256": "7daaab53a181be9885b853a8582bf1838186317e5dadacbcef9c426d6fa0da14",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/lexicon-us-en.txt",
+            "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/lexicon-us-en.txt"
+          ]
+        },
+        {
+          "name": "lexicon-zh.txt",
+          "role": "lexicon",
+          "size": 2365182,
+          "sha256": "902bc2d20ac7c449c5ecbbbb23c89d12119c03ed5b8ed27f114f0260c9e35229",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/lexicon-zh.txt"
+          ],
+          "alternates": [
+            {
+              "size": 2364621,
+              "sha256": "509a1f55bf9c62e3f7e598e7544b114eadef1e00266f2badff4f281153f9f327",
+              "urls": [
+                "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/lexicon-zh.txt"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "phone-zh.fst",
+          "role": "rule_fst",
+          "size": 88630,
+          "sha256": "1ac2b6fa56b1442320c4de7db08353bab8963a2b57f365eebcdd3a2d3562f8d7",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/phone-zh.fst",
+            "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/phone-zh.fst"
+          ]
+        },
+        {
+          "name": "date-zh.fst",
+          "role": "rule_fst",
+          "size": 59154,
+          "sha256": "eb8aa079ae3cb81d8f4404992f39d61a0cb990947512b5b8d1e54d1f6980e718",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/date-zh.fst",
+            "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/date-zh.fst"
+          ]
+        },
+        {
+          "name": "number-zh.fst",
+          "role": "rule_fst",
+          "size": 64482,
+          "sha256": "743f402181fcfebf76cc2f0546b71fa26476e626fbe4e460fb7b4c3a7a8bd5bd",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/number-zh.fst",
+            "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/number-zh.fst"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -105,7 +105,7 @@ import { shortTime } from "../lib/time";
 import { ItemMenuItems } from "./ItemMenu";
 import { SenderIcon, useMixedAccounts } from "./SourceIcon";
 import { PluginMenuItems } from "./PluginMenu";
-import { SpeechBar } from "./ReadAloud";
+import { ListenButton, SpeechBar } from "./ReadAloud";
 import { LaterBar, LaterEmpty } from "./ReadLater";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import {
@@ -1088,6 +1088,7 @@ export function ItemList({ width }: { width: number }) {
       </IconButton>
     ),
     view: <ViewControl />,
+    listen: <ListenButton items={items} />,
     markAllRead: (
       <IconButton label={t("action.markAllRead")} shortcut="⇧A" disabled={!hasUnread} onClick={confirmMarkAllRead}>
         <CheckCheck {...ICON} />

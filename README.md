@@ -179,10 +179,13 @@ click **More info → Run anyway**.
   listed under the article, where you can write notes, delete them, or copy them as Markdown. "Export all highlights
   and notes" in the command palette copies everything as Markdown, grouped by article. They sync to your other
   devices.
-- Read aloud (next to the date under an article's title): your system's voice reads the article, or its translation
-  when that's showing, marking the sentence it's on. Pause, skip sentences and change the speed; it keeps going when
-  you open another article, with controls under the list. Needs a system voice, so it isn't offered where
-  there is none (most Linux desktops).
+- Read aloud (next to the date under an article's title): reads the article, or its translation when that's showing,
+  marking the sentence it's on. Pause, skip sentences and change the speed; it keeps going when you open another
+  article, with controls under the list. Choose the voice in Settings → Read aloud: natural-sounding local voices
+  (open-source Kokoro models, about 100 Chinese and 30 English voices, generated on your computer after a one-time
+  download) or your system's voice. Listen to the news: the headphones above the list read one article after
+  another — the full text, the feed's summary, an AI summary or just the headlines — marking each as read, with a
+  sleep timer. See [Read aloud](docs/read-aloud.md).
 - Feed stats (the chart icon on the Feeds heading): how often each feed posts, how many of its posts carry the full
   article, and how much of it you actually read — articles opened, read to the end, and reading time, measured from
   scrolling and time spent in the reader while the window is in front. Feeds that fail to fetch, have gone quiet,

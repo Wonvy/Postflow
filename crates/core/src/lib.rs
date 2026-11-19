@@ -24,6 +24,7 @@ mod sender_icon;
 mod storage;
 mod subtitles;
 mod translate_rpc;
+mod voices;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -108,6 +109,15 @@ pub enum Event {
         total: u64,
         state: ModelState,
         /// 失败时的错误码。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// 朗读模型的下载进度。
+    VoiceModel {
+        id: String,
+        received: u64,
+        total: u64,
+        state: ModelState,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
@@ -305,6 +315,8 @@ pub struct Core {
     pub(crate) speech: Arc<Speech>,
     /// 正在进行的转写，见 subtitles.rs。
     pub(crate) subtitles: subtitles::Subtitles,
+    /// 朗读用的本机声音：模型放在 `local_dir/voices` 下，见 voices.rs。
+    pub(crate) voices: voices::Voices,
 }
 
 impl Core {
@@ -323,8 +335,10 @@ impl Core {
         let (events, _) = broadcast::channel(256);
         let translator = Arc::new(Translator::new(local_dir.join("translation"))?);
         let speech = Arc::new(Speech::new(local_dir.join("speech"))?);
+        let voices = voices::Voices::new(local_dir.join("voices"))?;
         let core = Arc::new(Core {
             speech,
+            voices,
             subtitles: Default::default(),
             sender_icons: sender_icon::SenderIcons::new(&local_dir),
             rsshub: rsshub::Rsshub::new(&local_dir),

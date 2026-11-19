@@ -93,6 +93,10 @@ export interface SpeechModel {
   retired: boolean;
   /** 正在下载的话，已经下了多少。 */
   received: number | null;
+  /** 加载时的选项。朗读模型里有 `voice_zh`、`voice_en`：每种语言默认用哪种声音。 */
+  options?: Record<string, string>;
+  /** 朗读模型里的声音，按编号排。名字的第一个字母是语言（a 美式英语、b 英式英语、z 中文），第二个是 f 女声、m 男声。 */
+  speakers?: string[];
 }
 
 export interface SpeechOverview {
@@ -823,6 +827,15 @@ export const api = {
   speechSelect: (id: string) => rpc<SpeechOverview>("speech.select", { id }),
   /** 从本机的一个文件夹装模型（文件照样校验）。 */
   speechImport: (id: string, path: string) => rpc<SpeechOverview>("speech.import", { id, path }),
+  /** 朗读用的本机声音模型（目录、下载、删除、导入），和识别模型分开管。 */
+  voicesOverview: () => rpc<SpeechOverview>("voices.overview"),
+  /** 在后台下载一个朗读模型，进度通过 voice_model 事件来。 */
+  voicesDownload: (id: string) => rpc<void>("voices.download", { id }),
+  voicesRemove: (id: string) => rpc<SpeechOverview>("voices.remove", { id }),
+  voicesImport: (id: string, path: string) => rpc<SpeechOverview>("voices.import", { id, path }),
+  /** 用本机的声音念一句：返回 Base64 的 WAV（没什么可念的时候是空的）和时长（秒）。 */
+  voicesSpeak: (model: string, voice: string, text: string, speed: number) =>
+    rpc<{ audio: string; duration: number }>("voices.speak", { model, voice, text, speed }),
   /** 这一期在本机转写出来的字幕（没有就是空的）。 */
   subtitlesGet: (id: string) => rpc<SubtitleSnapshot>("subtitles.get", { id }),
   /**
@@ -1020,7 +1033,7 @@ export const api = {
 };
 
 export interface StoragePart {
-  key: "articles" | "oplog" | "index" | "translation" | "speech" | "episodes" | "logs" | "icons" | "rsshub" | "other";
+  key: "articles" | "oplog" | "index" | "translation" | "speech" | "voices" | "episodes" | "logs" | "icons" | "rsshub" | "other";
   bytes: number;
 }
 

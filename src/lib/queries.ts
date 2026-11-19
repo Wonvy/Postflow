@@ -25,6 +25,7 @@ import { useAiStreams } from "./ai";
 import { retryBlocked } from "./listTranslate";
 import { useModelDownloads } from "./translate";
 import { onSpeechModelEvent, onSubtitlesEvent } from "./subtitles";
+import { onVoiceModelEvent } from "./voices";
 import { notifyNewMail, notifyReminders } from "./notify";
 import { startOfToday } from "./time";
 import { clientId, subscribe } from "./transport";
@@ -184,6 +185,10 @@ export function useCoreEvents() {
         case "speech_model":
           onSpeechModelEvent(event);
           if (event.state !== "downloading") void qc.invalidateQueries({ queryKey: ["speech"] });
+          break;
+        case "voice_model":
+          onVoiceModelEvent(event);
+          if (event.state !== "downloading") void qc.invalidateQueries({ queryKey: ["voices"] });
           break;
         case "subtitles":
           onSubtitlesEvent(event);

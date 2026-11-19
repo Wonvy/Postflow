@@ -40,6 +40,15 @@ export type CoreEvent =
       error?: string;
     }
   | {
+      /** 朗读模型的下载进度。 */
+      type: "voice_model";
+      id: string;
+      received: number;
+      total: number;
+      state: "downloading" | "installed" | "failed";
+      error?: string;
+    }
+  | {
       /** 一期节目的字幕有了进展：新转出来的几句（落在 from–to 里的旧句子由它们替换），和现在的状态。 */
       type: "subtitles";
       id: string;

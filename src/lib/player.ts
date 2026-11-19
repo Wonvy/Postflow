@@ -357,6 +357,15 @@ function setupMediaSession() {
   }
 }
 
+/** 系统的播放键交还给播客（朗读用过以后）。 */
+export function restoreMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  setupMediaSession();
+  const current = usePlayer.getState().current;
+  if (current) updateMediaMetadata(current);
+  else navigator.mediaSession.metadata = null;
+}
+
 function updateMediaMetadata(episode: Episode) {
   if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
   const art = episode.image ?? episode.icon;
