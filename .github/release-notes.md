@@ -2,7 +2,7 @@
 
 | System | File |
 |---|---|
-| macOS (Apple silicon and Intel) | `Postflow___VERSION___universal.dmg` |
+| macOS 10.15 or later (Apple silicon and Intel) | `Postflow___VERSION___universal.dmg` |
 | Windows 10 / 11 | `Postflow___VERSION___x64-setup.exe`, or the `.msi` |
 | Linux: Debian, Ubuntu | `.deb` |
 | Linux: Fedora, openSUSE | `.rpm` |
@@ -24,7 +24,7 @@ The installers are not yet signed by Apple or Microsoft, so your system will ask
 
 | 系统 | 下载哪个文件 |
 |---|---|
-| macOS（Apple 芯片和 Intel 通用） | `Postflow___VERSION___universal.dmg` |
+| macOS 10.15 及以上（Apple 芯片和 Intel 通用） | `Postflow___VERSION___universal.dmg` |
 | Windows 10 / 11 | `Postflow___VERSION___x64-setup.exe`，或者 `.msi` |
 | Linux：Debian、Ubuntu | `.deb` |
 | Linux：Fedora、openSUSE | `.rpm` |
