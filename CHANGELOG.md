@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.34 — 2026-11-19
+
+### English
 - Read later has a "Save to Postflow" button for your browser's bookmarks bar (the bookmark button next to Import). In the desktop app it opens a postflow:// link; in the browser version it opens Postflow in a new tab.
 - Search: `OR` between two words finds either, and `in:inbox`, `in:archive`, `in:sent`, `in:drafts`, `in:junk` or `in:trash` searches just that folder.
 - Waiting for reply: messages sent with "Remind me if no reply" are listed under Mail, and the message shows when you'll be reminded, with a button to cancel.
