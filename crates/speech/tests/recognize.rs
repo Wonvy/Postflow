@@ -7,7 +7,7 @@
 //! 下载或校验出错、声纹模型加载不了。
 //!
 //! ```text
-//! POSTFLOW_SPEECH_SMOKE=/tmp/speech-smoke cargo test -p postflow-speech --test recognize -- --nocapture
+//! POSTFLOW_SPEECH_SMOKE=/tmp/speech-smoke cargo test --workspace --test recognize -- --nocapture
 //! ```
 
 use std::path::Path;
