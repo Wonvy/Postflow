@@ -8,9 +8,19 @@ that heading into the version number and date.
 
 ### English
 - Linux: copies installed from the `.deb` or `.rpm` package now update themselves like the AppImage. Your system asks for your administrator password to install the update.
+- Showing only podcasts, videos, articles or newsletters, the list is titled with that type instead of "All articles".
+- Settings → Translation lists the models you skipped, and "Ask again" brings back the download prompt for one.
+- Folded date headings stay folded after a restart.
+- The shortcuts window shows Space in your language.
+- Add feed shows a small grip in its bottom-right corner, so you can see it resizes.
 
 ### 中文
 - Linux：用 `.deb`、`.rpm` 安装的也能像 AppImage 一样在应用里直接更新了。安装更新时系统会请你输入管理员密码。
+- 订阅里只看播客、视频、文章或 Newsletter 时，列表标题显示这一类的名字，不再是「全部文章」。
+- 「设置 → 翻译」列出跳过下载的模型，点「恢复提示」就会重新提示下载。
+- 收起的日期分段重启后还是收起的。
+- 快捷键窗口里的空格键按界面语言显示。
+- 「添加订阅」右下角有一个小的拖动标记，看得出能改大小。
 
 ## 0.1.31 — 2026-11-18
 

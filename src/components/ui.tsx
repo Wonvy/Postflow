@@ -395,12 +395,17 @@ function ModalResizeHandles({
         onPointerDown={(e) => start(e, "y")}
         className="absolute -bottom-1 left-4 right-4 h-2 cursor-ns-resize touch:hidden max-md:hidden"
       />
+      {/* 右下角露出两道斜线，看得出能拖 */}
       <div
         aria-hidden
         onPointerDown={(e) => start(e, "xy")}
         onDoubleClick={onReset}
-        className="absolute -bottom-1 -right-1 size-4 cursor-nwse-resize touch:hidden max-md:hidden"
-      />
+        className="absolute bottom-0 right-0 flex size-5 cursor-nwse-resize items-end justify-end p-[3px] text-fg-4 hover:text-fg-3 touch:hidden max-md:hidden"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round">
+          <path d="M9 3L3 9M9 6.5L6.5 9" />
+        </svg>
+      </div>
     </>
   );
 }

@@ -56,14 +56,14 @@ import {
   useListTranslations,
 } from "../lib/listTranslate";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateTarget } from "../lib/translate";
-import type { Item, OlderTarget } from "../lib/api";
+import type { ContentKind, Item, OlderTarget } from "../lib/api";
 import { endDrag, startDrag } from "../lib/dnd";
 import type { Group, GroupMode, Row } from "../lib/grouping";
 import { type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { dateSection, sectionLabel } from "../lib/dateSections";
 import { useListModel } from "../lib/listModel";
 import { IS_TABLET } from "../lib/device";
-import { useFeedKind, useListMedia } from "../lib/feedKinds";
+import { FEED_KIND_LABEL, useFeedKind, useListMedia } from "../lib/feedKinds";
 import { useDrawerSidebar, useIsTouch, useReaderOverlay } from "../lib/mobile";
 import { EpisodeChip, EpisodeQueue, MiniPlayer } from "./Player";
 import { useWindowControlsGap } from "./WindowControls";
@@ -660,9 +660,12 @@ function scopeTitle(
   space: Space,
   t: Translate,
   sourceTitle: (id: string) => string | undefined,
+  feedKind: ContentKind | "all" = "all",
 ) {
   switch (scope.kind) {
     case "view":
+      // 订阅那边只看一类（播客、视频……）时，「全部」叫那一类的名字，不叫「全部文章」
+      if (scope.view === "inbox" && space === "feeds" && feedKind !== "all") return t(FEED_KIND_LABEL[feedKind]);
       return t(viewLabelKey(scope.view, space));
     case "folder":
       return scope.folder;
@@ -796,14 +799,10 @@ export function ItemList({ width }: { width: number }) {
       return { key: section.key, label: sectionLabel(section, lang, now) };
     };
   }, [style.dateSections, minute, lang]);
-  // 收起的日期分段，点分段标题切换
-  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleSection = (key: string) =>
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
+  // 收起的日期分段，点分段标题切换；记在这台设备上
+  const collapsedList = useUi((s) => s.collapsedDates);
+  const toggleSection = useUi((s) => s.toggleDateSection);
+  const collapsedSections = useMemo(() => new Set(collapsedList), [collapsedList]);
   const lines = useMemo(
     () => linesOf(listRows, view, columns, sectionOf, collapsedSections),
     [listRows, view, columns, sectionOf, collapsedSections],
@@ -1054,6 +1053,7 @@ export function ItemList({ width }: { width: number }) {
 
   const feeds = nav.data?.feeds;
   const accounts = nav.data?.accounts;
+  const listFeedKind = useFeedKind();
   const title = scopeTitle(
     scope,
     space,
@@ -1062,6 +1062,7 @@ export function ItemList({ width }: { width: number }) {
       feeds?.find((f) => f.id === id)?.title ??
       accounts?.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean) ??
       (nav.data?.newsletters?.find((n) => n.address === id)?.name || undefined),
+    listFeedKind,
   );
   const unreadCount = items.filter((i) => !i.read).length;
   const hasUnread = unreadCount > 0;
@@ -1581,6 +1582,7 @@ export function MarkAllReadDialog() {
   // 侧栏右键菜单可以指定别的列表；那时不知道列表里有多少条，不写数字
   const scope = (open && dialog.scope) || current;
   const isCurrent = sameScope(scope, current);
+  const feedKind = useFeedKind();
   const title = scopeTitle(
     scope,
     space,
@@ -1589,11 +1591,11 @@ export function MarkAllReadDialog() {
       nav.data?.feeds.find((f) => f.id === id)?.title ??
       nav.data?.accounts.map((a) => (a.id === id ? a.name || a.email : undefined)).find(Boolean) ??
       (nav.data?.newsletters?.find((n) => n.address === id)?.name || undefined),
+    feedKind,
   );
   const { items, query } = useListModel();
   const { markAllRead: markCurrent } = useActions();
   const markAll = useMarkAllRead();
-  const feedKind = useFeedKind();
   const markAllRead = () => (isCurrent ? markCurrent() : markAll.mutate(filterOf(scope, space, feedKind)));
   const unread = items.filter((i) => !i.read).length;
   // 列表还有没加载的部分时说不准有多少条，不写数字

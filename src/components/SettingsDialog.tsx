@@ -581,7 +581,37 @@ function TranslationSettings({ open }: { open: boolean }) {
         </ul>
         {error && <div className="mt-1 text-[12px] text-danger">{error}</div>}
       </div>
+      <SkippedModels installed={installed.map((m) => m.pair)} name={name} />
     </>
+  );
+}
+
+/** 用户在翻译提示里点了「跳过」的模型：列出来，可以恢复提示。已经下载了的不再列。 */
+function SkippedModels({ installed, name }: { installed: string[]; name: (code: string) => string }) {
+  const t = useT();
+  const skipped = useUi((s) => s.skippedModels).filter((pair) => !installed.includes(pair));
+  const unskip = useUi((s) => s.unskipModel);
+  if (skipped.length === 0) return null;
+  return (
+    <div>
+      <div className="text-fg">{t("settings.skippedModels")}</div>
+      <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("settings.skippedModelsHint")}</div>
+      <ul className="mt-2 flex flex-col">
+        {skipped.map((pair) => {
+          const [from = "", to = ""] = pair.split("-");
+          return (
+            <li key={pair} className="flex h-8 items-center gap-3">
+              <span className="min-w-0 flex-1 truncate text-fg-2">
+                {name(from)} → {name(to)}
+              </span>
+              <Button variant="ghost" className="h-6 px-2 text-[12px]" onClick={() => unskip(pair)}>
+                {t("settings.unskipModel")}
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

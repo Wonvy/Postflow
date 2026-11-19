@@ -75,7 +75,7 @@ export function ShortcutsDialog() {
                   <dt className="min-w-0 truncate text-fg-2">{t(label)}</dt>
                   <dd className="flex shrink-0 gap-1">
                     {keys.map((k) => (
-                      <Kbd key={k}>{k}</Kbd>
+                      <Kbd key={k}>{k === "Space" ? t("key.space") : k}</Kbd>
                     ))}
                   </dd>
                 </div>

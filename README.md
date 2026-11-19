@@ -371,6 +371,10 @@ Run the desktop app:
 npm run app
 ```
 
+This development build is called Postflow Dev and keeps its own settings and index, so it runs next to an installed
+Postflow without touching it. Point it at a separate data folder when it asks, unless you mean to test syncing with
+your real data.
+
 Work on the interface in a normal browser (two terminals):
 
 ```bash

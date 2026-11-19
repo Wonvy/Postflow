@@ -183,12 +183,16 @@ interface UiState {
   /** 鼠标停在侧栏、列表、阅读区中的一栏上时，另外两栏变淡。 */
   focusPane: boolean;
   setFocusPane: (on: boolean) => void;
+  /** 列表里收起的日期分段（today、thisWeek、m:2026-10…），所有列表共用。只在这台设备上。 */
+  collapsedDates: string[];
+  toggleDateSection: (key: string) => void;
   /** 鼠标停在列表的一行上时按空格打开那一行（不必先点它）。 */
   spaceOpensHovered: boolean;
   setSpaceOpensHovered: (on: boolean) => void;
   /** 用户选了「跳过」的离线翻译模型（语言对）：不再自动提示下载。自己按翻译时还会问。只在这台设备上。 */
   skippedModels: string[];
   skipModels: (pairs: string[]) => void;
+  unskipModel: (pair: string) => void;
   /** 侧栏里每一边不显示的内置视图（收件箱、今天、未读、星标、稍后提醒、归档）。右键视图那一组可以改。 */
   hiddenViews: Record<Space, View[]>;
   toggleViewShown: (space: Space, view: View) => void;
@@ -416,6 +420,7 @@ export const useUi = create<UiState>()(
       lockedLists: [],
       rememberViews: false,
       focusPane: true,
+      collapsedDates: [],
       spaceOpensHovered: true,
       skippedModels: [],
       markReadOnScroll: false,
@@ -441,8 +446,16 @@ export const useUi = create<UiState>()(
         }),
       setRememberViews: (rememberViews) => set({ rememberViews }),
       setFocusPane: (focusPane) => set({ focusPane }),
+      toggleDateSection: (key) =>
+        set((s) => ({
+          collapsedDates: s.collapsedDates.includes(key)
+            ? s.collapsedDates.filter((k) => k !== key)
+            : // 按月的分段越攒越多，只留最近收起的 50 个
+              [...s.collapsedDates, key].slice(-50),
+        })),
       setSpaceOpensHovered: (spaceOpensHovered) => set({ spaceOpensHovered }),
       skipModels: (pairs) => set((s) => ({ skippedModels: [...new Set([...s.skippedModels, ...pairs])] })),
+      unskipModel: (pair) => set((s) => ({ skippedModels: s.skippedModels.filter((p) => p !== pair) })),
       setMarkReadOnScroll: (markReadOnScroll) => set({ markReadOnScroll }),
       setEpisodesKeep: (episodesKeep) => set({ episodesKeep }),
       setReaderLayout: (readerLayout) => set({ readerLayout }),
@@ -718,6 +731,7 @@ export const useUi = create<UiState>()(
         lockedLists: s.lockedLists,
         rememberViews: s.rememberViews,
         focusPane: s.focusPane,
+        collapsedDates: s.collapsedDates,
         spaceOpensHovered: s.spaceOpensHovered,
         skippedModels: s.skippedModels,
         markReadOnScroll: s.markReadOnScroll,
