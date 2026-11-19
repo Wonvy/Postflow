@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.36 — 2026-11-19
+
+### English
 - Speech recognition models can be downloaded in mainland China: SenseVoice and Whisper are also fetched from ModelScope. Before downloading, Postflow tries each source briefly and uses the fastest, so a source your network can't reach no longer holds things up.
 - Fixed resuming a model download from servers that answer a partial request with status 200, which could leave a broken file.
 - Subtitle styles: eleven ways to show subtitles, each with a live preview in Settings → Subtitles: karaoke (the default: each word lights up as it's spoken), typewriter, bounce, glass, bilingual, emphasis, scroll, particles, speaker labels, waves and minimal. Switch from the small arrow next to the CC button too. Reduce Motion keeps the colors and drops the movement.

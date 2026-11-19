@@ -4210,7 +4210,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-ai"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "postflow-testkit",
  "reqwest",
@@ -4224,7 +4224,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-core"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "axum",
  "futures",
@@ -4250,7 +4250,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-desktop"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "local-ip-address",
  "postflow-core",
@@ -4272,7 +4272,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-feed"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "ammonia",
  "bytes",
@@ -4292,7 +4292,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-mail"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "ammonia",
  "async-imap",
@@ -4317,7 +4317,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-speech"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "axum",
  "opus-decoder",
@@ -4335,7 +4335,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-store"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "rand",
  "rusqlite",
@@ -4348,7 +4348,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-testkit"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "serde_json",
  "sha2 0.11.1",
@@ -4357,7 +4357,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-translate"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "axum",
  "flate2",
@@ -4375,7 +4375,7 @@ dependencies = [
 
 [[package]]
 name = "postflow-web"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "axum",
  "futures",
