@@ -23,8 +23,18 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { createContext, type CSSProperties, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, type Item } from "../lib/api";
+import {
+  createContext,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { api, type Item, type Voice } from "../lib/api";
 import { formatLength } from "../lib/duration";
 import { useDownloadActions, useDownloads } from "../lib/episodes";
 import { errorText, type Translate, useLang, useT } from "../lib/i18n";
@@ -53,11 +63,11 @@ import { coveredPercent, type Cue, cueAt, isCovered, speakerOrder } from "../lib
 import { redoLocal, startLocal, SUBTITLE_STYLES, useSubtitles } from "../lib/subtitles";
 import { type SubtitleTranslation, translationOf, useTranslationFor } from "../lib/subtitleTranslate";
 import { activeIndex, parseChapters, parseTranscript } from "../lib/transcript";
-import { languageName } from "../lib/translate";
+import { languageName, useTranslateTarget } from "../lib/translate";
 import { useUi } from "../lib/store";
-import { clockRate, SubtitleView, usePlaybackClock } from "./SubtitleStyles";
+import { clockRate, SpeakerMark, SubtitleView, usePlaybackClock } from "./SubtitleStyles";
 import { toast } from "./Toast";
-import { cx, Favicon, IconButton, Menu, MenuItem, MenuSeparator, MenuSub, Spinner } from "./ui";
+import { ContextMenu, cx, Favicon, IconButton, Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub, Spinner } from "./ui";
 
 /** 当前列表里能放的几期，按列表顺序：播完一期接着放下一期时用。 */
 function useQueue(): Episode[] {
@@ -543,6 +553,154 @@ function translationNote(t: Translate, lang: Lang, value: SubtitleTranslation, w
   }
 }
 
+/** 字幕右键菜单里能选的翻译语言（再加上现在用的那种）。 */
+const SUBTITLE_LANGUAGES = ["zh", "en", "ja", "ko", "fr", "de", "es", "ru", "pt", "it"];
+
+/** 字幕上右键：看原文、原文和译文、只看译文，翻译成什么语言；字号、高度恢复默认。 */
+function SubtitleContextItems() {
+  const t = useT();
+  const lang = useLang();
+  const translate = useSubtitles((s) => s.translate);
+  const setTranslate = useSubtitles((s) => s.setTranslate);
+  const show = useSubtitles((s) => s.show);
+  const setShow = useSubtitles((s) => s.setShow);
+  const chosen = useSubtitles((s) => s.translateTo);
+  const setTranslateTo = useSubtitles((s) => s.setTranslateTo);
+  const scale = useSubtitles((s) => s.scale);
+  const setScale = useSubtitles((s) => s.setScale);
+  const height = useSubtitles((s) => s.height);
+  const setHeight = useSubtitles((s) => s.setHeight);
+  const general = useTranslateTarget();
+  const target = chosen ?? general;
+  const mark = (yes: boolean) => (yes ? <Check size={14} /> : <span className="inline-block size-[14px]" />);
+  const codes = SUBTITLE_LANGUAGES.includes(target) ? SUBTITLE_LANGUAGES : [target, ...SUBTITLE_LANGUAGES];
+  const pickLanguage = (code: string | null) => {
+    setTranslateTo(code);
+    setTranslate(true);
+  };
+  return (
+    <>
+      <MenuLabel>{t("subtitles.menuLanguage")}</MenuLabel>
+      <MenuItem icon={mark(!translate)} onSelect={() => setTranslate(false)}>
+        {t("subtitles.showOriginal")}
+      </MenuItem>
+      <MenuItem
+        icon={mark(translate && show === "both")}
+        onSelect={() => {
+          setShow("both");
+          setTranslate(true);
+        }}
+      >
+        {t("subtitles.showBoth")}
+      </MenuItem>
+      <MenuItem
+        icon={mark(translate && show === "translation")}
+        onSelect={() => {
+          setShow("translation");
+          setTranslate(true);
+        }}
+      >
+        {t("subtitles.showTranslation")}
+      </MenuItem>
+      <MenuSub
+        label={
+          <span className="flex items-center justify-between gap-3">
+            {t("subtitles.translateInto")}
+            <span className="text-fg-3">{languageName(target, lang)}</span>
+          </span>
+        }
+      >
+        <MenuItem icon={mark(chosen === null)} onSelect={() => pickLanguage(null)}>
+          {t("subtitles.followSettings", { lang: languageName(general, lang) })}
+        </MenuItem>
+        <MenuSeparator />
+        {codes.map((code) => (
+          <MenuItem key={code} icon={mark(chosen === code)} onSelect={() => pickLanguage(code)}>
+            {languageName(code, lang)}
+          </MenuItem>
+        ))}
+      </MenuSub>
+      {(scale !== 1 || height !== null) && <MenuSeparator />}
+      {scale !== 1 && (
+        <MenuItem icon={<span className="inline-block size-[14px]" />} onSelect={() => setScale(1)}>
+          {t("subtitles.resetSize", { n: Math.round(scale * 100) })}
+        </MenuItem>
+      )}
+      {height !== null && (
+        <MenuItem icon={<span className="inline-block size-[14px]" />} onSelect={() => setHeight(null)}>
+          {t("subtitles.resetHeight")}
+        </MenuItem>
+      )}
+    </>
+  );
+}
+
+/**
+ * 字幕区域：鼠标放在上面按住 Ctrl（Mac 上 ⌘ 也行，触控板双指捏合也是）滚滚轮调字号；
+ * 拖下沿调高度，双击下沿恢复；右键切换语言。迷你播放器里只能调字号、右键，不能拖高度。
+ */
+function SubtitleArea({ compact, children }: { compact: boolean; children: ReactNode }) {
+  const t = useT();
+  const scale = useSubtitles((s) => s.scale);
+  const height = useSubtitles((s) => s.height);
+  const box = useRef<HTMLDivElement>(null);
+  // 要拦住网页视图自己的整页缩放，得用不是 passive 的监听
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const { scale, setScale } = useSubtitles.getState();
+      setScale(scale * Math.exp(-e.deltaY * 0.0015));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  const startResize = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = box.current;
+    if (!el || e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    const startY = e.clientY;
+    const startHeight = el.getBoundingClientRect().height;
+    handle.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => useSubtitles.getState().setHeight(startHeight + ev.clientY - startY);
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  };
+  return (
+    <ContextMenu bare items={<SubtitleContextItems />}>
+      <div
+        ref={box}
+        className={cx("relative flex flex-col justify-center", !compact && "group/subs")}
+        style={{ minHeight: compact ? undefined : (height ?? undefined) }}
+      >
+        <div style={{ zoom: scale }}>{children}</div>
+        {!compact && (
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label={t("subtitles.resizeHint")}
+            title={t("subtitles.resizeHint")}
+            onPointerDown={startResize}
+            onDoubleClick={() => useSubtitles.getState().setHeight(null)}
+            className="absolute inset-x-0 -bottom-1.5 flex h-3 cursor-ns-resize touch-none items-center justify-center"
+          >
+            <span className="h-1 w-10 rounded-full bg-line-strong opacity-0 transition-opacity group-hover/subs:opacity-100" />
+          </div>
+        )}
+      </div>
+    </ContextMenu>
+  );
+}
+
 /**
  * 这一句是谁说的。本机分出来的按 `order`（speakerOrder）重新编号，没编号的不标；节目文字稿里的用名字。
  */
@@ -551,11 +709,23 @@ function speakerOf(
   cue: Cue,
   order: Map<number, number> | null,
   names: readonly string[] | undefined,
-): { index: number; name: string } | null {
+  voices?: readonly Voice[],
+): { index: number; name: string; voice: Voice } | null {
   if (cue.speaker === undefined) return null;
   const index = order ? order.get(cue.speaker) : cue.speaker;
   if (index === undefined) return null;
-  return { index, name: names?.[cue.speaker] ?? t("subtitles.speakerN", { n: index + 1 }) };
+  return {
+    index,
+    name: names?.[cue.speaker] ?? t("subtitles.speakerN", { n: index + 1 }),
+    voice: voices?.[cue.speaker] ?? null,
+  };
+}
+
+/** 说话人圆章的提示：名字，猜得出时加上男声女声。 */
+function speakerTitle(t: Translate, name: string, voice: Voice): string {
+  if (voice === "male") return `${name} · ${t("subtitles.voiceMale")}`;
+  if (voice === "female") return `${name} · ${t("subtitles.voiceFemale")}`;
+  return name;
 }
 
 /**
@@ -570,6 +740,7 @@ function SubtitleLine({ id, compact = false }: { id: string; compact?: boolean }
   const needsModel = useSubtitles((s) => s.needsModel);
   const style = useSubtitles((s) => s.style);
   const showSpeakers = useSubtitles((s) => s.speakers);
+  const show = useSubtitles((s) => s.show);
   const translation = useTranslationFor(id);
   const position = usePlayer((s) => (s.current?.id === id ? s.position : -1));
   const playing = usePlayer((s) => s.playing && s.current?.id === id);
@@ -618,20 +789,26 @@ function SubtitleLine({ id, compact = false }: { id: string; compact?: boolean }
     status = waiting ? t("subtitles.downloadingEpisodeAt", { n: percent }) : t("subtitles.recognizing");
   }
 
-  const speaker = showSpeakers && cue ? speakerOf(t, cue, order, entry?.speakerNames) : null;
+  const speaker = showSpeakers && cue ? speakerOf(t, cue, order, entry?.speakerNames, entry?.voices) : null;
   const translated = cue ? translationOf(translation, cue) : undefined;
+  // 只看译文：有译文的句子把原文换成译文（逐字效果按这一句的时长平均分）
+  const onlyTranslation = show === "translation" && !!translated;
+  const shownCues =
+    onlyTranslation && cue && cues ? cues.map((c, i) => (i === index ? { ...c, text: translated, t: undefined } : c)) : cues;
   return (
-    <SubtitleView
-      style={style}
-      cues={cues ?? []}
-      index={index}
-      time={time}
-      translation={translated}
-      speaker={speaker}
-      compact={compact}
-      placeholder={status}
-      note={compact ? null : translationNote(t, lang, translation, !!cue && !translated)}
-    />
+    <SubtitleArea compact={compact}>
+      <SubtitleView
+        style={style}
+        cues={shownCues ?? []}
+        index={index}
+        time={time}
+        translation={onlyTranslation ? undefined : translated}
+        speaker={speaker}
+        compact={compact}
+        placeholder={status}
+        note={compact ? null : translationNote(t, lang, translation, !!cue && !translated)}
+      />
+    </SubtitleArea>
   );
 }
 
@@ -682,24 +859,34 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
   const hasChapters = (chapters.data?.length ?? 0) > 0;
   // 说话人：节目文字稿里写的名字按出现的先后编号，本机分出来的直接是编号；编号决定颜色
   const shown = useMemo(() => {
+    type Line = { start: number | null; text: string; speaker?: string; index?: number; voice: Voice; first: boolean };
+    let lines: Omit<Line, "first">[] | undefined;
     if (transcript) {
       const names: string[] = [];
-      return cues.data?.map((c) => {
+      lines = cues.data?.map((c) => {
         let index: number | undefined;
         if (c.speaker) {
           index = names.indexOf(c.speaker);
           if (index < 0) index = names.push(c.speaker) - 1;
         }
-        return { start: c.start, text: c.text, speaker: c.speaker, index };
+        return { start: c.start, text: c.text, speaker: c.speaker, index, voice: null };
+      });
+    } else if (hasLocal && local) {
+      const order = speakerOrder(local.cues);
+      lines = local.cues.map((c) => {
+        const who = showSpeakers ? speakerOf(t, c, order, undefined, local.voices) : null;
+        return { start: c.start as number | null, text: c.text, speaker: who?.name, index: who?.index, voice: who?.voice ?? null };
       });
     }
-    if (!hasLocal || !local) return undefined;
-    const order = speakerOrder(local.cues);
-    return local.cues.map((c) => {
-      const who = showSpeakers ? speakerOf(t, c, order, undefined) : null;
-      return { start: c.start as number | null, text: c.text, speaker: who?.name, index: who?.index };
+    // 换了人的那一句写上名字，同一个人接着说的只放记号。中间夹着认不出是谁的句子不算换人
+    let last: string | undefined;
+    return lines?.map((l): Line => {
+      const first = !!l.speaker && l.speaker !== last;
+      if (l.speaker) last = l.speaker;
+      return { ...l, first };
     });
   }, [transcript, cues.data, hasLocal, local, showSpeakers, t]);
+  const anySpeaker = showSpeakers && (shown?.some((l) => l.speaker) ?? false);
   const activeCue = panel === "transcript" && shown && position >= 0 ? activeIndex(shown, position) : -1;
   const activeRef = useRef<HTMLParagraphElement>(null);
   // 正在放的那一句跟着滚进面板里（只在面板里滚，不带着整页动）
@@ -763,40 +950,60 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
           ) : transcript && (cues.error || (cues.data && cues.data.length === 0)) ? (
             <p className="px-2 py-2 text-[12px] text-fg-3">{t("player.transcriptFailed")}</p>
           ) : (
-            shown?.map((c, i) => (
-              <p
-                key={`${i}:${c.start}`}
-                ref={i === activeCue ? activeRef : undefined}
-                className={cx(
-                  "select-text rounded-md px-2 py-1 text-[13px] leading-relaxed",
-                  i === activeCue ? "bg-accent-soft text-fg" : "text-fg-2",
-                )}
-              >
-                {c.start !== null && (
-                  <button
-                    type="button"
-                    onClick={() => jump(c.start ?? 0)}
-                    className="tabular mr-2 text-[11px] text-fg-3 hover:text-accent"
-                  >
-                    {formatTime(c.start)}
-                  </button>
-                )}
-                {c.speaker && (
-                  <span
-                    className="mr-1 font-medium text-fg"
-                    style={showSpeakers && c.index !== undefined ? { color: `var(--spk-${c.index % 8})` } : undefined}
-                  >
-                    {c.speaker}:
+            // 三列：时间、说话人记号（形状分男女、颜色分人）、文字。换人的那一句上面写名字
+            shown?.map((c, i) => {
+              const tr = c.start !== null ? translationOf(translation, { start: c.start, text: c.text }) : undefined;
+              const color = c.index !== undefined ? { color: `var(--spk-${c.index % 8})` } : undefined;
+              return (
+                <p
+                  key={`${i}:${c.start}`}
+                  ref={i === activeCue ? activeRef : undefined}
+                  className={cx(
+                    "grid select-text gap-x-2.5 rounded-md px-2 py-1 text-[13px] leading-[22px]",
+                    anySpeaker ? "grid-cols-[2.75rem_8px_minmax(0,1fr)]" : "grid-cols-[2.75rem_minmax(0,1fr)]",
+                    i === activeCue ? "bg-accent-soft text-fg" : "text-fg-2",
+                    c.first && i > 0 && "mt-2",
+                  )}
+                >
+                  {anySpeaker && c.first && c.speaker && (
+                    <>
+                      <span />
+                      <span />
+                      <span className="text-[12px] font-medium leading-5" style={color}>
+                        {c.speaker}
+                      </span>
+                    </>
+                  )}
+                  {c.start !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => jump(c.start ?? 0)}
+                      className="tabular self-start text-right text-[11px] leading-[22px] text-fg-3 hover:text-accent"
+                    >
+                      {formatTime(c.start)}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  {anySpeaker && (
+                    <span className="flex h-[22px] items-center justify-center self-start">
+                      {c.speaker && c.index !== undefined && (
+                        <SpeakerMark voice={c.voice} index={c.index} size="8px" title={speakerTitle(t, c.speaker, c.voice)} />
+                      )}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    {c.speaker && !anySpeaker && (
+                      <span className="mr-1.5 font-medium text-fg" style={showSpeakers ? color : undefined}>
+                        {c.speaker}:
+                      </span>
+                    )}
+                    {c.text}
+                    {tr && <span className="block text-[12px] leading-5 text-fg-3">{tr}</span>}
                   </span>
-                )}
-                {c.text}
-                {c.start !== null && translationOf(translation, { start: c.start, text: c.text }) && (
-                  <span className="mt-0.5 block text-[12px] text-fg-3">
-                    {translationOf(translation, { start: c.start, text: c.text })}
-                  </span>
-                )}
-              </p>
-            ))
+                </p>
+              );
+            })
           )}
           {hasLocal && local && (
             <p className="sticky bottom-0 flex flex-wrap items-center gap-x-2 bg-surface px-2 pb-0.5 pt-2 text-[11px] text-fg-3">

@@ -7,8 +7,24 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Fixed subtitles failing with "this episode's audio can't be read" while some episodes were still downloading (for example 故事FM): M4A files with a large index at the start are now read as they download. If a file can only be read once it's complete, subtitles start by themselves when the download finishes, without pressing Retry.
+- Fixed subtitles failing when an episode finished downloading at the very moment transcription started.
+- Translation no longer gives up when an episode opens with music that recognition turns into a few stray words; it waits for more lines to tell the language.
+- The Bilingual style shows a second language for episodes that are already in yours: English under a Chinese show, the interface language under an English one.
+- Subtitles can be adjusted in place: Ctrl-scroll (⌘ on a Mac, or pinch) over them to change the text size, drag their bottom edge in the play bar to change the height, and right-click to show the original, the translation or both, and to pick the language to translate subtitles into.
+- The transcript is laid out in columns: the time, the speaker's mark and the text, with the speaker's name above the first line whenever the speaker changes. Each speaker has their own color; the mark is a square for a voice that sounds male and a circle for one that sounds female (guessed from its pitch, on your device), and a small diamond when it can't tell.
+- Fixed Postflow freezing with "hide at the screen edge" turned on: clicking the tray icon could leave the window impossible to open, and the window stopped sliding away.
+- On Windows, dragging the window to the top of the screen with "hide at the screen edge" on now docks it there instead of letting Snap maximize it.
 
 ### 中文
+- 修复部分单集（比如故事FM）边下载边出字幕时报「这一期的音频读不了」：开头索引很大的 M4A 现在也能边下边读；万一有要整个下完才读得了的文件，下载完字幕会自动开始，不用点「重试」。
+- 修复单集刚好在开始转写的那一刻下载完时字幕报错。
+- 节目开头是音乐、被识别成几个零散的字时，自动翻译不再直接放弃，会等句子多了再认语言。
+- 「双语」样式下，节目本来就是你的语言也会显示第二种语言：中文节目下面是英文，英文节目下面是界面语言。
+- 字幕可以直接调：鼠标放在上面按住 Ctrl（Mac 上 ⌘，或者双指捏合）滚动调字号，拖播放条里字幕的下沿调高度，右键选只看原文、只看译文还是都看，以及字幕翻译成什么语言。
+- 文字稿分成三列：时间、说话人记号、文字，换人时在第一句上面写上是谁。每个说话人一种颜色；记号的形状分男女：男声是方形，女声是圆形（在本机按音高猜的），听不出来是小菱形。
+- 修复开着「靠边自动隐藏」时 Postflow 会卡住：点托盘图标打不开窗口，窗口也不再靠边缩进去。
+- Windows 上开着「靠边自动隐藏」时，把窗口拖到屏幕顶上会贴在顶边，不再被系统的「贴靠」最大化。
 
 ## 0.1.36 — 2026-11-19
 

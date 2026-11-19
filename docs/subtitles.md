@@ -15,7 +15,8 @@ download as "Download for offline listening") and reads the file from where you'
 as the first part has arrived rather than waiting for the whole download. Recognition is several times to tens of
 times faster than playback, so the first line appears a few seconds after you press play and the transcription then
 stays ahead of you. If the download hasn't reached the part you're listening to yet, the player says how far it has
-got. When it reaches the end it goes back and fills in the part you skipped. If
+got. The rare file that can't be read until it's complete is transcribed as soon as the download finishes, without
+you having to press Retry. When it reaches the end it goes back and fills in the part you skipped. If
 you jump to a part that hasn't been transcribed yet, it continues from there.
 
 The result is saved on this device and reused next time. It is also listed under the play bar as a transcript: click a
@@ -46,11 +47,25 @@ The word timing comes from the recognizer: SenseVoice and Parakeet give the time
 Whisper and shows' own transcripts don't, so the line is spread evenly over the time it takes. If your system has
 Reduce Motion turned on, the styles keep their colors and drop the movement.
 
+You can also adjust the subtitles right where they are:
+
+- **Text size:** point at the subtitles and scroll with Ctrl held (⌘ on a Mac, or pinch on a trackpad).
+- **Height:** drag the bottom edge of the subtitles in the play bar; double-click the edge to reset it.
+- **Language:** right-click the subtitles to show the original only, the original and the translation, or the
+  translation only, and to pick the language to translate into (just for subtitles; Settings → Translation stays as
+  it is). The same menu resets the text size and height.
+
 ## Telling speakers apart
 
-With **Tell speakers apart** on, each person gets a color, in every style, and the transcript under the play bar
-names them (Speaker 1, Speaker 2, … in the order they first speak). When a show's transcript names its speakers,
-those names are used.
+With **Tell speakers apart** on, each person gets a color, in every style. The transcript under the play bar has
+three columns: the time, the speaker's mark, and the text, with the speaker's name above the first line whenever
+the speaker changes (Speaker 1, Speaker 2, … in the order they first speak). When a show's transcript names its
+speakers, those names are used.
+
+The mark's shape tells male and female voices apart: a **square** for a voice that sounds male, a **circle** for
+one that sounds female, and a small **diamond** when it can't tell. The guess comes from the pitch of each
+person's voice, measured on your device during recognition: most men talk at around 85–150 Hz and most women at
+around 180–260 Hz. Voices in between get the diamond.
 
 For speech recognized on your device, Postflow needs a second, small model that recognizes voices: **3D-Speaker
 CAM++** (27 MB, in Settings → Subtitles under Voice model). With it installed, every few seconds of speech are
@@ -63,6 +78,9 @@ again** in their transcript.
 Turn on **Translate subtitles** (in Settings → Subtitles or the menu next to the CC button). When an episode isn't
 in your language, a translation appears under each line. It uses what you chose in **Settings → Translation**: the
 target language, and either the free offline models (Postflow asks before downloading one) or your AI service.
+
+With the **Bilingual** style, an episode that's already in your language still gets a second line: a Chinese show
+shown to a Chinese reader is translated into English, and an English show into the interface language.
 
 Only the lines around where you're listening are translated, a minute or so ahead. Translations are kept on this
 device with the subtitles, so listening again, or reopening Postflow, doesn't translate (or, with an AI service,
@@ -145,3 +163,6 @@ Plugins can read the subtitles, their speakers and translations as they play, an
 - The first line of a part you jumped to may start mid-sentence.
 - Telling speakers apart is a best guess: two similar voices can be taken for one person, and short interjections
   or people talking over each other may go unlabeled. At most eight speakers are told apart per episode.
+- Square or circle is a guess from pitch, not from a model of who is speaking. A man speaking loudly (on stage, in a
+  speech) can get a circle, and children's voices count as high voices. Episodes transcribed before this feature
+  show diamonds until you choose Transcribe again.

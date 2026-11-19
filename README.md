@@ -143,7 +143,8 @@ click **More info → Run anyway**.
   transcript use it; the rest are transcribed on your own computer, starting where you're listening and running well
   ahead of playback, so the audio never leaves your device. Speech recognition models are downloaded on demand in
   Settings → Subtitles and you can switch between them. Eleven animated styles (words light up as they're spoken
-  by default), a color for each speaker, and automatic translation under each line. See
+  by default), a color for each speaker (a square or circle mark for male and female voices), and automatic translation under each line. Ctrl-scroll the
+  subtitles to resize them, drag their edge to make room, right-click to switch languages. See
   [Subtitles](docs/subtitles.md).
 - Newsletters: right-click a mail and choose "Read with feeds" to read that sender's mail in Feeds, one row per sender
   under Newsletters, instead of in Mail. Right-click the sender to move it back.
@@ -262,7 +263,7 @@ click **More info → Run anyway**.
   message, check mail and feeds, open Settings, or quit.
 - Hide at the screen edge (off by default; Settings → General, or the tray menu): drag the window to the top, left or
   right edge of the screen and it slides away when the pointer leaves, leaving a thin strip. Touch the strip to bring
-  it back.
+  it back. On Windows, dragging to the top edge docks the window there instead of letting Snap maximize it.
 - Works on phones: on a narrow screen Postflow shows one pane at a time, with the sidebar sliding in from the left
   and a back button in the reader. Swipe a row left to archive or right to mark it read or unread. Open it on your
   phone through [browser access](#using-postflow-in-a-browser) and add it to the home screen to use it like an app.

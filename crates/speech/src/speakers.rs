@@ -6,6 +6,8 @@
 //!
 //! 阈值是拿 3D-Speaker CAM++ 声纹量出来的：同一个人的 3 秒片段相似度 0.78–0.88，不同的人 0.2–0.6
 //! （同一档节目里两位男主持也在 0.6 以下）。
+//!
+//! 每个人还记着音高（`pitch.rs` 估的基频）的平均，用来猜男声女声，界面上给不同的图标。
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +19,28 @@ const SHORT_SAME: f32 = 0.6;
 const NEW_MIN_SECONDS: f64 = 1.5;
 /// 最多分出这么多人。再多的归给最像的那个。
 const MAX_SPEAKERS: usize = 8;
+/// 每个人量够这么多次音高就不再量（省时间，平均值也稳了）。
+const PITCH_SAMPLES: u32 = 24;
+/// 至少量过这么多次才猜男女。
+const PITCH_MIN_SAMPLES: u32 = 3;
+/// 音高（这个人各段的中位数）低于它算男声，高于 FEMALE_HZ 算女声，中间的不猜。
+/// 拿真实播客量的：聊天时男声多在 85–150 Hz，女声 180–260 Hz。大声演讲、很激动时男声也会到 200 Hz 以上，
+/// 那样会猜错，所以只当提示用。
+const MALE_HZ: f32 = 155.0;
+const FEMALE_HZ: f32 = 170.0;
+
+/// 猜出来的男声女声。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Gender {
+    Male,
+    Female,
+}
+
+/// 一个人各段话的音高（赫兹），最多 PITCH_SAMPLES 个。取中位数，偶尔量错一段（高八度）不影响。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+struct Pitch(Vec<f32>);
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Speakers {
@@ -26,6 +50,9 @@ pub struct Speakers {
     /// 每个人算进平均里的段数。
     #[serde(default)]
     counts: Vec<u32>,
+    /// 每个人的音高。以前存的字幕里没有，按需补上。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pitch: Vec<Pitch>,
 }
 
 fn normalize(v: &[f32]) -> Option<Vec<f32>> {
@@ -44,6 +71,51 @@ impl Speakers {
 
     pub fn is_empty(&self) -> bool {
         self.centroids.is_empty()
+    }
+
+    /// 这个人还要不要再量音高。
+    pub fn wants_pitch(&self, speaker: u32) -> bool {
+        (speaker as usize) < self.centroids.len()
+            && self
+                .pitch
+                .get(speaker as usize)
+                .is_none_or(|p| p.0.len() < PITCH_SAMPLES as usize)
+    }
+
+    /// 记下这个人一段话的音高（赫兹）。
+    pub fn add_pitch(&mut self, speaker: u32, hz: f32) {
+        let i = speaker as usize;
+        if i >= self.centroids.len() || !hz.is_finite() || hz <= 0.0 {
+            return;
+        }
+        if self.pitch.len() <= i {
+            self.pitch.resize(i + 1, Pitch::default());
+        }
+        let p = &mut self.pitch[i].0;
+        if p.len() < PITCH_SAMPLES as usize {
+            p.push(hz);
+        }
+    }
+
+    /// 每个人猜出来的男声女声，按编号排；量得太少、音高在中间的是 None。
+    pub fn genders(&self) -> Vec<Option<Gender>> {
+        (0..self.centroids.len())
+            .map(|i| {
+                let mut values = self.pitch.get(i).map(|p| p.0.clone()).unwrap_or_default();
+                if values.len() < PITCH_MIN_SAMPLES as usize {
+                    return None;
+                }
+                values.sort_by(f32::total_cmp);
+                let middle = values[values.len() / 2];
+                if middle < MALE_HZ {
+                    Some(Gender::Male)
+                } else if middle > FEMALE_HZ {
+                    Some(Gender::Female)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// 这段话是谁说的。`seconds` 是这段话多长。认不准时为空。
@@ -144,6 +216,47 @@ mod tests {
             s.assign(&voice(axis, 0.05, axis as u32), 4.0);
         }
         assert_eq!(s.len(), MAX_SPEAKERS);
+    }
+
+    #[test]
+    fn voices_are_guessed_from_their_pitch() {
+        let mut s = Speakers::default();
+        s.assign(&voice(0, 0.2, 1), 4.0);
+        s.assign(&voice(1, 0.2, 2), 4.0);
+        s.assign(&voice(2, 0.2, 3), 4.0);
+        // 量得太少：还不猜
+        s.add_pitch(0, 118.0);
+        assert_eq!(s.genders(), vec![None, None, None]);
+        for hz in [112.0, 125.0, 120.0] {
+            s.add_pitch(0, hz);
+        }
+        for hz in [210.0, 225.0, 198.0] {
+            s.add_pitch(1, hz);
+        }
+        // 中间的音高不猜；偶尔一段量成高八度不影响（取中位数）
+        for hz in [160.0, 168.0, 165.0] {
+            s.add_pitch(2, hz);
+        }
+        s.add_pitch(0, 240.0);
+        assert_eq!(
+            s.genders(),
+            vec![Some(Gender::Male), Some(Gender::Female), None]
+        );
+        // 量够了就不再要
+        for _ in 0..30 {
+            s.add_pitch(0, 120.0);
+        }
+        assert!(!s.wants_pitch(0));
+        assert!(s.wants_pitch(1));
+        // 没有这个人：不要、也不记
+        assert!(!s.wants_pitch(9));
+        s.add_pitch(9, 120.0);
+        // 存下来再读回来还在；以前没有音高的字幕也读得进来
+        let back: Speakers = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back.genders(), s.genders());
+        let old: Speakers =
+            serde_json::from_str(r#"{"centroids":[[1.0,0.0]],"counts":[1]}"#).unwrap();
+        assert_eq!(old.genders(), vec![None]);
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub mod audio;
 pub mod catalog;
 pub mod cues;
 pub mod engine;
+pub mod pitch;
 pub mod speakers;
 mod store;
 
@@ -35,7 +36,7 @@ pub use audio::AudioReader;
 pub use catalog::{Catalog, Model, RemoteFile, TASK_ASR, TASK_SPEAKER};
 pub use cues::{Covered, Cue};
 pub use engine::{Engine, Outcome, Step, default_threads};
-pub use speakers::Speakers;
+pub use speakers::{Gender, Speakers};
 pub use store::{Transcript, Transcripts};
 /// 自己实现的音频来源（比如还在下载的文件）要实现它，交给 `AudioReader::from_source`。
 pub use symphonia::core::io::MediaSource;

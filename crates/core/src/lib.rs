@@ -127,6 +127,8 @@ pub enum Event {
         complete: bool,
         /// 用哪个模型转的（模型加载好以前是空的）。
         model: String,
+        /// 每个说话人（按编号）猜出来的男声女声，猜不出是 null。
+        voices: Vec<Option<postflow_speech::Gender>>,
         /// 等这一期下载到本机时的进度。
         received: u64,
         total: Option<u64>,

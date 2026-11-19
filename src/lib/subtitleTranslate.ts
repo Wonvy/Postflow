@@ -4,10 +4,12 @@
 // - 只翻播放位置附近的句子，听到哪儿翻到哪儿。
 // - 译文存在本机（核心的 subtitles.translations），再听、重开都不用再翻：用 AI 翻译时不会重复花钱。
 // - 整个应用只有一处在翻（SubtitleTranslationBridge），播放条、迷你播放器、文字稿都读它的结果。
+// - 双语样式下，节目本来就是要看的语言（比如中文节目、翻译成中文）时译成另一种：见 secondLanguage。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { api, type TranslatePlan } from "./api";
+import { useLang } from "./i18n";
 import { usePlayer } from "./player";
 import { cueKey, type Cue } from "./subtitleCues";
 import { useSubtitles } from "./subtitles";
@@ -18,8 +20,11 @@ const BEHIND = 10;
 const AHEAD = 90;
 /** 一次最多翻几句。 */
 const BATCH = 24;
-/** 用来认语言的样本取多少句。 */
-const SAMPLE = 30;
+/**
+ * 认语言用前面多少句：有了这么多句就认一次。开头常是片头音乐，识别出来是「The.」「う。」这样的几个字，
+ * 只看前几句认不出来时，等句子多了再认。
+ */
+const STAGES = [3, 10, 30, 60];
 
 export type SubtitleTranslation =
   | { status: "off" }
@@ -35,9 +40,9 @@ export type SubtitleTranslation =
 
 const OFF: SubtitleTranslation = { status: "off" };
 
-function sampleText(cues: readonly Cue[]): string {
+function sampleText(cues: readonly Cue[], count: number): string {
   return cues
-    .slice(0, SAMPLE)
+    .slice(0, count)
     .map((c) => c.text)
     .join("\n");
 }
@@ -62,13 +67,31 @@ async function translateBatch(
 }
 
 /**
+ * 双语样式下，节目本来就是要看的语言时，下面一行用什么语言：不是英文的节目译成英文；
+ * 英文节目译成界面语言，界面也是英文就没有（只显示原文）。
+ */
+export function secondLanguage(from: string, ui: string): string | null {
+  if (from.split("-")[0] !== "en") return "en";
+  return ui !== "en" ? ui : null;
+}
+
+/**
  * 正在放的这一期字幕的译文。`cues` 是全部字幕（按时间排好），`position` 是播放到第几秒。
  * 关着自动翻译、或者没有字幕时是 off。
  */
 export function useSubtitleTranslation(id: string | null, cues: readonly Cue[], position: number): SubtitleTranslation {
   const on = useSubtitles((s) => s.translate);
-  const to = useTranslateTarget();
+  const bilingual = useSubtitles((s) => s.style === "bilingual");
+  // 字幕上右键选的语言优先，没选就跟着「设置 → 翻译」
+  const general = useTranslateTarget();
+  const chosen = useSubtitles((s) => s.translateTo);
+  const preferred = chosen ?? general;
+  const ui = useLang();
   const engine = useTranslateEngine();
+  // 双语时换成的另一种语言，只对这一期、这个目标语言算数
+  const [second, setSecond] = useState<{ key: string; to: string } | null>(null);
+  const key = `${id}|${preferred}`;
+  const to = bilingual && second?.key === key ? second.to : preferred;
   const [state, setState] = useState<SubtitleTranslation>(OFF);
   // 认出来的原文语言、要不要模型，每期只看一次
   const [from, setFrom] = useState<string | null>(null);
@@ -76,7 +99,8 @@ export function useSubtitleTranslation(id: string | null, cues: readonly Cue[], 
   const entries = useRef<Record<string, string>>({});
   const busy = useRef(false);
   const failed = useRef(new Set<string>());
-  const enough = cues.length >= 3;
+  // 现在够认语言的第几档（0 是还不够）
+  const stage = STAGES.filter((n) => cues.length >= n).at(-1) ?? 0;
 
   // 再试一次：之前没翻成的句子也重新翻
   const retry = useCallback(() => {
@@ -107,15 +131,26 @@ export function useSubtitleTranslation(id: string | null, cues: readonly Cue[], 
 
   // 字幕够几句了：认语言，离线翻译时看缺不缺模型
   useEffect(() => {
-    if (!on || !id || !enough || from !== null) return;
+    if (!on || !id || stage === 0 || from !== null) return;
     let cancelled = false;
     setState({ status: "checking" });
-    const sample = sampleText(cues);
+    const sample = sampleText(cues, stage);
     (async () => {
       const plan = await api.translatePlan(sample, to);
       if (cancelled) return;
-      if (!plan.from) throw new Error("unknown language");
+      if (!plan.from) {
+        // 还认不出来：等句子多了再认，最后一档还不行才说
+        if (stage < (STAGES.at(-1) ?? 0)) return;
+        setState({ status: "error", error: { code: "subtitles_language_unknown" }, retry });
+        return;
+      }
       if (plan.same) {
+        // 双语要有第二种语言：换一种再看（换了 to，这一段会重新跑）
+        const alt = bilingual ? secondLanguage(plan.from, ui) : null;
+        if (alt && alt !== to) {
+          setSecond({ key, to: alt });
+          return;
+        }
         setState({ status: "same" });
         return;
       }
@@ -136,9 +171,9 @@ export function useSubtitleTranslation(id: string | null, cues: readonly Cue[], 
     return () => {
       cancelled = true;
     };
-    // cues 只在「够不够几句」变的时候要；之后的新句子不用重新认语言
+    // cues 只在「够认语言的档」变的时候要；认出来以后的新句子不用重新认
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on, id, enough, from, to, engine, attempt, retry]);
+  }, [on, id, stage, from, to, engine, attempt, retry, bilingual, ui, key]);
 
   // 模型下好了，接着翻
   const downloads = useModelDownloads((s) => s.byPair);

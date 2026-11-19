@@ -6,6 +6,7 @@
 // - 动效都写在 styles.css 里（.sub-*），系统开了「减少动态效果」时只留颜色变化。
 
 import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import type { Voice } from "../lib/api";
 import { playbackTime } from "../lib/player";
 import { type Cue, cueKey, cueProgress, spokenChars } from "../lib/subtitleCues";
 import type { SubtitleStyle } from "../lib/subtitles";
@@ -153,6 +154,42 @@ export interface SubtitleSpeaker {
   /** 第几个人（从 0 数），决定颜色。 */
   index: number;
   name: string;
+  /** 按音高猜的男声女声。 */
+  voice?: Voice;
+}
+
+/**
+ * 说话人的记号：这个人的颜色，形状分男女（不用图标）：方形是男声，圆形是女声，听不出来是菱形。
+ * 颜色来自外面的 --sub-color（或者传 `index`）。`size` 是边长，可以用 em 跟着字号走。
+ */
+export function SpeakerMark({
+  voice,
+  index,
+  title,
+  size = "0.55em",
+  className,
+}: {
+  voice?: Voice;
+  index?: number;
+  title?: string;
+  size?: string;
+  className?: string;
+}) {
+  const shape = voice === "male" ? "sub-mark-male" : voice === "female" ? "sub-mark-female" : "sub-mark-unknown";
+  const style = {
+    width: size,
+    height: size,
+    ...(index === undefined ? {} : { "--sub-color": `var(--spk-${index % 8})` }),
+  } as CSSProperties;
+  return (
+    <span
+      className={cx("sub-mark", shape, className)}
+      style={style}
+      title={title}
+      role={title ? "img" : undefined}
+      aria-label={title}
+    />
+  );
 }
 
 export interface SubtitleViewProps {
@@ -199,7 +236,7 @@ export function SubtitleView({
   // 正在说的那个字：这一句还没说完时，最后说出来的那个
   const now = cue && spoken > 0 && spoken < count && time <= cue.end ? spoken - 1 : -1;
   const vars = speakerVars(speaker);
-  const dot = speaker ? <span className="sub-dot-speaker" title={speaker.name} aria-hidden /> : null;
+  const dot = speaker ? <SpeakerMark voice={speaker.voice} title={speaker.name} className="mr-2 align-[0.1em]" /> : null;
   const key = cue ? cueKey(cue) : "none";
   const glyphs = cue ? <Glyphs text={cue.text} spoken={spoken} now={now} caret={style === "typewriter"} /> : null;
 
@@ -366,7 +403,10 @@ export function SubtitleView({
             <div className={cx("select-text text-left", speaker && "sub-speaker-line pl-3")}>
               {speaker && (
                 <div key={`s:${speaker.index}`} className="sub-slide mb-1">
-                  <span className="sub-tag">{speaker.name}</span>
+                  <span className="sub-tag">
+                    <SpeakerMark voice={speaker.voice} size="7px" className="mr-1.5" />
+                    {speaker.name}
+                  </span>
                 </div>
               )}
               <div key={key} className="sub-enter text-[15px] leading-snug text-fg">

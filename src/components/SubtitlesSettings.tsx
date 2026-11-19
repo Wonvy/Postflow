@@ -304,7 +304,9 @@ export function SubtitlesSettings({ open }: { open: boolean }) {
 
       <div>
         <div className="text-fg">{t("subtitles.style")}</div>
-        <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("subtitles.styleHint")}</div>
+        <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">
+          {t("subtitles.styleHint")} {t("subtitles.adjustHint")}
+        </div>
       </div>
       <StylePicker running={open} />
 

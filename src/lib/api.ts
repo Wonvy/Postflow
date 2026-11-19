@@ -123,12 +123,17 @@ export interface SubtitleSnapshot {
   covered: [number, number][];
   complete: boolean;
   cues: SubtitleCue[];
+  /** 每个说话人（按编号）按音高猜的男声女声；猜不出是 null。 */
+  voices?: Voice[];
   /** 等这一期下载到本机时的进度。 */
   received: number;
   total: number | null;
   error: string | null;
   message: string | null;
 }
+
+/** 说话人猜出来的男声女声。 */
+export type Voice = "male" | "female" | null;
 
 /** 条目附带的音频或视频。 */
 export interface Media {

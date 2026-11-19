@@ -6,10 +6,10 @@
 // - 开没开字幕记在这台设备上。识别模型装在核心那边（设置 → 字幕），网页访问时用的是桌面那台的模型。
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { api, type SubtitleSnapshot } from "./api";
+import { api, type SubtitleSnapshot, type Voice } from "./api";
 import { localUrl, useDownloads } from "./episodes";
 import { savedPosition, switchToLocal, usePlayer } from "./player";
 import { useUi } from "./store";
@@ -50,6 +50,8 @@ export interface SubtitleEntry {
   model: string;
   /** 说话人的名字（节目自带的文字稿里写了的），按 `Cue.speaker` 的编号排。本机分出来的没有名字。 */
   speakerNames?: string[];
+  /** 本机分出来的说话人按音高猜的男声女声，按 `Cue.speaker` 的编号排。 */
+  voices?: Voice[];
   /** 等这一期下载到本机时的进度。 */
   received: number;
   total: number | null;
@@ -62,6 +64,23 @@ interface ModelDownload {
   total: number;
   state: SpeechModelEvent["state"];
   error?: string;
+}
+
+/** 字号能缩放的范围。 */
+export const SCALE_MIN = 0.6;
+export const SCALE_MAX = 2.5;
+/** 字幕区域能拖的高度范围（像素）。 */
+export const HEIGHT_MIN = 44;
+export const HEIGHT_MAX = 480;
+
+export function clampScale(scale: number): number {
+  if (!Number.isFinite(scale)) return 1;
+  return Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, scale)) * 100) / 100;
+}
+
+export function clampHeight(height: number): number {
+  if (!Number.isFinite(height)) return HEIGHT_MIN;
+  return Math.round(Math.min(HEIGHT_MAX, Math.max(HEIGHT_MIN, height)));
 }
 
 interface SubtitleStore {
@@ -77,6 +96,18 @@ interface SubtitleStore {
   /** 分出了说话人时，标出是谁在说、每人一种颜色。 */
   speakers: boolean;
   setSpeakers: (on: boolean) => void;
+  /** 开着翻译时显示什么：原文和译文，还是只看译文（字幕上右键选）。 */
+  show: "both" | "translation";
+  setShow: (show: "both" | "translation") => void;
+  /** 字幕翻译成哪种语言；null 跟着「设置 → 翻译」走（字幕上右键选）。 */
+  translateTo: string | null;
+  setTranslateTo: (code: string | null) => void;
+  /** 字号缩放（鼠标放在字幕上 Ctrl + 滚轮）。 */
+  scale: number;
+  setScale: (scale: number) => void;
+  /** 播放条里字幕区域的高度（像素，拖下沿调）；null 是跟着内容。 */
+  height: number | null;
+  setHeight: (height: number | null) => void;
   entry: SubtitleEntry | null;
   /** 开了字幕，但核心那边一个识别模型都没装。 */
   needsModel: boolean;
@@ -95,13 +126,30 @@ export const useSubtitles = create<SubtitleStore>()(
       setStyle: (style) => set({ style }),
       speakers: true,
       setSpeakers: (speakers) => set({ speakers }),
+      show: "both",
+      setShow: (show) => set({ show }),
+      translateTo: null,
+      setTranslateTo: (translateTo) => set({ translateTo }),
+      scale: 1,
+      setScale: (scale) => set({ scale: clampScale(scale) }),
+      height: null,
+      setHeight: (height) => set({ height: height === null ? null : clampHeight(height) }),
       entry: null,
       needsModel: false,
       downloads: {},
     }),
     {
       name: "postflow.subtitles",
-      partialize: (s) => ({ on: s.on, translate: s.translate, style: s.style, speakers: s.speakers }),
+      partialize: (s) => ({
+        on: s.on,
+        translate: s.translate,
+        style: s.style,
+        speakers: s.speakers,
+        show: s.show,
+        translateTo: s.translateTo,
+        scale: s.scale,
+        height: s.height,
+      }),
     },
   ),
 );
@@ -116,6 +164,7 @@ function fromSnapshot(snap: SubtitleSnapshot): SubtitleEntry {
     duration: snap.duration,
     complete: snap.complete,
     model: snap.model,
+    voices: snap.voices,
     received: snap.received,
     total: snap.total,
     error: snap.error,
@@ -132,6 +181,7 @@ function applyEvent(entry: SubtitleEntry, event: SubtitlesEvent): SubtitleEntry 
     duration: event.duration,
     complete: event.complete,
     model: event.model || entry.model,
+    voices: event.voices ?? entry.voices,
     received: event.received,
     total: event.total,
     error: event.error ?? null,
@@ -304,6 +354,18 @@ export function SubtitlesBridge() {
   useEffect(() => {
     if (on && id && file && state) switchToLocal(id, localUrl(id, file));
   }, [on, id, file, state]);
+
+  // 字幕出错了、这一期后来下好了：自动再转一次（每一期每份文件一次），不用用户点「重试」。
+  // 边下边读不了的格式核心自己会等下完再转，这里兜住别的情况（比如下载中途断过）
+  const retried = useRef<string | null>(null);
+  const failed = state === "failed";
+  useEffect(() => {
+    if (!on || !id || !file || !failed) return;
+    const key = `${id}|${file}`;
+    if (retried.current === key) return;
+    retried.current = key;
+    void startLocal(id);
+  }, [on, id, file, failed]);
 
   // 拖到了还没转的地方：告诉核心改从那里转
   useEffect(() => {

@@ -94,9 +94,60 @@ impl Read for GrowingFile {
 }
 
 impl Seek for GrowingFile {
-    // 跳到还没下到的地方也可以：之后读的时候再等
+    // 跳到还没下到的地方也可以：之后读的时候再等。
+    // 「从末尾往前」要按整个文件的大小算，不能按已经下到的：解码器靠跳到末尾知道文件多长，
+    // 按下了一半的长度算，索引很大的 M4A（比如故事FM 的，开头的 moov 有 800 多 KB）
+    // 会被当成在索引中间就结束了，报「missing moov atom」。
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        let pos = from_start(pos, self.byte_len())?;
         self.file.seek(pos)
+    }
+}
+
+/// 「从末尾往前」换成从开头算，按整个文件的大小 `total`（不知道就照原样）。
+fn from_start(pos: SeekFrom, total: Option<u64>) -> io::Result<SeekFrom> {
+    match (pos, total) {
+        (SeekFrom::End(delta), Some(total)) => total
+            .checked_add_signed(delta)
+            .map(SeekFrom::Start)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "seek before the start")),
+        (pos, _) => Ok(pos),
+    }
+}
+
+/// 等这一期下载完，返回下好的文件。边下边读不行的时候用（见 `prepare`）。等的时候让界面显示下载进度。
+fn wait_for_download(core: &Arc<Core>, job: &Arc<Job>) -> Result<PathBuf, RpcError> {
+    let mut reported = Instant::now() - WAIT_REPORT;
+    loop {
+        if job.cancelled() {
+            return Err(RpcError::new("cancelled", "cancelled"));
+        }
+        if let Some(file) = core.episodes.file(&job.id) {
+            return Ok(file);
+        }
+        match core.episodes.progress().remove(&job.id) {
+            Some(p) if p.error.is_some() => {
+                return Err(RpcError::new(
+                    "speech_episode_failed",
+                    p.error.unwrap_or_default(),
+                ));
+            }
+            // 在等下载：每秒让界面看一次下到哪儿了
+            Some(p) if reported.elapsed() >= WAIT_REPORT => {
+                reported = Instant::now();
+                {
+                    let mut live = job.live();
+                    live.state = SubtitleState::Downloading;
+                    live.received = p.received;
+                    live.total = p.total;
+                }
+                job.emit(core, Vec::new(), None);
+            }
+            Some(_) => {}
+            // 刚好下完、正在改名：再看一圈
+            None => {}
+        }
+        std::thread::sleep(WAIT);
     }
 }
 
@@ -226,6 +277,7 @@ impl Job {
             duration: live.transcript.duration,
             complete: live.transcript.complete(),
             model: live.transcript.model.clone(),
+            voices: live.transcript.speakers.genders(),
             received: live.received,
             total: live.total,
             error: live.error.as_ref().map(|e| e.code.clone()),
@@ -250,6 +302,7 @@ fn snapshot(
         "covered": transcript.covered,
         "complete": transcript.complete(),
         "cues": transcript.cues,
+        "voices": transcript.speakers.genders(),
         "received": received,
         "total": total,
         "error": error.map(|e| e.code.clone()),
@@ -615,7 +668,28 @@ async fn prepare_and_transcribe(
     job.emit(core, Vec::new(), None);
     let (core, job) = (core.clone(), job.clone());
     tokio::task::spawn_blocking(move || {
-        let result = transcribe(&core, &job, source);
+        let growing = matches!(source, Source::Growing { .. });
+        let mut result = transcribe(&core, &job, source);
+        // 边下边读不了的文件（个别格式要整个下完才认得出来）：不报错，等下完了自动从头转，
+        // 不用用户点「重试」
+        if growing
+            && !job.cancelled()
+            && result.as_ref().is_err_and(|e| e.code == "speech_audio_failed")
+        {
+            if let Err(e) = &result {
+                tracing::info!(item = %job.id, "cannot read while downloading ({}); waiting for the whole episode", e.message);
+            }
+            result = wait_for_download(&core, &job).and_then(|file| {
+                {
+                    let mut live = job.live();
+                    live.state = SubtitleState::Loading;
+                    live.received = 0;
+                    live.total = None;
+                }
+                job.emit(&core, Vec::new(), None);
+                transcribe(&core, &job, Source::File(file))
+            });
+        }
         // 被取消的（换了一期、关了字幕）不算出错
         if job.cancelled() { Ok(()) } else { result }
     })
@@ -630,16 +704,22 @@ fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), Rp
     let engine = core.speech.load(model)?;
     let mut reader = match source {
         Source::File(file) => AudioReader::open(&file)?,
-        Source::Growing { part, ext } => {
-            let file =
-                std::fs::File::open(&part).map_err(|e| RpcError::new("io", e.to_string()))?;
-            let growing = GrowingFile {
-                file,
-                core: core.clone(),
-                job: job.clone(),
-            };
-            AudioReader::from_source(Box::new(growing), ext.as_deref())?
-        }
+        Source::Growing { part, ext } => match std::fs::File::open(&part) {
+            Ok(file) => {
+                let growing = GrowingFile {
+                    file,
+                    core: core.clone(),
+                    job: job.clone(),
+                };
+                AudioReader::from_source(Box::new(growing), ext.as_deref())?
+            }
+            // 加载模型的这一会儿刚好下完了，.part 已经改名：直接读下好的文件
+            Err(e) if e.kind() == io::ErrorKind::NotFound => match core.episodes.file(&job.id) {
+                Some(file) => AudioReader::open(&file)?,
+                None => return Err(RpcError::new("io", e.to_string())),
+            },
+            Err(e) => return Err(RpcError::new("io", e.to_string())),
+        },
     };
     {
         let mut live = job.live();
@@ -758,4 +838,37 @@ fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), Rp
         "transcription stopped"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seeking_from_the_end_counts_the_whole_file() {
+        // 下了 512 KB、整个 48 MB：跳到末尾是 48 MB 那儿，不是已经下到的地方
+        let total = Some(48_877_686);
+        assert_eq!(
+            from_start(SeekFrom::End(0), total).unwrap(),
+            SeekFrom::Start(48_877_686)
+        );
+        assert_eq!(
+            from_start(SeekFrom::End(-128), total).unwrap(),
+            SeekFrom::Start(48_877_558)
+        );
+        assert!(from_start(SeekFrom::End(-50_000_000), total).is_err());
+        // 从开头、从当前位置跳的不用换；不知道多大的照原样
+        assert_eq!(
+            from_start(SeekFrom::Start(10), total).unwrap(),
+            SeekFrom::Start(10)
+        );
+        assert_eq!(
+            from_start(SeekFrom::Current(-4), total).unwrap(),
+            SeekFrom::Current(-4)
+        );
+        assert_eq!(
+            from_start(SeekFrom::End(0), None).unwrap(),
+            SeekFrom::End(0)
+        );
+    }
 }

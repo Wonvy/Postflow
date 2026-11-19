@@ -607,14 +607,21 @@
   animation: sub-fade 0.4s ease both;
 }
 /* 说话人的小圆点和名字 */
-.sub-dot-speaker {
+/* 说话人的记号：方形男声、圆形女声、菱形听不出来，颜色是这个人的 */
+.sub-mark {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  flex-shrink: 0;
+  background: var(--sub-color, var(--accent));
+}
+.sub-mark-male {
+  border-radius: 1.5px;
+}
+.sub-mark-female {
   border-radius: 999px;
-  background: var(--sub-color);
-  margin-right: 6px;
-  vertical-align: 0.1em;
+}
+.sub-mark-unknown {
+  border-radius: 1px;
+  transform: rotate(45deg) scale(0.8);
 }
 .sub-tag {
   display: inline-flex;

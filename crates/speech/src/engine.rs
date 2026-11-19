@@ -292,9 +292,17 @@ impl Engine {
                         .map(|(a, b)| {
                             let from = (a * rate) as usize;
                             let to = ((b * rate) as usize).min(samples.len());
+                            let window = &samples[from..to];
                             let who = self
-                                .embedding(&samples[from..to])
+                                .embedding(window)
                                 .and_then(|e| speakers.assign(&e, b - a));
+                            // 顺便量音高猜男女：每个人量够了就不量了
+                            if let Some(id) = who
+                                && speakers.wants_pitch(id)
+                                && let Some(hz) = crate::pitch::median_pitch(window)
+                            {
+                                speakers.add_pitch(id, hz);
+                            }
                             (a, b, who)
                         })
                         .collect();

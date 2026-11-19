@@ -99,6 +99,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 true
             })?;
+            if !speakers.is_empty() {
+                println!("voices: {:?}", speakers.genders());
+            }
             let took = started.elapsed().as_secs_f64();
             let audio_seconds = outcome.reached - begin;
             println!(

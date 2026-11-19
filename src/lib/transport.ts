@@ -52,6 +52,8 @@ export type CoreEvent =
       complete: boolean;
       /** 用哪个模型转的；模型加载好以前是空的。 */
       model?: string;
+      /** 每个说话人（按编号）猜出来的男声女声。 */
+      voices?: ("male" | "female" | null)[];
       received: number;
       total: number | null;
       error?: string;
