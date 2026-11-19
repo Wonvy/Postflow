@@ -4,6 +4,7 @@ import { Check, TriangleAlert } from "lucide-react";
 import { siYoutube } from "simple-icons";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type Candidate, type Feed, type FeedKind, type FeedPreview, type Preview } from "../lib/api";
+import { feedErrorText } from "../lib/feedError";
 import { errorText, type Translate, useLang, useT } from "../lib/i18n";
 import { useFolders } from "../lib/folders";
 import { openExternal } from "../lib/platform";
@@ -811,8 +812,11 @@ function EditFeedForm({ feed, onDone }: { feed: Feed; onDone: () => void }) {
           <TriangleAlert size={14} strokeWidth={2} className="mt-px shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
             <p className="select-text">
-              {t("edit.lastError")}: {feed.error}
+              {t("feedError.tooltip", { reason: feedErrorText(t, feed.error, feed.error_code) })}
             </p>
+            {feedErrorText(t, feed.error, feed.error_code) !== feed.error && (
+              <p className="mt-1 select-text text-[11px] text-fg-3 [overflow-wrap:anywhere]">{t("feedError.detail", { error: feed.error })}</p>
+            )}
             <p className="mt-1 text-fg-3">{t("edit.errorHint")}</p>
             <FindAgain feed={feed} onPick={setUrl} />
           </div>

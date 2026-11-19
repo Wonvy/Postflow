@@ -40,6 +40,9 @@ pub enum Error {
     TooLarge(usize),
     #[error("not a feed: {0}")]
     NotAFeed(String),
+    /// 服务器没给订阅内容，而是回了一个「禁止访问」之类的网页（`{0}` 是那个网页的标题）。
+    #[error("the server refused to send the feed and returned a page saying \"{0}\"")]
+    Refused(String),
     #[error("no feed found at this address")]
     NoFeedFound,
     #[error("invalid OPML: {0}")]
@@ -63,6 +66,7 @@ impl Error {
             Error::Status(_) => "http_status",
             Error::TooLarge(_) => "too_large",
             Error::NotAFeed(_) => "not_a_feed",
+            Error::Refused(_) => "feed_refused",
             Error::NoFeedFound => "no_feed_found",
             Error::Opml(_) => "invalid_opml",
             Error::Extract(_) => "extract_failed",

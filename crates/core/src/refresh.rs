@@ -130,9 +130,10 @@ impl Core {
                 let factor = 1i64 << target.error_count.clamp(0, 6);
                 let next = now + (interval * factor).min(MAX_BACKOFF_MIN) * 60_000;
                 let message = err.to_string();
+                let code = err.code();
                 tracing::warn!(feed = %target.feed_id, failures = target.error_count + 1, "fetch {} failed: {message}", target.url);
                 session
-                    .db(move |s| s.record_fetch_err(&feed_id, &message, now, next))
+                    .db(move |s| s.record_fetch_err(&feed_id, code, &message, now, next))
                     .await
             }
         };

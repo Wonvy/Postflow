@@ -239,6 +239,7 @@ CREATE TABLE IF NOT EXISTS feed_fetch (
     last_fetch_at INTEGER,
     next_fetch_at INTEGER NOT NULL DEFAULT 0,
     error         TEXT,
+    error_code    TEXT,
     error_count   INTEGER NOT NULL DEFAULT 0
 ) WITHOUT ROWID;
 "#;
@@ -1019,26 +1020,28 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4, ?5, NULL, 0) \
              ON CONFLICT (feed_id) DO UPDATE SET etag = excluded.etag, \
                  last_modified = excluded.last_modified, last_fetch_at = excluded.last_fetch_at, \
-                 next_fetch_at = excluded.next_fetch_at, error = NULL, error_count = 0",
+                 next_fetch_at = excluded.next_fetch_at, error = NULL, error_code = NULL, error_count = 0",
             params![feed_id, etag, last_modified, now, next_at],
         )?;
         Ok(())
     }
 
+    /// 记下一次失败的抓取。`code` 是错误的种类（界面按它说明），`error` 是原始的错误信息。
     pub fn record_fetch_err(
         &self,
         feed_id: &str,
+        code: &str,
         error: &str,
         now: i64,
         next_at: i64,
     ) -> Result<()> {
         self.lock().conn.execute(
-            "INSERT INTO feed_fetch (feed_id, last_fetch_at, next_fetch_at, error, error_count) \
-             VALUES (?1, ?2, ?3, ?4, 1) \
+            "INSERT INTO feed_fetch (feed_id, last_fetch_at, next_fetch_at, error, error_code, error_count) \
+             VALUES (?1, ?2, ?3, ?4, ?5, 1) \
              ON CONFLICT (feed_id) DO UPDATE SET last_fetch_at = excluded.last_fetch_at, \
                  next_fetch_at = excluded.next_fetch_at, error = excluded.error, \
-                 error_count = feed_fetch.error_count + 1",
-            params![feed_id, now, next_at, error],
+                 error_code = excluded.error_code, error_count = feed_fetch.error_count + 1",
+            params![feed_id, now, next_at, error, code],
         )?;
         Ok(())
     }
@@ -1106,6 +1109,8 @@ fn migrate(conn: &Connection) -> Result<()> {
     add_column(conn, "items", "media_kind", "TEXT")?;
     add_column(conn, "feeds", "kind", "TEXT")?;
     add_column(conn, "feeds", "full_text", "INTEGER NOT NULL DEFAULT 0")?;
+    // 上次抓取出错的种类（postflow_feed::Error::code），界面按它给出说明；以前的错误没有，下次抓取时补上
+    add_column(conn, "feed_fetch", "error_code", "TEXT")?;
     Ok(())
 }
 
@@ -1524,7 +1529,7 @@ fn feed_sql(cond: &str) -> String {
         "SELECT f.id, f.url, f.title, f.site_url, f.icon_url, f.folder, f.interval_min, f.added_at, \
                 (SELECT COUNT(*) FROM items i \
                   WHERE i.source_id = f.id AND i.read = 0 AND i.archived = 0 AND NOT {snoozed}), \
-                ff.last_fetch_at, ff.error, {kind}, f.kind, f.full_text \
+                ff.last_fetch_at, ff.error, {kind}, f.kind, f.full_text, ff.error_code \
          FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
          WHERE {cond} \
          ORDER BY f.folder COLLATE NOCASE, f.position IS NULL, f.position, f.title COLLATE NOCASE",
@@ -1549,6 +1554,7 @@ fn feed_from_row(r: &Row<'_>) -> rusqlite::Result<Feed> {
         kind: r.get(11)?,
         kind_set: r.get(12)?,
         full_text: r.get(13)?,
+        error_code: r.get(14)?,
     })
 }
 

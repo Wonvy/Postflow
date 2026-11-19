@@ -6,6 +6,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChartColumn, TriangleAlert, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { api, type FeedStats, type ReadingDay, type Stats } from "../lib/api";
+import { feedErrorText } from "../lib/feedError";
 import { useLang, useT } from "../lib/i18n";
 import { type Flag, flagsOf, hoursMinutes, niceMax, perWeek, ratio, type SortKey, sortFeeds } from "../lib/stats";
 import { useUi } from "../lib/store";
@@ -354,7 +355,7 @@ function FeedTable({ stats, days }: { stats: Stats; days: number }) {
                             "inline-flex items-center gap-1 rounded px-1.5 py-px text-[11px]",
                             flag === "error" ? "bg-hover text-warning" : "bg-hover text-fg-2",
                           )}
-                          title={flag === "error" ? (f.error ?? undefined) : undefined}
+                          title={flag === "error" && f.error ? feedErrorText(t, f.error) : undefined}
                         >
                           {flag === "error" && <TriangleAlert size={11} strokeWidth={2} />}
                           {t(FLAG_LABEL[flag])}

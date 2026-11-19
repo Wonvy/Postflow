@@ -54,6 +54,7 @@ import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
 import { OutboxRow } from "./Outbox";
 import { PhoneAccessButton } from "./WebAccessSettings";
 import { UpdateButton } from "./UpdateDialog";
+import { feedErrorText } from "../lib/feedError";
 import { errorText, useT } from "../lib/i18n";
 import { copyText, hasInsetTitlebar, isMac } from "../lib/platform";
 import { isTauri } from "../lib/transport";
@@ -280,10 +281,20 @@ function FeedRow({
         trailing={
           <>
             {feed.error ? (
-              <Tip label={`${t("edit.lastError")}: ${feed.error}`} side="right">
-                <span className="flex size-5 shrink-0 items-center justify-center text-warning group-hover:hidden">
+              // 出错的三角鼠标移上去也一直在（提示要靠悬停才看得到），点一下打开「编辑订阅」看完整说明
+              <Tip label={t("feedError.tooltip", { reason: feedErrorText(t, feed.error, feed.error_code) })} side="right">
+                <button
+                  type="button"
+                  aria-label={t("feedError.tooltip", { reason: feedErrorText(t, feed.error, feed.error_code) })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDialog({ type: "edit-feed", feedId: feed.id });
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="flex size-5 shrink-0 items-center justify-center rounded text-warning hover:bg-active"
+                >
                   <TriangleAlert size={13} strokeWidth={2} />
-                </span>
+                </button>
               </Tip>
             ) : (
               <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">

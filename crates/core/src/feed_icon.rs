@@ -119,6 +119,7 @@ mod tests {
             unread: 0,
             last_fetch_at: None,
             error: None,
+            error_code: None,
         }
     }
 

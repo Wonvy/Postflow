@@ -68,7 +68,9 @@ export function Tip({
         <Tooltip.Content
           side={side}
           sideOffset={6}
-          className="anim-fade z-50 flex items-center gap-2 rounded-md bg-surface px-2 py-1 text-[12px] text-fg shadow-pop"
+          collisionPadding={8}
+          // 长的说明（比如订阅源出错的原因）折行，不伸出窗口
+          className="anim-fade z-50 flex max-w-[320px] items-center gap-2 rounded-md bg-surface px-2 py-1 text-[12px] leading-snug text-fg shadow-pop"
         >
           {label}
           {shortcut && <Kbd>{shortcut}</Kbd>}

@@ -161,7 +161,10 @@ export interface Feed {
   added_at: number;
   unread: number;
   last_fetch_at: number | null;
+  /** 上次刷新的错误（原始信息，英文）。给人看用 feedErrorText。 */
   error: string | null;
+  /** 上次刷新出错的种类；以前记下的错误没有。 */
+  error_code?: string | null;
 }
 
 export interface Counts {

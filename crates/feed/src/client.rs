@@ -100,7 +100,11 @@ impl Client {
             let Some(page) = read_page(resp).await? else {
                 return Ok(FetchResult::NotModified);
             };
-            let feed = parse_source(&page.body, page.final_url.as_str())?;
+            let feed = parse_source(&page.body, page.final_url.as_str()).map_err(|e| match e {
+                // 回来的是「禁止访问」的网页：说清楚是被拒绝了，不是地址不对
+                Error::NotAFeed(_) => refusal(&page.body).map_or(e, Error::Refused),
+                e => e,
+            })?;
             let moved_to = (permanent && current != start).then(|| current.to_string());
             return Ok(FetchResult::Fetched(Fetched {
                 feed,
@@ -262,6 +266,57 @@ async fn read_page(mut resp: reqwest::Response) -> Result<Option<Page>> {
     }))
 }
 
+/// 回来的网页是不是「禁止访问 / 要人机验证」的拦截页。是的话返回它的标题（没有标题就是空的）。
+///
+/// 有的服务器不给订阅源，而是用 200 回一个写着 403 的网页（比如小宇宙的 feed.xyzfm.space 对不在白名单里的
+/// 客户端）。照「不是订阅源」报错会让人以为地址错了。
+fn refusal(body: &[u8]) -> Option<String> {
+    let head = String::from_utf8_lossy(&body[..body.len().min(16 * 1024)]);
+    // 只把 ASCII 变小写，字节位置和原文一一对应，下面才能拿同样的下标去原文里取标题
+    let lower = head.to_ascii_lowercase();
+    if !(lower.trim_start().starts_with("<!doctype html") || lower.contains("<html")) {
+        return None;
+    }
+    let title = lower
+        .find("<title")
+        .and_then(|i| lower[i..].find('>').map(|j| i + j + 1))
+        .and_then(|start| {
+            lower[start..]
+                .find("</title")
+                .map(|len| (start, start + len))
+        })
+        .map(|(a, b)| head[a..b].split_whitespace().collect::<Vec<_>>().join(" "))
+        .unwrap_or_default();
+    let title_lower = title.to_ascii_lowercase();
+    const IN_TITLE: [&str; 12] = [
+        "403",
+        "401",
+        "forbidden",
+        "denied",
+        "blocked",
+        "not allowed",
+        "无法访问",
+        "访问受限",
+        "拒绝访问",
+        "禁止访问",
+        "attention required",
+        "just a moment",
+    ];
+    const IN_PAGE: [&str; 8] = [
+        "access denied",
+        "you don't have permission",
+        "denied by",
+        "未被允许",
+        "访问受限",
+        "人机验证",
+        "captcha",
+        "cf-challenge",
+    ];
+    let blocked = IN_TITLE.iter().any(|w| title_lower.contains(w))
+        || IN_PAGE.iter().any(|w| lower.contains(w));
+    blocked.then_some(title)
+}
+
 /// 把 reqwest 的错误压成一句人能看懂的话，带上最底层的原因。
 pub(crate) fn describe(err: reqwest::Error) -> Error {
     let kind = if err.is_timeout() {
@@ -318,6 +373,37 @@ fn sniff_meta_charset(body: &[u8]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_pages_are_told_apart_from_ordinary_web_pages() {
+        // 小宇宙 feed.xyzfm.space 给不在白名单里的客户端跳到的那一页
+        let xyz = "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">\
+            <title>403 · 无法访问</title></head><body><h1>暂时无法访问此页面</h1>\
+            <p>你的请求未被允许。</p></body></html>";
+        assert_eq!(refusal(xyz.as_bytes()).as_deref(), Some("403 · 无法访问"));
+        let nginx = "<html><head><title>403 Forbidden</title></head><body><center>nginx</center></body></html>";
+        assert_eq!(refusal(nginx.as_bytes()).as_deref(), Some("403 Forbidden"));
+        let cloudflare =
+            "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>";
+        assert_eq!(
+            refusal(cloudflare.as_bytes()).as_deref(),
+            Some("Just a moment...")
+        );
+        // 没有标题、正文里说了被拒绝
+        let bare = "<html><body>Access denied by IP ACL</body></html>";
+        assert_eq!(refusal(bare.as_bytes()).as_deref(), Some(""));
+        // 普通网页、坏掉的 XML 不算：照旧报「不是订阅源」，添加订阅时会去网页里找订阅源
+        let blog =
+            "<!doctype html><html><head><title>My Blog</title></head><body>Hello</body></html>";
+        assert_eq!(refusal(blog.as_bytes()), None);
+        assert_eq!(refusal(b"<rss><channel><title>403 tips"), None);
+        // 标题里大小写不同、带奇怪的 Unicode 也不出错
+        let odd = "<HTML><HEAD><TITLE>İstanbul — Forbidden</TITLE></HEAD></HTML>";
+        assert_eq!(
+            refusal(odd.as_bytes()).as_deref(),
+            Some("İstanbul — Forbidden")
+        );
+    }
 
     fn page(content_type: Option<&str>, body: &[u8]) -> Page {
         Page {

@@ -19,6 +19,7 @@ that heading into the version number and date.
 - AI: models that think before answering are asked not to for short tasks on DeepSeek, Kimi (Moonshot), Qwen, SiliconFlow, Gemini, Ollama and OpenRouter too, not just Zhipu. Postflow remembers which models insist on thinking, so it doesn't have to find out again after a restart.
 - AI errors are explained in plain words; what the AI service said is shown on a separate line when it helps.
 - Zhipu's suggested model is now GLM-4.7. If you use GLM-4.5, which Zhipu is retiring, Settings → AI suggests switching.
+- When a feed fails to refresh, the warning sign in the sidebar now explains why in plain words: for example, that the server sent a "no access" page instead of the feed (as some Xiaoyuzhou podcast feeds do), that the address no longer exists, or that the site can't be reached. The sign stays visible when you point at the row, and clicking it opens the feed's settings.
 
 ### 中文
 - 国内也能下载语音识别模型了：SenseVoice 和 Whisper 增加了魔搭社区（ModelScope）的下载地址。下载前会先对各个地址测速，从最快的下，连不上的地址不再拖慢下载。
@@ -33,6 +34,7 @@ that heading into the version number and date.
 - AI：DeepSeek、Kimi（月之暗面）、通义千问、硅基流动、Gemini、Ollama、OpenRouter 上会思考的模型，做简短的任务时也会请它们别思考，不只是智谱。哪些模型一定要思考会记下来，重启后不用再试一遍。
 - AI 出错时用大白话说明原因；AI 服务原本的回答需要时单独列一行。
 - 智谱的推荐模型换成 GLM-4.7。还在用即将下线的 GLM-4.5 的，「设置 → AI」里会提示换一个。
+- 订阅源刷新失败时，侧栏的警告三角会用大白话说明原因：比如服务器回了一个「禁止访问」的网页而不是订阅内容（小宇宙的部分播客源会这样）、地址已经失效、网站连不上。鼠标移到那一行时三角不再消失，点它直接打开这个源的设置。
 
 ## 0.1.35 — 2026-11-19
 
