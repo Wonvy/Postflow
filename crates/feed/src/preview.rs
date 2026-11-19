@@ -6,7 +6,8 @@ use url::Url;
 
 use crate::client::{Client, decode_html};
 use crate::discover::{Candidate, links_in_html};
-use crate::parse::{ParsedFeed, parse_feed, truncate};
+use crate::known;
+use crate::parse::{ParsedFeed, parse_feed, parse_source, truncate};
 use crate::sanitize::collapse_whitespace;
 use crate::{Error, Result, favicon_url, normalize_url};
 
@@ -148,7 +149,7 @@ fn summarize(
 impl Client {
     async fn fetch_parsed(&self, url: &str) -> Result<ParsedFeed> {
         let page = self.get(url, None, None).await?.ok_or(Error::NoFeedFound)?;
-        parse_feed(&page.body, page.final_url.as_str())
+        parse_source(&page.body, page.final_url.as_str())
     }
 
     /// 预览用户贴进来的地址：可以是源，也可以是网站首页或 YouTube 频道。
@@ -179,6 +180,19 @@ impl Client {
                     title,
                 }],
                 feed: preview,
+            });
+        }
+
+        // 已知网站（Telegram 频道、PyPI、Steam……）：不读网页，直接换成订阅地址
+        if let Some(feed_url) = known::feed_for(&url) {
+            let feed = self.fetch_parsed(&feed_url).await?;
+            let title = feed.title.clone();
+            return Ok(Preview {
+                candidates: vec![Candidate {
+                    url: feed_url.clone(),
+                    title,
+                }],
+                feed: summarize(feed_url, feed, PageMeta::default(), None),
             });
         }
 

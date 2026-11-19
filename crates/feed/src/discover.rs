@@ -5,7 +5,8 @@ use serde::Serialize;
 use url::Url;
 
 use crate::client::{Client, decode_html};
-use crate::parse::parse_feed;
+use crate::known;
+use crate::parse::{parse_feed, parse_source};
 use crate::sanitize::collapse_whitespace;
 use crate::{Error, Result, normalize_url};
 
@@ -38,6 +39,19 @@ impl Client {
                 title,
             }]);
         }
+        // 已知网站（Telegram 频道、PyPI、Steam……）：直接换成订阅地址，读一次拿到标题
+        if let Some(feed_url) = known::feed_for(&url) {
+            let page = self
+                .get(&feed_url, None, None)
+                .await?
+                .ok_or(Error::NoFeedFound)?;
+            let feed = parse_source(&page.body, page.final_url.as_str())?;
+            return Ok(vec![Candidate {
+                url: feed_url,
+                title: feed.title,
+            }]);
+        }
+
         let page = self
             .get(url.as_str(), None, None)
             .await?

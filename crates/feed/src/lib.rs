@@ -6,6 +6,7 @@ mod client;
 mod discover;
 mod frame;
 mod fulltext;
+mod known;
 pub mod opml;
 mod parse;
 mod preview;
@@ -13,6 +14,7 @@ pub mod rsshub;
 mod sanitize;
 mod site_icon;
 mod source;
+mod telegram;
 mod youtube;
 
 pub use client::{Client, Conditional, FetchResult, Fetched};

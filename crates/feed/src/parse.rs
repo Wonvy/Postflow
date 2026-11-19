@@ -56,6 +56,14 @@ impl ParsedMedia {
     }
 }
 
+/// 解析抓到的内容：一般是订阅源；Telegram 频道的公开网页由 telegram.rs 读成订阅源。
+pub(crate) fn parse_source(bytes: &[u8], url: &str) -> Result<ParsedFeed> {
+    if crate::telegram::is_channel_page(url) {
+        return crate::telegram::parse(&String::from_utf8_lossy(bytes), url);
+    }
+    parse_feed(bytes, url)
+}
+
 /// 解析 RSS、Atom 或 JSON Feed。`base_url` 用来把相对链接补全。
 pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
     let feed = match parse_raw(bytes, base_url) {

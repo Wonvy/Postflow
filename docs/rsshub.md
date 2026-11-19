@@ -11,7 +11,8 @@ every request, so feed readers like Postflow can't use it. Running your own inst
 about 130 MB of download.
 
 > You may not need RSSHub at all. Most blogs and news sites have feeds Postflow finds by itself, and YouTube
-> channels and playlists can be followed directly: paste the address in **Add feed → Address**.
+> channels and playlists, public Telegram channels and the popular sites listed under **Add feed → Address** (GitHub,
+> GitLab, Reddit, Mastodon, Steam, PyPI and more) can be followed directly: paste the address there.
 
 - [Choose where to run it](#choose-where-to-run-it)
 - [On your computer](#on-your-computer)

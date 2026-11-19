@@ -104,6 +104,12 @@ click **More info → Run anyway**.
   you can see what you're subscribing to. Sites that offer several feeds let you pick one.
 - YouTube channels and playlists: paste an address like `https://www.youtube.com/@name` to subscribe to the channel's
   new videos, with the channel's avatar as the feed icon.
+- Public Telegram channels: paste `https://t.me/name`. Channels have no feed, so Postflow reads the channel's public
+  page (the latest messages, with pictures and link previews). Private channels and groups can't be followed.
+- Popular sites under Add feed → Address: pick YouTube, GitHub, GitLab, Codeberg, Reddit, Bluesky, Mastodon, Lemmy,
+  Telegram, Medium, Substack, DEV, Tumblr, Stack Overflow, Hacker News, Lobsters, V2EX, Discourse forums, arXiv, PyPI,
+  Steam, Vimeo, Pinterest or Letterboxd, type a name, and Postflow builds the feed address, no RSSHub needed. Pasting
+  a profile, project or store page of these sites works too.
 - Podcasts: search for a show by name under Add feed → Podcasts (results from Apple's public podcast directory; you
   subscribe to the show's own RSS feed). Episodes play in the reader and keep playing in a small player under the
   list while you move around: back 15 s, forward 30 s, 0.8×–3× speed, and each episode remembers where you stopped

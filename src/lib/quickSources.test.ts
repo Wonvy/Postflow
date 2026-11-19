@@ -56,3 +56,53 @@ test("forms start with the first option picked", () => {
   assert.deepEqual(quickInitial(quickSource("github")), { target: "", kind: "releases" });
   assert.deepEqual(quickInitial(quickSource("hackernews")), {});
 });
+
+test("Telegram public channels", () => {
+  assert.equal(build("telegram", { channel: "durov" }), "https://t.me/s/durov");
+  assert.equal(build("telegram", { channel: "@telegram" }), "https://t.me/s/telegram");
+  assert.equal(build("telegram", { channel: "https://t.me/s/telegram" }), "https://t.me/s/telegram");
+  assert.equal(build("telegram", { channel: "t.me/durov/123" }), "https://t.me/s/durov");
+  assert.equal(build("telegram", { channel: "ab" }), null);
+});
+
+test("GitLab and Codeberg, including self-hosted", () => {
+  assert.equal(build("gitlab", { target: "gitlab-org/gitlab-runner", kind: "releases" }), "https://gitlab.com/gitlab-org/gitlab-runner/-/releases.atom");
+  assert.equal(build("gitlab", { target: "https://gitlab.com/a/b/c/-/tree/main", kind: "tags" }), "https://gitlab.com/a/b/c/-/tags?format=atom");
+  assert.equal(build("gitlab", { target: "https://git.example.org/team/app", kind: "activity" }), "https://git.example.org/team/app.atom");
+  assert.equal(build("gitlab", { target: "@someone", kind: "releases" }), "https://gitlab.com/someone.atom");
+  assert.equal(build("codeberg", { target: "forgejo/forgejo", kind: "releases" }), "https://codeberg.org/forgejo/forgejo/releases.rss");
+  assert.equal(build("codeberg", { target: "https://gitea.example.com/me/tool.git", kind: "tags" }), "https://gitea.example.com/me/tool/tags.rss");
+  assert.equal(build("codeberg", { target: "forgejo", kind: "releases" }), "https://codeberg.org/forgejo.rss");
+  assert.equal(build("codeberg", { target: "bad name/x", kind: "releases" }), null);
+});
+
+test("DEV, Lobsters, Lemmy, Discourse", () => {
+  assert.equal(build("devto", { name: "ben" }), "https://dev.to/feed/ben");
+  assert.equal(build("devto", { name: "#rust" }), "https://dev.to/feed/tag/rust");
+  assert.equal(build("devto", { name: "https://dev.to/t/webdev" }), "https://dev.to/feed/tag/webdev");
+  assert.equal(build("lobsters", { tag: "" }), "https://lobste.rs/rss");
+  assert.equal(build("lobsters", { tag: "https://lobste.rs/t/rust" }), "https://lobste.rs/t/rust.rss");
+  assert.equal(build("lemmy", { community: "!technology@lemmy.world" }), "https://lemmy.world/feeds/c/technology.xml");
+  assert.equal(build("lemmy", { community: "https://lemmy.ml/c/linux" }), "https://lemmy.ml/feeds/c/linux.xml");
+  assert.equal(build("lemmy", { community: "technology" }), null);
+  assert.equal(build("discourse", { forum: "meta.discourse.org" }), "https://meta.discourse.org/latest.rss");
+  assert.equal(build("discourse", { forum: "https://meta.discourse.org/c/support/6" }), "https://meta.discourse.org/c/support/6.rss");
+  assert.equal(build("discourse", { forum: "forum" }), null);
+});
+
+test("Tumblr, Vimeo, Pinterest, PyPI, Steam, Letterboxd", () => {
+  assert.equal(build("tumblr", { blog: "staff" }), "https://staff.tumblr.com/rss");
+  assert.equal(build("tumblr", { blog: "https://staff.tumblr.com/post/1" }), "https://staff.tumblr.com/rss");
+  assert.equal(build("tumblr", { blog: "https://www.tumblr.com/staff" }), "https://staff.tumblr.com/rss");
+  assert.equal(build("vimeo", { user: "staff" }), "https://vimeo.com/staff/videos/rss");
+  assert.equal(build("vimeo", { user: "https://vimeo.com/channels/staffpicks" }), "https://vimeo.com/channels/staffpicks/videos/rss");
+  assert.equal(build("vimeo", { user: "https://vimeo.com/76979871" }), null);
+  assert.equal(build("pinterest", { user: "pinterest" }), "https://www.pinterest.com/pinterest/feed.rss");
+  assert.equal(build("pinterest", { user: "https://www.pinterest.com/someone/recipes/" }), "https://www.pinterest.com/someone/recipes.rss");
+  assert.equal(build("pypi", { package: "Requests" }), "https://pypi.org/rss/project/requests/releases.xml");
+  assert.equal(build("pypi", { package: "https://pypi.org/project/numpy/" }), "https://pypi.org/rss/project/numpy/releases.xml");
+  assert.equal(build("steam", { app: "570" }), "https://store.steampowered.com/feeds/news/app/570/");
+  assert.equal(build("steam", { app: "https://store.steampowered.com/app/570/Dota_2/" }), "https://store.steampowered.com/feeds/news/app/570/");
+  assert.equal(build("steam", { app: "dota" }), null);
+  assert.equal(build("letterboxd", { user: "https://letterboxd.com/dave/films/" }), "https://letterboxd.com/dave/rss/");
+});

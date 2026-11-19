@@ -13,6 +13,8 @@ that heading into the version number and date.
 - Folded date headings stay folded after a restart.
 - The shortcuts window shows Space in your language.
 - Add feed shows a small grip in its bottom-right corner, so you can see it resizes.
+- Public Telegram channels can be followed without RSSHub: paste `https://t.me/name`, and Postflow reads the channel's public page.
+- Popular sites gains GitLab, Codeberg (and any Forgejo or Gitea), DEV, Lobsters, Lemmy, Discourse, Tumblr, Vimeo, Pinterest, PyPI, Steam, Letterboxd and Telegram. Pasting a PyPI, Steam, Letterboxd, Tumblr, Pinterest or Telegram page finds its feed too.
 
 ### 中文
 - Linux：用 `.deb`、`.rpm` 安装的也能像 AppImage 一样在应用里直接更新了。安装更新时系统会请你输入管理员密码。
@@ -21,6 +23,8 @@ that heading into the version number and date.
 - 收起的日期分段重启后还是收起的。
 - 快捷键窗口里的空格键按界面语言显示。
 - 「添加订阅」右下角有一个小的拖动标记，看得出能改大小。
+- Telegram 公开频道不用 RSSHub 也能订阅：贴进 `https://t.me/频道名`，Postflow 读频道的公开网页。
+- 常用网站新增 GitLab、Codeberg（以及任何 Forgejo、Gitea）、DEV、Lobsters、Lemmy、Discourse、Tumblr、Vimeo、Pinterest、PyPI、Steam、Letterboxd 和 Telegram。直接粘贴 PyPI、Steam、Letterboxd、Tumblr、Pinterest、Telegram 的页面也能找到订阅源。
 
 ## 0.1.31 — 2026-11-18
 

@@ -89,6 +89,11 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 粘贴网站或订阅地址，自动找到订阅源。支持 RSS、Atom 和 JSON Feed。一粘贴就显示预览：网站图标、名称和介绍、
   更新频率，以及最近的几篇，订阅前就知道是什么内容。网站提供好几个源时可以挑一个。
 - YouTube 频道和播放列表：贴进 `https://www.youtube.com/@名字` 这样的地址就能订阅博主的新视频，图标用频道头像。
+- Telegram 公开频道：贴进 `https://t.me/频道名`。频道没有订阅源，Postflow 读频道的公开网页（最近的消息，带图片和链接预览）。
+  私有频道和群组订阅不了。
+- 「添加订阅 → 网址」里的常用网站：YouTube、GitHub、GitLab、Codeberg、Reddit、Bluesky、Mastodon、Lemmy、Telegram、Medium、
+  Substack、DEV、Tumblr、Stack Overflow、Hacker News、Lobsters、V2EX、Discourse 论坛、arXiv、PyPI、Steam、Vimeo、Pinterest、
+  Letterboxd，点图标、填个名字，Postflow 就拼出订阅地址，不需要 RSSHub。直接粘贴这些网站的主页、项目页或商店页也行。
 - 播客：在「添加订阅 → 播客」里按节目名搜索（结果来自苹果播客的公开目录，订阅的是节目自己的 RSS）。单集在阅读区里播放，
   换条目时列表底下的迷你播放器接着放：后退 15 秒、前进 30 秒、0.8×–3× 倍速，每一期记住听到哪里（只存在这台设备上）。
   听完自动标为已读；在倍速菜单里打开「播完接着放下一期」可以连着听。带视频附件的条目在阅读区里直接播放。

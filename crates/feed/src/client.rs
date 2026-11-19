@@ -4,7 +4,7 @@ use reqwest::header::{
     CONTENT_TYPE, COOKIE, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED, LOCATION,
 };
 
-use crate::parse::{ParsedFeed, parse_feed};
+use crate::parse::{ParsedFeed, parse_source};
 use crate::{Error, Result};
 
 const USER_AGENT: &str = concat!("Postflow/", env!("CARGO_PKG_VERSION"));
@@ -100,7 +100,7 @@ impl Client {
             let Some(page) = read_page(resp).await? else {
                 return Ok(FetchResult::NotModified);
             };
-            let feed = parse_feed(&page.body, page.final_url.as_str())?;
+            let feed = parse_source(&page.body, page.final_url.as_str())?;
             let moved_to = (permanent && current != start).then(|| current.to_string());
             return Ok(FetchResult::Fetched(Fetched {
                 feed,
