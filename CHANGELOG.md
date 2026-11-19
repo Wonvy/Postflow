@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.35 — 2026-11-19
+
+### English
 - "Play the next episode when done" can go oldest to newest and skip episodes you've already played, for catching up on a show (in the speed menu).
 - In the card view, podcast episodes have a big play button with the length, on the cover when there is one.
 - Subtitles for podcasts: turn on the CC button in the player and the text follows the audio, in the player and in the small player under the list. A show's own transcript is used when it has one; otherwise speech is recognized on your computer, starting from where you're listening, and the audio is never uploaded. The transcript is kept on this device and listed under the play bar.
