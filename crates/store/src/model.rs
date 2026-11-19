@@ -105,6 +105,19 @@ impl Media {
     }
 }
 
+/// 「没回复就提醒」：发出去的一封信，到 `until` 还没收到回复就提醒。存在同步日志里（kind = followup，
+/// ID 是这封信的 Message-ID），其他设备也知道。
+#[derive(Debug, Clone, PartialEq)]
+pub struct FollowUp {
+    pub message_id: String,
+    pub account_id: String,
+    pub subject: String,
+    /// 收件人和抄送的地址（小写）：他们之中谁回了信都算回复。
+    pub to: Vec<String>,
+    pub sent_at: i64,
+    pub until: i64,
+}
+
 /// 发件人卡片：和这个人的往来。
 #[derive(Debug, Clone, Serialize)]
 pub struct SenderProfile {

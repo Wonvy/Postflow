@@ -117,6 +117,9 @@ struct Letter {
     /// 这封信之前存过的草稿的 Message-ID：发出去或者再存时，把它删掉。
     #[serde(default)]
     draft: Option<String>,
+    /// 「没回复就提醒」：到这个时间（毫秒）还没收到回复就提醒。
+    #[serde(default)]
+    follow_up: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -450,6 +453,26 @@ impl Core {
                 tracing::warn!(account = %account.id, host = %smtp.host, code = e.code(), "sending mail failed: {e}");
                 send_error(&e, oauth)
             })?;
+        // 没回复就提醒：记进同步日志，到时间由提醒检查去看有没有回复（见 reminders.rs）
+        if let Some(until) = p.follow_up.filter(|u| *u > 0) {
+            let to: Vec<String> = [&p.to, &p.cc]
+                .into_iter()
+                .flat_map(|list| list.iter())
+                .filter_map(|s| postflow_mail::parse_address(s))
+                .filter_map(|m| m.address.map(|a| a.to_lowercase()))
+                .collect();
+            let follow = postflow_store::FollowUp {
+                message_id: built.message_id.clone(),
+                account_id: account.id.clone(),
+                subject: p.subject.clone(),
+                to,
+                sent_at: now_secs() * 1000,
+                until,
+            };
+            if let Err(e) = session.db(move |s| s.set_follow_up(&follow)).await {
+                tracing::warn!("could not save the follow-up reminder: {}", e.message);
+            }
+        }
         // 只记人数，不记地址和文件名
         tracing::info!(
             account = %account.id,

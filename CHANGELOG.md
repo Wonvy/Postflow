@@ -15,6 +15,7 @@ that heading into the version number and date.
 - Sender card: click a sender to see how many messages you've exchanged, their latest mail, and buttons to write, search their mail or mark them as important.
 - Notifications can be limited to important senders (Settings → General).
 - Quick reply templates, inserted from the Templates button while writing and managed in Settings → General.
+- Remind me if no reply: choose 1, 3 or 7 days when sending, and the message comes back to Reminders if nobody answers.
 
 ### 中文
 - 稍后读：把任意网页存下来，和文章一样读。在「稍后读」（订阅那边视图里的书签图标）顶上的输入框贴网址；在输入框以外直接粘贴链接；或者在文章、邮件里右键链接，选「存到稍后读」。网页连同正文一起存下，会同步到你的其他设备，不混进「全部文章」。
@@ -25,6 +26,7 @@ that heading into the version number and date.
 - 发件人卡片：点发件人看你们的往来封数和最近的邮件，可以写信、搜索全部来信、设为重要联系人。
 - 新邮件通知可以只提醒重要联系人（设置 → 通用）。
 - 快速回复模板：写信时点「模板」插入，在「设置 → 通用」里管理。
+- 没回复就提醒：发信时选 1、3 或 7 天，到时没人回复，这封信回到「提醒」里。
 
 ## 0.1.32 — 2026-11-19
 

@@ -88,6 +88,9 @@ click **More info → Run anyway**.
 - Each mailbox can have a signature (in its settings), added below what you write and above the quote in replies.
 - Quick reply templates: replies you write often, inserted with the Templates button while writing. Save what you're
   writing as a template, or add and edit them in Settings → General. They sync to your other devices.
+- Remind me if no reply (the bell next to Attach while writing): if nobody answers in 1, 3 or 7 days, the message
+  comes back to the Reminders at the top of your inbox. A message from any recipient on the same subject counts as a
+  reply.
 - Click a sender's name or picture for their card: how many messages they sent you and you sent them, the latest
   few, and buttons to write to them, search all their mail, or mark them as important.
 - Attachments (under the Mail views, or in the command palette): every file from your mail in one list, filtered by

@@ -365,6 +365,8 @@ export interface Outgoing {
   attachments?: string[];
   /** 这封信上次存成的草稿的 Message-ID：发出去或者再存时删掉它。 */
   draft?: string | null;
+  /** 没回复就提醒：到这个时间（毫秒）还没收到回复就提醒。 */
+  follow_up?: number | null;
 }
 
 /** 一封草稿里写了什么（`mail.draft`）。 */

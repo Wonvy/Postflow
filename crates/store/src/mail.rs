@@ -736,6 +736,83 @@ impl Store {
         Ok(out)
     }
 
+    /// 记下「没回复就提醒」。
+    pub fn set_follow_up(&self, f: &FollowUp) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("account".into(), json!(f.account_id));
+        set.insert("subject".into(), json!(f.subject));
+        set.insert("to".into(), json!(f.to));
+        set.insert("sent_at".into(), json!(f.sent_at));
+        set.insert("until".into(), json!(f.until));
+        self.set_fields("followup", std::slice::from_ref(&f.message_id), set)
+    }
+
+    /// 取消「没回复就提醒」。
+    pub fn cancel_follow_up(&self, message_id: &str) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("until".into(), json!(0));
+        self.set_fields("followup", &[message_id.to_string()], set)
+    }
+
+    /// 提醒时间在 (`after`, `until`] 之间的「没回复就提醒」。
+    pub fn due_follow_ups(&self, after: i64, until: i64) -> Result<Vec<FollowUp>> {
+        let guard = self.lock();
+        let mut stmt = guard.conn.prepare(
+            "SELECT id FROM lww WHERE kind = 'followup' AND field = 'until' \
+               AND CAST(value AS INTEGER) > ?1 AND CAST(value AS INTEGER) <= ?2",
+        )?;
+        let ids = stmt
+            .query_map(params![after, until], |r| r.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut out = Vec::new();
+        for id in ids {
+            let f = lww_fields(&guard.conn, "followup", &id)?;
+            let text = |k: &str| {
+                f.get(k)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            let num = |k: &str| f.get(k).and_then(Value::as_i64).unwrap_or_default();
+            out.push(FollowUp {
+                message_id: id.clone(),
+                account_id: text("account"),
+                subject: text("subject"),
+                to: f
+                    .get("to")
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(str::to_lowercase))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                sent_at: num("sent_at"),
+                until: num("until"),
+            });
+        }
+        Ok(out)
+    }
+
+    /// 这些地址在 `since` 之后发来的信的标题（不算垃圾邮件和已删除）。判断有没有回复用。
+    pub fn titles_from_since(&self, addresses: &[String], since: i64) -> Result<Vec<String>> {
+        if addresses.is_empty() {
+            return Ok(Vec::new());
+        }
+        let guard = self.lock();
+        let marks = vec!["?"; addresses.len()].join(", ");
+        let sql = format!(
+            "SELECT i.title FROM items i JOIN mail_meta m ON m.id = i.id \
+             WHERE i.kind = 'mail' AND i.published_at > ?1 AND i.archived NOT IN (2, 3, 4, 5) \
+               AND lower(m.from_address) IN ({marks})"
+        );
+        let mut args: Vec<rusqlite::types::Value> = vec![since.into()];
+        args.extend(addresses.iter().map(|a| a.to_lowercase().into()));
+        let mut stmt = guard.conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(args), |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// 发件人卡片：和这个地址的往来。垃圾邮件和已删除的不算。
     pub fn sender_profile(&self, address: &str) -> Result<SenderProfile> {
         use crate::store::{ALIVE, ITEM_COLUMNS, ITEM_FROM, item_from_row};

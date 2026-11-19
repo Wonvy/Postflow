@@ -45,7 +45,79 @@ fn write(path: &Path, up_to: i64) {
     }
 }
 
+/// 讨论的主题：去掉回复、转发的前缀（各种语言，可能好几层），忽略大小写和多余空白。
+/// 和界面的 grouping.ts 里 `threadSubject` 一样。
+pub(crate) fn thread_subject(title: &str) -> String {
+    static PREFIX: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = PREFIX.get_or_init(|| {
+        regex::Regex::new(
+            r"(?i)^\s*(re|fw|fwd|aw|sv|antw|tr|rif|回复|答复|回覆|转发|轉寄|转寄)\s*(\[\d+\]|\(\d+\))?\s*[:：]\s*",
+        )
+        .expect("valid regex")
+    });
+    let mut subject = title.trim().to_string();
+    loop {
+        let next = re.replace(&subject, "").into_owned();
+        if next == subject {
+            break;
+        }
+        subject = next;
+    }
+    subject
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 impl Core {
+    /// 「没回复就提醒」到时间的：收件人里有人在发信之后回了同一个主题的信就算回过了，不提醒；
+    /// 没回的，把「已发送」里那封标成未读，它就出现在收件箱顶上的「提醒」里。
+    async fn due_follow_ups(
+        self: &Arc<Self>,
+        session: &Arc<Session>,
+        after: i64,
+        now: i64,
+    ) -> Vec<postflow_store::ItemSummary> {
+        let due = match session.db(move |s| s.due_follow_ups(after, now)).await {
+            Ok(due) => due,
+            Err(e) => {
+                tracing::warn!("follow-ups: {}", e.message);
+                return Vec::new();
+            }
+        };
+        let mut out = Vec::new();
+        for f in due {
+            let (to, since) = (f.to.clone(), f.sent_at);
+            let replies = session
+                .db(move |s| s.titles_from_since(&to, since))
+                .await
+                .unwrap_or_default();
+            let topic = thread_subject(&f.subject);
+            if replies.iter().any(|t| thread_subject(t) == topic) {
+                tracing::info!("follow-up: already answered");
+                continue;
+            }
+            let id = postflow_store::ids::mail_id(&f.account_id, &format!("sent:{}", f.message_id));
+            let lookup = id.clone();
+            let Ok(Some(detail)) = session.db(move |s| s.item(&lookup)).await else {
+                continue;
+            };
+            let patch = ItemPatch {
+                read: Some(false),
+                ..Default::default()
+            };
+            let p = patch.clone();
+            let ids = vec![id];
+            match session.db(move |s| s.set_item_state(&ids, &p)).await {
+                Ok(refs) => self.dispatch(session, refs, &patch),
+                Err(e) => tracing::warn!("follow-up: could not mark unread: {}", e.message),
+            }
+            out.push(detail.item);
+        }
+        out
+    }
+
     /// 看看有没有到时间的稍后提醒。调度器每分钟调用一次。
     pub(crate) async fn check_reminders(self: &Arc<Self>, session: &Arc<Session>) {
         let path = self.local_dir.join(STATE_FILE);
@@ -64,6 +136,8 @@ impl Core {
                 return;
             }
         };
+        let mut due = due;
+        due.extend(self.due_follow_ups(session, after, now).await);
         write(&path, now);
         if due.is_empty() {
             return;
@@ -94,5 +168,17 @@ impl Core {
                 .collect(),
         });
         self.emit_changed(&[Scope::Feeds, Scope::Items], None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::thread_subject;
+
+    #[test]
+    fn reply_prefixes_are_ignored() {
+        assert_eq!(thread_subject("Re: Fwd: 回复： Q4  Budget"), "q4 budget");
+        assert_eq!(thread_subject("AW[2]: Plan"), "plan");
+        assert_eq!(thread_subject("Repo update"), "repo update");
     }
 }

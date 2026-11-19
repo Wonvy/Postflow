@@ -6,7 +6,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookmarkPlus, Clock, FileText, MessageSquareText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
+import { BellRing, BookmarkPlus, Check, Clock, FileText, MessageSquareText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -104,6 +104,51 @@ function errorMessage(err: unknown): string {
 }
 
 export const sendShortcut = isMac ? "⌘↩" : "Ctrl+Enter";
+
+/** 没回复就提醒：发出后几天还没收到回复，这封信回到收件箱顶上的「提醒」里。 */
+function FollowUpMenu({
+  days,
+  onChange,
+  disabled,
+}: {
+  days: number | null;
+  onChange: (days: number | null) => void;
+  disabled: boolean;
+}) {
+  const t = useT();
+  const mark = (on: boolean) => (on ? <Check size={14} /> : <span className="inline-block size-[14px]" />);
+  return (
+    <Menu
+      align="start"
+      trigger={
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={t("followUp.title")}
+          title={t("followUp.title")}
+          aria-pressed={days !== null}
+          className={cx(
+            "inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] transition-colors touch:h-10",
+            days !== null ? "bg-accent-soft text-accent" : "text-fg-2 hover:bg-hover hover:text-fg",
+          )}
+        >
+          <BellRing size={15} strokeWidth={1.75} />
+          {days !== null && t("followUp.short", { n: days })}
+        </button>
+      }
+    >
+      <p className="max-w-[260px] px-2 pb-1 pt-0.5 text-[11px] leading-relaxed text-fg-3">{t("followUp.hint")}</p>
+      <MenuItem icon={mark(days === null)} onSelect={() => onChange(null)}>
+        {t("followUp.off")}
+      </MenuItem>
+      {[1, 3, 7].map((n) => (
+        <MenuItem key={n} icon={mark(days === n)} onSelect={() => onChange(n)}>
+          {n === 1 ? t("followUp.tomorrow") : t("followUp.in", { n })}
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+}
 
 /** 写信窗口底部的「模板」：点一条插进正文；把正在写的存成模板；去设置里管理。 */
 function TemplateMenu({
@@ -543,6 +588,10 @@ function Composer({
     setPending(null);
   };
 
+  /** 没回复就提醒：发出后几天。null 是不提醒。 */
+  const [followDays, setFollowDays] = useState<number | null>(null);
+  const followAt = (sentAt: number) => (followDays ? sentAt + followDays * 86_400_000 : null);
+
   /** 定时发送：存到本机的待发送里，到时间由核心发出去。 */
   const schedule = async (at: number) => {
     if (!checkLetter()) return;
@@ -552,7 +601,10 @@ function Composer({
       while (saving.current) await saving.current;
       const { letter: current } = latest.current;
       const old = draft.current;
-      await api.schedule({ ...current, draft: old?.account === current.account_id ? old.id : null }, at);
+      await api.schedule(
+        { ...current, draft: old?.account === current.account_id ? old.id : null, follow_up: followAt(at) },
+        at,
+      );
       if (old && old.account !== current.account_id) void api.deleteDraft(old.account, old.id).catch(() => {});
       draft.current = null;
       tokensRef.current = [];
@@ -580,7 +632,11 @@ function Composer({
         void qc.invalidateQueries({ queryKey: keys.nav });
       }
       const old = draft.current;
-      await api.send({ ...current, draft: old?.account === current.account_id ? old.id : null });
+      await api.send({
+        ...current,
+        draft: old?.account === current.account_id ? old.id : null,
+        follow_up: followAt(Date.now()),
+      });
       // 草稿在别的邮箱里：单独删掉
       if (old && old.account !== current.account_id) void api.deleteDraft(old.account, old.id).catch(() => {});
       draft.current = null;
@@ -944,6 +1000,7 @@ function Composer({
                 <IconButton label={t("compose.attach")} disabled={!ready} onClick={() => picker.current?.click()}>
                   <Paperclip {...ICON} />
                 </IconButton>
+                <FollowUpMenu days={followDays} onChange={setFollowDays} disabled={!ready} />
                 <TemplateMenu
                   disabled={!ready}
                   current={(rich ? rich.text : text).trim()}

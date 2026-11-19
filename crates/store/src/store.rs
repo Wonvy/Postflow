@@ -1376,9 +1376,12 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         ),
         // 稍后提醒刚到时间的；以及发出去的信「没回复就提醒」到了时间、还没回复的（提醒时标成了未读）
         View::Reminders => format!(
-            "i.read = 0 AND i.archived = 0 AND {ALIVE} AND EXISTS (SELECT 1 FROM lww s \
+            "i.read = 0 AND {ALIVE} AND ((i.archived = 0 AND EXISTS (SELECT 1 FROM lww s \
              WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
-             AND CAST(s.value AS INTEGER) BETWEEN {NOW_MS} - {REMINDER_WINDOW_MS} AND {NOW_MS})"
+             AND CAST(s.value AS INTEGER) BETWEEN {NOW_MS} - {REMINDER_WINDOW_MS} AND {NOW_MS})) \
+             OR (i.archived = 5 AND EXISTS (SELECT 1 FROM lww s \
+             WHERE s.kind = 'followup' AND s.id = m.message_id AND s.field = 'until' \
+             AND CAST(s.value AS INTEGER) BETWEEN {NOW_MS} - {REMINDER_WINDOW_MS} AND {NOW_MS})))"
         ),
     };
     if let Some(source_id) = &filter.source_id {
