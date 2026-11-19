@@ -66,7 +66,7 @@ import { useListModel } from "../lib/listModel";
 import { IS_TABLET } from "../lib/device";
 import { FEED_KIND_LABEL, useFeedKind, useListMedia } from "../lib/feedKinds";
 import { useDrawerSidebar, useIsTouch, useReaderOverlay } from "../lib/mobile";
-import { EpisodeChip, EpisodeQueue, MiniPlayer } from "./Player";
+import { EpisodeCardButton, EpisodeChip, EpisodeQueue, MiniPlayer } from "./Player";
 import { useWindowControlsGap } from "./WindowControls";
 import {
   isDefaultListStyle,
@@ -1973,6 +1973,8 @@ interface RowProps {
   /** AI 写的一句话摘要，有的话代替原文开头。 */
   abstract?: string;
   look: Look;
+  /** 卡片视图：播客单集有单独的大播放按钮，来源那一行不再放小的。 */
+  bigPlay?: boolean;
 }
 
 /** 列表样式算出来的尺寸，以及邮件要不要标出是哪个邮箱的。 */
@@ -2019,7 +2021,8 @@ export function LabelChip({ label }: { label: string }) {
   );
 }
 
-function Trailing({ item, group, time, onExpand, expandLabel, look }: RowProps) {
+function Trailing(props: RowProps) {
+  const { item, group, time, onExpand, expandLabel, look } = props;
   const attachments = group ? group.hasAttachments : item.has_attachments;
   const starred = group ? group.starred : item.starred;
   return (
@@ -2027,7 +2030,7 @@ function Trailing({ item, group, time, onExpand, expandLabel, look }: RowProps) 
       {item.label && <LabelChip label={item.label} />}
       {group && onExpand && <CountPill count={group.items.length} onExpand={onExpand} label={expandLabel} />}
       {attachments && <Paperclip size={12} className="shrink-0 text-fg-3" />}
-      {!group && <EpisodeChip item={item} size={look.m.summary.size} />}
+      {!group && !props.bigPlay && <EpisodeChip item={item} size={look.m.summary.size} />}
       {starred && <Star size={12} className="shrink-0 fill-warning text-warning" />}
       <span className="tabular shrink-0 text-fg-3" style={{ fontSize: Math.min(look.m.summary.size, 13) }}>
         {time}
@@ -2210,21 +2213,26 @@ function Card(props: RowProps & { imageHeight: number }) {
   const picture = look.style.showImage && item.image && !broken;
   const padY = look.m.padY + 2;
   const padX = look.m.padX + 2;
+  // 播客单集：封面上（没有封面时卡片里）放一个大播放按钮
+  const audio = !group && !!item.media?.mime.startsWith("audio/");
   return (
     <div className="flex h-full flex-col">
       {picture && (
-        <img
-          src={item.image ?? ""}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          draggable={false}
-          onError={() => setBroken(true)}
-          // 不裁剪：整张图按比例缩到框里
-          className="w-full shrink-0 bg-active object-contain"
-          style={{ height: imageHeight }}
-        />
+        <div className="relative shrink-0">
+          <img
+            src={item.image ?? ""}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            draggable={false}
+            onError={() => setBroken(true)}
+            // 不裁剪：整张图按比例缩到框里
+            className="w-full bg-active object-contain"
+            style={{ height: imageHeight }}
+          />
+          {audio && <EpisodeCardButton item={item} overlay />}
+        </div>
       )}
       <div
         className="flex min-h-0 flex-1 flex-col gap-1.5"
@@ -2233,9 +2241,14 @@ function Card(props: RowProps & { imageHeight: number }) {
         <div className="flex h-5 shrink-0 items-center gap-1.5">
           <UnreadDot unread={unread} />
           <div className="min-w-0 flex-1">
-            <SourceLine {...props} />
+            <SourceLine {...props} bigPlay={audio} />
           </div>
         </div>
+        {audio && !picture && (
+          <div className="shrink-0">
+            <EpisodeCardButton item={item} overlay={false} />
+          </div>
+        )}
         <span
           className={cx("shrink-0", unread ? "font-semibold text-fg" : "text-fg-2")}
           style={{ ...text(look.m.bigTitle), ...clampLines(picture || !look.style.showSummary ? 2 : 3) }}

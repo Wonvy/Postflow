@@ -7,8 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- "Play the next episode when done" can go oldest to newest and skip episodes you've already played, for catching up on a show (in the speed menu).
+- In the card view, podcast episodes have a big play button with the length, on the cover when there is one.
 
 ### 中文
+- 「播完接着放下一期」可以改成从旧到新、跳过听过的，适合从头追一个节目（在倍速菜单里）。
+- 卡片视图里，播客单集有一个大的播放按钮和时长，有封面时放在封面上。
 
 ## 0.1.34 — 2026-11-19
 

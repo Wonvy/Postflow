@@ -70,6 +70,8 @@ function RateMenu({ compact = false }: { compact?: boolean }) {
   const setRate = usePlayer((s) => s.setRate);
   const autoNext = usePlayer((s) => s.autoNext);
   const setAutoNext = usePlayer((s) => s.setAutoNext);
+  const catchUp = usePlayer((s) => s.catchUp);
+  const setCatchUp = usePlayer((s) => s.setCatchUp);
   const sleep = usePlayer((s) => s.sleep);
   const lang = useLang();
   const mark = (on: boolean) => (on ? <Check size={14} /> : <span className="inline-block size-[14px]" />);
@@ -103,6 +105,14 @@ function RateMenu({ compact = false }: { compact?: boolean }) {
       <MenuItem icon={mark(autoNext)} onSelect={() => setAutoNext(!autoNext)}>
         {t("player.autoNext")}
       </MenuItem>
+      {autoNext && (
+        <MenuItem icon={mark(catchUp)} onSelect={() => setCatchUp(!catchUp)}>
+          <span className="flex flex-col">
+            <span>{t("player.catchUp")}</span>
+            <span className="text-[11px] text-fg-3">{t("player.catchUpHint")}</span>
+          </span>
+        </MenuItem>
+      )}
       <MenuSeparator />
       {/* 睡眠定时：到时间暂停，或者这一期放完就停 */}
       <MenuItem icon={mark(sleep === null)} onSelect={() => setSleep(null)}>
@@ -209,6 +219,68 @@ export function EpisodeChip({ item, size }: { item: Item; size: number }) {
       )}
       {label}
     </button>
+  );
+}
+
+/**
+ * 卡片视图里播客单集的大播放按钮：有封面时压在封面左下角，没有时放在卡片里。旁边写着时长
+ * （听过一半的是还剩多久，正在放的是剩下的时间）。点它不会打开这一条。
+ */
+export function EpisodeCardButton({ item, overlay }: { item: Item; overlay: boolean }) {
+  const t = useT();
+  const lang = useLang();
+  const queue = useContext(QueueContext);
+  const episode = useMemo(() => episodeOf(item), [item]);
+  const current = usePlayer((s) => s.current?.id === item.id);
+  const playing = usePlayer((s) => s.playing && s.current?.id === item.id);
+  const waiting = usePlayer((s) => s.waiting && s.current?.id === item.id);
+  const left = usePlayer((s) =>
+    s.current?.id === item.id && s.duration > 0 ? Math.max(0, s.duration - s.position) : null,
+  );
+  if (!episode) return null;
+  const total = episode.media.duration ?? 0;
+  const saved = savedPosition(item.id);
+  const zh = lang === "zh" ? "zh" : "en";
+  const label =
+    left !== null
+      ? `-${formatTime(left)}`
+      : saved > 0 && total > saved
+        ? t("player.left", { time: formatLength(total - saved, zh) })
+        : total > 0
+          ? formatLength(total, zh)
+          : "";
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-2",
+        overlay && "absolute bottom-2 left-2 rounded-full bg-black/55 py-1 pl-1 pr-2.5 text-white backdrop-blur-sm",
+      )}
+    >
+      <button
+        type="button"
+        aria-label={playing ? t("player.pause") : t("player.play")}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (current) toggle();
+          else play(episode, queue);
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-sm transition-transform hover:brightness-110 active:scale-95 touch:size-11"
+      >
+        {waiting && playing ? (
+          <Spinner size={14} />
+        ) : playing ? (
+          <Pause size={15} fill="currentColor" strokeWidth={0} />
+        ) : (
+          <Play size={15} fill="currentColor" strokeWidth={0} className="translate-x-px" />
+        )}
+      </button>
+      {label && (
+        <span className={cx("tabular text-[12px]", overlay ? "text-white" : current ? "text-accent" : "text-fg-3")}>
+          {label}
+        </span>
+      )}
+    </span>
   );
 }
 

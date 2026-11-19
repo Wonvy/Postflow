@@ -1,13 +1,14 @@
 // 播客播放器：整个界面共用一个 <audio>，换条目、换列表、切到邮件都接着放。
 //
 // - 每一期听到哪里记在本机（localStorage，最多记 300 期），下次从那里接着放。播放进度变得很快，不放进同步数据。
-// - 倍速和「播完接着放下一期」记在本机。
+// - 倍速、「播完接着放下一期」和「从旧到新」记在本机。
 // - 播完把这一期标为已读（由 PlayerBridge 做，它能拿到查询缓存），开着「接着放」时放队列里的下一期。
 // - 系统的媒体控制（键盘上的播放键、锁屏、控制中心）通过 Media Session 接上。
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Item, Media } from "./api";
+import { nextEntry } from "./playerQueue";
 
 export { formatTime } from "./duration";
 
@@ -19,6 +20,9 @@ export interface Episode {
   icon: string | null;
   image: string | null;
   media: Media;
+  /** 发布时间和放之前是不是已经听完（已读）：「从旧到新」挑下一期用。 */
+  published: number;
+  read: boolean;
 }
 
 export function episodeOf(item: Item): Episode | null {
@@ -30,6 +34,8 @@ export function episodeOf(item: Item): Episode | null {
     icon: item.source_icon,
     image: item.image,
     media: item.media,
+    published: item.published_at,
+    read: item.read,
   };
 }
 
@@ -49,10 +55,13 @@ interface PlayerState {
   error: string | null;
   rate: number;
   autoNext: boolean;
+  /** 接着放时从旧到新、跳过听完的（追一个节目用）；关着时放列表里的下一条。 */
+  catchUp: boolean;
   /** 睡眠定时：到这个时间（毫秒）暂停；"end" 是这一期放完就停。 */
   sleep: number | "end" | null;
   setRate: (rate: number) => void;
   setAutoNext: (on: boolean) => void;
+  setCatchUp: (on: boolean) => void;
 }
 
 export const usePlayer = create<PlayerState>()(
@@ -67,16 +76,18 @@ export const usePlayer = create<PlayerState>()(
       error: null,
       rate: 1,
       autoNext: false,
+      catchUp: false,
       sleep: null,
       setRate: (rate) => {
         set({ rate });
         if (audio) audio.playbackRate = rate;
       },
       setAutoNext: (autoNext) => set({ autoNext }),
+      setCatchUp: (catchUp) => set({ catchUp }),
     }),
     {
       name: "postflow.player",
-      partialize: (s) => ({ rate: s.rate, autoNext: s.autoNext }),
+      partialize: (s) => ({ rate: s.rate, autoNext: s.autoNext, catchUp: s.catchUp }),
     },
   ),
 );
@@ -128,6 +139,8 @@ function savePosition(id: string, t: number, duration: number) {
 // ---------------------------------------------------------------- 播放
 
 let audio: HTMLAudioElement | null = null;
+/** 这次打开以后放完的几期（队列里的「已读」是开始放时的样子，后来放完的记在这里）。 */
+const played = new Set<string>();
 /** 下载到本机的单集：条目 ID → 播放地址。见 episodes.ts。 */
 let localFiles: Record<string, string> = {};
 
@@ -183,7 +196,8 @@ function element(): HTMLAudioElement {
       setSleep(null);
       return;
     }
-    const next = s.autoNext ? s.queue[s.queue.findIndex((e) => e.id === finished.id) + 1] : undefined;
+    played.add(finished.id);
+    const next = s.autoNext ? nextEntry(s.queue, finished.id, s.catchUp, played) : undefined;
     if (next) play(next, s.queue);
   });
   audio = el;
