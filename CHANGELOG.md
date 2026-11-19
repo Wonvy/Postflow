@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.37 — 2026-11-19
+
+### English
 - Fixed subtitles failing with "this episode's audio can't be read" while some episodes were still downloading (for example 故事FM): M4A files with a large index at the start are now read as they download. If a file can only be read once it's complete, subtitles start by themselves when the download finishes, without pressing Retry.
 - Fixed subtitles failing when an episode finished downloading at the very moment transcription started.
 - Translation no longer gives up when an episode opens with music that recognition turns into a few stray words; it waits for more lines to tell the language.
