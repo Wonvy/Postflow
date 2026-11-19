@@ -123,7 +123,7 @@ impl Store {
             let mut stmt = conn.prepare(
                 "SELECT f.id, f.title, f.url, f.icon_url, f.folder, f.added_at, ff.error \
                  FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
-                 WHERE f.deleted = 0 ORDER BY f.title COLLATE NOCASE",
+                 WHERE f.deleted = 0 AND f.url <> 'postflow:later' ORDER BY f.title COLLATE NOCASE",
             )?;
             let rows = stmt.query_map([], |r| {
                 Ok(FeedStats {

@@ -299,6 +299,20 @@ const REMINDER_WINDOW_MS: i64 = 3 * 86_400_000;
 /// 来源还在：订阅没退订，邮箱没移除。
 pub(crate) const ALIVE: &str = "COALESCE(f.deleted, a.deleted, 1) = 0";
 
+/// 「稍后读」：用户自己存下来的网页。它是一个地址固定的内置订阅源，存下的网页是它的文章，
+/// 所以阅读、翻译、星标、搜索、同步都和别的文章一样。它不刷新、不出现在订阅源列表和 OPML 里，
+/// 文章也不混进「全部文章」「今天」「未读」，只在侧栏的「稍后读」里看。
+pub const LATER_URL: &str = "postflow:later";
+
+/// 「稍后读」订阅源的 ID。地址固定，所以每台设备算出来都一样。
+pub fn later_feed_id() -> &'static str {
+    static ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ID.get_or_init(|| ids::feed_id(LATER_URL))
+}
+
+/// 条目 `i`（连着订阅源 `f`）不是「稍后读」里的。
+const NOT_LATER: &str = "COALESCE(f.url, '') <> 'postflow:later'";
+
 /// 一条操作里最多带多少个 ID，超过就拆成多行，避免出现特别长的行。
 const MAX_IDS_PER_OP: usize = 500;
 
@@ -426,6 +440,19 @@ impl Store {
     }
 
     /// 订阅一个源。已订阅过则直接返回；退订过的会恢复。
+    /// 「稍后读」订阅源，没有就建一个（退订过的也恢复）。返回它的 ID。
+    pub fn ensure_later_feed(&self) -> Result<String> {
+        let id = later_feed_id();
+        if self.feed(id)?.is_none() {
+            self.put_feed(NewFeed {
+                url: LATER_URL.into(),
+                title: "Read later".into(),
+                ..Default::default()
+            })?;
+        }
+        Ok(id.to_string())
+    }
+
     pub fn put_feed(&self, new: NewFeed) -> Result<Feed> {
         let url = new.url.trim().to_string();
         if url.is_empty() {
@@ -675,7 +702,9 @@ impl Store {
 
     pub fn feeds(&self) -> Result<Vec<Feed>> {
         let guard = self.lock();
-        let mut stmt = guard.conn.prepare(&feed_sql("f.deleted = 0"))?;
+        let mut stmt = guard
+            .conn
+            .prepare(&feed_sql("f.deleted = 0 AND f.url <> 'postflow:later'"))?;
         let rows = stmt.query_map([], feed_from_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
@@ -771,7 +800,7 @@ impl Store {
                     COALESCE(SUM(i.read = 0 AND i.published_at >= ?1), 0), \
                     COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND NOT {nl}), 0), \
                     COALESCE(SUM(i.read = 0 AND i.kind = 'mail' AND NOT {nl} AND i.published_at >= ?1), 0) \
-             FROM {ITEM_FROM} WHERE i.archived = 0 AND {ALIVE} AND NOT {}",
+             FROM {ITEM_FROM} WHERE i.archived = 0 AND {ALIVE} AND {NOT_LATER} AND NOT {}",
             snoozed_now(),
             nl = newsletter_sql!(),
         );
@@ -785,7 +814,17 @@ impl Store {
                 .query_row("SELECT COUNT(*) FROM items WHERE starred = 1", [], |r| {
                     r.get(0)
                 })?;
+        let later = guard.conn.query_row(
+            &format!(
+                "SELECT COUNT(*) FROM {ITEM_FROM} WHERE i.read = 0 AND i.archived = 0 AND {ALIVE} \
+                 AND f.url = 'postflow:later' AND NOT {}",
+                snoozed_now()
+            ),
+            [],
+            |r| r.get(0),
+        )?;
         Ok(Counts {
+            later,
             unread,
             today,
             starred,
@@ -926,7 +965,7 @@ impl Store {
             "SELECT f.id, f.url, f.interval_min, ff.etag, ff.last_modified, \
                     COALESCE(ff.error_count, 0) \
              FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
-             WHERE f.deleted = 0 AND {cond}"
+             WHERE f.deleted = 0 AND f.url NOT LIKE 'postflow:%' AND {cond}"
         );
         let mut stmt = guard.conn.prepare(&sql)?;
         let rows = stmt.query_map(params_from_iter(args), |r| {
@@ -1331,6 +1370,11 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         View::Sent => format!("i.archived = 5 AND {ALIVE}"),
         View::Folder => format!("i.archived = 6 AND {ALIVE}"),
         View::Snoozed => format!("i.archived < 2 AND {ALIVE} AND {}", snoozed_now()),
+        View::Later => format!(
+            "i.archived = 0 AND {ALIVE} AND f.url = 'postflow:later' AND NOT {}",
+            snoozed_now()
+        ),
+        // 稍后提醒刚到时间的；以及发出去的信「没回复就提醒」到了时间、还没回复的（提醒时标成了未读）
         View::Reminders => format!(
             "i.read = 0 AND i.archived = 0 AND {ALIVE} AND EXISTS (SELECT 1 FROM lww s \
              WHERE s.kind = 'snooze' AND s.id = i.id AND s.field = 'until' \
@@ -1340,6 +1384,11 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
     if let Some(source_id) = &filter.source_id {
         args.push(SqlValue::Text(source_id.clone()));
         conds.push_str(&format!(" AND i.source_id = ?{}", args.len()));
+    } else if matches!(filter.view, View::Inbox | View::Today | View::Unread)
+        && filter.label.is_none()
+    {
+        // 存下的网页只在「稍后读」里，不混进订阅的文章流
+        conds.push_str(&format!(" AND {NOT_LATER}"));
     }
     if let Some(mailbox) = &filter.mailbox {
         args.push(SqlValue::Text(mailbox.clone()));
@@ -1443,6 +1492,25 @@ fn feed_from_row(r: &Row<'_>) -> rusqlite::Result<Feed> {
 }
 
 pub(crate) fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
+    let mut item = raw_item_from_row(r)?;
+    // 存下的网页各来自不同的网站：来源显示网站的域名，图标由界面按域名去找
+    if item.kind == "article" && item.source_id == later_feed_id() {
+        item.source_title = item.url.as_deref().map(site_of).unwrap_or_default();
+        item.source_icon = None;
+    }
+    Ok(item)
+}
+
+/// 网址的域名，去掉开头的 `www.`。
+fn site_of(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = host.rsplit_once('@').map_or(host, |(_, h)| h);
+    let host = host.split(':').next().unwrap_or_default();
+    host.trim_start_matches("www.").to_ascii_lowercase()
+}
+
+fn raw_item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemSummary> {
     Ok(ItemSummary {
         id: r.get(0)?,
         kind: r.get(1)?,

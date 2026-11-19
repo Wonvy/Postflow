@@ -17,7 +17,7 @@ import { articleActions, canArchive, canSnooze, type Space, useUi, viewLabelKey 
 import { SETTINGS_PAGES } from "./SettingsDialog";
 import { cx, Kbd } from "./ui";
 
-const SPACE_VIEWS = ["inbox", "today", "unread", "starred", "snoozed", "archived"] as const;
+const SPACE_VIEWS = ["inbox", "today", "unread", "starred", "later", "snoozed", "archived"] as const;
 const SNOOZE_LABEL: Record<SnoozePreset, "snooze.later" | "snooze.tonight" | "snooze.tomorrow" | "snooze.weekend" | "snooze.nextWeek"> = {
   later: "snooze.later",
   tonight: "snooze.tonight",
@@ -126,7 +126,9 @@ function useCommands(): Command[] {
   const spaces: Space[] = showFeeds ? ["mail", "feeds"] : ["mail"];
   for (const s of spaces) {
     // 侧栏里藏起来的视图这里也不列（「全部文章」除外，什么都没选时就是它）
-    for (const view of SPACE_VIEWS.filter((v) => v === "inbox" || !(ui.hiddenViews[s] ?? []).includes(v))) {
+    for (const view of SPACE_VIEWS.filter(
+      (v) => (v === "inbox" || !(ui.hiddenViews[s] ?? []).includes(v)) && (v !== "later" || s === "feeds"),
+    )) {
       list.push({
         id: `go:${s}:${view}`,
         group: go,

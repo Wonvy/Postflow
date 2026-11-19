@@ -104,6 +104,7 @@ import { shortTime } from "../lib/time";
 import { ItemMenuItems } from "./ItemMenu";
 import { SenderIcon, useMixedAccounts } from "./SourceIcon";
 import { PluginMenuItems } from "./PluginMenu";
+import { LaterBar, LaterEmpty } from "./ReadLater";
 import { StatusBar, ToolbarMenu, Tools } from "./Toolbars";
 import {
   Button,
@@ -1097,6 +1098,7 @@ export function ItemList({ width }: { width: number }) {
     ),
   };
 
+  const laterList = scope.kind === "view" && scope.view === "later";
   return (
     <EpisodeQueue items={items}>
     <section
@@ -1122,6 +1124,7 @@ export function ItemList({ width }: { width: number }) {
       </ToolbarMenu>
 
       {searchOpen && <SearchBar scopeName={title} fetching={query.isFetching} firstId={stops[0]?.id} />}
+      {laterList && !searchOpen && <LaterBar />}
       {listTranslate && engine === "offline" && <ModelPrompt />}
 
       {/* 空白处右键：列表的显示方式和常用操作。行上右键是那一行自己的菜单 */}
@@ -1148,6 +1151,8 @@ export function ItemList({ width }: { width: number }) {
           <div className="flex h-full items-center justify-center text-fg-3">
             <Spinner size={16} />
           </div>
+        ) : items.length === 0 && laterList && !search ? (
+          <LaterEmpty />
         ) : items.length === 0 ? (
           <EmptyList
             search={search ? { query: search, all: searchAll, onAll: () => setSearchAll(true) } : undefined}

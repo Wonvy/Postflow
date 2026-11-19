@@ -31,6 +31,7 @@ import { api } from "./lib/api";
 import { resolveLang, useT } from "./lib/i18n";
 import { useTray, useUnreadBadge } from "./lib/notify";
 import { useTrayActions } from "./lib/trayActions";
+import { usePasteToSave } from "./components/ReadLater";
 import { useCoreEvents, useNav, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
@@ -185,6 +186,8 @@ function Shell() {
   useUnreadBadge(unreadMail);
   useTray(unreadMail);
   useTrayActions();
+  // 在输入框外面粘贴一个网址：存进稍后读
+  usePasteToSave();
   useEffect(() => startUpdateChecks(), []);
   useEffect(() => watchFullscreen(), []);
   usePluginLoader();

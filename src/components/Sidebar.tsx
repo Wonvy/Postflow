@@ -6,6 +6,7 @@ import {
   ChevronUp,
   ChevronDown,
   Archive,
+  Bookmark,
   ChartColumn,
   Check,
   CheckCheck,
@@ -97,9 +98,13 @@ const VIEWS: { view: View; icon: LucideIcon }[] = [
   { view: "today", icon: Sun },
   { view: "unread", icon: CircleDot },
   { view: "starred", icon: Star },
+  { view: "later", icon: Bookmark },
   { view: "snoozed", icon: AlarmClock },
   { view: "archived", icon: Archive },
 ];
+
+/** 只在订阅那边有的视图。 */
+const FEEDS_ONLY: View[] = ["later"];
 
 /** 邮箱里另外同步的几个文件夹，放在邮箱列表下面。 */
 const MAIL_FOLDERS: { view: View; icon: LucideIcon; label: `nav.${View}` }[] = [
@@ -766,10 +771,11 @@ export function Sidebar({ width }: { width: number }) {
   // 这一边显示哪几个内置视图
   const hiddenViews = useUi((s) => s.hiddenViews[space] ?? NO_VIEWS);
   const toggleViewShown = useUi((s) => s.toggleViewShown);
-  const shownViews = VIEWS.filter(({ view }) => !hiddenViews.includes(view));
+  const spaceViews = VIEWS.filter(({ view }) => !mail || !FEEDS_ONLY.includes(view));
+  const shownViews = spaceViews.filter(({ view }) => !hiddenViews.includes(view));
   const viewsSection: SidebarSection = space === "mail" ? "views-mail" : "views-feeds";
   // 右键菜单里「显示哪几个视图」的勾选
-  const viewChoices = VIEWS.map(({ view, icon: Icon }) => (
+  const viewChoices = spaceViews.map(({ view, icon: Icon }) => (
     <MenuItem
       key={view}
       icon={hiddenViews.includes(view) ? <Icon size={14} className="opacity-40" /> : <Check size={14} />}
@@ -985,6 +991,7 @@ export function Sidebar({ width }: { width: number }) {
   const isActive = (target: ListScope) => sameScope(scope, target);
   const countFor = (view: View) => {
     if (!counts) return 0;
+    if (view === "later") return counts.later ?? 0;
     // 只看某一类源时，「全部文章」的数字是这一类源的未读加起来；「今天」不单独算，不显示数字
     if (!mail && feedKind !== "all") {
       return view === "inbox" ? (feeds ?? []).reduce((sum, f) => sum + f.unread, 0) : 0;

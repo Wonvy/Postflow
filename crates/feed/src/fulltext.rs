@@ -24,7 +24,7 @@ impl Client {
         extract_article(&html, &page.final_url)
     }
 
-    async fn article_page(&self, url: &str) -> Result<Page> {
+    pub(crate) async fn article_page(&self, url: &str) -> Result<Page> {
         match self.get(url, None, None).await {
             // 被转到了人机验证页，比如微信公众号的「环境异常」。不去绕，照实告诉用户。
             Ok(Some(page)) if page.final_url.path().contains("captcha") => {
@@ -43,7 +43,7 @@ impl Client {
 
 /// 从网页里取出正文：先看有没有专门的站点规则，再用 Readability，
 /// 最后用网页给搜索引擎看的结构化数据（JSON-LD 的 articleBody）兜底。
-fn extract_article(html: &str, url: &Url) -> Result<String> {
+pub(crate) fn extract_article(html: &str, url: &Url) -> Result<String> {
     if let Some(content) = site_rule(html, url) {
         return Ok(content);
     }

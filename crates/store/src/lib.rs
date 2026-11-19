@@ -25,5 +25,5 @@ pub use model::*;
 pub use rules::RuleItem;
 pub use search::match_query;
 pub use stats::{FeedStats, ReadingDay, Stats};
-pub use store::Store;
+pub use store::{LATER_URL, Store, later_feed_id};
 pub use usage::{IndexUsage, SourceUsage};

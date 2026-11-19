@@ -57,7 +57,7 @@ export function spaceOfScope(scope: ListScope): Space | null {
     case "newsletter":
       return "feeds";
     case "view":
-      return isMailOnlyView(scope.view) ? "mail" : null;
+      return isMailOnlyView(scope.view) ? "mail" : scope.view === "later" ? "feeds" : null;
     case "label":
       return null;
   }
@@ -907,6 +907,8 @@ export function filterOf(scope: ListScope, space: Space, feedKind: ContentKind |
     case "label":
       return withFeedKind({ view: "inbox", label: scope.label, kind }, space, feedKind);
     case "view": {
+      // 稍后读只有存下的网页，不按订阅源的类型分
+      if (scope.view === "later") return { view: "later", kind: "article" };
       const filter: ItemFilter =
         scope.view === "today" ? { view: "today", since: startOfToday() } : { view: scope.view };
       if (isMailOnlyView(scope.view)) return filter;

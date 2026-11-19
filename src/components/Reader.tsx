@@ -3,6 +3,7 @@ import {
   AlarmClock,
   Archive,
   ArchiveRestore,
+  Bookmark,
   BookOpenText,
   Check,
   ChevronLeft,
@@ -75,14 +76,14 @@ import { useWindowControlsGap } from "./WindowControls";
 import { ItemMenuItems, useSetLabel } from "./ItemMenu";
 import { MediaAttachment } from "./Player";
 import { ReaderStyleMenu } from "./ReaderStyleMenu";
-import { AccountIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
+import { AccountIcon, ArticleIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
+import { useSaveLater } from "./ReadLater";
 import { WebPage } from "./WebPage";
 import {
   Button,
   ContextMenu,
   cx,
-  Favicon,
   ICON,
   IconButton,
   Kbd,
@@ -200,6 +201,7 @@ function ReaderMenu({
 }) {
   const t = useT();
   const { openTargets } = useActions();
+  const saveLater = useSaveLater();
   const [info] = useState(() => context.current);
   const group = openTargets();
   const targets = group.length > 0 ? group : [fallback];
@@ -221,6 +223,11 @@ function ReaderMenu({
           <MenuItem icon={<Link size={14} />} onSelect={() => void copyText(link.replace(/^mailto:/i, ""))}>
             {t("menu.copyLink")}
           </MenuItem>
+          {/^https?:/i.test(link) && (
+            <MenuItem icon={<Bookmark size={14} />} onSelect={() => void saveLater(link)}>
+              {t("menu.saveLater")}
+            </MenuItem>
+          )}
         </>
       )}
       {image && (
@@ -326,7 +333,10 @@ function Article({ id }: { id: string }) {
   const readerFullText = useUi((s) => s.readerFullText);
   const setReaderFullText = useUi((s) => s.setReaderFullText);
   // 这个订阅源设了「打开时自动取全文」
-  const feedFullText = useNav().data?.feeds.find((f) => f.id === summary?.source_id)?.full_text === true;
+  const nav = useNav().data;
+  const feedFullText = nav?.feeds.find((f) => f.id === summary?.source_id)?.full_text === true;
+  // 从 Pocket 之类导入的稍后读只有地址，打开时去抓正文
+  const laterWithoutText = !!summary && summary.source_id === nav?.later_id && !item?.content?.trim();
 
   // 原网页模式：开着时有网页链接的条目直接显示原网页，没有链接的（多数邮件）照常显示正文
   const readerWeb = useUi((s) => s.readerWeb);
@@ -384,11 +394,11 @@ function Article({ id }: { id: string }) {
   // 全文开关开着、或者这个源设了自动取全文：文章一打开就显示全文
   const autoFull = useRef(false);
   useEffect(() => {
-    if (!(readerFullText || feedFullText) || autoFull.current || !item || item.mail || !item.url) return;
+    if (!(readerFullText || feedFullText || laterWithoutText) || autoFull.current || !item || item.mail || !item.url) return;
     autoFull.current = true;
     void showFullText();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, readerFullText, feedFullText]);
+  }, [item, readerFullText, feedFullText, laterWithoutText]);
 
 
   /** 工具栏上的按钮。放在顶部还是状态栏、按什么顺序由用户的布局决定（Toolbars.tsx）。用不上的是 null。 */
@@ -771,7 +781,7 @@ function ArticleView({
         {shown?.title || item.title || t("reader.untitled")}
       </h1>
       <div className="mb-8 mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-3">
-        <Favicon src={item.source_icon} />
+        <ArticleIcon item={item} />
         <span className="font-medium text-fg-2">{item.source_title}</span>
         {item.author && (
           <>

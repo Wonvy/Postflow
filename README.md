@@ -139,6 +139,12 @@ click **More info → Run anyway**.
   reader is a switch: while it is on, every article you open loads in full. WeChat articles and pages that describe
   their article in structured data are supported. When a page can't be loaded, the reader says why (the site blocks
   apps, needs a login, or loads its text with scripts) and shows the feed's own content.
+- Read later (the bookmark in the Feeds views): save any web page to read like an article. Paste a link into the box
+  at the top of the list, press `⌘V` / `Ctrl+V` with a link anywhere outside a text field, or right-click a link in an
+  article or message and choose "Save to Read later". The page is saved with its text, so it stays readable even if the
+  original changes or disappears, and it syncs to your other devices. Saved pages stay out of All articles; archive one
+  when you're done. "Import" brings in a Pocket or Instapaper export (CSV or HTML) or browser bookmarks; archived
+  items stay archived, and their text is fetched when you open them.
 - Feed stats (the chart icon on the Feeds heading): how often each feed posts, how many of its posts carry the full
   article, and how much of it you actually read — articles opened, read to the end, and reading time, measured from
   scrolling and time spent in the reader while the window is in front. Feeds that fail to fetch, have gone quiet,

@@ -19,7 +19,9 @@ export type View =
   /** 稍后提醒着、还没到时间的。 */
   | "snoozed"
   /** 提醒时间刚到、还没读的：收件箱顶部单独列出来。 */
-  | "reminders";
+  | "reminders"
+  /** 稍后读：自己存下来的网页（只在订阅那边）。 */
+  | "later";
 
 export interface Status {
   configured: boolean;
@@ -100,6 +102,8 @@ export interface Feed {
 }
 
 export interface Counts {
+  /** 稍后读里的未读数。 */
+  later: number;
   unread: number;
   today: number;
   starred: number;
@@ -151,6 +155,16 @@ export interface Nav {
   labels: LabelCount[];
   /** 放到订阅里看的订阅邮件发件人。 */
   newsletters?: Newsletter[];
+  /** 「稍后读」内置订阅源的 ID（存下的网页的 source_id）。 */
+  later_id?: string;
+}
+
+/** 存进稍后读的结果。`warning`：网页打不开或认不出正文，条目照样存了，打开时再试。 */
+export interface LaterSaved {
+  id: string;
+  title: string;
+  existed: boolean;
+  warning?: string;
 }
 
 export type ItemKind = "article" | "mail";
@@ -618,6 +632,10 @@ export const api = {
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
+  /** 把一个网页存进稍后读（核心抓下标题和正文）。 */
+  laterSave: (url: string) => rpc<LaterSaved>("later.save", { url }),
+  /** 导入 Pocket、Instapaper 的导出文件或浏览器书签（文件的文字内容）。 */
+  laterImport: (text: string) => rpc<{ found: number; added: number }>("later.import", { text }),
   /** 下载在线的推荐订阅源目录（地址固定，见核心的 `catalog.fetch`）。 */
   catalogFetch: () => rpc<{ text: string; url: string }>("catalog.fetch"),
   episodesList: () => rpc<EpisodeList>("episodes.list"),

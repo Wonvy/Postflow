@@ -398,6 +398,19 @@ impl Core {
                 self.download_episode(&session, p.id, p.keep).await?;
                 reply(json!({}))
             }
+            // 稍后读：存一个网页、导入 Pocket / Instapaper / 书签
+            "later.save" => {
+                let p: UrlParam = parse(params)?;
+                reply(self.save_later(&session, &p.url).await?)
+            }
+            "later.import" => {
+                #[derive(Deserialize)]
+                struct Import {
+                    text: String,
+                }
+                let p: Import = parse(params)?;
+                reply(self.import_later(&session, &p.text).await?)
+            }
             "nav.get" => {
                 let p: NavGet = parse(params)?;
                 let (counts, feeds, accounts, labels, newsletters) = session
@@ -417,6 +430,7 @@ impl Core {
                     "accounts": accounts,
                     "labels": labels,
                     "newsletters": newsletters,
+                    "later_id": postflow_store::later_feed_id(),
                 }))
             }
 

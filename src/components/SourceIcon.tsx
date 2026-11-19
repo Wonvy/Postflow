@@ -9,7 +9,33 @@ import { useUi } from "../lib/store";
 import { hasProviderIcon, ProviderIcon, providerOf } from "./ProviderIcon";
 import { Avatar, cx, Favicon } from "./ui";
 
-type Source = Pick<Item, "kind" | "source_id" | "source_icon" | "source_title">;
+type Source = Pick<Item, "kind" | "source_id" | "source_icon" | "source_title"> & { url?: string | null };
+
+function hostOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host.includes(".") ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 文章的图标：订阅源的图标；没有时（比如稍后读里存下的网页，各来自不同网站）按文章所在的网站去找。
+ */
+export function ArticleIcon({ item, size = 16 }: { item: Pick<Item, "source_icon"> & { url?: string | null }; size?: number }) {
+  const domain = item.source_icon ? null : hostOf(item.url);
+  const icon = useQuery({
+    queryKey: ["senderIcon", domain],
+    queryFn: () => api.senderIcon(domain ?? ""),
+    enabled: domain !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 60 * 60 * 1000,
+    retry: false,
+  });
+  return <Favicon src={item.source_icon ?? icon.data?.url ?? null} size={size} />;
+}
 
 /** 邮箱账户的图标，和侧栏里的一样。 */
 export function AccountIcon({ accountId, fallback, size = 16 }: { accountId: string; fallback: string; size?: number }) {
@@ -23,7 +49,7 @@ export function AccountIcon({ accountId, fallback, size = 16 }: { accountId: str
 
 export function SourceIcon({ item, size = 16 }: { item: Source; size?: number }) {
   if (item.kind === "mail") return <AccountIcon accountId={item.source_id} fallback={item.source_title} size={size} />;
-  return <Favicon src={item.source_icon} size={size} />;
+  return <ArticleIcon item={item} size={size} />;
 }
 
 /**
@@ -90,7 +116,7 @@ export function useMixedAccounts(): boolean {
  * 文章直接是订阅源的图标。
  */
 export function SenderIcon({ item, size = 16, badge }: { item: Item; size?: number; badge: boolean }) {
-  if (item.kind !== "mail") return <Favicon src={item.source_icon} size={size} />;
+  if (item.kind !== "mail") return <ArticleIcon item={item} size={size} />;
   const avatar = <SenderAvatar name={item.author || item.sender_address || "?"} address={item.sender_address} size={size} />;
   if (!badge) return avatar;
   const mark = Math.max(8, Math.round(size * 0.56));

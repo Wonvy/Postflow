@@ -271,12 +271,17 @@ export function useActions() {
   /** 列表换成这一条所在的订阅源或邮箱，阅读面板里还开着它。 */
   const goToSource = useCallback((item: Pick<Item, "id" | "kind" | "source_id">) => {
     const ui = useUi.getState();
+    const laterId = qc.getQueryData<Nav>(keys.nav)?.later_id;
     ui.setScope(
-      item.kind === "mail" ? { kind: "account", accountId: item.source_id } : { kind: "feed", feedId: item.source_id },
+      item.kind === "mail"
+        ? { kind: "account", accountId: item.source_id }
+        : item.source_id === laterId
+          ? { kind: "view", view: "later" }
+          : { kind: "feed", feedId: item.source_id },
     );
     // 换到另一边的订阅源或邮箱时空间跟着切换（见 setScope）；打开的那一条留着
     ui.open(item.id);
-  }, []);
+  }, [qc]);
 
   return {
     items,

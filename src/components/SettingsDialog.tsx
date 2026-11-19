@@ -756,7 +756,10 @@ function ShownViews({ space }: { space: Space }) {
   const t = useT();
   const hidden = useUi((s) => s.hiddenViews[space]) ?? [];
   const toggle = useUi((s) => s.toggleViewShown);
-  const views: View[] = ["inbox", "today", "unread", "starred", "snoozed", "archived"];
+  const views: View[] =
+    space === "mail"
+      ? ["inbox", "today", "unread", "starred", "snoozed", "archived"]
+      : ["inbox", "today", "unread", "starred", "later", "snoozed", "archived"];
   const label = t(space === "mail" ? "settings.viewsMail" : "settings.viewsFeeds");
   return (
     <SettingRow label={label} hint={t(space === "mail" ? "settings.viewsMailHint" : "settings.viewsFeedsHint")}>

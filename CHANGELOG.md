@@ -7,8 +7,14 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Read later: save any web page and read it like an article. Paste a link into the box at the top of Read later (the bookmark in the Feeds views), paste a link anywhere outside a text field, or right-click a link in an article or message and choose "Save to Read later". Pages are saved with their text and sync to your other devices; they stay out of All articles.
+- Read later can import a Pocket or Instapaper export, or bookmarks exported from your browser.
+- Articles without a feed icon show the icon of their own website.
 
 ### 中文
+- 稍后读：把任意网页存下来，和文章一样读。在「稍后读」（订阅那边视图里的书签图标）顶上的输入框贴网址；在输入框以外直接粘贴链接；或者在文章、邮件里右键链接，选「存到稍后读」。网页连同正文一起存下，会同步到你的其他设备，不混进「全部文章」。
+- 稍后读可以导入 Pocket、Instapaper 的导出文件和浏览器导出的书签。
+- 没有订阅源图标的文章，显示它所在网站的图标。
 
 ## 0.1.32 — 2026-11-19
 

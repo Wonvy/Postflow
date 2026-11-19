@@ -210,6 +210,8 @@ pub enum View {
     Snoozed,
     /// 提醒时间刚到（三天内）、还没读的：收件箱顶部单独列出来。
     Reminders,
+    /// 「稍后读」里还没归档的网页。
+    Later,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -306,7 +308,9 @@ pub struct ItemDetail {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Counts {
-    /// 收件箱里的未读数。
+    /// 「稍后读」里的未读数。
+    pub later: i64,
+    /// 收件箱里的未读数。（不算「稍后读」）
     pub unread: i64,
     /// 今天发布的未读数。
     pub today: i64,
