@@ -68,8 +68,17 @@ jobs:
           path: ${{ runner.temp }}/speech-smoke
           key: speech-smoke-${{ runner.os }}-${{ hashFiles('public/catalog/speech.json') }}
 
+      # 失败时把输出的最后几十行写成这次运行的注释：任务日志要登录 GitHub 才能看，注释谁都能看
       - name: 真实语音识别
         if: runner.os != 'macOS'
+        shell: bash
         env:
           POSTFLOW_SPEECH_SMOKE: ${{ runner.temp }}/speech-smoke
-        run: cargo test -p postflow-speech --test recognize -- --nocapture
+        run: |
+          set -o pipefail
+          if ! cargo test -p postflow-speech --test recognize -- --nocapture 2>&1 | tee recognize.log; then
+            printf '::error title=真实语音识别失败 (%s)::' "$RUNNER_OS"
+            tail -n 60 recognize.log | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }'
+            echo
+            exit 1
+          fi
