@@ -102,7 +102,8 @@ export type Dialog =
   /** `scope` 省略时是当前打开的列表；侧栏右键菜单会指定别的列表。 */
   | { type: "mark-all-read"; scope?: ListScope }
   /** 写信。回复、转发时带上原信 `itemId`；写新邮件时可以指定从哪个邮箱发。 */
-  | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string }
+  /** `to`：写新邮件时先填好的收件人（发件人卡片里的「写信」）。 */
+  | { type: "compose"; mode: ComposeMode; itemId?: string; accountId?: string; to?: string }
   /** 全部快捷键一览（按 ?）。 */
   | { type: "shortcuts" }
   /** ⌘K 命令面板。 */
@@ -250,6 +251,9 @@ interface UiState {
   recentFolders: string[];
   /** 应用不在前台时，新邮件弹系统通知。 */
   notifyMail: boolean;
+  /** 新邮件通知只提醒重要联系人的来信（见 vip.ts）。 */
+  notifyVipOnly: boolean;
+  setNotifyVipOnly: (on: boolean) => void;
   /** 图标上显示收件箱的未读邮件数。 */
   badgeUnread: boolean;
   /** 发件人头像用发件人所在网站的图标，没有时显示首字母。 */
@@ -521,6 +525,7 @@ export const useUi = create<UiState>()(
         }),
       recentFolders: [],
       notifyMail: true,
+      notifyVipOnly: false,
       badgeUnread: true,
       senderLogos: true,
       toolbars: {},
@@ -639,6 +644,7 @@ export const useUi = create<UiState>()(
       setWebDevice: (webDevice) => set({ webDevice: devicePreset(webDevice).id }),
       setWebLandscape: (webLandscape) => set({ webLandscape }),
       setNotifyMail: (notifyMail) => set({ notifyMail }),
+      setNotifyVipOnly: (notifyVipOnly) => set({ notifyVipOnly }),
       setBadgeUnread: (badgeUnread) => set({ badgeUnread }),
       setSenderLogos: (senderLogos) => set({ senderLogos }),
       setToolbar: (id, layout) =>
@@ -767,6 +773,7 @@ export const useUi = create<UiState>()(
         recentFolders: s.recentFolders,
         searchAll: s.searchAll,
         notifyMail: s.notifyMail,
+        notifyVipOnly: s.notifyVipOnly,
         badgeUnread: s.badgeUnread,
         senderLogos: s.senderLogos,
         toolbars: s.toolbars,

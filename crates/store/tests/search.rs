@@ -220,6 +220,15 @@ fn finds_articles_and_mail_by_title_people_and_body() {
             .is_empty()
     );
 
+    // 发件人卡片
+    let mei = store.sender_profile(" MEI@example.com ").unwrap();
+    assert_eq!((mei.received, mei.unread, mei.sent), (1, 1, 0));
+    assert_eq!(mei.name.as_deref(), Some("Mei Han"));
+    assert_eq!(mei.recent.len(), 1);
+    assert_eq!(
+        store.sender_profile("nobody@example.com").unwrap().received,
+        0
+    );
 
     // 标题没命中时给出正文里的片段
     let hit = search(&store, "storage");

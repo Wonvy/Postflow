@@ -79,6 +79,7 @@ import { ReaderStyleMenu } from "./ReaderStyleMenu";
 import { AccountIcon, ArticleIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { useSaveLater } from "./ReadLater";
+import { SenderCard } from "./SenderCard";
 import { WebPage } from "./WebPage";
 import {
   Button,
@@ -880,10 +881,26 @@ function MailView({
       </h1>
 
       <div className="mb-6 mt-5 flex items-start gap-3">
-        <SenderAvatar name={sender || "?"} address={mail.from.address} size={32} />
+        {mail.from.address ? (
+          <SenderCard name={sender} address={mail.from.address} accountId={item.source_id}>
+            <button type="button" aria-label={t("sender.open")} className="shrink-0 rounded-full">
+              <SenderAvatar name={sender || "?"} address={mail.from.address} size={32} />
+            </button>
+          </SenderCard>
+        ) : (
+          <SenderAvatar name={sender || "?"} address={mail.from.address} size={32} />
+        )}
         <div className="min-w-0 flex-1 select-text">
           <div className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate font-medium text-fg">{sender}</span>
+            {mail.from.address ? (
+              <SenderCard name={sender} address={mail.from.address} accountId={item.source_id}>
+                <button type="button" className="truncate font-medium text-fg hover:underline">
+                  {sender}
+                </button>
+              </SenderCard>
+            ) : (
+              <span className="truncate font-medium text-fg">{sender}</span>
+            )}
             {mail.from.name && mail.from.address && (
               <span className="truncate text-[12px] text-fg-3">{mail.from.address}</span>
             )}

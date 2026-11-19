@@ -398,6 +398,15 @@ impl Core {
                 self.download_episode(&session, p.id, p.keep).await?;
                 reply(json!({}))
             }
+            // 发件人卡片：和这个人的往来
+            "mail.sender" => {
+                #[derive(Deserialize)]
+                struct Sender {
+                    address: String,
+                }
+                let p: Sender = parse(params)?;
+                reply(session.db(move |s| s.sender_profile(&p.address)).await?)
+            }
             // 附件总览：最近邮件里的附件
             "mail.attachments" => {
                 #[derive(Deserialize)]

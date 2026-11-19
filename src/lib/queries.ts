@@ -18,6 +18,7 @@ import {
   type ItemPage,
   type ItemPatch,
   type Nav,
+  type Settings,
 } from "./api";
 import { isArchiveLike, useUi } from "./store";
 import { useAiStreams } from "./ai";
@@ -156,7 +157,7 @@ export function useCoreEvents() {
           setRefreshing(event.active, event.mail ?? 0);
           break;
         case "new_mail":
-          notifyNewMail(event, qc.getQueryData<Nav>(keys.nav));
+          notifyNewMail(event, qc.getQueryData<Nav>(keys.nav), qc.getQueryData<Settings>(keys.settings));
           break;
         case "reminders":
           notifyReminders(event);

@@ -86,9 +86,13 @@ click **More info → Run anyway**.
 - Move mail into a folder with "Move to folder" in its right-click menu, or drag it onto the folder in the
   sidebar.
 - Each mailbox can have a signature (in its settings), added below what you write and above the quote in replies.
+- Click a sender's name or picture for their card: how many messages they sent you and you sent them, the latest
+  few, and buttons to write to them, search all their mail, or mark them as important.
 - Attachments (under the Mail views, or in the command palette): every file from your mail in one list, filtered by
   type (images, PDF, documents, spreadsheets, presentations, archives) and searchable by file name, subject or sender.
   Save a file or jump to its message. Large messages whose files haven't been downloaded yet are listed below.
+- Notifications for important senders only (Settings → General): mark people as important from their card, and only
+  their mail notifies you. The list syncs to your other devices.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
   [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365). Gmail can sign in with your Google account the

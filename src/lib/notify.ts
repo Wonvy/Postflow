@@ -4,7 +4,8 @@
 // 应用在前台时不弹通知：用户正看着，列表里自己就能看到。
 
 import { useEffect } from "react";
-import type { Nav } from "./api";
+import type { Nav, Settings } from "./api";
+import { vipList, vipOnly } from "./vipList";
 import { activePack, resolveLang, translate } from "./i18n";
 import type { LangPack } from "./langPack";
 import { useUi } from "./store";
@@ -12,7 +13,8 @@ import { type CoreEvent, isTauri } from "./transport";
 
 export interface NewMailEvent {
   account_id: string;
-  mails: { id: string; from: string; subject: string; date: number }[];
+  /** `address`：发件人地址（小写），判断是不是重要联系人用。 */
+  mails: { id: string; from: string; address?: string; subject: string; date: number }[];
   total: number;
 }
 
@@ -56,10 +58,21 @@ async function show(title: string, body: string, onClick: () => void) {
   };
 }
 
+/**
+ * 只提醒重要联系人时，把一批新邮件减到他们的来信。核心最多带上前几封的详情，
+ * 所以只看得到这几封里的；其余的不算。
+ */
+export function vipEvent(event: NewMailEvent, vip: readonly string[]): NewMailEvent {
+  const mails = vipOnly(event.mails, vip);
+  return { ...event, mails, total: mails.length };
+}
+
 /** 核心说来了新邮件时调用。 */
-export function notifyNewMail(event: NewMailEvent, nav: Nav | undefined) {
+export function notifyNewMail(event: NewMailEvent, nav: Nav | undefined, settings?: Settings) {
   const ui = useUi.getState();
-  if (!ui.notifyMail || event.total === 0) return;
+  if (!ui.notifyMail) return;
+  if (ui.notifyVipOnly) event = vipEvent(event, vipList(settings));
+  if (event.total === 0) return;
   // 应用在前台、而且窗口是可见的：不打扰
   if (document.visibilityState === "visible" && document.hasFocus()) return;
   const account = nav?.accounts.find((a) => a.id === event.account_id);

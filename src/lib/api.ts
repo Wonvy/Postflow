@@ -648,6 +648,18 @@ export const api = {
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
+  /** 发件人卡片：和这个地址的往来。 */
+  senderProfile: (address: string) =>
+    rpc<{
+      address: string;
+      name: string | null;
+      received: number;
+      unread: number;
+      sent: number;
+      first_at: number | null;
+      last_at: number | null;
+      recent: Item[];
+    }>("mail.sender", { address }),
   /** 附件总览：最近邮件里的附件，按文件名、标题、发件人搜。 */
   mailAttachments: (query: string) =>
     rpc<{ files: AttachmentRow[]; not_downloaded: Item[] }>("mail.attachments", { query: query || null }),

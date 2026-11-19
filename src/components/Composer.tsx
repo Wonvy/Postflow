@@ -107,7 +107,14 @@ export function ComposeDialog() {
   const dialog = useUi((s) => s.dialog);
   // 关上就卸掉，下次打开是一个新的窗口，不留上一封的内容
   if (dialog?.type !== "compose") return null;
-  return <Composer mode={dialog.mode} itemId={dialog.itemId ?? null} accountId={dialog.accountId ?? null} />;
+  return (
+    <Composer
+      mode={dialog.mode}
+      itemId={dialog.itemId ?? null}
+      accountId={dialog.accountId ?? null}
+      initialTo={dialog.to ?? null}
+    />
+  );
 }
 
 type Footer =
@@ -124,7 +131,17 @@ type Footer =
 
 type DraftStatus = { kind: "idle" } | { kind: "saving" } | { kind: "saved"; at: number } | { kind: "failed" };
 
-function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: string | null; accountId: string | null }) {
+function Composer({
+  mode,
+  itemId,
+  accountId,
+  initialTo,
+}: {
+  mode: ComposeMode;
+  itemId: string | null;
+  accountId: string | null;
+  initialTo: string | null;
+}) {
   const t = useT();
   const lang = useLang();
   const qc = useQueryClient();
@@ -171,7 +188,7 @@ function Composer({ mode, itemId, accountId }: { mode: ComposeMode; itemId: stri
   const quoteTail = useRef("");
   // 这个邮箱还没填过发件人名字：在这里顺手填，发送时记进邮箱设置
   const [senderName, setSenderName] = useState("");
-  const [to, setTo] = useState<Recipients>(EMPTY);
+  const [to, setTo] = useState<Recipients>(initialTo ? { list: [initialTo], draft: "" } : EMPTY);
   const [cc, setCc] = useState<Recipients>(EMPTY);
   const [bcc, setBcc] = useState<Recipients>(EMPTY);
   const [showCc, setShowCc] = useState(false);

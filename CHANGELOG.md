@@ -12,6 +12,8 @@ that heading into the version number and date.
 - Articles without a feed icon show the icon of their own website.
 - Search conditions: `from:`, `to:`, `subject:`, `has:attachment`, `is:unread`, `is:starred`, `after:` and `before:` (dates in your time zone), and `-` to leave something out. The new filter button in the search bar inserts them.
 - Attachments: every file from your mail in one place, filtered by type and searchable by name, subject or sender.
+- Sender card: click a sender to see how many messages you've exchanged, their latest mail, and buttons to write, search their mail or mark them as important.
+- Notifications can be limited to important senders (Settings → General).
 
 ### 中文
 - 稍后读：把任意网页存下来，和文章一样读。在「稍后读」（订阅那边视图里的书签图标）顶上的输入框贴网址；在输入框以外直接粘贴链接；或者在文章、邮件里右键链接，选「存到稍后读」。网页连同正文一起存下，会同步到你的其他设备，不混进「全部文章」。
@@ -19,6 +21,8 @@ that heading into the version number and date.
 - 没有订阅源图标的文章，显示它所在网站的图标。
 - 搜索条件：`from:`、`to:`、`subject:`、`has:attachment`、`is:unread`、`is:starred`、`after:`、`before:`（日期按你所在的时区），以及用 `-` 排除。搜索栏里新的筛选按钮可以直接插入。
 - 附件总览：所有邮件里的附件放在一起，按类型筛选，按文件名、标题或发件人搜索。
+- 发件人卡片：点发件人看你们的往来封数和最近的邮件，可以写信、搜索全部来信、设为重要联系人。
+- 新邮件通知可以只提醒重要联系人（设置 → 通用）。
 
 ## 0.1.32 — 2026-11-19
 

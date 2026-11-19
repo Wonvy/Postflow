@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Tags,
+  X,
 } from "lucide-react";
 import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 // 更新说明随应用打包，关于页里不联网也能看到这个版本改了什么
@@ -27,6 +28,7 @@ import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
+import { useVip } from "../lib/vip";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type ReaderLayout, type SettingsPage, type Space, type ThemePref, useUi, viewLabelKey } from "../lib/store";
 import { languageName, useModelDownloads, useTranslateEngine, useTranslateLanguages } from "../lib/translate";
@@ -279,6 +281,7 @@ export function SettingsDialog() {
         <SettingRow label={t("settings.notifyMail")} hint={t("settings.notifyMailHint")}>
           <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />
         </SettingRow>
+        {notifyMail && <VipSettings />}
         <SettingsHeading>{t("settings.groupApp")}</SettingsHeading>
         {isTauri && (
           <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>
@@ -748,6 +751,48 @@ function UpdateCheck() {
         {t("settings.checkUpdates")}
       </Button>
     </>
+  );
+}
+
+/** 新邮件通知：全部，还是只提醒重要联系人；重要联系人的名单（在发件人卡片里加）。 */
+function VipSettings() {
+  const t = useT();
+  const only = useUi((s) => s.notifyVipOnly);
+  const setOnly = useUi((s) => s.setNotifyVipOnly);
+  const vip = useVip();
+  return (
+    <SettingRow label={t("settings.notifyWho")} hint={t("settings.notifyWhoHint")}>
+      <div className="flex max-w-[300px] flex-col items-end gap-2">
+        <Select
+          className="w-44"
+          value={only ? "vip" : "all"}
+          aria-label={t("settings.notifyWho")}
+          onChange={(e) => setOnly(e.target.value === "vip")}
+        >
+          <option value="all">{t("settings.notifyAll")}</option>
+          <option value="vip">{t("settings.notifyVip")}</option>
+        </Select>
+        {vip.list.length > 0 ? (
+          <div className="flex flex-wrap justify-end gap-1">
+            {vip.list.map((a) => (
+              <span key={a} className="inline-flex h-6 items-center gap-1 rounded-full border border-line pl-2 pr-1 text-[12px] text-fg-2">
+                {a}
+                <button
+                  type="button"
+                  aria-label={t("settings.vipRemove", { address: a })}
+                  onClick={() => void vip.remove(a)}
+                  className="rounded-full p-0.5 text-fg-3 hover:bg-hover hover:text-fg"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          only && <p className="text-right text-[12px] text-warning">{t("settings.vipNone")}</p>
+        )}
+      </div>
+    </SettingRow>
   );
 }
 

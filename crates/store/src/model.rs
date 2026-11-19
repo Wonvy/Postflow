@@ -105,6 +105,24 @@ impl Media {
     }
 }
 
+/// 发件人卡片：和这个人的往来。
+#[derive(Debug, Clone, Serialize)]
+pub struct SenderProfile {
+    pub address: String,
+    /// 最近一封信里的名字。
+    pub name: Option<String>,
+    /// 收到这个人多少封信（不算垃圾邮件和已删除），其中几封没读。
+    pub received: i64,
+    pub unread: i64,
+    /// 我发给这个人多少封（「已发送」里收件人有他的）。
+    pub sent: i64,
+    /// 第一封和最近一封的时间。
+    pub first_at: Option<i64>,
+    pub last_at: Option<i64>,
+    /// 最近几封来信。
+    pub recent: Vec<ItemSummary>,
+}
+
 /// 放到订阅里看的一个订阅邮件发件人。
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Newsletter {
@@ -532,6 +550,9 @@ pub struct MailSyncStats {
 pub struct FreshMail {
     pub id: String,
     pub from: String,
+    /// 发件人地址（小写），界面按它判断是不是重要联系人。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
     pub subject: String,
     pub date: i64,
 }

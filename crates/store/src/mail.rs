@@ -460,6 +460,7 @@ impl Store {
                         .clone()
                         .or_else(|| mail.from_address.clone())
                         .unwrap_or_default(),
+                    address: mail.from_address.as_ref().map(|a| a.trim().to_lowercase()),
                     subject: mail.subject.clone(),
                     date: mail.date,
                 });
@@ -733,6 +734,52 @@ impl Store {
         });
         out.truncate(limit);
         Ok(out)
+    }
+
+    /// 发件人卡片：和这个地址的往来。垃圾邮件和已删除的不算。
+    pub fn sender_profile(&self, address: &str) -> Result<SenderProfile> {
+        use crate::store::{ALIVE, ITEM_COLUMNS, ITEM_FROM, item_from_row};
+        let address = address.trim().to_lowercase();
+        let guard = self.lock();
+        let (received, unread, first_at, last_at, name): (i64, i64, Option<i64>, Option<i64>, Option<String>) =
+            guard.conn.query_row(
+                &format!(
+                    "SELECT COUNT(*), COALESCE(SUM(i.read = 0), 0), MIN(i.published_at), MAX(i.published_at), \
+                            (SELECT m2.from_name FROM mail_meta m2 JOIN items i2 ON i2.id = m2.id \
+                              WHERE lower(m2.from_address) = ?1 AND COALESCE(m2.from_name, '') <> '' \
+                              ORDER BY i2.published_at DESC LIMIT 1) \
+                     FROM {ITEM_FROM} WHERE i.kind = 'mail' AND lower(m.from_address) = ?1 \
+                       AND i.archived NOT IN (2, 3, 5) AND {ALIVE}"
+                ),
+                [&address],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )?;
+        let sent: i64 = guard.conn.query_row(
+            &format!(
+                "SELECT COUNT(*) FROM {ITEM_FROM} WHERE i.kind = 'mail' AND i.archived = 5 AND {ALIVE} \
+                   AND m.id IN (SELECT id FROM mail_meta WHERE instr(lower(recipients), ?1) > 0)"
+            ),
+            [format!("\"{}\"", address.replace('"', ""))],
+            |r| r.get(0),
+        )?;
+        let mut stmt = guard.conn.prepare(&format!(
+            "SELECT {ITEM_COLUMNS} FROM {ITEM_FROM} WHERE i.kind = 'mail' AND lower(m.from_address) = ?1 \
+               AND i.archived NOT IN (2, 3, 5) AND {ALIVE} \
+             ORDER BY i.published_at DESC, i.id DESC LIMIT 6"
+        ))?;
+        let recent = stmt
+            .query_map([&address], item_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(SenderProfile {
+            address,
+            name,
+            received,
+            unread,
+            sent,
+            first_at,
+            last_at,
+            recent,
+        })
     }
 
     /// 邮件要移到别的文件夹：先从本机拿掉。移成以后，目标文件夹同步时会以那边的身份带回来；
