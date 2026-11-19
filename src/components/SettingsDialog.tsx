@@ -81,6 +81,8 @@ export function SettingsDialog() {
   const density = useUi((s) => s.density);
   const setDensity = useUi((s) => s.setDensity);
   const notifyMail = useUi((s) => s.notifyMail);
+  const notifyCodes = useUi((s) => s.notifyCodes);
+  const setNotifyCodes = useUi((s) => s.setNotifyCodes);
   const setNotifyMail = useUi((s) => s.setNotifyMail);
   const badgeUnread = useUi((s) => s.badgeUnread);
   const senderLogos = useUi((s) => s.senderLogos);
@@ -286,6 +288,9 @@ export function SettingsDialog() {
           <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />
         </SettingRow>
         {notifyMail && <VipSettings />}
+        <SettingRow label={t("settings.notifyCodes")} hint={t("settings.notifyCodesHint")}>
+          <Switch label={t("settings.notifyCodes")} checked={notifyCodes} onChange={setNotifyCodes} />
+        </SettingRow>
         <TemplateSettings />
         <SettingsHeading>{t("settings.groupApp")}</SettingsHeading>
         {isTauri && (

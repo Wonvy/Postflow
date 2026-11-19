@@ -10,8 +10,11 @@ export type CoreEvent =
   | {
       type: "new_mail";
       account_id: string;
-      mails: { id: string; from: string; subject: string; date: number }[];
+      /** `address`：发件人地址（小写）。`code`：这封信里的验证码，没有就不带。 */
+      mails: { id: string; from: string; address?: string; subject: string; date: number; code?: string }[];
       total: number;
+      /** 全部新邮件的发件人地址（不止列出的几封），从新到旧。 */
+      senders?: string[];
     }
   | {
       type: "reminders";

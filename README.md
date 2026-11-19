@@ -103,6 +103,9 @@ click **More info → Run anyway**.
   type (images, PDF, documents, spreadsheets, presentations, archives) and searchable by file name, subject or sender.
   Save a file or jump to its message. Files in large messages that haven't been downloaded yet are listed too (saving
   one downloads the message first).
+- Verification code alerts (Settings → General, off by default): when a new message carries a verification code,
+  the code pops up in the bottom-right corner with a Copy button, and the system notification shows it while
+  Postflow is in the background.
 - Notifications for important senders only (Settings → General): mark people as important from their card, and only
   their mail notifies you. The list syncs to your other devices.
 - Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
@@ -283,7 +286,7 @@ click **More info → Run anyway**.
 | Key | Action |
 |---|---|
 | `J` / `K` | Next / previous item |
-| `Space` | Open the row under the pointer (Settings → Appearance) |
+| `Space` | Open the row under the pointer (Settings → Appearance); on the open item, pop the reader up over the list, and again to put it back |
 | `E` | Archive (in Archive, Spam or Trash, move back to the inbox) |
 | `S` | Star |
 | `H` | Snooze (pick a time with 1–5) |

@@ -55,7 +55,7 @@ import { copyText, formatSize, hasInsetTitlebar, isMac, openExternal, saveAttach
 import { useReadingTracker } from "../lib/reading";
 import { keys, useItem, useNav } from "../lib/queries";
 import { mailZoom, readerVars, readerWidth, titleSize } from "../lib/readerStyle";
-import { useDrawerSidebar, useIsMobile, useReaderOverlay } from "../lib/mobile";
+import { useDrawerSidebar, useIsMobile, useReaderInPopup } from "../lib/mobile";
 import { SnoozeButton, snoozeTime } from "./Snooze";
 import { canArchive, canSnooze, useArticleActions, useReaderStyle, useToolbarLayout, useUi } from "../lib/store";
 import { toolsAt } from "../lib/toolbars";
@@ -118,7 +118,7 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
   const t = useT();
   // 阅读区的顶栏总在窗口最右上角（AI 栏在它下面），窗口按钮的位置由它留
   // 阅读区弹出来、又没铺满窗口时，右上角是列表的顶栏，不用给窗口按钮留位置
-  const overlay = useReaderOverlay();
+  const overlay = useReaderInPopup();
   const popupFull = useUi((s) => s.readerMaximized);
   const gap = useWindowControlsGap(!overlay || popupFull);
   // 手机上阅读区占满屏幕，左上角返回列表；按钮放不下时左右滑动
@@ -154,7 +154,7 @@ function Toolbar({ leading, children }: { leading?: ReactNode; children?: ReactN
       {overlay && !mobile && (
         <>
           <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
-          <IconButton label={t("action.close")} shortcut="Esc" onClick={close}>
+          <IconButton label={t("action.close")} shortcut="Esc" onClick={() => useUi.getState().closeReader()}>
             <X {...ICON} />
           </IconButton>
         </>

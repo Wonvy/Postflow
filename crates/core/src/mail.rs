@@ -262,7 +262,12 @@ impl Core {
             .iter()
             .map(|m| m.address.clone().unwrap_or_default())
             .collect();
-        mails.truncate(NOTIFY_LIST);
+        // 只列最新的几封；带验证码的不管排第几都留着，界面要把验证码弹出来
+        let mut listed = 0;
+        mails.retain(|m| {
+            listed += 1;
+            listed <= NOTIFY_LIST || m.code.is_some()
+        });
         tracing::debug!(account = %account_id, total, "new mail");
         self.emit(Event::NewMail {
             account_id: account_id.to_string(),
@@ -1267,6 +1272,7 @@ fn new_mail(
         list_unsubscribe: summary.list_unsubscribe,
         raw: full.then(|| raw.to_vec()),
         recipients,
+        code: summary.code,
     }
 }
 

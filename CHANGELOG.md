@@ -12,6 +12,10 @@ that heading into the version number and date.
 - Subtitles for podcasts: turn on the CC button in the player and the text follows the audio, in the player and in the small player under the list. A show's own transcript is used when it has one; otherwise speech is recognized on your computer, starting from where you're listening, and the audio is never uploaded. The transcript is kept on this device and listed under the play bar.
 - Speech recognition models are downloaded on demand in Settings → Subtitles (they aren't part of the installer). You can keep several and switch: SenseVoice for Chinese, Whisper or Parakeet for English and other languages. A model can also be imported from a folder if the download is slow.
 - The macOS app now needs macOS 10.15 or later.
+- Verification code alerts (Settings → General, off by default): when a message carries a verification code, the code pops up in the bottom-right corner with a Copy button, and the system notification shows it while Postflow isn't in front.
+- With the reader beside the list, press Space on the open item (pointer over the list) to pop the reader up over the list for a closer look; Space or Esc puts it back.
+- Fixed links that did nothing in the desktop app, such as "Release page" in the update window, "Open in browser" and links in articles.
+- The window now opens in the middle of the screen, and is shrunk to fit on small screens.
 
 ### 中文
 - 「播完接着放下一期」可以改成从旧到新、跳过听过的，适合从头追一个节目（在倍速菜单里）。
@@ -19,6 +23,10 @@ that heading into the version number and date.
 - 播客字幕：点播放器上的字幕按钮，声音放到哪儿字幕跟到哪儿，播放条和列表底下的迷你播放器里都有。节目自带文字稿的直接用；没有的在这台电脑上识别，从正在听的地方开始，音频不会上传。转出来的文字稿存在本机，列在播放条下面。
 - 语音识别模型在「设置 → 字幕」里按需下载，不随安装包带。可以装好几个、随时换：中文用 SenseVoice，英文和其他语言用 Whisper 或 Parakeet。下载慢的话可以从文件夹导入。
 - macOS 版现在需要 macOS 10.15 或更高版本。
+- 验证码提醒（设置 → 通用，默认关闭）：收到带验证码的邮件时，右下角弹出验证码，点一下就能复制；应用不在前台时，系统通知里也写着验证码。
+- 阅读区在列表右边时，鼠标在列表上对已经打开的那一条按空格，把阅读区弹出来盖在列表上看，再按空格或 Esc 收回去。
+- 修复桌面应用里点了没反应的链接，比如更新窗口里的「在发布页查看」、「在浏览器中打开」和文章里的链接。
+- 窗口现在开在屏幕正中，小屏幕上会先缩到放得下。
 
 ## 0.1.34 — 2026-11-19
 

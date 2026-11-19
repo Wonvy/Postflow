@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useActions } from "./actions";
-import { IS_TABLET } from "./device";
+import { IS_TABLET, layoutFor } from "./device";
 import { normalizeReaderStyle, readerDefault } from "./readerStyle";
 import { episodeOf, play, skip, toggleIfLoaded, usePlayer, BACK_SECONDS, FORWARD_SECONDS } from "./player";
 import type { ContentKind } from "./api";
@@ -206,19 +206,33 @@ export function useShortcuts() {
           ui.setReaderMaximized(!ui.readerMaximized);
           break;
         case " ": {
-          // 空格：打开鼠标停着的那一行（设置里可以关）。鼠标不在列表的行上时不管，空格照常翻页
-          if (!ui.spaceOpensHovered) return;
+          // 临时弹出来看的：再按一次空格收回右边一栏（和「快速查看」一样）。焦点在弹出的正文里时照常翻页
+          if (ui.readerPopped) {
+            if (e.target instanceof Element && e.target !== document.body && e.target.closest("[data-reader-popup]")) return;
+            ui.setReaderPopped(false);
+            break;
+          }
+          // 空格：打开鼠标停着的那一行（设置里可以关）
           const row = document.querySelector<HTMLElement>("[data-row-id]:hover");
           const id = row?.dataset.rowId;
-          if (!id) return;
-          ui.setSelection([]);
-          ui.open(id);
+          if (id && id !== ui.openId) {
+            if (!ui.spaceOpensHovered) return;
+            ui.setSelection([]);
+            ui.open(id);
+            break;
+          }
+          // 阅读区在右边一栏、已经选中了一条：把它弹出来看。鼠标在阅读区上时不管，空格照常翻页
+          const threeColumns = ui.readerLayout === "pane" && layoutFor(window.innerWidth, IS_TABLET) !== "phone";
+          if (!threeColumns || !ui.openId || ui.readerMaximized) return;
+          if (document.querySelector('[data-pane="reader"]:hover')) return;
+          ui.setReaderPopped(true);
           break;
         }
         case "Escape":
-          // 先退出全屏，再退出最大化，最后才是取消选择、关掉条目
+          // 先退出全屏，再退出最大化，然后收回弹出来看的，最后才是取消选择、关掉条目
           if (useFullscreen.getState().on) void setFullscreen(false);
           else if (ui.readerMaximized) ui.setReaderMaximized(false);
+          else if (ui.readerPopped) ui.setReaderPopped(false);
           else if (ui.selection.length > 0) ui.setSelection([]);
           else if (ui.openId) ui.open(null);
           else return;

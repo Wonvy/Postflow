@@ -2,9 +2,13 @@
 //
 // 桌面应用用 Tauri 的通知插件；浏览器里用网页通知（第一次会问能不能发通知）。
 // 应用在前台时不弹通知：用户正看着，列表里自己就能看到。
+//
+// 带验证码的邮件另有一套（设置里单独开）：右下角弹一张写着验证码的卡片，应用不在前台时
+// 系统通知里也写上验证码。这几封不再算进普通的新邮件通知里。
 
 import { useEffect } from "react";
 import type { Nav, Settings } from "./api";
+import { splitCodes, useCodeNotice } from "./codeNotice";
 import { vipList, vipOnly } from "./vipList";
 import { activePack, resolveLang, translate } from "./i18n";
 import type { LangPack } from "./langPack";
@@ -14,7 +18,7 @@ import { type CoreEvent, isTauri } from "./transport";
 export interface NewMailEvent {
   account_id: string;
   /** `address`：发件人地址（小写），判断是不是重要联系人用。 */
-  mails: { id: string; from: string; address?: string; subject: string; date: number }[];
+  mails: { id: string; from: string; address?: string; subject: string; date: number; code?: string }[];
   total: number;
   /** 全部新邮件的发件人地址（不止列出的几封），从新到旧。 */
   senders?: string[];
@@ -41,7 +45,7 @@ export function notification(
   return { title, body: lines.join("\n") };
 }
 
-async function show(title: string, body: string, onClick: () => void) {
+async function show(title: string, body: string, onClick: () => void, tag = "postflow-new-mail") {
   if (isTauri) {
     const n = await import("@tauri-apps/plugin-notification");
     let granted = await n.isPermissionGranted();
@@ -52,7 +56,7 @@ async function show(title: string, body: string, onClick: () => void) {
   if (!("Notification" in window)) return;
   if (Notification.permission === "default") await Notification.requestPermission();
   if (Notification.permission !== "granted") return;
-  const shown = new Notification(title, { body, tag: "postflow-new-mail" });
+  const shown = new Notification(title, { body, tag });
   shown.onclick = () => {
     window.focus();
     onClick();
@@ -74,13 +78,40 @@ export function vipEvent(event: NewMailEvent, vip: readonly string[]): NewMailEv
 /** 核心说来了新邮件时调用。 */
 export function notifyNewMail(event: NewMailEvent, nav: Nav | undefined, settings?: Settings) {
   const ui = useUi.getState();
+  const account = nav?.accounts.find((a) => a.id === event.account_id);
+  const name = account ? account.name || account.email : "";
+  const foreground = document.visibilityState === "visible" && document.hasFocus();
+
+  // 验证码提醒：卡片什么时候都弹（正等着验证码呢），系统通知只在应用不在前台时发。
+  // 不受「只通知重要联系人」限制：发验证码的都是系统地址
+  if (ui.notifyCodes) {
+    const { code, rest } = splitCodes(event);
+    if (code?.code) {
+      const mail = { id: code.id, accountId: event.account_id, code: code.code, from: code.from || name, subject: code.subject };
+      useCodeNotice.getState().show(mail);
+      if (!foreground) {
+        const title = translate(resolveLang(ui.lang), "notify.code", { code: mail.code }, activePack(ui.lang));
+        void show(
+          title,
+          [mail.from, mail.subject].filter(Boolean).join(" · "),
+          () => {
+            const state = useUi.getState();
+            state.setSpace("mail");
+            state.setScope({ kind: "account", accountId: mail.accountId });
+            state.open(mail.id);
+          },
+          "postflow-code",
+        ).catch(() => {});
+      }
+      event = { ...event, ...rest };
+    }
+  }
+
   if (!ui.notifyMail) return;
   if (ui.notifyVipOnly) event = vipEvent(event, vipList(settings));
   if (event.total === 0) return;
   // 应用在前台、而且窗口是可见的：不打扰
-  if (document.visibilityState === "visible" && document.hasFocus()) return;
-  const account = nav?.accounts.find((a) => a.id === event.account_id);
-  const name = account ? account.name || account.email : "";
+  if (foreground) return;
   const { title, body } = notification(event, name, resolveLang(ui.lang), activePack(ui.lang));
   const first = event.mails[0]?.id;
   void show(title, body, () => {

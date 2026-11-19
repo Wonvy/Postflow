@@ -463,6 +463,7 @@ impl Store {
                     address: mail.from_address.as_ref().map(|a| a.trim().to_lowercase()),
                     subject: mail.subject.clone(),
                     date: mail.date,
+                    code: mail.code.clone(),
                 });
             }
             // 同一封邮件可能因为被移回收件箱而换了 UID，按 ID 合并

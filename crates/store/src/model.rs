@@ -535,6 +535,8 @@ pub struct NewMail {
     pub raw: Option<Vec<u8>>,
     /// 已发送的信写给了谁（名字、地址），这些人也算联系人。
     pub recipients: Vec<(Option<String>, String)>,
+    /// 信里的验证码，只用来在刚收到时提醒，不存进数据库。
+    pub code: Option<String>,
 }
 
 /// 同步的是邮箱里的哪个文件夹。
@@ -599,6 +601,9 @@ pub struct FreshMail {
     pub address: Option<String>,
     pub subject: String,
     pub date: i64,
+    /// 这封信里的验证码。界面开了「验证码提醒」时把它弹出来。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 impl MailSyncStats {

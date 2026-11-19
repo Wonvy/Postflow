@@ -8,6 +8,28 @@ use tauri::utils::config::BundleType;
 use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
+/// 窗口最多占可用屏幕（去掉任务栏、程序坞）的多大一部分。
+#[cfg(desktop)]
+const SCREEN_SHARE: f64 = 0.96;
+
+/// 把窗口放到它所在屏幕的正中。默认大小比屏幕能放下的还大时（小笔记本、缩放比例大），先缩到屏幕里，
+/// 免得标题栏或者底边跑到屏幕外面。
+#[cfg(desktop)]
+fn center_on_screen<R: tauri::Runtime>(window: &tauri::Window<R>) {
+    if let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) {
+        let area = monitor.work_area().size;
+        let max_w = (f64::from(area.width) * SCREEN_SHARE) as u32;
+        let max_h = (f64::from(area.height) * SCREEN_SHARE) as u32;
+        if max_w > 0 && max_h > 0 && (size.width > max_w || size.height > max_h) {
+            let _ = window.set_size(tauri::PhysicalSize::new(
+                size.width.min(max_w),
+                size.height.min(max_h),
+            ));
+        }
+    }
+    let _ = window.center();
+}
+
 #[cfg(desktop)]
 mod deep_link;
 #[cfg(desktop)]
@@ -147,6 +169,11 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             if let Some(window) = app.get_window("main") {
                 let _ = window.set_decorations(false);
+            }
+            // 窗口开在屏幕正中；默认大小在小屏幕上放不下时先缩到屏幕里
+            #[cfg(desktop)]
+            if let Some(window) = app.get_window("main") {
+                center_on_screen(&window);
             }
             // 索引和本机配置放在系统给应用分配的私有目录里，不参与同步
             let local_dir = app.path().app_local_data_dir()?;

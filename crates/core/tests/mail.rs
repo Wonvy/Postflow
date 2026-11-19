@@ -4,7 +4,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use postflow_core::{Core, MemorySecrets};
+use postflow_core::{Core, Event, MemorySecrets};
 use postflow_testkit::{FakeImap, FakeSmtp, mail};
 use serde_json::{Value, json};
 
@@ -1223,5 +1223,98 @@ async fn older_mail_is_loaded_on_request() {
     )
     .await;
     assert_eq!(none, json!({ "added": 0, "more": false }));
+    core.shutdown();
+}
+
+/// 一封日期写在未来的信：核心会把日期压到现在，所以它总算「刚收到的」，会触发新邮件事件
+/// （假服务器给的到达时间是固定的，过了两天就不再提醒）。
+fn fresh_mail(message_id: &str, from: &str, subject: &str, body: &str) -> String {
+    format!(
+        "From: {from}\r\nTo: me@example.com\r\nSubject: {subject}\r\n\
+         Date: Thu, 01 Jan 2099 00:00:00 +0000\r\nMessage-ID: <{message_id}>\r\n\
+         Content-Type: text/plain; charset=utf-8\r\n\r\n{body}\r\n"
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn new_mail_events_carry_verification_codes() {
+    let server = FakeImap::start(USER, PASS).await;
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap(), "device_name": "A" }),
+    )
+    .await;
+    // 第一次同步不提醒（邮箱里原有的信）；等它同步完，后面到的才算新邮件
+    server.deliver(
+        "INBOX",
+        &mail(
+            "old-1@example.com",
+            "Ada <ada@example.com>",
+            "Already here",
+            "x",
+        ),
+        &[],
+    );
+    call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    wait_for("the first sync", || async {
+        find(&core, "inbox", "Already here").await.is_some()
+    })
+    .await;
+
+    let mut events = core.subscribe();
+    // 验证码在正文两百字以后（列表摘要里看不到），照样要找出来
+    let padding = "We noticed a sign-in attempt from a device we do not recognize. ".repeat(4);
+    server.deliver(
+        "INBOX",
+        &fresh_mail(
+            "code-1@example.com",
+            "GitHub <noreply@github.example>",
+            "[GitHub] Please verify your device",
+            &format!("{padding}\r\n\r\nVerification code: 482019\r\n\r\nIf this was not you, ignore this."),
+        ),
+        &[],
+    );
+    server.deliver(
+        "INBOX",
+        &fresh_mail(
+            "plain-9@example.com",
+            "Ada <ada@example.com>",
+            "Lunch on the 2026-11-20?",
+            "Table for 4, order 77120934.",
+        ),
+        &[],
+    );
+
+    // 两封信可能分两次到，把事件攒起来看
+    let mut seen: Vec<(String, Option<String>)> = Vec::new();
+    let wait = async {
+        while seen.len() < 2 {
+            if let Ok(Event::NewMail { mails, .. }) = events.recv().await {
+                for m in mails {
+                    seen.push((m.subject, m.code));
+                }
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(15), wait)
+        .await
+        .expect("new mail events");
+    seen.sort();
+    assert_eq!(
+        seen,
+        [
+            ("Lunch on the 2026-11-20?".to_string(), None),
+            (
+                "[GitHub] Please verify your device".to_string(),
+                Some("482019".to_string())
+            ),
+        ]
+    );
     core.shutdown();
 }

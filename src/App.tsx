@@ -6,7 +6,7 @@ import { PlayerBridge } from "./components/Player";
 import { DownloadsBridge } from "./lib/episodes";
 import { SubtitlesBridge } from "./lib/subtitles";
 import { accentVars } from "./lib/accent";
-import { useCanHover, useLayout, useReaderOverlay } from "./lib/mobile";
+import { useCanHover, useLayout, useReaderOverlay, useReaderPopped } from "./lib/mobile";
 import { Unplug } from "lucide-react";
 import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { AddAccountDialog, EditAccountDialog, RemoveAccountDialog } from "./components/AccountDialogs";
@@ -14,6 +14,7 @@ import { AddFeedDialog, EditFeedDialog } from "./components/FeedDialogs";
 import { ItemList, MarkAllReadDialog } from "./components/ItemList";
 import { Onboarding } from "./components/Onboarding";
 import { Reader } from "./components/Reader";
+import { CodeNotice } from "./components/CodeNotice";
 import { ComposeDialog } from "./components/Composer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Toaster } from "./components/Toast";
@@ -157,18 +158,20 @@ function usePaneFocus() {
 /**
  * 「阅读区弹出」时打开的条目：盖在侧栏和列表上面的大面板，四周是变暗、模糊的遮罩。
  * 点遮罩、右上角的关闭按钮或按 Esc 关掉；最大化（F）时铺满窗口。快捷键照常用，J/K 直接换下一条。
+ * 阅读区在右边一栏时，鼠标在列表上按空格也能把打开的这一条临时这样弹出来看；这时关掉只是收回右边一栏。
  * 不用 role=dialog：它不是一个要先关掉才能做别的事的对话框，桌面应用的原网页视图也靠 role=dialog 判断有没有被盖住。
  */
 function ReaderPopup() {
   const t = useT();
   const openId = useUi((s) => s.openId);
-  const open = useUi((s) => s.open);
+  const closeReader = useUi((s) => s.closeReader);
   const maximized = useUi((s) => s.readerMaximized);
   if (!openId) return null;
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
-      <div aria-hidden className="anim-fade absolute inset-0 bg-overlay-reader backdrop-blur-[6px]" onClick={() => open(null)} />
+      <div aria-hidden className="anim-fade absolute inset-0 bg-overlay-reader backdrop-blur-[6px]" onClick={closeReader} />
       <section
+        data-reader-popup
         aria-label={t("reader.popup")}
         className={cx(
           "anim-pop relative flex overflow-hidden bg-bg shadow-pop [&>main]:border-l-0",
@@ -179,6 +182,11 @@ function ReaderPopup() {
       </section>
     </div>
   );
+}
+
+/** 打开的条目被临时弹出来看时，右边一栏留着位置、先空着。 */
+function ReaderAway() {
+  return <main aria-hidden className="h-full min-w-0 flex-1 border-l border-line bg-bg" />;
 }
 
 function Shell() {
@@ -219,7 +227,9 @@ function Shell() {
   const layout = useLayout();
   // 阅读区弹出时窗口里只有侧栏和列表，最大化只是把弹出的阅读区铺满
   const overlay = useReaderOverlay();
-  const maximized = useUi((s) => s.readerMaximized) && !page && !overlay;
+  // 三栏时把打开的这一条临时弹出来看：右边一栏先空着，阅读区只画在弹出的面板里
+  const popped = useReaderPopped();
+  const maximized = useUi((s) => s.readerMaximized) && !page && !overlay && !popped;
   const focus = usePaneFocus();
   const shownPanes: PaneId[] = overlay
     ? layout === "tablet"
@@ -255,6 +265,7 @@ function Shell() {
       <MarkAllReadDialog />
       <UpdateDialog />
       <UpdateNotice />
+      <CodeNotice />
       <SettingsDialog />
       <ToolbarsDialog />
       <ComposeDialog />
@@ -315,12 +326,12 @@ function Shell() {
                     <Resizer width={tabletList} onResize={(w) => setListWidth(Math.min(w, tabletListMax))} />
                   </>
                 )}
-                {pane("reader", <Reader />)}
+                {pane("reader", popped ? <ReaderAway /> : <Reader />)}
               </>
             )}
           </>
         )}
-        {overlay && !page && <ReaderPopup />}
+        {(overlay || popped) && !page && <ReaderPopup />}
         {drawer}
         {dialogs}
       </div>
@@ -350,12 +361,12 @@ function Shell() {
                   <Resizer width={listShown} onResize={(w) => setListWidth(Math.min(w, listMax))} />
                 </>
               )}
-              {pane("reader", <Reader />)}
+              {pane("reader", popped ? <ReaderAway /> : <Reader />)}
             </>
           )}
         </>
       )}
-      {overlay && !page && <ReaderPopup />}
+      {(overlay || popped) && !page && <ReaderPopup />}
       {dialogs}
     </div>
   );

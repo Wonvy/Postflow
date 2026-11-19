@@ -34,6 +34,20 @@ export function useReaderOverlay(): boolean {
   return overlay && layout !== "phone";
 }
 
+/** 阅读区在列表右边一栏，但打开的这一条被临时弹出来看（鼠标在列表上按空格）。 */
+export function useReaderPopped(): boolean {
+  const popped = useUi((s) => s.readerPopped && s.readerLayout === "pane" && s.openId !== null);
+  const layout = useLayout();
+  return popped && layout !== "phone";
+}
+
+/** 阅读区现在是不是在弹出的面板里：设置里选了「弹出」，或者临时弹出来看。 */
+export function useReaderInPopup(): boolean {
+  const overlay = useReaderOverlay();
+  const popped = useReaderPopped();
+  return overlay || popped;
+}
+
 /** 侧栏是不是收成从左边滑出来的抽屉（手机和平板布局）。 */
 export function useDrawerSidebar(): boolean {
   return useLayout() !== "desktop";

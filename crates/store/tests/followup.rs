@@ -41,6 +41,7 @@ fn mail(
         list_unsubscribe: None,
         raw: None,
         recipients: vec![],
+        code: None,
     }
 }
 

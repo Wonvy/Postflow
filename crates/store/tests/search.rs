@@ -143,6 +143,7 @@ fn finds_articles_and_mail_by_title_people_and_body() {
                             .to_vec(),
                     ),
                     recipients: vec![],
+                    code: None,
                 }],
                 flags: vec![],
                 vanished: vec![],

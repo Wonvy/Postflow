@@ -39,6 +39,8 @@ pub struct Summary {
     pub has_attachments: bool,
     /// 邮件列表的退订地址，用来识别订阅类邮件。
     pub list_unsubscribe: Option<String>,
+    /// 邮件里的验证码（登录、注册时发来的一次性数字），见 code.rs。只有信头时没有。
+    pub code: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -204,8 +206,17 @@ pub fn summarize(raw: &[u8]) -> Summary {
         msg.body_preview(SNIPPET_CHARS * 2).map(|p| p.into_owned())
     };
     let snippet = preview
-        .map(|p| truncate(&clean_text(&p), SNIPPET_CHARS))
+        .as_deref()
+        .map(|p| truncate(&clean_text(p), SNIPPET_CHARS))
         .unwrap_or_default();
+    // 验证码不一定在开头两百字里，找的时候看整段正文（纯文本的预览是截过的，重新取）
+    let subject = msg.subject().map(clean_text).unwrap_or_default();
+    let body = if has_plain {
+        msg.body_text(0).map(|t| t.into_owned())
+    } else {
+        preview
+    };
+    let code = crate::code::verification_code(&subject, body.as_deref().unwrap_or_default());
     let list_unsubscribe = match msg.list_unsubscribe() {
         mail_parser::HeaderValue::Address(addr) => addr
             .iter()
@@ -224,7 +235,7 @@ pub fn summarize(raw: &[u8]) -> Summary {
             .message_id()
             .map(|id| id.trim().to_string())
             .filter(|id| !id.is_empty()),
-        subject: msg.subject().map(clean_text).unwrap_or_default(),
+        subject,
         from: mailboxes(msg.from()).into_iter().next().unwrap_or_default(),
         to: mailboxes(msg.to()),
         cc: mailboxes(msg.cc()),
@@ -232,6 +243,7 @@ pub fn summarize(raw: &[u8]) -> Summary {
         snippet,
         has_attachments: msg.attachments().any(|p| !is_inline_calendar(p)),
         list_unsubscribe,
+        code,
     }
 }
 

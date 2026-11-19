@@ -121,6 +121,14 @@ interface UiState {
   scope: ListScope;
   /** 阅读面板里打开的条目。 */
   openId: string | null;
+  /**
+   * 阅读区在列表右边一栏时，临时把打开的这一条弹出来看（鼠标在列表上按空格，再按一次或 Esc 收回去）。
+   * 不记到下次打开。
+   */
+  readerPopped: boolean;
+  setReaderPopped: (on: boolean) => void;
+  /** 关掉阅读区：临时弹出来看的收回右边一栏，否则关掉这一条。 */
+  closeReader: () => void;
   /** 明确勾选的条目。非空时操作作用于它们，否则作用于打开的那一条。 */
   selection: string[];
   dialog: Dialog;
@@ -254,6 +262,9 @@ interface UiState {
   notifyMail: boolean;
   /** 新邮件通知只提醒重要联系人的来信（见 vip.ts）。 */
   notifyVipOnly: boolean;
+  /** 收到带验证码的邮件时，右下角弹出验证码（应用不在前台时发系统通知）。只在这台设备上。 */
+  notifyCodes: boolean;
+  setNotifyCodes: (on: boolean) => void;
   setNotifyVipOnly: (on: boolean) => void;
   /** 图标上显示收件箱的未读邮件数。 */
   badgeUnread: boolean;
@@ -527,6 +538,7 @@ export const useUi = create<UiState>()(
       recentFolders: [],
       notifyMail: true,
       notifyVipOnly: false,
+      notifyCodes: false,
       badgeUnread: true,
       senderLogos: true,
       toolbars: {},
@@ -559,6 +571,9 @@ export const useUi = create<UiState>()(
         })),
       setMainView: (mainView) => set({ mainView, drawerOpen: false }),
       open: (id) => set({ openId: id }),
+      readerPopped: false,
+      setReaderPopped: (readerPopped) => set({ readerPopped }),
+      closeReader: () => set((s) => (s.readerPopped ? { readerPopped: false } : { openId: null })),
       setSelection: (ids) => set({ selection: ids }),
       setDialog: (dialog) => set({ dialog }),
       setRefreshing: (refreshing, refreshingMail) => set({ refreshing, refreshingMail }),
@@ -646,6 +661,7 @@ export const useUi = create<UiState>()(
       setWebLandscape: (webLandscape) => set({ webLandscape }),
       setNotifyMail: (notifyMail) => set({ notifyMail }),
       setNotifyVipOnly: (notifyVipOnly) => set({ notifyVipOnly }),
+      setNotifyCodes: (notifyCodes) => set({ notifyCodes }),
       setBadgeUnread: (badgeUnread) => set({ badgeUnread }),
       setSenderLogos: (senderLogos) => set({ senderLogos }),
       setToolbar: (id, layout) =>
@@ -775,6 +791,7 @@ export const useUi = create<UiState>()(
         searchAll: s.searchAll,
         notifyMail: s.notifyMail,
         notifyVipOnly: s.notifyVipOnly,
+        notifyCodes: s.notifyCodes,
         badgeUnread: s.badgeUnread,
         senderLogos: s.senderLogos,
         toolbars: s.toolbars,
@@ -959,3 +976,8 @@ export function useToolbarLayout(id: ToolbarId, extra: readonly string[] = NO_EX
   return useMemo(() => normalizeLayout(id, raw, extra), [id, raw, key]);
 }
 const NO_EXTRA: readonly string[] = [];
+
+// 条目关掉了（不管从哪儿关的），「临时弹出来看」也跟着结束，免得下一条一打开就弹出来
+useUi.subscribe((s) => {
+  if (s.readerPopped && s.openId === null) useUi.setState({ readerPopped: false });
+});
