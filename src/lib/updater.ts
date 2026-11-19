@@ -35,6 +35,8 @@ export type UpdatePhase =
 interface UpdaterState {
   /** 这个安装方式能不能在应用里直接更新。不能的话只提示去下载页。 */
   supported: boolean;
+  /** 安装时系统会要管理员密码（Linux 上用 deb、rpm 装的）。 */
+  needsPassword: boolean;
   phase: UpdatePhase;
   version: string | null;
   /** 发布流程放进 latest.json 的更新说明（CHANGELOG.md 里最近几个版本），更新窗口里直接显示。 */
@@ -51,6 +53,7 @@ interface UpdaterState {
 
 export const useUpdater = create<UpdaterState>()((set) => ({
   supported: false,
+  needsPassword: false,
   phase: "idle",
   version: null,
   notes: null,
@@ -165,7 +168,12 @@ export function startUpdateChecks(): void {
   if (!isTauri || started) return;
   started = true;
   void import("@tauri-apps/api/core")
-    .then(({ invoke }) => invoke<boolean>("updater_supported"))
+    .then(({ invoke }) => {
+      void invoke<boolean>("update_needs_password")
+        .then((needsPassword) => useUpdater.setState({ needsPassword }))
+        .catch(() => {});
+      return invoke<boolean>("updater_supported");
+    })
     .catch(() => false)
     .then((supported) => {
       useUpdater.setState({ supported });

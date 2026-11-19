@@ -107,7 +107,8 @@ export function UpdateNotice() {
 export function UpdateDialog() {
   const t = useT();
   const status = useStatus();
-  const { dialogOpen, setDialogOpen, phase, version, notes, downloaded, total, error, supported } = useUpdater();
+  const { dialogOpen, setDialogOpen, phase, version, notes, downloaded, total, error, supported, needsPassword } =
+    useUpdater();
   const busy = phase === "downloading" || phase === "installing";
   const percent = total ? Math.min(100, Math.round((downloaded / total) * 100)) : null;
   const releaseUrl = version ? `${RELEASES_URL}/tag/v${version}` : RELEASES_URL;
@@ -138,6 +139,9 @@ export function UpdateDialog() {
         {version && <ReleaseNotes notes={notes} current={status.data?.version ?? null} next={version} />}
 
         {!supported && <p className="text-[13px] leading-relaxed text-fg-2">{t("update.manual")}</p>}
+        {supported && needsPassword && phase !== "error" && (
+          <p className="text-[13px] leading-relaxed text-fg-2">{t("update.password")}</p>
+        )}
 
         {busy && (
           <div>

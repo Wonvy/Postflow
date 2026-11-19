@@ -7,8 +7,10 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Linux: copies installed from the `.deb` or `.rpm` package now update themselves like the AppImage. Your system asks for your administrator password to install the update.
 
 ### 中文
+- Linux：用 `.deb`、`.rpm` 安装的也能像 AppImage 一样在应用里直接更新了。安装更新时系统会请你输入管理员密码。
 
 ## 0.1.31 — 2026-11-18
 

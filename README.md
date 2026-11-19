@@ -190,7 +190,8 @@ click **More info → Run anyway**.
 - Use it in a browser too: turn on Settings → Browser access in the desktop app, and the app serves the same
   interface and data on a port of your choice. See [Using Postflow in a browser](#using-postflow-in-a-browser).
 - Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
-  packages are signed, and the app refuses any package whose signature doesn't match.
+  packages are signed, and the app refuses any package whose signature doesn't match. On Linux, `.deb` and `.rpm`
+  installs ask for your administrator password to install the update.
 
 **Getting things done**
 
@@ -224,9 +225,7 @@ click **More info → Run anyway**.
 - Mail is never sent to a cloud service unless you turn that on; local services may read it. Results, chats and usage
   stay on this device, and nothing is sent until you ask (or turn on an automatic feature).
 
-**Not yet available:** a command palette, snoozing, rules, a tray icon, mobile apps, and installers signed by Apple
-and Microsoft. On Linux, only the AppImage can update itself; `.deb` and `.rpm` installs point you to the
-download page instead.
+**Not yet available:** mobile apps, and installers signed by Apple and Microsoft.
 
 ## Keyboard shortcuts
 

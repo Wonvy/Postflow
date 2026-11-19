@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use postflow_core::{Core, Event, RpcError, Scope};
 use serde_json::Value;
+use tauri::utils::config::BundleType;
 use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
@@ -41,8 +42,6 @@ async fn rpc(
     result
 }
 
-/// 这个安装方式能不能在应用里直接更新。Linux 上只有 AppImage 可以原地替换自己；
-/// 用 deb、rpm 装的版本由系统的包管理器管，界面会改成引导去下载页。
 /// 把界面生成的文字存到用户在保存对话框里选的位置（导出语言文件）。
 /// 只有桌面应用的界面能调用；网页访问时界面改用浏览器下载。
 #[tauri::command]
@@ -51,13 +50,36 @@ async fn save_text_file(path: String, contents: String) -> Result<(), String> {
     std::fs::write(&path, contents).map_err(|e| e.to_string())
 }
 
+/// 打包时写进程序的安装包类型（Tauri 打包工具按 deb、rpm、AppImage 分别改写）。
+/// 直接 `cargo run` 的开发版没有，是 None。
+fn linux_package() -> Option<BundleType> {
+    if cfg!(target_os = "linux") {
+        tauri::utils::platform::bundle_type()
+    } else {
+        None
+    }
+}
+
+/// 这个安装方式能不能在应用里直接更新。Linux 上 AppImage 原地替换自己；deb、rpm 由更新插件
+/// 交给 dpkg、rpm 安装（系统会弹窗要管理员密码）。认不出安装方式时界面引导去下载页。
 #[tauri::command]
 fn updater_supported() -> bool {
     if cfg!(target_os = "linux") {
         std::env::var_os("APPIMAGE").is_some()
+            || matches!(
+                linux_package(),
+                Some(BundleType::AppImage | BundleType::Deb | BundleType::Rpm)
+            )
     } else {
         cfg!(desktop)
     }
+}
+
+/// 安装更新时系统会不会要管理员密码：Linux 上用 deb、rpm 装的。更新窗口提前说一声。
+#[cfg(desktop)]
+#[tauri::command]
+fn update_needs_password() -> bool {
+    matches!(linux_package(), Some(BundleType::Deb | BundleType::Rpm))
 }
 
 /// 界面能调用的命令。原网页模式的网页视图只有桌面端有，手机上界面改用 iframe。
@@ -67,6 +89,7 @@ fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
         rpc,
         save_text_file,
         updater_supported,
+        update_needs_password,
         elevated_update::install_dir_writable,
         elevated_update::install_update_elevated,
         web_page::web_show,
