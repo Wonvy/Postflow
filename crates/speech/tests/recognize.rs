@@ -7,8 +7,10 @@
 //! 下载或校验出错、声纹模型加载不了。
 //!
 //! ```text
-//! POSTFLOW_SPEECH_SMOKE=/tmp/speech-smoke cargo test --workspace --test recognize -- --nocapture
+//! POSTFLOW_SPEECH_SMOKE=/tmp/speech-smoke cargo test -p postflow-speech --test recognize -- --nocapture
 //! ```
+//!
+//! CI 里它跟着整个 `cargo test --workspace` 一起跑（.github/workflows/ci.yml 里写了为什么不单独编译）。
 
 use std::path::Path;
 
@@ -21,7 +23,8 @@ const SPEAKER_MODEL: &str = "speaker-campplus";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn recognizes_real_speech() {
-    let Some(root) = std::env::var_os("POSTFLOW_SPEECH_SMOKE") else {
+    // CI 在 macOS 上把它设成空的
+    let Some(root) = std::env::var_os("POSTFLOW_SPEECH_SMOKE").filter(|v| !v.is_empty()) else {
         eprintln!("skipped: set POSTFLOW_SPEECH_SMOKE to a folder for the models to run this test");
         return;
     };

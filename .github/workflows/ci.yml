@@ -56,11 +56,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: 测试
-        run: cargo test --workspace
-
       # 真的跑一次语音识别（crates/speech/tests/recognize.rs）：下载模型、解码 Opus、识别、分说话人。
-      # macOS 上开发时天天在跑，这里补上 Linux 和 Windows。模型缓存起来，模型目录变了才重新下载。
+      # macOS 上开发时天天在跑，这里补上 Linux 和 Windows：设了 POSTFLOW_SPEECH_SMOKE 它才跑。
+      # 模型缓存起来，模型目录变了才重新下载。
       - name: 缓存语音识别模型
         if: runner.os != 'macOS'
         uses: actions/cache@v6
@@ -68,19 +66,19 @@ jobs:
           path: ${{ runner.temp }}/speech-smoke
           key: speech-smoke-${{ runner.os }}-${{ hashFiles('public/catalog/speech.json') }}
 
+      # 识别测试和别的测试在同一次 cargo test 里跑，不另外编译：只编一部分（-p 或 --test）时依赖的特性
+      # 不一样，sherpa-onnx-sys 会重新编，而它下载的预编译静态库（target/sherpa-onnx-prebuilt）已经被
+      # rust-cache 清掉了，链接会失败。
       # 失败时把输出的最后几十行写成这次运行的注释：任务日志要登录 GitHub 才能看，注释谁都能看。
-      # 一定要带 --workspace：只编一个包（-p）时依赖的特性不同，sherpa-onnx-sys 会重新编，而它下载的
-      # 预编译静态库（target/sherpa-onnx-prebuilt）已经被 rust-cache 清掉了，链接会失败
-      - name: 真实语音识别
-        if: runner.os != 'macOS'
+      - name: 测试
         shell: bash
         env:
-          POSTFLOW_SPEECH_SMOKE: ${{ runner.temp }}/speech-smoke
+          POSTFLOW_SPEECH_SMOKE: ${{ runner.os != 'macOS' && format('{0}/speech-smoke', runner.temp) || '' }}
         run: |
           set -o pipefail
-          if ! cargo test --workspace --test recognize -- --nocapture 2>&1 | tee recognize.log; then
-            printf '::error title=真实语音识别失败 (%s)::' "$RUNNER_OS"
-            tail -n 60 recognize.log | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }'
+          if ! cargo test --workspace 2>&1 | tee test.log; then
+            printf '::error title=测试失败 (%s)::' "$RUNNER_OS"
+            tail -n 60 test.log | tr -d '\r' | sed -e 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }'
             echo
             exit 1
           fi
