@@ -2,6 +2,7 @@
 //!
 //! 和 `postflow-feed` 一样，这个 crate 不碰存储，只负责和邮件服务器打交道、把邮件变成结构化数据。
 
+pub mod calendar;
 mod compose;
 mod imap;
 mod message;

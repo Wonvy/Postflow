@@ -120,6 +120,9 @@ struct Letter {
     /// 「没回复就提醒」：到这个时间（毫秒）还没收到回复就提醒。
     #[serde(default)]
     follow_up: Option<i64>,
+    /// 会议回复的 iCalendar（只由核心自己填，见 `mail.rsvp`）。
+    #[serde(default, skip_deserializing)]
+    calendar: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -242,6 +245,8 @@ impl Core {
         let result = match method {
             "mail.compose_context" => self.compose_context(params, session).await,
             "mail.send" => self.send(params, session).await,
+            "mail.rsvp" => self.rsvp(params, session).await,
+            "mail.invite_file" => self.invite_file(params, session).await,
             "mail.save_draft" => self.save_draft(params, session).await,
             "mail.delete_draft" => self.delete_draft(params, session).await,
             "mail.draft" => self.open_draft(params, session).await,
@@ -432,6 +437,122 @@ impl Core {
 
     async fn send(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
         let p: Letter = parse(params)?;
+        self.send_letter(p, session).await
+    }
+
+    /// 回复会议邀请：给组织者发一封带 iCalendar REPLY 的信，对方的日历据此更新参会状态。
+    async fn rsvp(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
+        #[derive(Deserialize)]
+        struct Rsvp {
+            id: String,
+            status: String,
+        }
+        let p: Rsvp = parse(params)?;
+        let status = match p.status.to_ascii_uppercase().as_str() {
+            "ACCEPTED" => postflow_mail::calendar::Partstat::Accepted,
+            "TENTATIVE" => postflow_mail::calendar::Partstat::Tentative,
+            "DECLINED" => postflow_mail::calendar::Partstat::Declined,
+            _ => {
+                return Err(RpcError::new(
+                    "bad_params",
+                    "status must be accepted, tentative or declined",
+                ));
+            }
+        };
+        let raw = self.raw_mail(session, &p.id).await?;
+        let invite = postflow_mail::calendar::invite(&raw)
+            .filter(|i| i.method == "REQUEST")
+            .ok_or_else(|| {
+                RpcError::new("not_found", "this message has no invitation to answer")
+            })?;
+        let organizer = invite
+            .organizer
+            .as_ref()
+            .and_then(|o| o.address.clone())
+            .filter(|a| a.contains('@'))
+            .ok_or_else(|| {
+                RpcError::new(
+                    "invite_no_organizer",
+                    "the invitation has no organizer to reply to",
+                )
+            })?;
+        let lookup = p.id.clone();
+        let item = session
+            .db(move |s| s.item(&lookup))
+            .await?
+            .ok_or_else(|| RpcError::new("not_found", "no such message"))?
+            .item;
+        let account = self.account(session, &item.source_id).await?;
+        // 邀请里写的是我哪个地址（可能是别名），回复里就用那个
+        let me_address = invite
+            .attendees
+            .iter()
+            .map(|a| a.address.clone())
+            .find(|a| a.eq_ignore_ascii_case(&account.email))
+            .unwrap_or_else(|| account.email.clone());
+        let me = Mailbox {
+            name: Some(account.sender_name.trim().to_string()).filter(|n| !n.is_empty()),
+            address: Some(me_address),
+        };
+        let who = me.name.clone().unwrap_or_else(|| account.email.clone());
+        let (prefix, verb) = match status {
+            postflow_mail::calendar::Partstat::Accepted => ("Accepted", "accepted"),
+            postflow_mail::calendar::Partstat::Tentative => ("Tentative", "tentatively accepted"),
+            postflow_mail::calendar::Partstat::Declined => ("Declined", "declined"),
+        };
+        let letter = Letter {
+            account_id: account.id.clone(),
+            to: vec![organizer],
+            cc: vec![],
+            bcc: vec![],
+            subject: format!("{prefix}: {}", invite.summary),
+            text: format!("{who} has {verb} this invitation."),
+            html: None,
+            in_reply_to: None,
+            references: vec![],
+            attachments: vec![],
+            draft: None,
+            follow_up: None,
+            calendar: Some(postflow_mail::calendar::reply_ics(
+                &invite,
+                &me,
+                status,
+                now_secs(),
+            )),
+        };
+        self.send_letter(letter, session).await?;
+        let (id, s) = (p.id.clone(), status.as_str().to_string());
+        session.db(move |db| db.set_rsvp(&id, &s)).await?;
+        reply(json!({ "status": status.as_str() }))
+    }
+
+    /// 邀请的 .ics 文件：桌面应用存到本机临时目录，交给系统的日历应用打开；网页里给出文字自己下载。
+    async fn invite_file(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
+        #[derive(Deserialize)]
+        struct File {
+            id: String,
+            #[serde(default)]
+            save: bool,
+        }
+        let p: File = parse(params)?;
+        let raw = self.raw_mail(session, &p.id).await?;
+        let invite = postflow_mail::calendar::invite(&raw)
+            .ok_or_else(|| RpcError::new("not_found", "this message has no invitation"))?;
+        if !p.save {
+            return reply(json!({ "ics": invite.ics }));
+        }
+        if !ids_ok(&p.id) {
+            return Err(RpcError::new("bad_params", "invalid id"));
+        }
+        let dir = self.local_dir.join("tmp");
+        std::fs::create_dir_all(&dir).map_err(|e| RpcError::new("io", e.to_string()))?;
+        let path = dir.join(format!("invite-{}.ics", p.id));
+        std::fs::write(&path, invite.ics.as_bytes())
+            .map_err(|e| RpcError::new("io", e.to_string()))?;
+        reply(json!({ "path": path.to_string_lossy() }))
+    }
+
+    async fn send_letter(&self, p: Letter, session: &Arc<Session>) -> Result<Value, RpcError> {
         let account = self.account(session, &p.account_id).await?;
         let outgoing = letter(
             &account,
@@ -583,6 +704,11 @@ impl Core {
     }
 }
 
+/// 条目 ID 只能是字母数字，免得拿它拼出别的路径。
+fn ids_ok(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric())
+}
+
 /// 把写信窗口里的一封信变成要生成的邮件。`lists` 是收件人、抄送、密送。
 fn letter(
     account: &postflow_store::Account,
@@ -606,6 +732,7 @@ fn letter(
         in_reply_to: p.in_reply_to.clone(),
         references: p.references.clone(),
         attachments,
+        calendar: p.calendar.clone(),
     }
 }
 

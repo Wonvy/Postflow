@@ -91,6 +91,10 @@ click **More info → Run anyway**.
 - Remind me if no reply (the bell next to Attach while writing): if nobody answers in 1, 3 or 7 days, the message
   comes back to the Reminders at the top of your inbox. A message from any recipient on the same subject counts as a
   reply.
+- Meeting invitations show as a card above the message: time in your time zone, place, organizer and who's coming.
+  Accept, Maybe or Decline sends the organizer a standard reply, so their calendar updates; Join opens the online
+  meeting, and Add to calendar hands the invitation to your calendar app. Cancellations and other people's replies
+  show their status.
 - Click a sender's name or picture for their card: how many messages they sent you and you sent them, the latest
   few, and buttons to write to them, search all their mail, or mark them as important.
 - Attachments (under the Mail views, or in the command palette): every file from your mail in one list, filtered by

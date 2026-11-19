@@ -648,8 +648,17 @@ impl Core {
             },
         )
         .ok_or_else(|| RpcError::new("mail_parse", "this message could not be read"))?;
+        let invite = postflow_mail::calendar::invite(&raw);
+        let rsvp = if invite.is_some() {
+            let id = item.id.clone();
+            session.db(move |s| s.rsvp(&id)).await?
+        } else {
+            None
+        };
         let mut value = reply(&item)?;
         value["mail"] = json!({
+            "invite": invite,
+            "rsvp": rsvp,
             "body_kind": rendered.kind,
             "body": rendered.body,
             "has_remote_content": rendered.has_remote_content,

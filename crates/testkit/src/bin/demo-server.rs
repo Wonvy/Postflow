@@ -179,6 +179,74 @@ test machines,8000\r\n\
     )
 }
 
+/// 会议邀请：带一段 iCalendar（明天上午十点，按 UTC 写，界面按当地时间显示）。
+fn meeting_invite(ago: i64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    // 明天这个时候，取整到整点
+    let start = (now + 86_400) / 3600 * 3600;
+    let ics_time = |t: i64| {
+        let days = t.div_euclid(86_400);
+        let secs = t.rem_euclid(86_400);
+        let z = days + 719_468;
+        let era = z.div_euclid(146_097);
+        let doe = z - era * 146_097;
+        let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = yoe + era * 400 + i64::from(m <= 2);
+        format!(
+            "{y:04}{m:02}{d:02}T{:02}{:02}00Z",
+            secs / 3600,
+            secs % 3600 / 60
+        )
+    };
+    format!(
+        "From: Leo Park <leo@northwind.example>\r\n\
+To: work@example.com, Mei Han <mei@northwind.example>\r\n\
+Subject: Invitation: Release planning\r\n\
+Date: {date}\r\n\
+Message-ID: <invite-release@northwind.example>\r\n\
+Content-Type: multipart/alternative; boundary=\"C\"\r\n\
+\r\n\
+--C\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+Let's plan the next release: scope, dates and who does what.\r\n\
+\r\n\
+Join online: https://meet.google.com/abc-defg-hij\r\n\
+--C\r\n\
+Content-Type: text/calendar; charset=utf-8; method=REQUEST\r\n\
+\r\n\
+BEGIN:VCALENDAR\r\n\
+PRODID:-//Northwind//Calendar//EN\r\n\
+VERSION:2.0\r\n\
+METHOD:REQUEST\r\n\
+BEGIN:VEVENT\r\n\
+UID:release-planning@northwind.example\r\n\
+SEQUENCE:0\r\n\
+DTSTAMP:{stamp}\r\n\
+DTSTART:{start}\r\n\
+DTEND:{end}\r\n\
+SUMMARY:Release planning\r\n\
+LOCATION:Meeting room 2\r\n\
+ORGANIZER;CN=Leo Park:mailto:leo@northwind.example\r\n\
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=Sam Lee:mailto:work@example.com\r\n\
+ATTENDEE;PARTSTAT=ACCEPTED;CN=Mei Han:mailto:mei@northwind.example\r\n\
+DESCRIPTION:Scope\\, dates and owners.\\nJoin: https://meet.google.com/abc-defg-hij\r\n\
+END:VEVENT\r\n\
+END:VCALENDAR\r\n\
+--C--\r\n",
+        date = mail_date(ago),
+        stamp = ics_time(now - ago),
+        start = ics_time(start),
+        end = ics_time(start + 3600),
+    )
+}
+
 /// 工作邮箱里已经发过的几封信，和几个自己建的文件夹。
 fn seed_folders(work: &FakeImap) {
     let w = "Sam Lee <work@example.com>";
@@ -318,6 +386,7 @@ fn seed_mail(work: &FakeImap, personal: &FakeImap) {
         &["\\Seen"],
     );
     work.deliver("INBOX", &with_attachment(5 * HOUR), &[]);
+    work.deliver("INBOX", &meeting_invite(90 * MINUTE), &[]);
     work.deliver("INBOX", &newsletter(3 * HOUR), &[]);
     work.deliver(
         "INBOX",

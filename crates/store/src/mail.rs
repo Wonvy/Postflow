@@ -736,6 +736,19 @@ impl Store {
         Ok(out)
     }
 
+    /// 对一封会议邀请的回复（ACCEPTED、TENTATIVE、DECLINED），记在同步日志里，别的设备也看得到。
+    pub fn set_rsvp(&self, item_id: &str, status: &str) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("status".into(), json!(status));
+        self.set_fields("rsvp", &[item_id.to_string()], set)
+    }
+
+    pub fn rsvp(&self, item_id: &str) -> Result<Option<String>> {
+        let guard = self.lock();
+        let f = lww_fields(&guard.conn, "rsvp", item_id)?;
+        Ok(f.get("status").and_then(Value::as_str).map(str::to_string))
+    }
+
     /// 记下「没回复就提醒」。
     pub fn set_follow_up(&self, f: &FollowUp) -> Result<()> {
         let mut set = Map::new();

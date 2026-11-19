@@ -230,7 +230,7 @@ pub fn summarize(raw: &[u8]) -> Summary {
         cc: mailboxes(msg.cc()),
         date: msg.date().map(|d| d.to_timestamp() * 1000),
         snippet,
-        has_attachments: msg.attachment_count() > 0,
+        has_attachments: msg.attachments().any(|p| !is_inline_calendar(p)),
         list_unsubscribe,
     }
 }
@@ -346,7 +346,18 @@ fn message_ids(v: &mail_parser::HeaderValue<'_>) -> Vec<String> {
     .collect()
 }
 
-/// 真正的附件：正文里用 cid: 引用的内嵌图片不算。
+/// 会议邀请里和正文并列的那段日历（没有文件名的 text/calendar）：阅读区显示成邀请卡片，不算附件。
+fn is_inline_calendar(part: &mail_parser::MessagePart<'_>) -> bool {
+    part.attachment_name().is_none()
+        && part.content_type().is_some_and(|ct| {
+            ct.ctype().eq_ignore_ascii_case("text")
+                && ct
+                    .subtype()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("calendar"))
+        })
+}
+
+/// 真正的附件：正文里用 cid: 引用的内嵌图片和会议邀请的日历部分不算。
 fn real_attachments(msg: &Message<'_>) -> Vec<AttachmentInfo> {
     let html: String = msg
         .html_bodies()
@@ -361,7 +372,7 @@ fn real_attachments(msg: &Message<'_>) -> Vec<AttachmentInfo> {
             part.content_id().is_none_or(|cid| {
                 let cid = cid.trim_matches(['<', '>']).to_ascii_lowercase();
                 !html.contains(&format!("cid:{cid}"))
-            })
+            }) && !is_inline_calendar(part)
         })
         .map(|(index, part)| AttachmentInfo {
             index: index as u32,
@@ -716,7 +727,7 @@ pub fn render(raw: &[u8], opts: RenderOptions) -> Option<Rendered> {
     let attachments = msg
         .attachments()
         .enumerate()
-        .filter(|(index, _)| !used.contains(&(*index as u32)))
+        .filter(|(index, part)| !used.contains(&(*index as u32)) && !is_inline_calendar(part))
         .map(|(index, part)| AttachmentInfo {
             index: index as u32,
             name: attachment_name(part, index as u32),

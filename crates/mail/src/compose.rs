@@ -53,6 +53,9 @@ pub struct Outgoing {
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
     pub attachments: Vec<Attachment>,
+    /// 会议回复（iTIP REPLY 的 iCalendar 文字）。有的话和纯文本正文一起放进 multipart/alternative，
+    /// 对方的日历据此更新参会状态。
+    pub calendar: Option<String>,
 }
 
 /// 生成好的邮件。
@@ -194,10 +197,27 @@ fn build_with(out: &Outgoing, now: i64, draft: bool) -> Result<Built> {
         .subject(one_line(&out.subject))
         .date(now)
         .message_id(message_id.clone())
-        .header("User-Agent", Raw::new("Postflow"))
-        .text_body(crlf(&out.text));
-    if let Some(html) = out.html.as_deref().filter(|h| !h.trim().is_empty()) {
-        builder = builder.html_body(html_document(html));
+        .header("User-Agent", Raw::new("Postflow"));
+    if let Some(ics) = out.calendar.as_deref() {
+        use mail_builder::headers::content_type::ContentType;
+        use mail_builder::mime::MimePart;
+        builder = builder.body(MimePart::new(
+            "multipart/alternative",
+            vec![
+                MimePart::new("text/plain", crlf(&out.text)),
+                MimePart::new(
+                    ContentType::new("text/calendar")
+                        .attribute("method", "REPLY")
+                        .attribute("charset", "utf-8"),
+                    ics.to_string(),
+                ),
+            ],
+        ));
+    } else {
+        builder = builder.text_body(crlf(&out.text));
+        if let Some(html) = out.html.as_deref().filter(|h| !h.trim().is_empty()) {
+            builder = builder.html_body(html_document(html));
+        }
     }
     if !out.to.is_empty() {
         builder = builder.to(list(&out.to));
@@ -379,6 +399,34 @@ mod tests {
     }
 
     #[test]
+    fn meeting_reply_carries_the_calendar() {
+        let out = Outgoing {
+            from: mb(Some("Me"), "me@example.com"),
+            to: vec![mb(None, "ann@example.com")],
+            subject: "Accepted: Q4 review".into(),
+            text: "Me has accepted.".into(),
+            calendar: Some("BEGIN:VCALENDAR\r\nMETHOD:REPLY\r\nEND:VCALENDAR\r\n".into()),
+            ..Default::default()
+        };
+        let built = build(&out, 1_700_000_000).unwrap();
+        let raw = String::from_utf8_lossy(&built.raw);
+        assert!(raw.contains("multipart/alternative"), "{raw}");
+        assert!(raw.contains("text/calendar"), "{raw}");
+        assert!(
+            raw.to_ascii_lowercase().contains("method=reply")
+                || raw.to_ascii_lowercase().contains("method=\"reply\""),
+            "{raw}"
+        );
+        let parsed = mail_parser::MessageParser::default()
+            .parse(&built.raw)
+            .unwrap();
+        assert_eq!(
+            parsed.body_text(0).as_deref().map(str::trim),
+            Some("Me has accepted.")
+        );
+    }
+
+    #[test]
     fn builds_a_message_that_parses_back() {
         let out = Outgoing {
             from: mb(Some("示例 用户"), "me@example.com"),
@@ -391,6 +439,7 @@ mod tests {
             references: vec!["first@example.org".into(), "orig@example.org".into()],
             attachments: vec![],
             html: None,
+            calendar: None,
         };
         let built = build(&out, 1_700_000_000).unwrap();
         assert!(built.message_id.ends_with("@example.com"));

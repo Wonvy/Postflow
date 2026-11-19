@@ -77,6 +77,24 @@ export async function copyText(text: string): Promise<void> {
   }
 }
 
+/** 用系统的日历应用打开会议邀请；网页里下载 .ics，浏览器会交给日历应用。 */
+export async function openInvite(id: string): Promise<void> {
+  if (isTauri) {
+    const { path } = await api.inviteFile(id, true);
+    if (!path) return;
+    const { openPath } = await import("@tauri-apps/plugin-opener");
+    await openPath(path);
+    return;
+  }
+  const { ics } = await api.inviteFile(id, false);
+  const href = URL.createObjectURL(new Blob([ics ?? ""], { type: "text/calendar" }));
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = "invite.ics";
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
 /** 保存邮件附件。返回 false 表示用户取消了。 */
 export async function saveAttachment(id: string, index: number, name: string): Promise<boolean> {
   if (isTauri) {

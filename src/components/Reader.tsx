@@ -79,6 +79,7 @@ import { ReaderStyleMenu } from "./ReaderStyleMenu";
 import { AccountIcon, ArticleIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { useSaveLater } from "./ReadLater";
+import { InviteCard } from "./InviteCard";
 import { SenderCard } from "./SenderCard";
 import { WebPage } from "./WebPage";
 import {
@@ -948,6 +949,7 @@ function MailView({
         </div>
       )}
 
+      <InviteCard item={item} />
       {bar}
       <PluginSections item={item} />
 

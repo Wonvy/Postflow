@@ -242,6 +242,27 @@ export interface MailDetail {
   attachments: Attachment[];
   /** 邮件列表的退订方式；不是邮件列表时为空。 */
   unsubscribe?: { url: string | null; mailto: string | null; one_click: boolean } | null;
+  /** 会议邀请（邮件里带着 iCalendar 时）。 */
+  invite?: Invite | null;
+  /** 我对这个邀请的回复：ACCEPTED、TENTATIVE、DECLINED。 */
+  rsvp?: string | null;
+}
+
+/** 邮件里的会议邀请。时间是 UTC 毫秒；算不出时区时只有 `start_local`。 */
+export interface Invite {
+  /** REQUEST（邀请、更新）、CANCEL（取消）、REPLY（别人的回复）。 */
+  method: string;
+  uid: string;
+  sequence: number;
+  summary: string;
+  location: string | null;
+  start: number | null;
+  end: number | null;
+  start_local: string | null;
+  all_day: boolean;
+  organizer: Mailbox | null;
+  attendees: { name: string | null; address: string; status: string }[];
+  url: string | null;
 }
 
 export interface ItemDetail extends Item {
@@ -650,6 +671,10 @@ export const api = {
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
+  /** 回复会议邀请：ACCEPTED、TENTATIVE、DECLINED。 */
+  rsvp: (id: string, status: "ACCEPTED" | "TENTATIVE" | "DECLINED") => rpc<{ status: string }>("mail.rsvp", { id, status }),
+  /** 邀请的 .ics：`save` 时存到本机临时目录给出路径（桌面应用），否则给出文字。 */
+  inviteFile: (id: string, save: boolean) => rpc<{ path?: string; ics?: string }>("mail.invite_file", { id, save }),
   /** 发件人卡片：和这个地址的往来。 */
   senderProfile: (address: string) =>
     rpc<{
