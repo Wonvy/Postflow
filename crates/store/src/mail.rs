@@ -736,6 +736,103 @@ impl Store {
         Ok(out)
     }
 
+    /// 新加或者整段改写一段划线。
+    pub fn put_highlight(&self, h: &Highlight) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("item".into(), json!(h.item));
+        set.insert("quote".into(), json!(h.quote));
+        set.insert("prefix".into(), json!(h.prefix));
+        set.insert("suffix".into(), json!(h.suffix));
+        set.insert("note".into(), json!(h.note));
+        set.insert("created_at".into(), json!(h.created_at));
+        set.insert("deleted".into(), json!(false));
+        self.set_fields("highlight", std::slice::from_ref(&h.id), set)
+    }
+
+    pub fn set_highlight_note(&self, id: &str, note: &str) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("note".into(), json!(note));
+        self.set_fields("highlight", &[id.to_string()], set)
+    }
+
+    pub fn remove_highlight(&self, id: &str) -> Result<()> {
+        let mut set = Map::new();
+        set.insert("deleted".into(), json!(true));
+        self.set_fields("highlight", &[id.to_string()], set)
+    }
+
+    /// 一篇文章的划线（`item` 为 `None` 时是全部），按加上的先后。
+    pub fn highlights(&self, item: Option<&str>) -> Result<Vec<Highlight>> {
+        let guard = self.lock();
+        let ids: Vec<String> = match item {
+            Some(item) => {
+                let mut stmt = guard.conn.prepare_cached(
+                    "SELECT id FROM lww WHERE kind = 'highlight' AND field = 'item' AND value = ?1",
+                )?;
+                stmt.query_map([json!(item).to_string()], |r| r.get(0))?
+                    .collect::<rusqlite::Result<_>>()?
+            }
+            None => {
+                let mut stmt = guard.conn.prepare_cached(
+                    "SELECT id FROM lww WHERE kind = 'highlight' AND field = 'item'",
+                )?;
+                stmt.query_map([], |r| r.get(0))?
+                    .collect::<rusqlite::Result<_>>()?
+            }
+        };
+        let mut out = Vec::new();
+        for id in ids {
+            let f = lww_fields(&guard.conn, "highlight", &id)?;
+            if f.get("deleted").and_then(Value::as_bool) == Some(true) {
+                continue;
+            }
+            let text = |k: &str| {
+                f.get(k)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            out.push(Highlight {
+                id: id.clone(),
+                item: text("item"),
+                quote: text("quote"),
+                prefix: text("prefix"),
+                suffix: text("suffix"),
+                note: text("note"),
+                created_at: f
+                    .get("created_at")
+                    .and_then(Value::as_i64)
+                    .unwrap_or_default(),
+            });
+        }
+        out.sort_by_key(|h| (h.created_at, h.id.clone()));
+        Ok(out)
+    }
+
+    /// 全部划线，带着文章的标题、地址和来源，导出笔记用。按文章分在一起，新的文章在前。
+    pub fn all_highlights(&self) -> Result<Vec<HighlightWithItem>> {
+        let list = self.highlights(None)?;
+        let mut out = Vec::new();
+        for h in list {
+            let Some(detail) = self.item(&h.item)? else {
+                continue;
+            };
+            out.push(HighlightWithItem {
+                title: detail.item.title,
+                url: detail.item.url,
+                source_title: detail.item.source_title,
+                highlight: h,
+            });
+        }
+        out.sort_by(|a, b| {
+            b.highlight
+                .created_at
+                .cmp(&a.highlight.created_at)
+                .then_with(|| a.highlight.item.cmp(&b.highlight.item))
+        });
+        Ok(out)
+    }
+
     /// 对一封会议邀请的回复（ACCEPTED、TENTATIVE、DECLINED），记在同步日志里，别的设备也看得到。
     pub fn set_rsvp(&self, item_id: &str, status: &str) -> Result<()> {
         let mut set = Map::new();

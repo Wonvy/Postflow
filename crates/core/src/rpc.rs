@@ -398,6 +398,51 @@ impl Core {
                 self.download_episode(&session, p.id, p.keep).await?;
                 reply(json!({}))
             }
+            // 划线和笔记：存在同步日志里
+            "highlights.list" => {
+                #[derive(Deserialize)]
+                struct List {
+                    #[serde(default)]
+                    item: Option<String>,
+                }
+                let p: List = parse(params)?;
+                match p.item {
+                    Some(item) => reply(
+                        json!({ "highlights": session.db(move |s| s.highlights(Some(&item))).await? }),
+                    ),
+                    None => {
+                        reply(json!({ "highlights": session.db(|s| s.all_highlights()).await? }))
+                    }
+                }
+            }
+            "highlights.add" => {
+                let mut h: postflow_store::Highlight = parse(params)?;
+                if h.quote.trim().is_empty() || h.item.is_empty() {
+                    return Err(RpcError::new("bad_params", "nothing to highlight"));
+                }
+                h.quote = h.quote.chars().take(5000).collect();
+                h.created_at = crate::refresh::now();
+                let saved = h.clone();
+                session.db(move |s| s.put_highlight(&h)).await?;
+                reply(saved)
+            }
+            "highlights.note" => {
+                #[derive(Deserialize)]
+                struct Note {
+                    id: String,
+                    note: String,
+                }
+                let p: Note = parse(params)?;
+                session
+                    .db(move |s| s.set_highlight_note(&p.id, &p.note))
+                    .await?;
+                reply(json!({}))
+            }
+            "highlights.remove" => {
+                let p: IdParam = parse(params)?;
+                session.db(move |s| s.remove_highlight(&p.id)).await?;
+                reply(json!({}))
+            }
             // 发件人卡片：和这个人的往来
             "mail.sender" => {
                 #[derive(Deserialize)]

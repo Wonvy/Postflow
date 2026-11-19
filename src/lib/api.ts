@@ -173,6 +173,24 @@ export interface AttachmentRow {
   account_id: string;
 }
 
+/** 文章里的一段划线，可以带一条笔记。 */
+export interface Highlight {
+  id: string;
+  item: string;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  note: string;
+  created_at: number;
+}
+
+/** 「全部笔记」里的一段，带着它所在的文章。 */
+export interface HighlightWithItem extends Highlight {
+  title: string;
+  url: string | null;
+  source_title: string;
+}
+
 /** 存进稍后读的结果。`warning`：网页打不开或认不出正文，条目照样存了，打开时再试。 */
 export interface LaterSaved {
   id: string;
@@ -671,6 +689,13 @@ export const api = {
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
+  /** 一篇文章的划线和笔记。 */
+  highlights: (item: string) => rpc<{ highlights: Highlight[] }>("highlights.list", { item }),
+  /** 全部划线和笔记，带着文章标题，导出用。 */
+  allHighlights: () => rpc<{ highlights: HighlightWithItem[] }>("highlights.list", {}),
+  addHighlight: (h: Omit<Highlight, "created_at">) => rpc<Highlight>("highlights.add", h),
+  setHighlightNote: (id: string, note: string) => rpc<void>("highlights.note", { id, note }),
+  removeHighlight: (id: string) => rpc<void>("highlights.remove", { id }),
   /** 回复会议邀请：ACCEPTED、TENTATIVE、DECLINED。 */
   rsvp: (id: string, status: "ACCEPTED" | "TENTATIVE" | "DECLINED") => rpc<{ status: string }>("mail.rsvp", { id, status }),
   /** 邀请的 .ics：`save` 时存到本机临时目录给出路径（桌面应用），否则给出文字。 */

@@ -95,3 +95,42 @@ fn saved_pages_stay_in_read_later() {
     assert_eq!((counts.unread_article, counts.later), (1, 1));
 }
 
+#[test]
+fn highlights_are_kept_per_article() {
+    use postflow_store::Highlight;
+    let (_tmp, store) = store();
+    let later = store.ensure_later_feed().unwrap();
+    store
+        .add_articles(vec![
+            article(&later, "https://example.com/a", 1),
+            article(&later, "https://example.com/b", 2),
+        ])
+        .unwrap();
+    let a = ids::item_id(&later, "https://example.com/a");
+    let b = ids::item_id(&later, "https://example.com/b");
+    let h = |id: &str, item: &str, quote: &str, at: i64| Highlight {
+        id: id.into(),
+        item: item.into(),
+        quote: quote.into(),
+        prefix: "before ".into(),
+        suffix: " after".into(),
+        note: String::new(),
+        created_at: at,
+    };
+    store.put_highlight(&h("h1", &a, "first", 10)).unwrap();
+    store.put_highlight(&h("h2", &a, "second", 20)).unwrap();
+    store.put_highlight(&h("h3", &b, "other", 30)).unwrap();
+    store.set_highlight_note("h2", "remember this").unwrap();
+    let on_a = store.highlights(Some(&a)).unwrap();
+    assert_eq!(
+        on_a.iter().map(|h| h.quote.as_str()).collect::<Vec<_>>(),
+        ["first", "second"]
+    );
+    assert_eq!(on_a[1].note, "remember this");
+    store.remove_highlight("h1").unwrap();
+    assert_eq!(store.highlights(Some(&a)).unwrap().len(), 1);
+    let all = store.all_highlights().unwrap();
+    assert_eq!(all.len(), 2);
+    assert_eq!(all[0].highlight.quote, "other", "newest first");
+    assert_eq!(all[0].title, "Title of https://example.com/b");
+}

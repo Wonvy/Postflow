@@ -17,6 +17,7 @@ that heading into the version number and date.
 - Quick reply templates, inserted from the Templates button while writing and managed in Settings → General.
 - Remind me if no reply: choose 1, 3 or 7 days when sending, and the message comes back to Reminders if nobody answers.
 - Meeting invitations show as a card with the time, place and attendees. Accept, Maybe or Decline replies to the organizer; Join opens the online meeting; Add to calendar opens it in your calendar app.
+- Highlights and notes in articles, listed under the article and exportable as Markdown (one article, or everything from the command palette).
 
 ### 中文
 - 稍后读：把任意网页存下来，和文章一样读。在「稍后读」（订阅那边视图里的书签图标）顶上的输入框贴网址；在输入框以外直接粘贴链接；或者在文章、邮件里右键链接，选「存到稍后读」。网页连同正文一起存下，会同步到你的其他设备，不混进「全部文章」。
@@ -29,6 +30,7 @@ that heading into the version number and date.
 - 快速回复模板：写信时点「模板」插入，在「设置 → 通用」里管理。
 - 没回复就提醒：发信时选 1、3 或 7 天，到时没人回复，这封信回到「提醒」里。
 - 会议邀请显示成卡片，有时间、地点和参会人。「接受」「暂定」「拒绝」会回复组织者；「加入会议」打开线上会议；「添加到日历」交给系统日历。
+- 文章里可以划线和写笔记，列在文章下面，可以导出成 Markdown（单篇，或者在命令面板里导出全部）。
 
 ## 0.1.32 — 2026-11-19
 

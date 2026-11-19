@@ -8,6 +8,8 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useActions } from "../lib/actions";
 import { api } from "../lib/api";
 import { type Command, rankCommands } from "../lib/commands";
+import { toMarkdown } from "../lib/highlightsText";
+import { copyText } from "../lib/platform";
 import { type SnoozePreset, snoozePresets } from "../lib/snooze";
 import { useFolders } from "../lib/folders";
 import { useT } from "../lib/i18n";
@@ -15,6 +17,7 @@ import { useCategories } from "../lib/labels";
 import { keys, useNav } from "../lib/queries";
 import { articleActions, canArchive, canSnooze, type Space, useUi, viewLabelKey } from "../lib/store";
 import { SETTINGS_PAGES } from "./SettingsDialog";
+import { toast } from "./Toast";
 import { cx, Kbd } from "./ui";
 
 const SPACE_VIEWS = ["inbox", "today", "unread", "starred", "later", "snoozed", "archived"] as const;
@@ -152,6 +155,7 @@ function useCommands(): Command[] {
       list.push({ id: `go:feed:${f.id}`, group: go, label: f.title || f.url, keywords: f.url, run: () => ui.setScope({ kind: "feed", feedId: f.id }) });
     }
     list.push({ id: "go:stats", group: go, label: t("stats.title"), keywords: "stats", run: () => { ui.setSpace("feeds"); ui.setMainView("stats"); } });
+    list.push({ id: "highlights:export", group: go, label: t("highlight.exportAll"), keywords: "highlights notes markdown export", run: () => void exportHighlights(t) });
   }
   if (nav?.accounts.length) {
     list.push({ id: "go:attachments", group: go, label: t("files.title"), keywords: "attachments files", run: () => { ui.setSpace("mail"); ui.setMainView("attachments"); } });
@@ -165,6 +169,28 @@ function useCommands(): Command[] {
     list.push({ id: `settings:${p.page}`, group: settings, label: `${settings} · ${t(p.label)}`, keywords: `settings ${p.page}`, run: () => ui.setDialog({ type: "settings", page: p.page }) });
   }
   return list;
+}
+
+/** 全部划线和笔记，按文章分组成 Markdown，复制下来。 */
+async function exportHighlights(t: ReturnType<typeof useT>) {
+  const { highlights } = await api.allHighlights();
+  if (highlights.length === 0) {
+    toast(t("highlight.none"));
+    return;
+  }
+  const groups: Parameters<typeof toMarkdown>[0] = [];
+  for (const h of highlights) {
+    let g = groups.find((x) => x.title === h.title && x.url === h.url);
+    if (!g) {
+      g = { title: h.title, url: h.url, source: h.source_title, highlights: [] };
+      groups.push(g);
+    }
+    g.highlights.push(h);
+  }
+  // 同一篇里按划线的先后
+  for (const g of groups) g.highlights.reverse();
+  await copyText(toMarkdown(groups));
+  toast(t("highlight.exported", { n: highlights.length }));
 }
 
 export function CommandPalette() {

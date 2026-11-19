@@ -118,6 +118,33 @@ pub struct FollowUp {
     pub until: i64,
 }
 
+/// 文章里的一段划线，可以带一条笔记。存在同步日志里（kind = highlight），所有设备都有。
+/// 位置按引文和前后几个字记（W3C 的 TextQuoteSelector），正文的排版变了也找得回来。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Highlight {
+    pub id: String,
+    pub item: String,
+    pub quote: String,
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub created_at: i64,
+}
+
+/// 「全部笔记」里的一段：带着它所在的文章。
+#[derive(Debug, Clone, Serialize)]
+pub struct HighlightWithItem {
+    #[serde(flatten)]
+    pub highlight: Highlight,
+    pub title: String,
+    pub url: Option<String>,
+    pub source_title: String,
+}
+
 /// 发件人卡片：和这个人的往来。
 #[derive(Debug, Clone, Serialize)]
 pub struct SenderProfile {

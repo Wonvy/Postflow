@@ -79,6 +79,7 @@ import { ReaderStyleMenu } from "./ReaderStyleMenu";
 import { AccountIcon, ArticleIcon, SenderAvatar, SourceIcon } from "./SourceIcon";
 import { useCategories, useLabelColor } from "../lib/labels";
 import { useSaveLater } from "./ReadLater";
+import { HighlightLayer, HighlightList } from "./Highlights";
 import { InviteCard } from "./InviteCard";
 import { SenderCard } from "./SenderCard";
 import { WebPage } from "./WebPage";
@@ -771,6 +772,11 @@ function ArticleView({
   const original = mode === "full" && item.full_text ? item.full_text : (item.content ?? "");
   const html = shown?.html ?? original;
   const style = useReaderStyle();
+  // 划线：看译文时不显示（位置是按原文记的）
+  const body = useRef<HTMLDivElement>(null);
+  const highlightable = !shown?.html;
+  const [noteFocus, setNoteFocus] = useState<{ id: string; n: number } | null>(null);
+  const focusNote = (id: string) => setNoteFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
   return (
     <article
       className="mx-auto px-10 pb-24 pt-10"
@@ -819,7 +825,19 @@ function ArticleView({
         </p>
       )}
       {/* 内容在核心里已经净化过，见 postflow-feed 的 sanitize_html */}
-      <div className="article" onClick={interceptLinks} dangerouslySetInnerHTML={{ __html: html }} />
+      <div
+        ref={body}
+        className="article"
+        onClick={(e) => {
+          // 点正文里的划线：跳到下面它的笔记
+          const mark = (e.target as HTMLElement).closest<HTMLElement>("mark[data-hl]");
+          if (mark?.dataset.hl && !window.getSelection()?.toString()) focusNote(mark.dataset.hl);
+          interceptLinks(e);
+        }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      <HighlightLayer item={item} body={body} html={html} enabled={highlightable} onFocusNote={focusNote} />
+      <HighlightList item={item} focus={noteFocus} enabled={highlightable} />
     </article>
   );
 }
