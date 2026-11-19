@@ -212,7 +212,11 @@ click **More info → Run anyway**.
 - Command palette (`⌘K` / `Ctrl+K`, or the button at the bottom of the sidebar): jump to any view, mailbox, feed,
   folder, category or settings page, or act on the open item.
 - Keeps running in the tray (menu bar) when you close the window, still checking mail, with the unread count on the
-  icon. Turn it off in Settings → General.
+  icon. Turn it off in Settings → General. The tray menu shows the unread count and can open Postflow, start a new
+  message, check mail and feeds, open Settings, or quit.
+- Hide at the screen edge (off by default; Settings → General, or the tray menu): drag the window to the top, left or
+  right edge of the screen and it slides away when the pointer leaves, leaving a thin strip. Touch the strip to bring
+  it back.
 - Works on phones: on a narrow screen Postflow shows one pane at a time, with the sidebar sliding in from the left
   and a back button in the reader. Swipe a row left to archive or right to mark it read or unread. Open it on your
   phone through [browser access](#using-postflow-in-a-browser) and add it to the home screen to use it like an app.

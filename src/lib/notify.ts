@@ -113,6 +113,7 @@ export function notifyReminders(event: Extract<CoreEvent, { type: "reminders" }>
  */
 export function useTray(unreadMail: number | undefined) {
   const keepRunning = useUi((s) => s.keepRunning);
+  const edgeHide = useUi((s) => s.edgeHide);
   const lang = useUi((s) => s.lang);
   useEffect(() => {
     if (!isTauri) return;
@@ -125,12 +126,18 @@ export function useTray(unreadMail: number | undefined) {
           update: {
             unread,
             tooltip: unread > 0 ? `Postflow · ${t("tray.unread", { n: unread })}` : "Postflow",
+            unread_label: unread > 0 ? t("tray.unread", { n: unread }) : null,
             show_label: t("tray.open"),
+            compose_label: t("tray.compose"),
+            refresh_label: t("tray.refresh"),
+            settings_label: t("tray.settings"),
+            edge_label: t("tray.edgeHide"),
+            edge_hide: edgeHide,
             quit_label: t("tray.quit"),
             keep_running: keepRunning,
           },
         }),
       )
       .catch(() => {});
-  }, [unreadMail, keepRunning, lang]);
+  }, [unreadMail, keepRunning, edgeHide, lang]);
 }

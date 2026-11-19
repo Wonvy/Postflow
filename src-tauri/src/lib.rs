@@ -9,6 +9,8 @@ use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(desktop)]
+mod edge_hide;
+#[cfg(desktop)]
 mod elevated_update;
 #[cfg(desktop)]
 mod tray;
@@ -128,6 +130,7 @@ pub fn run() {
         .manage(web_page::WebPageState::default())
         .manage(web_access::WebAccess::default())
         .manage(tray::TrayState::default())
+        .manage(edge_hide::EdgeHide::default())
         // 关窗口时留在后台（托盘常驻）
         .on_window_event(tray::on_window_event);
 
@@ -176,6 +179,9 @@ pub fn run() {
             if let Err(err) = tray::create(app.handle()) {
                 tracing::warn!("tray icon: {err}");
             }
+            // 靠边自动隐藏：后台看着窗口，设置打开后才动它
+            #[cfg(desktop)]
+            edge_hide::start(app.handle());
 
             app.manage(AppState { core });
             Ok(())

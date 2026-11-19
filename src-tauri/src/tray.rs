@@ -7,11 +7,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Deserialize;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, Runtime, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WindowEvent};
 
 const TRAY_ID: &str = "main";
+/// 托盘菜单里要界面去做的事，发给界面的事件名。
+const ACTION_EVENT: &str = "postflow://tray-action";
 
 pub struct TrayState {
     /// 关窗口时留在后台。界面启动时按设置告诉这里；默认留着。
@@ -30,6 +32,8 @@ impl Default for TrayState {
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(target_os = "macos")]
     let _ = app.show();
+    // 靠边藏着的窗口先拿出来
+    crate::edge_hide::reveal(app);
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -65,6 +69,15 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main(app),
             "quit" => app.exit(0),
+            // 写邮件、检查新内容、设置：把窗口拿出来，交给界面去做
+            id @ ("compose" | "refresh" | "settings") => {
+                show_main(app);
+                let _ = app.emit(ACTION_EVENT, id);
+            }
+            // 靠边隐藏的开关：界面改设置，再告诉这里
+            "edge" => {
+                let _ = app.emit(ACTION_EVENT, "edge");
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -103,7 +116,21 @@ pub struct TrayUpdate {
     unread: u32,
     /// 鼠标悬停的提示，比如「Postflow · 3 封未读邮件」。
     tooltip: String,
+    /// 菜单最上面一行（不能点）：「3 封未读邮件」。没有未读时不显示。
+    #[serde(default)]
+    unread_label: Option<String>,
     show_label: String,
+    #[serde(default)]
+    compose_label: Option<String>,
+    #[serde(default)]
+    refresh_label: Option<String>,
+    #[serde(default)]
+    settings_label: Option<String>,
+    /// 「靠边自动隐藏」勾选项的文字和现在是否打开。
+    #[serde(default)]
+    edge_label: Option<String>,
+    #[serde(default)]
+    edge_hide: bool,
     quit_label: String,
     keep_running: bool,
 }
@@ -126,12 +153,67 @@ pub fn tray_update<R: Runtime>(app: AppHandle<R>, update: TrayUpdate) -> Result<
     });
     #[cfg(not(target_os = "macos"))]
     let _ = update.unread;
-    let show = MenuItem::with_id(&app, "show", &update.show_label, true, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    let quit = MenuItem::with_id(&app, "quit", &update.quit_label, true, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    let separator = PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
-    let menu = Menu::with_items(&app, &[&show, &separator, &quit]).map_err(|e| e.to_string())?;
+    let menu = build_menu(&app, &update).map_err(|e| e.to_string())?;
     tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+    crate::edge_hide::set_enabled(&app, update.edge_hide);
     Ok(())
+}
+
+/// 托盘菜单：未读数、打开、写邮件、检查新内容、设置、靠边自动隐藏、退出。
+fn build_menu<R: Runtime>(app: &AppHandle<R>, update: &TrayUpdate) -> tauri::Result<Menu<R>> {
+    let menu = Menu::new(app)?;
+    if let Some(label) = &update.unread_label {
+        menu.append(&MenuItem::with_id(
+            app,
+            "unread",
+            label,
+            false,
+            None::<&str>,
+        )?)?;
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+    }
+    menu.append(&MenuItem::with_id(
+        app,
+        "show",
+        &update.show_label,
+        true,
+        None::<&str>,
+    )?)?;
+    for (id, label) in [
+        ("compose", &update.compose_label),
+        ("refresh", &update.refresh_label),
+    ] {
+        if let Some(label) = label {
+            menu.append(&MenuItem::with_id(app, id, label, true, None::<&str>)?)?;
+        }
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    if let Some(label) = &update.edge_label {
+        menu.append(&CheckMenuItem::with_id(
+            app,
+            "edge",
+            label,
+            true,
+            update.edge_hide,
+            None::<&str>,
+        )?)?;
+    }
+    if let Some(label) = &update.settings_label {
+        menu.append(&MenuItem::with_id(
+            app,
+            "settings",
+            label,
+            true,
+            None::<&str>,
+        )?)?;
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "quit",
+        &update.quit_label,
+        true,
+        None::<&str>,
+    )?)?;
+    Ok(menu)
 }

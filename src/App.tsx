@@ -30,6 +30,7 @@ import { Button, cx, Logo, Spinner, TextInput } from "./components/ui";
 import { api } from "./lib/api";
 import { resolveLang, useT } from "./lib/i18n";
 import { useTray, useUnreadBadge } from "./lib/notify";
+import { useTrayActions } from "./lib/trayActions";
 import { useCoreEvents, useNav, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
@@ -183,6 +184,7 @@ function Shell() {
   const unreadMail = useNav().data?.counts.unread_mail;
   useUnreadBadge(unreadMail);
   useTray(unreadMail);
+  useTrayActions();
   useEffect(() => startUpdateChecks(), []);
   useEffect(() => watchFullscreen(), []);
   usePluginLoader();

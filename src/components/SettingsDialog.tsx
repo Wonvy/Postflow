@@ -83,6 +83,8 @@ export function SettingsDialog() {
   const showFeeds = useUi((s) => s.showFeeds);
   const undoSendSeconds = useUi((s) => s.undoSendSeconds);
   const keepRunning = useUi((s) => s.keepRunning);
+  const edgeHide = useUi((s) => s.edgeHide);
+  const setEdgeHide = useUi((s) => s.setEdgeHide);
   const rememberViews = useUi((s) => s.rememberViews);
   const focusPane = useUi((s) => s.focusPane);
   const spaceOpens = useUi((s) => s.spaceOpensHovered);
@@ -281,6 +283,11 @@ export function SettingsDialog() {
         {isTauri && (
           <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>
             <Switch label={t("settings.keepRunning")} checked={keepRunning} onChange={setKeepRunning} />
+          </SettingRow>
+        )}
+        {isTauri && (
+          <SettingRow label={t("settings.edgeHide")} hint={t("settings.edgeHideHint")}>
+            <Switch label={t("settings.edgeHide")} checked={edgeHide} onChange={setEdgeHide} />
           </SettingRow>
         )}
         <SettingRow label={t("settings.badge")} hint={t("settings.badgeHint")}>

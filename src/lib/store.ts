@@ -219,6 +219,9 @@ interface UiState {
   /** 桌面应用：关掉窗口时留在后台继续收信，从托盘图标打开。 */
   keepRunning: boolean;
   setKeepRunning: (on: boolean) => void;
+  /** 桌面应用：窗口拖到屏幕上、左、右边缘后，鼠标离开就缩进屏幕外，碰到边再滑出来。只在这台设备上。 */
+  edgeHide: boolean;
+  setEdgeHide: (on: boolean) => void;
   /** 点「发送」后等几秒才真的发，这段时间里可以撤销。0 是马上发。 */
   undoSendSeconds: number;
   setUndoSendSeconds: (n: number) => void;
@@ -492,6 +495,8 @@ export const useUi = create<UiState>()(
       undoSendSeconds: 5,
       keepRunning: true,
       setKeepRunning: (keepRunning) => set({ keepRunning }),
+      edgeHide: false,
+      setEdgeHide: (edgeHide) => set({ edgeHide }),
       setUndoSendSeconds: (undoSendSeconds) => set({ undoSendSeconds }),
       setCatalogOnline: (catalogOnline) => set({ catalogOnline }),
       aiPanel: false,
@@ -747,6 +752,7 @@ export const useUi = create<UiState>()(
         catalogOnline: s.catalogOnline,
         undoSendSeconds: s.undoSendSeconds,
         keepRunning: s.keepRunning,
+        edgeHide: s.edgeHide,
         aiPanel: s.aiPanel,
         listTranslate: s.listTranslate,
         readerTranslate: s.readerTranslate,
