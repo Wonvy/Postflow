@@ -6,7 +6,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, FileText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
+import { BookmarkPlus, Clock, FileText, MessageSquareText, Paperclip, Send, TriangleAlert, Type, X } from "lucide-react";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -37,10 +37,12 @@ import { formatSize, isMac } from "../lib/platform";
 import { keys, useNav } from "../lib/queries";
 import { useUi } from "../lib/store";
 import { type SnoozePreset, snoozePresets, toLocalInput } from "../lib/snooze";
+import { useTemplates } from "../lib/templates";
+import { insertAt } from "../lib/templatesList";
 import { RichEditor, type RichEditorHandle } from "./RichEditor";
 import { snoozeTime } from "./Snooze";
 import { toast } from "./Toast";
-import { Button, cx, IconButton, ICON, Menu, MenuItem, Select, Spinner, Tip } from "./ui";
+import { Button, cx, IconButton, ICON, Menu, MenuItem, MenuSeparator, Select, Spinner, Tip } from "./ui";
 
 /** 定时发送的预设时间（和稍后提醒的一样，去掉「稍后」）。 */
 const SCHEDULE_LABEL: Record<SnoozePreset, "snooze.later" | "snooze.tonight" | "snooze.tomorrow" | "snooze.weekend" | "snooze.nextWeek"> = {
@@ -102,6 +104,51 @@ function errorMessage(err: unknown): string {
 }
 
 export const sendShortcut = isMac ? "⌘↩" : "Ctrl+Enter";
+
+/** 写信窗口底部的「模板」：点一条插进正文；把正在写的存成模板；去设置里管理。 */
+function TemplateMenu({
+  disabled,
+  current,
+  onInsert,
+}: {
+  disabled: boolean;
+  current: string;
+  onInsert: (text: string) => void;
+}) {
+  const t = useT();
+  const templates = useTemplates();
+  return (
+    <Menu
+      align="start"
+      trigger={
+        <IconButton label={t("templates.title")} disabled={disabled}>
+          <MessageSquareText {...ICON} />
+        </IconButton>
+      }
+    >
+      {templates.list.length === 0 && (
+        <p className="max-w-[260px] px-2 py-1 text-[12px] leading-relaxed text-fg-3">{t("templates.empty")}</p>
+      )}
+      {templates.list.map((tpl) => (
+        <MenuItem key={tpl.id} icon={<FileText size={14} />} onSelect={() => onInsert(tpl.body)}>
+          <span className="flex max-w-[280px] flex-col">
+            <span className="truncate">{tpl.name}</span>
+            <span className="truncate text-[11px] text-fg-3">{tpl.body.replace(/\s+/g, " ")}</span>
+          </span>
+        </MenuItem>
+      ))}
+      {templates.list.length > 0 && current && <MenuSeparator />}
+      {current && (
+        <MenuItem
+          icon={<BookmarkPlus size={14} />}
+          onSelect={() => void templates.add(current).then(() => toast(t("templates.saved")))}
+        >
+          {t("templates.saveCurrent")}
+        </MenuItem>
+      )}
+    </Menu>
+  );
+}
 
 export function ComposeDialog() {
   const dialog = useUi((s) => s.dialog);
@@ -897,6 +944,23 @@ function Composer({
                 <IconButton label={t("compose.attach")} disabled={!ready} onClick={() => picker.current?.click()}>
                   <Paperclip {...ICON} />
                 </IconButton>
+                <TemplateMenu
+                  disabled={!ready}
+                  current={(rich ? rich.text : text).trim()}
+                  onInsert={(insert) => {
+                    if (rich) {
+                      editor.current?.insertText(insert);
+                      return;
+                    }
+                    const el = body.current;
+                    const { text: next, caret } = insertAt(text, el?.selectionStart ?? 0, insert);
+                    setText(next);
+                    requestAnimationFrame(() => {
+                      el?.focus();
+                      el?.setSelectionRange(caret, caret);
+                    });
+                  }}
+                />
                 <IconButton
                   label={rich ? t("format.toPlain") : t("format.toRich")}
                   active={rich !== null}

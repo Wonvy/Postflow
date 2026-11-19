@@ -28,6 +28,7 @@ import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
 import { checkForUpdate, useUpdater } from "../lib/updater";
+import { useTemplates } from "../lib/templates";
 import { useVip } from "../lib/vip";
 import { keys, useDevices, useSettings, useStatus } from "../lib/queries";
 import { type Density, type ReaderLayout, type SettingsPage, type Space, type ThemePref, useUi, viewLabelKey } from "../lib/store";
@@ -282,6 +283,7 @@ export function SettingsDialog() {
           <Switch label={t("settings.notifyMail")} checked={notifyMail} onChange={setNotifyMail} />
         </SettingRow>
         {notifyMail && <VipSettings />}
+        <TemplateSettings />
         <SettingsHeading>{t("settings.groupApp")}</SettingsHeading>
         {isTauri && (
           <SettingRow label={t("settings.keepRunning")} hint={t("settings.keepRunningHint")}>
@@ -751,6 +753,70 @@ function UpdateCheck() {
         {t("settings.checkUpdates")}
       </Button>
     </>
+  );
+}
+
+/** 快速回复模板：写信时点「模板」插进正文。在这里改名字、改内容、删除，或者新加一条。 */
+function TemplateSettings() {
+  const t = useT();
+  const templates = useTemplates();
+  const [draft, setDraft] = useState<Record<string, { name: string; body: string }>>({});
+  const value = (id: string, key: "name" | "body", fallback: string) => draft[id]?.[key] ?? fallback;
+  const edit = (id: string, key: "name" | "body", v: string, tpl: { name: string; body: string }) =>
+    setDraft((d) => ({ ...d, [id]: { name: tpl.name, body: tpl.body, ...d[id], [key]: v } }));
+  const commit = (id: string) => {
+    const d = draft[id];
+    if (!d) return;
+    void templates.update(id, { name: d.name.trim() || d.body.trim().slice(0, 24), body: d.body });
+    setDraft(({ [id]: _, ...rest }) => rest);
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <div className="text-fg">{t("templates.title")}</div>
+        <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("templates.hint")}</div>
+      </div>
+      <div className="flex w-full flex-col gap-2">
+        {templates.list.map((tpl) => (
+          <div key={tpl.id} className="flex flex-col gap-1.5 rounded-md border border-line p-2">
+            <div className="flex items-center gap-1.5">
+              <TextInput
+                className="h-7 flex-1"
+                value={value(tpl.id, "name", tpl.name)}
+                aria-label={t("templates.name")}
+                onChange={(e) => edit(tpl.id, "name", e.target.value, tpl)}
+                onBlur={() => commit(tpl.id)}
+              />
+              <button
+                type="button"
+                aria-label={t("templates.delete", { name: tpl.name })}
+                onClick={() => void templates.remove(tpl.id)}
+                className="rounded-md p-1 text-fg-3 hover:bg-hover hover:text-danger"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <textarea
+              value={value(tpl.id, "body", tpl.body)}
+              aria-label={t("templates.body")}
+              rows={3}
+              onChange={(e) => edit(tpl.id, "body", e.target.value, tpl)}
+              onBlur={() => commit(tpl.id)}
+              className="resize-y rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] leading-relaxed text-fg outline-none focus:border-accent"
+            />
+          </div>
+        ))}
+        <div>
+          <Button
+            className="h-7 gap-1.5 px-2 text-[12px]"
+            onClick={() => void templates.add(t("templates.example"), t("templates.exampleName"))}
+          >
+            <Plus size={13} />
+            {t("templates.add")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

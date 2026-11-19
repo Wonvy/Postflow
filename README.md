@@ -86,6 +86,8 @@ click **More info → Run anyway**.
 - Move mail into a folder with "Move to folder" in its right-click menu, or drag it onto the folder in the
   sidebar.
 - Each mailbox can have a signature (in its settings), added below what you write and above the quote in replies.
+- Quick reply templates: replies you write often, inserted with the Templates button while writing. Save what you're
+  writing as a template, or add and edit them in Settings → General. They sync to your other devices.
 - Click a sender's name or picture for their card: how many messages they sent you and you sent them, the latest
   few, and buttons to write to them, search all their mail, or mark them as important.
 - Attachments (under the Mail views, or in the command palette): every file from your mail in one list, filtered by

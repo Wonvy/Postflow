@@ -34,6 +34,8 @@ export interface RichEditorHandle {
   focusStart: () => void;
   /** 换掉签名块（`signatureHtml` 生成的）；给空字符串就去掉。原来没有签名时插在开头两行后面。 */
   setSignature: (html: string) => void;
+  /** 在光标处插一段纯文字（快速回复模板）。光标不在正文里时插在最前面。 */
+  insertText: (text: string) => void;
 }
 
 const MOD = isMac ? "⌘" : "Ctrl+";
@@ -57,6 +59,7 @@ export function RichEditor({
   const [linking, setLinking] = useState(false);
   const [url, setUrl] = useState("");
   const saved = useRef<Range | null>(null);
+  const caret = useRef<Range | null>(null);
 
   const emit = () => {
     const el = box.current;
@@ -84,6 +87,25 @@ export function RichEditor({
       sel?.addRange(range);
       el.scrollTop = 0;
     },
+    insertText: (text) => {
+      const el = box.current;
+      if (!el) return;
+      const sel = window.getSelection();
+      const inside = sel && sel.rangeCount > 0 && el.contains(sel.anchorNode);
+      el.focus();
+      if (!inside) {
+        const last = caret.current;
+        const range = last && el.contains(last.startContainer) ? last : document.createRange();
+        if (range !== last) {
+          range.setStart(el.firstChild ?? el, 0);
+          range.collapse(true);
+        }
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+      document.execCommand("insertHTML", false, escapeHtml(text).replace(/\n/g, "<br>"));
+      emit();
+    },
     setSignature: (html) => {
       const el = box.current;
       if (!el) return;
@@ -108,6 +130,8 @@ export function RichEditor({
       const el = box.current;
       const sel = window.getSelection();
       if (!el || !sel || !el.contains(sel.anchorNode)) return;
+      // 记住光标：点了正文外面的按钮（比如模板菜单）以后还能插回原处
+      if (sel.rangeCount > 0) caret.current = sel.getRangeAt(0).cloneRange();
       setActive({
         bold: document.queryCommandState("bold"),
         italic: document.queryCommandState("italic"),
