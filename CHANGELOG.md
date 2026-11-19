@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.33 — 2026-11-19
+
+### English
 - Read later: save any web page and read it like an article. Paste a link into the box at the top of Read later (the bookmark in the Feeds views), paste a link anywhere outside a text field, or right-click a link in an article or message and choose "Save to Read later". Pages are saved with their text and sync to your other devices; they stay out of All articles.
 - Read later can import a Pocket or Instapaper export, or bookmarks exported from your browser.
 - Articles without a feed icon show the icon of their own website.
