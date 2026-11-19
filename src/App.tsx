@@ -25,6 +25,7 @@ import { WindowControls } from "./components/WindowControls";
 import { useFirstRunWelcome, WelcomeGuide } from "./components/WelcomeGuide";
 import { UpdateDialog, UpdateNotice } from "./components/UpdateDialog";
 import { Sidebar } from "./components/Sidebar";
+import { AttachmentsPage } from "./components/AttachmentsPage";
 import { StatsPage } from "./components/StatsPage";
 import { Button, cx, Logo, Spinner, TextInput } from "./components/ui";
 import { api } from "./lib/api";
@@ -198,6 +199,8 @@ function Shell() {
   const setSidebarWidth = useUi((s) => s.setSidebarWidth);
   const setListWidth = useUi((s) => s.setListWidth);
   const mainView = useUi((s) => s.mainView);
+  // 订阅统计、附件总览这类整页：占住列表和阅读区的位置
+  const page = mainView === "stats" ? <StatsPage /> : mainView === "attachments" ? <AttachmentsPage /> : null;
 
   // 卡片视图里列表可以拉得很宽，但要给阅读面板留出位置
   const [viewport, setViewport] = useState(window.innerWidth);
@@ -213,7 +216,7 @@ function Shell() {
   const layout = useLayout();
   // 阅读区弹出时窗口里只有侧栏和列表，最大化只是把弹出的阅读区铺满
   const overlay = useReaderOverlay();
-  const maximized = useUi((s) => s.readerMaximized) && mainView !== "stats" && !overlay;
+  const maximized = useUi((s) => s.readerMaximized) && !page && !overlay;
   const focus = usePaneFocus();
   const shownPanes: PaneId[] = overlay
     ? layout === "tablet"
@@ -221,7 +224,7 @@ function Shell() {
       : ["sidebar", "list"]
     : maximized
     ? ["reader"]
-    : mainView === "stats"
+    : page
       ? ["sidebar", "list"]
       : layout === "tablet"
         ? ["list", "reader"]
@@ -278,7 +281,7 @@ function Shell() {
   if (layout === "phone") {
     return (
       <div className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
-        {mainView === "stats" ? <StatsPage /> : openId ? <Reader /> : <ItemList width={viewport} />}
+        {page ? page : openId ? <Reader /> : <ItemList width={viewport} />}
         {drawer}
         {dialogs}
       </div>
@@ -294,8 +297,8 @@ function Shell() {
         className="flex h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
         onPointerLeave={focus.leave}
       >
-        {mainView === "stats" ? (
-          <StatsPage />
+        {page ? (
+          page
         ) : (
           <>
             {overlay ? (
@@ -313,7 +316,7 @@ function Shell() {
             )}
           </>
         )}
-        {overlay && mainView !== "stats" && <ReaderPopup />}
+        {overlay && !page && <ReaderPopup />}
         {drawer}
         {dialogs}
       </div>
@@ -328,8 +331,8 @@ function Shell() {
           <Resizer width={sidebarWidth} onResize={setSidebarWidth} />
         </>
       )}
-      {mainView === "stats" ? (
-        pane("list", <StatsPage />)
+      {page ? (
+        pane("list", page)
       ) : (
         <>
           {overlay ? (
@@ -348,7 +351,7 @@ function Shell() {
           )}
         </>
       )}
-      {overlay && mainView !== "stats" && <ReaderPopup />}
+      {overlay && !page && <ReaderPopup />}
       {dialogs}
     </div>
   );

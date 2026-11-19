@@ -144,7 +144,7 @@ async fn run_search_indexer(session: Arc<Session>) {
     let mut total = 0usize;
     loop {
         match session
-            .db(|s| s.index_search(SEARCH_BATCH, &postflow_mail::plain_text))
+            .db(|s| s.index_search(SEARCH_BATCH, &mail_search_text))
             .await
         {
             Ok(0) => {
@@ -212,6 +212,24 @@ impl Session {
         {
             task.abort();
         }
+    }
+}
+
+/// 邮件原文里给全文搜索用的文字。
+pub(crate) fn mail_search_text(raw: &[u8]) -> postflow_store::MailText {
+    let (body, recipients, files) = postflow_mail::search_text(raw);
+    postflow_store::MailText {
+        body,
+        recipients,
+        attachments: files
+            .into_iter()
+            .map(|a| postflow_store::AttachmentMeta {
+                index: a.index,
+                name: a.name,
+                mime: a.mime,
+                size: a.size as u64,
+            })
+            .collect(),
     }
 }
 

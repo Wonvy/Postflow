@@ -19,7 +19,7 @@ pub use imap::{
 pub use message::{
     AttachmentInfo, BodyKind, DraftContents, Mailbox, RenderOptions, Rendered, ReplyContext,
     Summary, Unsubscribe, attachment, base64, base64_decode, clean_compose_html, draft_contents,
-    plain_text, render, reply_context, summarize, unsubscribe, unsubscribe_one_click,
+    plain_text, render, reply_context, search_text, summarize, unsubscribe, unsubscribe_one_click,
 };
 pub use presets::{Preset, detect, guess, presets, provider_for_mx, smtp_for};
 

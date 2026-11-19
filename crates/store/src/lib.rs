@@ -23,7 +23,7 @@ pub use ai::{AiMessage, AiResult, AiUsage, LabelCount, day_of};
 pub use error::{Error, Result};
 pub use model::*;
 pub use rules::RuleItem;
-pub use search::match_query;
+pub use search::{AttachmentMeta, AttachmentOverview, AttachmentRow, MailText, match_query};
 pub use stats::{FeedStats, ReadingDay, Stats};
 pub use store::{LATER_URL, Store, later_feed_id};
 pub use usage::{IndexUsage, SourceUsage};

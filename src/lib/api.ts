@@ -159,6 +159,20 @@ export interface Nav {
   later_id?: string;
 }
 
+/** 附件总览里的一个附件。 */
+export interface AttachmentRow {
+  item_id: string;
+  index: number;
+  name: string;
+  mime: string;
+  size: number;
+  title: string;
+  from_name: string | null;
+  from_address: string | null;
+  published_at: number;
+  account_id: string;
+}
+
 /** 存进稍后读的结果。`warning`：网页打不开或认不出正文，条目照样存了，打开时再试。 */
 export interface LaterSaved {
   id: string;
@@ -399,6 +413,8 @@ export interface ItemFilter {
   label?: string;
   /** 全文搜索：标题、发件人、作者和正文里都要有这些词。 */
   query?: string;
+  /** 当地时间比 UTC 快多少分钟（搜索里的日期用）。 */
+  tz_offset?: number;
   /** 只看某一类订阅源的文章；newsletter 是放到订阅里看的订阅邮件。 */
   feed_kind?: ContentKind;
   /** 只看这个发件人的邮件。 */
@@ -632,6 +648,9 @@ export const api = {
   removeFeed: (id: string) => rpc<void>("feeds.remove", { id }),
   /** 把这些订阅源按顺序放进一个文件夹，空字符串是文件夹外。 */
   reorderFeeds: (folder: string, ids: string[]) => rpc<void>("feeds.reorder", { folder, ids }),
+  /** 附件总览：最近邮件里的附件，按文件名、标题、发件人搜。 */
+  mailAttachments: (query: string) =>
+    rpc<{ files: AttachmentRow[]; not_downloaded: Item[] }>("mail.attachments", { query: query || null }),
   /** 把一个网页存进稍后读（核心抓下标题和正文）。 */
   laterSave: (url: string) => rpc<LaterSaved>("later.save", { url }),
   /** 导入 Pocket、Instapaper 的导出文件或浏览器书签（文件的文字内容）。 */

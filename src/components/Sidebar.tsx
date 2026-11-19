@@ -24,6 +24,7 @@ import {
   KeyRound,
   type LucideIcon,
   Mail,
+  Paperclip,
   Pencil,
   Plus,
   RefreshCw,
@@ -1094,6 +1095,12 @@ export function Sidebar({ width }: { width: number }) {
           <MenuItem icon={<RefreshCw size={14} />} onSelect={() => refreshSpace("mail")}>
             {t("action.syncAllMail")}
           </MenuItem>
+          <MenuItem
+            icon={<Paperclip size={14} />}
+            onSelect={() => setMainView(mainView === "attachments" ? "list" : "attachments")}
+          >
+            {t("files.title")}
+          </MenuItem>
         </>
       )}
     </>
@@ -1240,7 +1247,33 @@ export function Sidebar({ width }: { width: number }) {
           <div className="mb-1 flex flex-wrap items-center gap-0.5">{shownViews.map(viewIcon)}</div>
         )}
         {viewsStyle === "rows" && !viewsCollapsed && (
-          <div className="flex flex-col gap-px">{shownViews.map(viewRow)}</div>
+          <div className="flex flex-col gap-px">
+            {shownViews.map(viewRow)}
+            {mail && hasAccounts && (
+              <Row
+                active={mainView === "attachments"}
+                onClick={() => setMainView(mainView === "attachments" ? "list" : "attachments")}
+                leading={<Paperclip {...ICON} />}
+                label={t("files.title")}
+              />
+            )}
+          </div>
+        )}
+        {mail && hasAccounts && viewsStyle === "icons" && !viewsCollapsed && (
+          <Tip label={t("files.title")} side="bottom">
+            <button
+              type="button"
+              aria-label={t("files.title")}
+              aria-current={mainView === "attachments" ? "page" : undefined}
+              onClick={() => setMainView(mainView === "attachments" ? "list" : "attachments")}
+              className={cx(
+                "mb-1 flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 transition-colors touch:h-10 touch:min-w-10",
+                mainView === "attachments" ? "bg-active text-fg" : "text-fg-2 hover:bg-hover hover:text-fg",
+              )}
+            >
+              <Paperclip {...ICON} />
+            </button>
+          </Tip>
         )}
         {(shownViews.length > 0 || (!mail && hasKinds)) && (
           <div className="flex justify-center">

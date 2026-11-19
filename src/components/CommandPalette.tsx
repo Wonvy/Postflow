@@ -153,6 +153,9 @@ function useCommands(): Command[] {
     }
     list.push({ id: "go:stats", group: go, label: t("stats.title"), keywords: "stats", run: () => { ui.setSpace("feeds"); ui.setMainView("stats"); } });
   }
+  if (nav?.accounts.length) {
+    list.push({ id: "go:attachments", group: go, label: t("files.title"), keywords: "attachments files", run: () => { ui.setSpace("mail"); ui.setMainView("attachments"); } });
+  }
   for (const c of categories) {
     list.push({ id: `go:label:${c.name}`, group: go, label: `${t("nav.labels")} · ${c.name}`, keywords: "category label", run: () => ui.setScope({ kind: "label", label: c.name }) });
   }

@@ -274,14 +274,15 @@ interface UiState {
   /** 变一下就重新扫描插件目录、重新加载插件。不保存。 */
   pluginReload: number;
   /** 右边两栏显示什么：列表和阅读区，还是订阅统计。不记住，重开应用回到列表。 */
-  mainView: "list" | "stats";
+  /** 列表和阅读区的位置显示什么：平常的列表，或者订阅统计、附件总览这样的整页。 */
+  mainView: "list" | "stats" | "attachments";
   /** 阅读面板右侧的 AI 栏开着。 */
   aiPanel: boolean;
   /** 用户是在哪一条上打开 AI 栏的。只有这一条会自动开始总结。 */
   aiPanelFor: string | null;
 
   setScope: (scope: ListScope) => void;
-  setMainView: (view: "list" | "stats") => void;
+  setMainView: (view: "list" | "stats" | "attachments") => void;
   open: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
   setDialog: (dialog: Dialog) => void;
@@ -881,7 +882,8 @@ export function searchFilterOf(
   const base: ItemFilter = all
     ? withFeedKind({ view: "all", kind: kindOfSpace(space) }, space, feedKind)
     : filterOf(scope, space, feedKind);
-  return { ...base, query };
+  // 搜索里的 before: / after: 日期按当地时间算
+  return { ...base, query, tz_offset: -new Date().getTimezoneOffset() };
 }
 
 /** 订阅那边选了某一类源时，只看这一类。 */

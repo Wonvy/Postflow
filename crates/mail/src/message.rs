@@ -545,10 +545,31 @@ const SEARCH_CHARS: usize = 50_000;
 
 /// 正文的纯文字，给全文搜索用。有纯文本部分就用它们，没有时从 HTML 部分里取字。
 pub fn plain_text(raw: &[u8]) -> String {
+    search_text(raw).0
+}
+
+/// 给全文搜索用的东西：正文（同 `plain_text`）、收件人和抄送的名字和地址（`to:` 搜索用），
+/// 以及真正的附件（附件总览用）。
+pub fn search_text(raw: &[u8]) -> (String, String, Vec<AttachmentInfo>) {
     let raw = utf8_headers(raw);
     let Some(msg) = parse(&raw) else {
-        return String::new();
+        return (String::new(), String::new(), Vec::new());
     };
+    let mut recipients = Vec::new();
+    for list in [msg.to(), msg.cc()].into_iter().flatten() {
+        for addr in list.iter() {
+            recipients.extend(addr.name().map(str::to_string));
+            recipients.extend(addr.address().map(str::to_string));
+        }
+    }
+    (
+        body_text(&msg),
+        recipients.join(" "),
+        real_attachments(&msg),
+    )
+}
+
+fn body_text(msg: &Message<'_>) -> String {
     let mut out = String::new();
     let has_plain = msg
         .text_bodies()

@@ -1428,17 +1428,41 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
         ));
     }
     if let Some(query) = filter.query.as_deref().filter(|q| !q.trim().is_empty()) {
-        match crate::search::match_query(query) {
-            Some(expr) => {
-                args.push(SqlValue::Text(expr));
-                conds.push_str(&format!(
-                    " AND i.id IN (SELECT d.id FROM search_docs d WHERE d.docid IN \
-                       (SELECT rowid FROM search WHERE search MATCH ?{}))",
-                    args.len()
-                ));
-            }
-            // 只有标点之类搜不了的字
-            None => conds.push_str(" AND 0"),
+        use crate::search::Filter;
+        let parsed = crate::search::parse(query, filter.tz_offset.unwrap_or(0));
+        let matching = |args: &mut Vec<SqlValue>, expr: String| {
+            args.push(SqlValue::Text(expr));
+            format!(
+                "i.id IN (SELECT d.id FROM search_docs d WHERE d.docid IN \
+                   (SELECT rowid FROM search WHERE search MATCH ?{}))",
+                args.len()
+            )
+        };
+        if let Some(expr) = parsed.include {
+            let cond = matching(args, expr);
+            conds.push_str(&format!(" AND {cond}"));
+        }
+        for expr in parsed.exclude {
+            let cond = matching(args, expr);
+            conds.push_str(&format!(" AND NOT {cond}"));
+        }
+        for (f, negated) in parsed.filters {
+            let cond = match f {
+                Filter::HasAttachment => "COALESCE(m.has_attachments, 0) = 1".to_string(),
+                Filter::Unread => "i.read = 0".to_string(),
+                Filter::Read => "i.read = 1".to_string(),
+                Filter::Starred => "i.starred = 1".to_string(),
+                Filter::Before(at) => format!("i.published_at < {at}"),
+                Filter::After(at) => format!("i.published_at >= {at}"),
+            };
+            conds.push_str(&format!(
+                " AND {}({cond})",
+                if negated { "NOT " } else { "" }
+            ));
+        }
+        // 只有标点之类搜不了的字，或者看不懂的日期
+        if parsed.impossible {
+            conds.push_str(" AND 0");
         }
     }
     conds

@@ -1,7 +1,8 @@
 //! 全文搜索：文章和邮件写进索引后，按标题、发件人和正文都能搜到，中文按词也能搜到。
 
 use postflow_store::{
-    AccountConfig, Article, ItemFilter, MailSync, NewFeed, NewMail, Store, View, ids,
+    AccountConfig, Article, AttachmentMeta, ItemFilter, MailSync, MailText, NewFeed, NewMail,
+    Store, View, ids,
 };
 
 fn store() -> (tempfile::TempDir, Store) {
@@ -32,9 +33,30 @@ fn article(feed_id: &str, guid: &str, title: &str, content: &str, published: i64
     }
 }
 
-/// 邮件原文变纯文字：测试里直接当 UTF-8 文字用。
-fn mail_text(raw: &[u8]) -> String {
-    String::from_utf8_lossy(raw).into_owned()
+/// 邮件原文变纯文字：测试里直接当 UTF-8 文字用，`To:` 开头的行算收件人。
+fn mail_text(raw: &[u8]) -> MailText {
+    let text = String::from_utf8_lossy(raw);
+    let (to, body): (Vec<&str>, Vec<&str>) = text.lines().partition(|l| l.starts_with("To:"));
+    let (files, body): (Vec<&str>, Vec<&str>) =
+        body.into_iter().partition(|l| l.starts_with("File:"));
+    MailText {
+        body: body.join("\n"),
+        recipients: to
+            .iter()
+            .map(|l| l.trim_start_matches("To:"))
+            .collect::<Vec<_>>()
+            .join(" "),
+        attachments: files
+            .iter()
+            .enumerate()
+            .map(|(i, l)| AttachmentMeta {
+                index: i as u32,
+                name: l.trim_start_matches("File:").trim().to_string(),
+                mime: "application/pdf".into(),
+                size: 1000,
+            })
+            .collect(),
+    }
 }
 
 fn index(store: &Store) {
@@ -116,7 +138,10 @@ fn finds_articles_and_mail_by_title_people_and_body() {
                     size: 100,
                     has_attachments: false,
                     list_unsubscribe: None,
-                    raw: Some(b"Cloud spend went down 12% after the storage migration.".to_vec()),
+                    raw: Some(
+                        b"To: Alex Rivera <alex@example.com>\nFile: budget-q4.pdf\nCloud spend went down 12% after the storage migration."
+                            .to_vec(),
+                    ),
                     recipients: vec![],
                 }],
                 flags: vec![],
@@ -145,6 +170,56 @@ fn finds_articles_and_mail_by_title_people_and_body() {
     // script 里的字不算
     assert_eq!(titles("budget"), vec!["Q4 budget for review"]);
     assert!(titles("!!!").is_empty());
+
+    // 搜索语法
+    assert_eq!(titles("from:mei"), vec!["Q4 budget for review"]);
+    assert_eq!(titles("发件人:mei"), vec!["Q4 budget for review"]);
+    assert!(
+        titles("from:quiet").is_empty(),
+        "from: only looks at senders and authors"
+    );
+    assert_eq!(titles("to:alex"), vec!["Q4 budget for review"]);
+    assert_eq!(titles("to:\"Alex Rivera\""), vec!["Q4 budget for review"]);
+    assert!(titles("to:mei").is_empty());
+    assert_eq!(titles("subject:budget"), vec!["Q4 budget for review"]);
+    assert!(
+        titles("subject:storage").is_empty(),
+        "storage is only in the body"
+    );
+    assert_eq!(titles("-from:mei").len(), 2);
+    assert_eq!(titles("budget -storage"), Vec::<String>::new());
+    assert_eq!(titles("is:unread").len(), 3);
+    assert_eq!(titles("is:unread from:mei"), vec!["Q4 budget for review"]);
+    assert!(titles("has:attachment").is_empty());
+    assert_eq!(titles("-has:attachment").len(), 3);
+    assert_eq!(titles("before:1970-01-02").len(), 3);
+    assert!(titles("after:2000").is_empty());
+    assert!(
+        titles("after:2000-13").is_empty(),
+        "a date we can't read finds nothing"
+    );
+    // 网址里的冒号不是条件
+    assert!(titles("https://example.com").is_empty());
+
+    // 附件总览
+    let files = store.attachments(None, 10).unwrap();
+    assert_eq!(files.files.len(), 1);
+    assert_eq!(files.files[0].name, "budget-q4.pdf");
+    assert_eq!(files.files[0].from_name.as_deref(), Some("Mei Han"));
+    assert!(files.not_downloaded.is_empty());
+    assert_eq!(
+        store.attachments(Some("BUDGET"), 10).unwrap().files.len(),
+        1
+    );
+    assert_eq!(store.attachments(Some("mei@"), 10).unwrap().files.len(), 1);
+    assert!(
+        store
+            .attachments(Some("100%"), 10)
+            .unwrap()
+            .files
+            .is_empty()
+    );
+
 
     // 标题没命中时给出正文里的片段
     let hit = search(&store, "storage");

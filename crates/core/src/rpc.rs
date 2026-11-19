@@ -398,6 +398,23 @@ impl Core {
                 self.download_episode(&session, p.id, p.keep).await?;
                 reply(json!({}))
             }
+            // 附件总览：最近邮件里的附件
+            "mail.attachments" => {
+                #[derive(Deserialize)]
+                struct List {
+                    #[serde(default)]
+                    query: Option<String>,
+                    #[serde(default)]
+                    limit: Option<u32>,
+                }
+                let p: List = parse(params)?;
+                let limit = p.limit.unwrap_or(500).clamp(1, 5000);
+                reply(
+                    session
+                        .db(move |s| s.attachments(p.query.as_deref(), limit))
+                        .await?,
+                )
+            }
             // 稍后读：存一个网页、导入 Pocket / Instapaper / 书签
             "later.save" => {
                 let p: UrlParam = parse(params)?;
@@ -593,7 +610,7 @@ impl Core {
                     session
                         .db(|s| {
                             for _ in 0..20 {
-                                if s.index_search(crate::SEARCH_BATCH, &postflow_mail::plain_text)?
+                                if s.index_search(crate::SEARCH_BATCH, &crate::mail_search_text)?
                                     == 0
                                 {
                                     break;

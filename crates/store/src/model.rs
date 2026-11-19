@@ -245,8 +245,10 @@ pub struct ItemFilter {
     pub since: Option<i64>,
     /// 只看某个分类。
     pub label: Option<String>,
-    /// 全文搜索：标题、发件人、作者和正文里都要有这些词。
+    /// 全文搜索：标题、发件人、作者和正文里都要有这些词。也认 `from:`、`has:attachment` 这类写法，见 search.rs。
     pub query: Option<String>,
+    /// 当地时间比 UTC 快多少分钟，搜索里的 `before:` / `after:` 日期按当地时间算。
+    pub tz_offset: Option<i64>,
     /// 只看某一类订阅源（`FEED_KINDS` 之一）的文章；`newsletter` 是放到订阅里看的订阅邮件。
     pub feed_kind: Option<String>,
     /// 只看这个发件人的邮件（地址，不分大小写）。订阅里的 Newsletter 用。
