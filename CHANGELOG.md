@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.38 — 2026-11-19
+
+### English
 - Read aloud can use natural-sounding local voices: open-source Kokoro models generated on your own computer, with about 100 Chinese and 30 English voices. Download a model in the new Settings → Read aloud page (about 350 MB, with a mirror for China), pick a voice for Chinese and for English, and preview it. Automatic uses a local voice when one is installed and the system voice otherwise. Local voices also work on Linux and in the browser on your phone, where the computer does the reading.
 - Before reading, abbreviations are spelled out, joined-up names like OpenAI are split, and numbers, dates, percentages and money are read as words, so news reads properly.
 - Pausing a local voice resumes mid-sentence, and starting to read pauses a podcast that's playing (and the other way round).
