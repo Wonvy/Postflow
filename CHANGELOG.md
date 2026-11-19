@@ -16,6 +16,7 @@ that heading into the version number and date.
 - With the reader beside the list, press Space on the open item (pointer over the list) to pop the reader up over the list for a closer look; Space or Esc puts it back.
 - Fixed links that did nothing in the desktop app, such as "Release page" in the update window, "Open in browser" and links in articles.
 - The window now opens in the middle of the screen, and is shrunk to fit on small screens.
+- AI: summaries, keywords, list abstracts and sorting now work with models that "think" before answering (Zhipu GLM-4.5 and later, and other reasoning models). The thinking used to eat the room reserved for the answer, leaving a summary of just `**` and "no keywords in the answer". Zhipu models are asked not to think for these short tasks; for the rest the limit is lifted when thinking is detected. Thinking written into the answer as `<think>…</think>` is left out.
 
 ### 中文
 - 「播完接着放下一期」可以改成从旧到新、跳过听过的，适合从头追一个节目（在倍速菜单里）。
@@ -27,6 +28,7 @@ that heading into the version number and date.
 - 阅读区在列表右边时，鼠标在列表上对已经打开的那一条按空格，把阅读区弹出来盖在列表上看，再按空格或 Esc 收回去。
 - 修复桌面应用里点了没反应的链接，比如更新窗口里的「在发布页查看」、「在浏览器中打开」和文章里的链接。
 - 窗口现在开在屏幕正中，小屏幕上会先缩到放得下。
+- AI：总结、关键词、列表摘要和分类现在能用会「思考」的模型了（智谱 GLM-4.5 及以后的模型，以及其他推理模型）。以前思考会把留给回答的输出额度占掉，总结只剩一个 `**`，关键词报「no keywords in the answer」。现在这类短任务会让智谱的模型不思考；其他服务一发现模型在思考，就不限输出长度重新请求。写在回答开头 `<think>…</think>` 里的思考内容也不再显示。
 
 ## 0.1.34 — 2026-11-19
 

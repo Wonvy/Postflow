@@ -429,3 +429,95 @@ async fn ai_features_end_to_end() {
     assert_eq!(listed["default"], fake_id);
     core.shutdown();
 }
+
+/// 智谱 GLM-4.5 这类会思考的模型：思考也算在输出上限里，以前总结只剩开头的「**」、关键词是空的
+/// （报「no keywords in the answer」）。现在总结和关键词都要完整。
+#[tokio::test(flavor = "multi_thread")]
+async fn thinking_models_summarize_and_find_keywords() {
+    let ai = FakeAi::start(Some("test-key")).await;
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    let mut events = core.subscribe();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data") }),
+    )
+    .await;
+    call(&core, "feeds.add", json!({ "url": feed_server().await })).await;
+    let items = call(
+        &core,
+        "items.list",
+        json!({ "filter": { "view": "inbox" } }),
+    )
+    .await;
+    let article = items["items"][0]["id"].as_str().unwrap().to_string();
+
+    // 两个服务：智谱（能让它别思考）和一个关不掉思考的自定义服务
+    for (preset, model) in [("zhipu", "glm-thinker"), ("custom", "some-thinker")] {
+        let provider =
+            json!({ "preset": preset, "name": model, "base_url": ai.base_url(), "model": model });
+        // 「测试连接」只给 16 个 token，也要通
+        let tested = call(
+            &core,
+            "ai.providers.test",
+            json!({ "provider": provider, "api_key": "test-key" }),
+        )
+        .await;
+        assert_eq!(tested["ok"], true, "{preset}");
+        let saved = call(
+            &core,
+            "ai.providers.save",
+            json!({ "provider": provider, "api_key": "test-key" }),
+        )
+        .await;
+        call(
+            &core,
+            "settings.set",
+            json!({ "key": "ai.default", "value": saved["id"] }),
+        )
+        .await;
+
+        // 每个服务用不同的语言，免得拿到上一个服务缓存的结果
+        let lang = if preset == "zhipu" { "en" } else { "fr" };
+        let started = call(
+            &core,
+            "ai.run",
+            json!({ "id": article, "task": "summary", "lang": lang }),
+        )
+        .await;
+        let (streamed, done) = finish(&mut events, started["request_id"].as_str().unwrap()).await;
+        let done = done.unwrap();
+        assert!(
+            streamed.starts_with("**Version two ships today.**") && streamed.contains("- "),
+            "{preset}: {streamed}"
+        );
+        assert_eq!(done["result"]["content"], streamed, "{preset}");
+
+        let started = call(
+            &core,
+            "ai.run",
+            json!({ "id": article, "task": "keywords", "lang": lang }),
+        )
+        .await;
+        let (_, done) = finish(&mut events, started["request_id"].as_str().unwrap()).await;
+        let words: Vec<String> =
+            serde_json::from_str(done.unwrap()["result"]["content"].as_str().unwrap()).unwrap();
+        assert!(
+            words.contains(&"Version".to_string()),
+            "{preset}: {words:?}"
+        );
+    }
+
+    // 智谱的短任务都带着「别思考」
+    let quiet = ai
+        .requests()
+        .iter()
+        .filter(|r| r["model"] == "glm-thinker")
+        .all(|r| r["thinking"]["type"] == "disabled");
+    assert!(quiet);
+    core.shutdown();
+}

@@ -2,6 +2,14 @@
 //!
 //! 它看系统提示里要的是什么（关键词、摘要、译文、分类），给出格式正确、内容可预期的回答；
 //! 其余的当作总结或对话，用正文里的句子拼一段回答。支持流式输出。
+//!
+//! 模型名决定它像哪一类服务，用来测「会思考的模型」：
+//! - `…thinker…`：先思考再回答，思考在单独的字段里，也算在 `max_tokens` 里（像智谱 GLM-4.5）；
+//!   请求里带 `thinking: {"type": "disabled"}` 就不思考。
+//! - `…forced…`：不让关掉思考，带了那个参数就回 400。
+//! - `…think-tags…`：把思考写在正文开头的 `<think>…</think>` 里。
+//! - `…strict-cap…`：不认 `max_tokens`，带了就回 400（像 OpenAI 的推理模型）。
+//! - `…legacy…`：不认 `thinking` 这个参数，带了就回 400，报错里也不说是哪个参数。
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -116,10 +124,43 @@ impl FakeAi {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .push(body.clone());
-                let text = answer(&body);
+                let model = body["model"].as_str().unwrap_or_default().to_string();
+                let max = body["max_tokens"].as_u64().map(|m| m as usize);
+                if model.contains("strict-cap") && max.is_some() {
+                    let err = json!({"error": {
+                        "message": "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+                        "type": "invalid_request_error", "param": "max_tokens",
+                    }});
+                    return respond(&mut stream, 400, &err).await;
+                }
+                let quiet = body["thinking"]["type"] == "disabled";
+                if model.contains("forced") && quiet {
+                    let err = json!({"error": {"code": "1210", "message": "thinking.type 不支持设置为 disabled"}});
+                    return respond(&mut stream, 400, &err).await;
+                }
+                if model.contains("legacy") && body.get("thinking").is_some() {
+                    let err = json!({"error": {"code": "1210", "message": "API 调用参数有误，请检查文档。"}});
+                    return respond(&mut stream, 400, &err).await;
+                }
+                let answer = answer(&body);
+                // 会思考的模型：思考和回答加起来不能超过 max_tokens（按四个字节一个 token 算），超了就截断
+                let limit = max.map_or(usize::MAX, |m| m.saturating_mul(4));
+                let (thought, text, full) = if model.contains("thinker") && !quiet {
+                    let thought = clip(THOUGHT, limit);
+                    let text = clip(&answer, limit - thought.len());
+                    (thought, text, THOUGHT.len() + answer.len())
+                } else if model.contains("think-tags") {
+                    let all = format!("<think>\n{THOUGHT}\n</think>\n\n{answer}");
+                    let full = all.len();
+                    (String::new(), clip(&all, limit), full)
+                } else {
+                    (String::new(), answer, 0)
+                };
+                let finish = if full > limit { "length" } else { "stop" };
                 let usage = json!({
                     "prompt_tokens": body.to_string().len() / 4,
-                    "completion_tokens": text.len() / 4,
+                    "completion_tokens": (thought.len() + text.len()) / 4,
+                    "completion_tokens_details": { "reasoning_tokens": thought.len() / 4 },
                 });
                 if body["stream"].as_bool() == Some(true) {
                     stream
@@ -127,23 +168,31 @@ impl FakeAi {
                             b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
                         )
                         .await?;
-                    let chars: Vec<char> = text.chars().collect();
-                    for piece in chars.chunks(6) {
-                        let delta: String = piece.iter().collect();
-                        let event = json!({"choices": [{"delta": {"content": delta}}]});
-                        stream
-                            .write_all(format!("data: {event}\n\n").as_bytes())
-                            .await?;
-                        tokio::time::sleep(Duration::from_millis(12)).await;
+                    for (field, body_text, pace) in
+                        [("reasoning_content", &thought, 1), ("content", &text, 12)]
+                    {
+                        let chars: Vec<char> = body_text.chars().collect();
+                        for piece in chars.chunks(if field == "content" { 6 } else { 40 }) {
+                            let delta: String = piece.iter().collect();
+                            let event = json!({"choices": [{"delta": {field: delta}}]});
+                            stream
+                                .write_all(format!("data: {event}\n\n").as_bytes())
+                                .await?;
+                            tokio::time::sleep(Duration::from_millis(pace)).await;
+                        }
                     }
-                    let last = json!({"choices": [{"delta": {}, "finish_reason": "stop"}], "usage": usage});
+                    let last = json!({"choices": [{"delta": {}, "finish_reason": finish}], "usage": usage});
                     stream
                         .write_all(format!("data: {last}\n\ndata: [DONE]\n\n").as_bytes())
                         .await?;
                     stream.shutdown().await
                 } else {
+                    let mut message = json!({"role": "assistant", "content": text});
+                    if !thought.is_empty() {
+                        message["reasoning_content"] = json!(thought);
+                    }
                     let reply = json!({
-                        "choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
+                        "choices": [{"message": message, "finish_reason": finish}],
                         "usage": usage,
                     });
                     respond(&mut stream, 200, &reply).await
@@ -161,10 +210,37 @@ impl FakeAi {
     }
 }
 
+/// 「会思考」的假模型每次想的内容：三百多个 token，比关键词任务的输出上限（300）还多。
+const THOUGHT: &str = "Let me read the text carefully and work out what matters most to the reader before I answer. \
+First I identify who wrote it and what it is about. Then I look for the main claim, the numbers, the dates and \
+anything the reader is asked to do. I should keep the answer short and follow the requested format exactly. \
+I will double check that I am writing in the requested language and that I am not adding a heading or closing \
+remarks. Now I restate the key points to myself: the first sentence usually carries the main point, the rest adds \
+supporting facts. I compare a few possible phrasings and choose the clearest one. I also make sure the output is \
+valid for the requested structure, with no extra commentary before or after it. One more pass over the text to \
+confirm nothing important was missed, including qualifiers, deadlines and names. That should be enough; I can \
+write the final answer now, carefully, one piece at a time, keeping it faithful to the source text throughout. \
+Before writing I list the candidate points once more and drop the ones that are merely background or repetition. \
+Finally I check the length: the reader is busy, so every sentence has to earn its place, and anything that only \
+restates the title can go. With that settled, the structure is clear and I am ready to produce the answer itself.";
+
+/// 截到最多 `max` 个字节（不切断一个字）。
+fn clip(text: &str, max: usize) -> String {
+    if text.len() <= max {
+        return text.to_string();
+    }
+    let mut end = max;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_string()
+}
+
 async fn respond(stream: &mut TcpStream, status: u16, body: &Value) -> std::io::Result<()> {
     let body = body.to_string();
     let reason = match status {
         200 => "OK",
+        400 => "Bad Request",
         401 => "Unauthorized",
         _ => "Not Found",
     };
