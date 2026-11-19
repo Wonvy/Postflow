@@ -82,3 +82,9 @@ jobs:
             echo
             exit 1
           fi
+          # 两套 C 运行库混在一起（见 crates/speech/build.rs）：标出来，不用登录看日志也知道
+          if grep -q "LNK4098" test.log; then
+            printf '::warning title=混用了两套 C 运行库 (%s)::' "$RUNNER_OS"
+            grep -B1 "LNK4098" test.log | tr -d '\r' | head -n 20 | sed -e 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }'
+            echo
+          fi

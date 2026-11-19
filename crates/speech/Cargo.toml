@@ -36,3 +36,7 @@ tracing = "0.1.44"
 axum = "0.8.9"
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["full"] }
+
+[build-dependencies]
+# 见 build.rs：Windows 上和桌面应用用同一套 C 运行库
+static_vcruntime = "3.0.0"

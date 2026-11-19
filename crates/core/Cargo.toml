@@ -28,3 +28,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 axum = "0.8.9"
 postflow-testkit = { path = "../testkit" }
 tempfile = "3.27.0"
+
+[build-dependencies]
+# 见 build.rs：Windows 上和桌面应用用同一套 C 运行库
+static_vcruntime = "3.0.0"
