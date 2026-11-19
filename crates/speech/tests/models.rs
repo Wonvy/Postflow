@@ -1,4 +1,5 @@
-//! 对着本机的假下载服务把模型管理走一遍：换地址重试、断点续传、校验、从文件夹导入、选用和删除。
+//! 对着本机的假下载服务把模型管理走一遍：换地址重试、断点续传、校验、测速选下载源、从文件夹导入、
+//! 选用和删除。
 //! 不加载真的模型（几百兆，不适合放进自动测试）；真模型用 examples/transcribe.rs 手动试。
 
 use std::sync::{Arc, Mutex};
@@ -37,7 +38,21 @@ impl Seen {
     }
 }
 
-/// `/good/<名字>` 给对的内容（认 Range），`/bad/<名字>` 给一样长但不对的内容，别的都是 404。
+/// `Range: bytes=起点-[终点]`。
+fn parse_range(range: Option<&str>, len: usize) -> Option<(usize, usize)> {
+    let (start, end) = range?.strip_prefix("bytes=")?.split_once('-')?;
+    let start: usize = start.parse().ok()?;
+    let end = if end.is_empty() {
+        len - 1
+    } else {
+        end.parse::<usize>().ok()?.min(len - 1)
+    };
+    (start <= end).then_some((start, end))
+}
+
+/// `/good/<名字>` 给对的内容（认 Range），`/bad/<名字>` 给一样长但不对的内容，
+/// `/slow/<名字>` 和 good 一样但每次先等一会儿，`/quirky/<名字>` 认 Range 但状态码给 200（像魔搭的小文件），
+/// 别的都是 404。
 async fn file(
     State(seen): State<Seen>,
     Path((kind, name)): Path<(String, String)>,
@@ -57,18 +72,21 @@ async fn file(
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     match kind.as_str() {
-        "good" => {}
+        "good" | "quirky" => {}
+        "slow" => tokio::time::sleep(std::time::Duration::from_millis(700)).await,
         "bad" => body.iter_mut().for_each(|b| *b = b.wrapping_add(1)),
         _ => return StatusCode::NOT_FOUND.into_response(),
     }
-    if let Some(from) = range
-        .as_deref()
-        .and_then(|r| r.strip_prefix("bytes="))
-        .and_then(|r| r.strip_suffix('-'))
-        .and_then(|r| r.parse::<usize>().ok())
-        .filter(|from| *from < body.len())
-    {
-        return (StatusCode::PARTIAL_CONTENT, body.split_off(from)).into_response();
+    if let Some((start, end)) = parse_range(range.as_deref(), body.len()) {
+        let len = body.len();
+        let part = body[start..=end].to_vec();
+        let status = if kind == "quirky" {
+            StatusCode::OK
+        } else {
+            StatusCode::PARTIAL_CONTENT
+        };
+        let content_range = format!("bytes {start}-{end}/{len}");
+        return (status, [(header::CONTENT_RANGE, content_range)], part).into_response();
     }
     body.into_response()
 }
@@ -332,4 +350,94 @@ async fn uses_the_builtin_catalog_when_offline_and_writes_the_vad_model() {
         Err(Error::NotInstalled(_))
     ));
     assert_eq!(speech.disk_usage().1, 0);
+}
+
+/// 测速用的请求：只要开头一兆。
+const PROBE: &str = "bytes=0-1048575";
+
+/// 一个文件放在好几个地方（`(网址, 种类)`）的模型，直接写进本机缓存的目录，不用再联网取。
+fn write_catalog(root: &std::path::Path, sources: &[(&str, &str)]) {
+    let file = |name: &str, bytes: &[u8], role: &str| {
+        json!({
+            "name": name, "role": role, "size": bytes.len(), "sha256": sha(bytes),
+            "urls": sources.iter().map(|(base, kind)| format!("{base}/{kind}/{name}")).collect::<Vec<_>>(),
+        })
+    };
+    let doc = json!({
+        "schema": 1,
+        "updated": "2999-01-01T00:00:00Z",
+        "models": [{
+            "id": "multi", "name": "Multi", "kind": "sense_voice", "languages": ["zh"], "license": "test",
+            "files": [file("model.onnx", &model_bytes(), "model"), file("tokens.txt", TOKENS, "tokens")],
+        }],
+    });
+    std::fs::create_dir_all(root).unwrap();
+    std::fs::write(root.join("catalog.json"), doc.to_string()).unwrap();
+}
+
+/// 国内连不上 Hugging Face、国外从魔搭下又慢：先测速，从最快的那里下，连不上的根本不去试。
+#[tokio::test]
+async fn downloads_from_the_fastest_source() {
+    let (fast, fast_seen) = server().await;
+    let (slow, slow_seen) = server().await;
+    let tmp = tempfile::tempdir().unwrap();
+    // 目录里排在前面的一个连不上（没人听的端口），一个慢，最快的排在最后
+    write_catalog(
+        tmp.path(),
+        &[
+            ("http://127.0.0.1:9", "good"),
+            (&slow, "slow"),
+            (&fast, "good"),
+        ],
+    );
+    let speech = Speech::with_catalog_urls(tmp.path(), Vec::new()).unwrap();
+    download(&speech, "multi").await.unwrap();
+    assert_eq!(
+        std::fs::read(tmp.path().join("models/multi/model.onnx")).unwrap(),
+        model_bytes()
+    );
+
+    // 慢的只被测了一次速，两个文件都从快的那里下
+    assert_eq!(
+        slow_seen.list(),
+        [("slow/model.onnx".to_string(), Some(PROBE.to_string()))]
+    );
+    assert_eq!(
+        fast_seen.list(),
+        [
+            ("good/model.onnx".to_string(), Some(PROBE.to_string())),
+            ("good/model.onnx".to_string(), None),
+            ("good/tokens.txt".to_string(), None),
+        ]
+    );
+}
+
+/// 有的服务器续传时只给了要的那一段，状态码却是 200（魔搭的小文件）：照 Content-Range 接着写，不能从头覆盖。
+#[tokio::test]
+async fn resumes_when_a_range_comes_back_with_status_200() {
+    let (base, seen) = server().await;
+    let tmp = tempfile::tempdir().unwrap();
+    write_catalog(tmp.path(), &[(&base, "quirky")]);
+    let partial = tmp.path().join("models/.multi.partial");
+    std::fs::create_dir_all(&partial).unwrap();
+    let half = model_bytes().len() / 2;
+    std::fs::write(partial.join("model.onnx"), &model_bytes()[..half]).unwrap();
+
+    let speech = Speech::with_catalog_urls(tmp.path(), Vec::new()).unwrap();
+    download(&speech, "multi").await.unwrap();
+    assert_eq!(
+        std::fs::read(tmp.path().join("models/multi/model.onnx")).unwrap(),
+        model_bytes()
+    );
+    // 只请求了后一半，没有重下
+    assert_eq!(
+        seen.list(),
+        [
+            (
+                "quirky/model.onnx".to_string(),
+                Some(format!("bytes={half}-"))
+            ),
+            ("quirky/tokens.txt".to_string(), None),
+        ]
+    );
 }

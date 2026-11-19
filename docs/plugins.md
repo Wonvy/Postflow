@@ -160,7 +160,54 @@ Errors thrown (or promises rejected) by `onClick` are shown as a toast.
 | `"new-mail"` | `{ account_id, mails: [{ id, from, subject, date }], total }`. Sent after new mail has gone through the user's rules (Settings → Rules). Only recent mail; mail caught up after days offline isn't announced. |
 | `"items-changed"` | `{ scope: string[] }`. Items, feeds or settings changed (on this or another device). |
 | `"item-open"` | `{ id }`, the item opened in the reader (`null` when it's closed). |
+| `"player"` | The podcast player changed: another episode, play or pause, a new speed, or a jump. Payload is [`api.player.state()`](#apiplayer) (`null` when the player closed). Not sent for normal progress; read `state().position` when you need it. |
+| `"subtitle"` | The subtitle line on screen changed (or its translation arrived). Payload is [`api.subtitles.cueAt()`](#apisubtitles): the line, or `null` between lines. |
 | `"core"` | Every event from Postflow's core, unfiltered. |
+
+### `api.player`
+
+The podcast player at the bottom of the list and in the reader.
+
+| Method | What it does |
+| --- | --- |
+| `state()` | The episode playing, or `null`: `{ id, title, source, url, playing, position, duration, rate }`. `id` is the item ID; `position` and `duration` are seconds (`duration` is `null` until known). |
+| `play(id?, at?)` | Plays the item `id` (an article with audio), optionally from second `at`. Without `id`, resumes the current episode. Rejects if the item has no audio. |
+| `pause()` · `stop()` | Pauses · closes the player. |
+| `seek(seconds)` · `skip(seconds)` | Jumps to a time · moves forward (or back, with a negative number). |
+| `setRate(rate)` | Playback speed, for example `1.5`. |
+
+### `api.subtitles`
+
+Subtitles of the episode playing: the show's own transcript when it has one with times, otherwise speech
+recognized on this device. Each line is a `Cue`:
+
+```ts
+interface Cue {
+  start: number;              // seconds
+  end: number;
+  text: string;
+  speaker: number | null;     // who is talking, counted from 0 in the order they first speak; null if unknown
+  speakerName: string | null; // the name, when the show's transcript gives one
+  translation: string | null; // the automatic translation, when it's on and ready
+}
+```
+
+| Method | Returns |
+| --- | --- |
+| `enabled()` · `setEnabled(on)` | Whether subtitles are on · turns them on or off (the same switch as the player's CC button). |
+| `current()` | `{ id, source, complete, translatedFrom, translatedTo, cues }` for the episode playing, or `null` when subtitles are off or nothing plays. `source` is `"feed"` or `"local"`; local subtitles grow while recognition runs (`complete` turns `true` at the end). `translatedFrom`/`translatedTo` are language codes when automatic translation is on. |
+| `cueAt(seconds?)` | The line shown at that second (default: now) with its `index` in `cues`, or `null`. |
+| `get(id)` | `{ id, complete, duration, cues }`: subtitles recognized on this device for any episode, playing or not (empty `cues` if there are none). |
+
+For example, a plugin that keeps a running log of what was said:
+
+```js
+export default function (api) {
+  api.events.on("subtitle", (cue) => {
+    if (cue) console.log(`[${cue.start.toFixed(1)}s] ${cue.speaker ?? "?"}: ${cue.text}`);
+  });
+}
+```
 
 ### `api.storage`
 

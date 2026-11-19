@@ -3,16 +3,17 @@
 //! 识别模型和转写出来的字幕都在本机目录的 `speech/` 下，不参与同步（见 postflow-speech）。
 //!
 //! 边播边出字幕的做法：不去录正在放的声音，而是直接读下载到本机的音频文件，从播放器现在的位置
-//! 往后转。识别比播放快得多（几倍到几十倍），所以开了字幕等一小会儿就能跟上，之后一直走在播放前面；
+//! 往后转。不用等整期下完：下了一点就开始转，读到还没下到的地方就等一等（`GrowingFile`）。识别比播放快得多（几倍到几十倍），所以开了字幕等一小会儿就能跟上，之后一直走在播放前面；
 //! 转到结尾再回头把前面没听的部分补上。用户拖动进度到还没转的地方，就改从那里接着转。
 //! 同一时间只转一期：换了一期听，上一期的停下，转了多少存多少，下次接着来。
 
-use std::path::Path;
+use std::io::{self, Read, Seek, SeekFrom};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use postflow_speech::{AudioReader, Cue, Transcript, cues};
+use postflow_speech::{AudioReader, Cue, MediaSource, Transcript, cues};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -27,6 +28,93 @@ const SAVE_EVERY: Duration = Duration::from_secs(10);
 const LOOKAHEAD: f64 = 45.0;
 /// 等单集下载时多久看一次进度。
 const POLL: Duration = Duration::from_millis(500);
+/// 单集下了这么多就开始转，不等整期下完。
+const START_BYTES: u64 = 256 * 1024;
+/// 读到还没下到的地方时，隔多久再看一次。
+const WAIT: Duration = Duration::from_millis(200);
+/// 等下载时，隔多久告诉界面一次下载进度。
+const WAIT_REPORT: Duration = Duration::from_secs(1);
+
+/// 转写读的是哪个文件。
+enum Source {
+    /// 下好了的。
+    File(PathBuf),
+    /// 还在下载的：`part` 是正在写的文件，`ext` 是下完以后的扩展名（帮着认格式）。
+    Growing { part: PathBuf, ext: Option<String> },
+}
+
+/// 还在下载的单集：读到还没下到的地方就等一等，下完了才算到头。下载失败、任务取消时报错，
+/// 转写跟着停下。下完改名不影响已经打开的文件。
+struct GrowingFile {
+    file: std::fs::File,
+    core: Arc<Core>,
+    job: Arc<Job>,
+}
+
+impl Read for GrowingFile {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut reported = Instant::now() - WAIT_REPORT;
+        loop {
+            let n = self.file.read(buf)?;
+            if n > 0 || buf.is_empty() {
+                return Ok(n);
+            }
+            if self.job.cancelled() {
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+            }
+            match self.core.episodes.progress().remove(&self.job.id) {
+                Some(p) if p.error.is_some() => {
+                    return Err(io::Error::other(p.error.unwrap_or_default()));
+                }
+                Some(p) => {
+                    // 在等下载：让界面显示下到哪儿了
+                    if reported.elapsed() >= WAIT_REPORT {
+                        reported = Instant::now();
+                        {
+                            let mut live = self.job.live();
+                            live.received = p.received;
+                            live.total = p.total;
+                        }
+                        self.job.emit(&self.core, Vec::new(), None);
+                    }
+                }
+                // 下完了（不在下载列表里了）：再读一次，还没有就是真的到头了
+                None => {
+                    let n = self.file.read(buf)?;
+                    let mut live = self.job.live();
+                    if let Some(total) = live.total {
+                        live.received = total;
+                    }
+                    return Ok(n);
+                }
+            }
+            std::thread::sleep(WAIT);
+        }
+    }
+}
+
+impl Seek for GrowingFile {
+    // 跳到还没下到的地方也可以：之后读的时候再等
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.file.seek(pos)
+    }
+}
+
+impl MediaSource for GrowingFile {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+
+    /// 整个文件多大（服务器说了的话）：有的格式靠它估算时长、跳转位置。
+    fn byte_len(&self) -> Option<u64> {
+        self.core
+            .episodes
+            .progress()
+            .get(&self.job.id)
+            .and_then(|p| p.total)
+            .or_else(|| self.file.metadata().ok().map(|m| m.len()))
+    }
+}
 
 impl From<postflow_speech::Error> for RpcError {
     fn from(err: postflow_speech::Error) -> Self {
@@ -71,6 +159,24 @@ struct Job {
 impl Job {
     fn live(&self) -> MutexGuard<'_, Live> {
         self.live.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 边下边转时，把单集的下载进度抄过来，界面据此说「在等下载」还是「在识别」。
+    fn track_download(&self, core: &Core) {
+        let progress = core.episodes.progress().remove(&self.id);
+        let mut live = self.live();
+        match progress {
+            Some(p) if p.error.is_none() => {
+                live.received = p.received;
+                live.total = p.total;
+            }
+            // 下完了
+            _ => {
+                if let Some(total) = live.total {
+                    live.received = total;
+                }
+            }
+        }
     }
 
     fn cancelled(&self) -> bool {
@@ -119,6 +225,7 @@ impl Job {
             covered: live.transcript.covered.clone(),
             duration: live.transcript.duration,
             complete: live.transcript.complete(),
+            model: live.transcript.model.clone(),
             received: live.received,
             total: live.total,
             error: live.error.as_ref().map(|e| e.code.clone()),
@@ -195,6 +302,15 @@ struct StartParams {
 
 fn default_keep() -> usize {
     10
+}
+
+#[derive(Deserialize)]
+struct TranslationsParams {
+    id: String,
+    lang: String,
+    /// 保存时：原文的句子（`<开始的百分之一秒>|<原文>`）到译文。
+    #[serde(default)]
+    entries: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -335,6 +451,19 @@ impl Core {
                 self.speech.transcripts().remove(&p.id);
                 reply(self.subtitles_snapshot(&p.id))
             }
+            // 字幕的译文：存在本机，再听、重开都不用再翻（AI 翻译要花钱）
+            "subtitles.translations" => {
+                let p: TranslationsParams = parse(params)?;
+                reply(json!({ "entries": self.speech.transcripts().translations(&p.id, &p.lang) }))
+            }
+            "subtitles.translations.save" => {
+                let p: TranslationsParams = parse(params)?;
+                self.speech
+                    .transcripts()
+                    .add_translations(&p.id, &p.lang, p.entries)
+                    .map_err(|e| RpcError::new("bad_params", e.to_string()))?;
+                reply(json!({}))
+            }
             // 本机哪些条目有转写出来的字幕
             "subtitles.list" => reply(json!({ "ids": self.speech.transcripts().list() })),
             "subtitles.clear" => {
@@ -418,9 +547,9 @@ async fn prepare_and_transcribe(
     job: &Arc<Job>,
     keep: usize,
 ) -> Result<(), RpcError> {
-    // 音频要在本机：还没下载就先下载
-    let file = match core.episodes.file(&job.id) {
-        Some(file) => file,
+    // 音频要在本机：还没下载就先下载，下了一点就开始转
+    let source = match core.episodes.file(&job.id) {
+        Some(file) => Source::File(file),
         None => {
             job.set_state(SubtitleState::Downloading);
             job.emit(core, Vec::new(), None);
@@ -430,7 +559,7 @@ async fn prepare_and_transcribe(
                     return Ok(());
                 }
                 if let Some(file) = core.episodes.file(&job.id) {
-                    break file;
+                    break Source::File(file);
                 }
                 match core.episodes.progress().get(&job.id) {
                     Some(p) if p.error.is_some() => {
@@ -446,6 +575,18 @@ async fn prepare_and_transcribe(
                             live.total = p.total;
                         }
                         job.emit(core, Vec::new(), None);
+                        // 已经下了一点：边下边转
+                        if p.received >= START_BYTES
+                            && let Some(part) = p.partial().filter(|f| f.is_file())
+                        {
+                            let ext = p
+                                .file
+                                .as_ref()
+                                .and_then(|f| f.extension())
+                                .and_then(|e| e.to_str())
+                                .map(str::to_string);
+                            break Source::Growing { part, ext };
+                        }
                     }
                     // 刚好下完：下一圈就能找到文件
                     None if core.episodes.file(&job.id).is_some() => continue,
@@ -466,22 +607,40 @@ async fn prepare_and_transcribe(
     {
         let mut live = job.live();
         live.state = SubtitleState::Loading;
-        live.received = 0;
-        live.total = None;
+        if matches!(source, Source::File(_)) {
+            live.received = 0;
+            live.total = None;
+        }
     }
     job.emit(core, Vec::new(), None);
     let (core, job) = (core.clone(), job.clone());
-    tokio::task::spawn_blocking(move || transcribe(&core, &job, &file))
-        .await
-        .map_err(|e| RpcError::new("internal", e.to_string()))?
+    tokio::task::spawn_blocking(move || {
+        let result = transcribe(&core, &job, source);
+        // 被取消的（换了一期、关了字幕）不算出错
+        if job.cancelled() { Ok(()) } else { result }
+    })
+    .await
+    .map_err(|e| RpcError::new("internal", e.to_string()))?
 }
 
 /// 转写的主循环，跑在阻塞线程里。
-fn transcribe(core: &Core, job: &Job, file: &Path) -> Result<(), RpcError> {
+fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), RpcError> {
     let model = job.model.as_str();
     let store = core.speech.transcripts();
     let engine = core.speech.load(model)?;
-    let mut reader = AudioReader::open(file)?;
+    let mut reader = match source {
+        Source::File(file) => AudioReader::open(&file)?,
+        Source::Growing { part, ext } => {
+            let file =
+                std::fs::File::open(&part).map_err(|e| RpcError::new("io", e.to_string()))?;
+            let growing = GrowingFile {
+                file,
+                core: core.clone(),
+                job: job.clone(),
+            };
+            AudioReader::from_source(Box::new(growing), ext.as_deref())?
+        }
+    };
     {
         let mut live = job.live();
         live.transcript.model = model.to_string();
@@ -530,7 +689,9 @@ fn transcribe(core: &Core, job: &Job, file: &Path) -> Result<(), RpcError> {
         let mut batch: Vec<Cue> = Vec::new();
         let mut batch_from = from;
         let mut last_emit = Instant::now();
-        let outcome = engine.run(&mut reader, to, &mut |step| {
+        // 认出来的说话人在任务和字幕文件里各有一份：转写时用本地的，每一步抄回去
+        let mut speakers = job.live().transcript.speakers.clone();
+        let outcome = engine.run(&mut reader, to, &mut speakers, &mut |step| {
             let reached = step.reached.max(emitted);
             // 跳转通常落在要的位置前面一点，那一小段已经转过了，不要重复的句子
             let new: Vec<Cue> = step
@@ -542,11 +703,13 @@ fn transcribe(core: &Core, job: &Job, file: &Path) -> Result<(), RpcError> {
                 let mut live = job.live();
                 cues::merge(&mut live.transcript.cues, emitted, reached, new.clone());
                 live.transcript.covered.add(from, reached);
+                live.transcript.speakers = step.speakers;
             }
             batch.extend(new);
             emitted = reached;
             if last_emit.elapsed() >= EMIT_EVERY {
                 last_emit = Instant::now();
+                job.track_download(core);
                 job.emit(
                     core,
                     std::mem::take(&mut batch),

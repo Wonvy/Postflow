@@ -9,7 +9,11 @@ import { create } from "zustand";
 import { toast } from "../components/Toast";
 import { api, type Item, type ItemDetail, type ItemFilter, type ItemPatch } from "./api";
 import { resolveLang } from "./i18n";
+import { episodeOf, pause, play, playbackTime, seek, skip, stop, toggle, usePlayer } from "./player";
 import { useUi } from "./store";
+import { type Cue, cueAt, speakerOrder } from "./subtitleCues";
+import { useSubtitles } from "./subtitles";
+import { type SubtitleTranslation, translationOf, useSubtitleTranslationState } from "./subtitleTranslate";
 import { type CoreEvent, rpc, subscribe } from "./transport";
 
 /** 插件接口的版本。改了不兼容的地方才加一。 */
@@ -88,9 +92,106 @@ export function buttonKey(pluginId: string, id: string): string {
   return `plugin:${pluginId}:${id}`;
 }
 
+// ------------------------------------------------------------------ 播放器和字幕（给插件看的样子）
+
+/** 正在放的一期，给插件看的样子。没在放是 null。 */
+export interface PluginPlayerState {
+  id: string;
+  title: string;
+  source: string;
+  url: string;
+  playing: boolean;
+  /** 放到第几秒（确切的）。 */
+  position: number;
+  /** 多长（秒）；还不知道是 null。 */
+  duration: number | null;
+  rate: number;
+}
+
+/** 一句字幕，给插件看的样子。 */
+export interface PluginCue {
+  start: number;
+  end: number;
+  text: string;
+  /** 第几个说话的人（从 0 数，按开口先后）。没分出来是 null。 */
+  speaker: number | null;
+  /** 节目文字稿里写的说话人名字。 */
+  speakerName: string | null;
+  /** 自动翻译的译文。 */
+  translation: string | null;
+}
+
+function playerState(): PluginPlayerState | null {
+  const s = usePlayer.getState();
+  if (!s.current) return null;
+  return {
+    id: s.current.id,
+    title: s.current.title,
+    source: s.current.source,
+    url: s.current.media.url,
+    playing: s.playing,
+    position: playbackTime() ?? s.position,
+    duration: s.duration > 0 ? s.duration : (s.current.media.duration ?? null),
+    rate: s.rate,
+  };
+}
+
+function toPluginCue(
+  c: Cue,
+  order: Map<number, number> | null,
+  names: readonly string[] | undefined,
+  translation: SubtitleTranslation | null,
+): PluginCue {
+  const speaker = c.speaker === undefined ? null : order ? (order.get(c.speaker) ?? null) : c.speaker;
+  return {
+    start: c.start,
+    end: c.end,
+    text: c.text,
+    speaker,
+    speakerName: c.speaker !== undefined ? (names?.[c.speaker] ?? null) : null,
+    translation: translation ? (translationOf(translation, c) ?? null) : null,
+  };
+}
+
+/** 正在放的这一期的字幕，和它的译文情况。 */
+function currentSubtitles() {
+  const entry = useSubtitles.getState().entry;
+  if (!entry) return null;
+  const tr = useSubtitleTranslationState.getState();
+  const translation = tr.id === entry.id ? tr.value : null;
+  const order = entry.source === "local" ? speakerOrder(entry.cues) : null;
+  return { entry, translation, order };
+}
+
+function subtitlesState() {
+  const now = currentSubtitles();
+  if (!now) return null;
+  const { entry, translation, order } = now;
+  return {
+    id: entry.id,
+    source: entry.source,
+    complete: entry.complete,
+    translatedFrom: translation?.status === "on" ? translation.from : null,
+    translatedTo: translation?.status === "on" ? translation.to : null,
+    cues: entry.cues.map((c) => toPluginCue(c, order, entry.speakerNames, translation)),
+  };
+}
+
+/** 第 `seconds` 秒（默认现在）显示的那一句，带它是第几句。 */
+function cueNow(seconds?: number): (PluginCue & { index: number }) | null {
+  const now = currentSubtitles();
+  const p = usePlayer.getState();
+  if (!now || p.current?.id !== now.entry.id) return null;
+  const at = typeof seconds === "number" ? seconds : (playbackTime() ?? p.position);
+  const index = cueAt(now.entry.cues, at);
+  const cue = now.entry.cues[index];
+  if (!cue) return null;
+  return { index, ...toPluginCue(cue, now.order, now.entry.speakerNames, now.translation) };
+}
+
 // ------------------------------------------------------------------ 事件
 
-type EventName = "new-mail" | "items-changed" | "item-open" | "core";
+type EventName = "new-mail" | "items-changed" | "item-open" | "core" | "player" | "subtitle";
 const listeners = new Map<EventName, Set<(payload: unknown) => void>>();
 
 function emit(name: EventName, payload: unknown) {
@@ -119,6 +220,32 @@ function startEvents() {
       emit("item-open", { id: last });
     }
   });
+
+  // 播放器：换了一期、放 / 停、改了速度、跳了一下
+  let was = usePlayer.getState();
+  usePlayer.subscribe((s) => {
+    const jumped = s.current?.id === was.current?.id && Math.abs(s.position - was.position) > 3;
+    const changed = s.current?.id !== was.current?.id || s.playing !== was.playing || s.rate !== was.rate;
+    was = s;
+    if (changed || jumped) emit("player", playerState());
+  });
+
+  // 字幕：显示的那一句换了（有人听的时候才看，放着时每秒看几次）
+  let shown: string | null = null;
+  const check = () => {
+    if (!listeners.get("subtitle")?.size) return;
+    const cue = cueNow();
+    const key = cue ? `${cue.index}|${cue.start}|${cue.text}|${cue.translation ?? ""}` : null;
+    if (key === shown) return;
+    shown = key;
+    emit("subtitle", cue);
+  };
+  setInterval(() => {
+    if (usePlayer.getState().playing) check();
+  }, 250);
+  usePlayer.subscribe(check);
+  useSubtitles.subscribe(check);
+  useSubtitleTranslationState.subscribe(check);
 }
 
 // ------------------------------------------------------------------ 接口对象
@@ -163,6 +290,53 @@ function makeApi(manifest: PluginManifest, track: (fn: () => void) => void) {
       open: (id: string) => useUi.getState().open(id),
       openedId: () => useUi.getState().openId,
       selection: () => [...useUi.getState().selection],
+    }),
+
+    /** 播客播放器。 */
+    player: Object.freeze({
+      /** 正在放的一期，没在放是 null。 */
+      state: () => playerState(),
+      /** 放某一期（条目 ID，可以从第 `at` 秒开始）；不给 ID 就是接着放现在这一期。 */
+      play: async (id?: string, at?: number) => {
+        const s = usePlayer.getState();
+        if (!id || s.current?.id === id) {
+          if (!s.current) return;
+          if (typeof at === "number") seek(at);
+          if (!s.playing) toggle();
+          return;
+        }
+        const episode = episodeOf(await api.getItem(id));
+        if (!episode) throw new Error(`item ${id} has no audio`);
+        play(episode, [episode], typeof at === "number" ? at : undefined);
+      },
+      pause: () => pause(),
+      seek: (seconds: number) => seek(Number(seconds)),
+      skip: (seconds: number) => skip(Number(seconds)),
+      setRate: (rate: number) => usePlayer.getState().setRate(Number(rate)),
+      /** 关掉播放器。 */
+      stop: () => stop(),
+    }),
+
+    /** 播客字幕。 */
+    subtitles: Object.freeze({
+      /** 字幕开着没有。 */
+      enabled: () => useSubtitles.getState().on,
+      setEnabled: (on: boolean) => useSubtitles.getState().setOn(Boolean(on)),
+      /** 正在放的这一期的全部字幕（本机转写的会边转边多）。没开字幕或没在放是 null。 */
+      current: () => subtitlesState(),
+      /** 第 `seconds` 秒（默认现在）显示的那一句，没有是 null。 */
+      cueAt: (seconds?: number) => cueNow(seconds),
+      /** 某一期在这台设备上转写过的字幕（不管在不在放）。 */
+      get: async (id: string) => {
+        const snap = await api.subtitlesGet(id);
+        const order = speakerOrder(snap.cues);
+        return {
+          id,
+          complete: snap.complete,
+          duration: snap.duration,
+          cues: snap.cues.map((c) => toPluginCue(c, order, undefined, null)),
+        };
+      },
     }),
 
     ui: Object.freeze({

@@ -18,6 +18,22 @@ import { parseTranscript } from "./transcript";
 import { type CoreEvent, RpcError } from "./transport";
 
 type SubtitlesEvent = Extract<CoreEvent, { type: "subtitles" }>;
+
+/** 字幕的样子。界面上的名字和效果见 SubtitleStyles.tsx。 */
+export const SUBTITLE_STYLES = [
+  "karaoke",
+  "typewriter",
+  "pop",
+  "glass",
+  "bilingual",
+  "emphasis",
+  "scroll",
+  "particles",
+  "speaker",
+  "wave",
+  "minimal",
+] as const;
+export type SubtitleStyle = (typeof SUBTITLE_STYLES)[number];
 type SpeechModelEvent = Extract<CoreEvent, { type: "speech_model" }>;
 
 /** 正在放的这一期的字幕。 */
@@ -32,6 +48,8 @@ export interface SubtitleEntry {
   complete: boolean;
   /** 本机转写用的模型。 */
   model: string;
+  /** 说话人的名字（节目自带的文字稿里写了的），按 `Cue.speaker` 的编号排。本机分出来的没有名字。 */
+  speakerNames?: string[];
   /** 等这一期下载到本机时的进度。 */
   received: number;
   total: number | null;
@@ -50,6 +68,15 @@ interface SubtitleStore {
   /** 开着字幕。记在这台设备上。 */
   on: boolean;
   setOn: (on: boolean) => void;
+  /** 字幕和界面语言（或者设置里选的翻译语言）不一样时，自动翻译，原文下面显示译文。 */
+  translate: boolean;
+  setTranslate: (on: boolean) => void;
+  /** 字幕的样子，见 SubtitleStyles.tsx。 */
+  style: SubtitleStyle;
+  setStyle: (style: SubtitleStyle) => void;
+  /** 分出了说话人时，标出是谁在说、每人一种颜色。 */
+  speakers: boolean;
+  setSpeakers: (on: boolean) => void;
   entry: SubtitleEntry | null;
   /** 开了字幕，但核心那边一个识别模型都没装。 */
   needsModel: boolean;
@@ -62,11 +89,20 @@ export const useSubtitles = create<SubtitleStore>()(
     (set) => ({
       on: false,
       setOn: (on) => set({ on }),
+      translate: false,
+      setTranslate: (translate) => set({ translate }),
+      style: "karaoke",
+      setStyle: (style) => set({ style }),
+      speakers: true,
+      setSpeakers: (speakers) => set({ speakers }),
       entry: null,
       needsModel: false,
       downloads: {},
     }),
-    { name: "postflow.subtitles", partialize: (s) => ({ on: s.on }) },
+    {
+      name: "postflow.subtitles",
+      partialize: (s) => ({ on: s.on, translate: s.translate, style: s.style, speakers: s.speakers }),
+    },
   ),
 );
 
@@ -95,6 +131,7 @@ function applyEvent(entry: SubtitleEntry, event: SubtitlesEvent): SubtitleEntry 
     covered: event.covered,
     duration: event.duration,
     complete: event.complete,
+    model: event.model || entry.model,
     received: event.received,
     total: event.total,
     error: event.error ?? null,
@@ -212,11 +249,16 @@ export function SubtitlesBridge() {
             void startLocal(id);
             return;
           }
-          const cues: Cue[] = timed.map((c, i) => ({
-            start: c.start,
-            end: timed[i + 1]?.start ?? c.start + 8,
-            text: c.speaker ? `${c.speaker}: ${c.text}` : c.text,
-          }));
+          // 文字稿里写了谁在说：每个名字一个编号，和本机分出来的说话人一样上色
+          const speakerNames: string[] = [];
+          const cues: Cue[] = timed.map((c, i) => {
+            let speaker: number | undefined;
+            if (c.speaker) {
+              speaker = speakerNames.indexOf(c.speaker);
+              if (speaker < 0) speaker = speakerNames.push(c.speaker) - 1;
+            }
+            return { start: c.start, end: timed[i + 1]?.start ?? c.start + 8, text: c.text, speaker };
+          });
           useSubtitles.setState({
             entry: {
               id,
@@ -227,6 +269,7 @@ export function SubtitlesBridge() {
               duration: null,
               complete: true,
               model: "",
+              speakerNames,
               received: 0,
               total: null,
               error: null,

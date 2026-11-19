@@ -11,7 +11,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use postflow_speech::{AudioReader, Speech};
+use postflow_speech::{AudioReader, Speakers, Speech};
 
 fn clock(seconds: f64) -> String {
     let s = seconds.max(0.0);
@@ -64,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .await?;
             println!("installed in {:.1}s", started.elapsed().as_secs_f64());
+            println!("sources, fastest first: {:?}", speech.sources());
         }
         (Some("run"), Some(root)) => {
             let id = arg(2).ok_or("which model?")?;
@@ -80,11 +81,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let started = Instant::now();
             let mut first: Option<f64> = None;
             let mut count = 0usize;
-            let outcome = engine.run(&mut reader, until, &mut |step| {
+            let mut speakers = Speakers::default();
+            let outcome = engine.run(&mut reader, until, &mut speakers, &mut |step| {
                 for cue in &step.cues {
                     first.get_or_insert(started.elapsed().as_secs_f64());
                     count += 1;
-                    println!("[{} → {}] {}", clock(cue.start), clock(cue.end), cue.text);
+                    let who = cue
+                        .speaker
+                        .map(|s| format!(" [S{}]", s + 1))
+                        .unwrap_or_default();
+                    println!(
+                        "[{} → {}]{who} {}",
+                        clock(cue.start),
+                        clock(cue.end),
+                        cue.text
+                    );
                 }
                 true
             })?;

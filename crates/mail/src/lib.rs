@@ -4,6 +4,7 @@
 
 pub mod calendar;
 mod code;
+pub use code::verification_code;
 mod compose;
 mod imap;
 mod message;

@@ -125,6 +125,8 @@ pub enum Event {
         covered: postflow_speech::Covered,
         duration: Option<f64>,
         complete: bool,
+        /// 用哪个模型转的（模型加载好以前是空的）。
+        model: String,
         /// 等这一期下载到本机时的进度。
         received: u64,
         total: Option<u64>,
@@ -326,7 +328,7 @@ impl Core {
             rsshub: rsshub::Rsshub::new(&local_dir),
             rules_state: rules::RulesState::new(&local_dir),
             episodes: episodes::Episodes::new(&local_dir),
-            ai: Default::default(),
+            ai: ai_rpc::AiRuntime::new(&local_dir),
             translator,
             local_dir,
             client: Client::new()?,

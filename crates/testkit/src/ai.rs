@@ -5,11 +5,12 @@
 //!
 //! 模型名决定它像哪一类服务，用来测「会思考的模型」：
 //! - `…thinker…`：先思考再回答，思考在单独的字段里，也算在 `max_tokens` 里（像智谱 GLM-4.5）；
-//!   请求里带 `thinking: {"type": "disabled"}` 就不思考。
+//!   请求里带了各家「别思考」的参数之一（`thinking: {"type": "disabled"}`、`enable_thinking: false`、
+//!   `reasoning_effort: "none"`、`reasoning: {"effort": "none"}`）就不思考。
 //! - `…forced…`：不让关掉思考，带了那个参数就回 400。
 //! - `…think-tags…`：把思考写在正文开头的 `<think>…</think>` 里。
 //! - `…strict-cap…`：不认 `max_tokens`，带了就回 400（像 OpenAI 的推理模型）。
-//! - `…legacy…`：不认 `thinking` 这个参数，带了就回 400，报错里也不说是哪个参数。
+//! - `…legacy…`：不认这些「别思考」的参数，带了就回 400，报错里也不说是哪个参数。
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -133,12 +134,23 @@ impl FakeAi {
                     }});
                     return respond(&mut stream, 400, &err).await;
                 }
-                let quiet = body["thinking"]["type"] == "disabled";
+                let quiet = body["thinking"]["type"] == "disabled"
+                    || body["enable_thinking"] == false
+                    || body["reasoning_effort"] == "none"
+                    || body["reasoning"]["effort"] == "none";
+                let asked_quiet = [
+                    "thinking",
+                    "enable_thinking",
+                    "reasoning_effort",
+                    "reasoning",
+                ]
+                .iter()
+                .any(|k| body.get(*k).is_some());
                 if model.contains("forced") && quiet {
                     let err = json!({"error": {"code": "1210", "message": "thinking.type 不支持设置为 disabled"}});
                     return respond(&mut stream, 400, &err).await;
                 }
-                if model.contains("legacy") && body.get("thinking").is_some() {
+                if model.contains("legacy") && asked_quiet {
                     let err = json!({"error": {"code": "1210", "message": "API 调用参数有误，请检查文档。"}});
                     return respond(&mut stream, 400, &err).await;
                 }
@@ -149,7 +161,7 @@ impl FakeAi {
                     let thought = clip(THOUGHT, limit);
                     let text = clip(&answer, limit - thought.len());
                     (thought, text, THOUGHT.len() + answer.len())
-                } else if model.contains("think-tags") {
+                } else if model.contains("think-tags") && !quiet {
                     let all = format!("<think>\n{THOUGHT}\n</think>\n\n{answer}");
                     let full = all.len();
                     (String::new(), clip(&all, limit), full)

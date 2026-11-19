@@ -1,7 +1,7 @@
 // 设置页里的「AI」：接入的服务、主要和快速任务各用哪个、邮件能不能发给云端、用量。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import {
   siAlibabacloud,
   siDeepseek,
@@ -109,6 +109,11 @@ export function AiSettings({ open }: { open: boolean }) {
                   <span className="text-fg">{p.name}</span>
                   <span className="text-[12px] text-fg-3"> · {p.model || t("ai.noModel")}</span>
                 </span>
+                {p.replacement && (
+                  <span title={t("ai.retiring", { model: p.model, next: p.replacement })} className="flex text-warning">
+                    <TriangleAlert size={13} aria-label={t("ai.retiring", { model: p.model, next: p.replacement })} />
+                  </span>
+                )}
                 {p.local && <Badge>{t("ai.local")}</Badge>}
                 {!p.local && !p.has_key && <Badge warn>{t("ai.noKey")}</Badge>}
                 <button
@@ -325,6 +330,10 @@ function ProviderDialog({ editing, onClose }: { editing: AiProviderView | "new" 
       local: preset.local,
     });
   const keyUrl = presets.data?.presets.find((p) => p.id === chosen?.preset)?.key_url;
+  // 智谱这类服务会下线旧模型：填的模型在下线名单里时，在模型框下面提醒换成哪个
+  const retiring = (presets.data?.presets ?? [])
+    .filter((p) => p.id === chosen?.preset || (!p.local && chosen?.base_url.toLowerCase().startsWith(p.base_url.toLowerCase())))
+    .flatMap((p) => p.retiring ?? []);
 
   return (
     <Modal open={editing !== null} onClose={onClose} title={existing ? t("ai.editTitle") : t("ai.addTitle")} width={460}>
@@ -333,6 +342,7 @@ function ProviderDialog({ editing, onClose }: { editing: AiProviderView | "new" 
           key={chosen.id || chosen.preset}
           initial={chosen}
           keyUrl={keyUrl}
+          retiring={retiring}
           onBack={existing ? undefined : () => setPreset(null)}
           onDone={onClose}
         />
@@ -354,7 +364,7 @@ function ProviderDialog({ editing, onClose }: { editing: AiProviderView | "new" 
             <button
               type="button"
               onClick={() =>
-                setPreset({ id: "custom", name: "", base_url: "https://", model: "", key_url: "", local: false })
+                setPreset({ id: "custom", name: "", base_url: "https://", model: "", key_url: "", local: false, retiring: [] })
               }
               className="flex h-16 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong px-2 text-[12px] text-fg-2 hover:bg-hover hover:text-fg"
             >
@@ -371,11 +381,13 @@ function ProviderDialog({ editing, onClose }: { editing: AiProviderView | "new" 
 function ProviderForm({
   initial,
   keyUrl,
+  retiring,
   onBack,
   onDone,
 }: {
   initial: AiProviderView;
   keyUrl?: string;
+  retiring: [string, string][];
   onBack?: () => void;
   onDone: () => void;
 }) {
@@ -389,7 +401,7 @@ function ProviderForm({
   const [proxy, setProxy] = useState(initial.proxy ?? "");
   const [models, setModels] = useState<string[]>([]);
   const [busy, setBusy] = useState<"models" | "test" | "save" | null>(null);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string; detail?: string | null } | null>(null);
 
   const draft = () => ({
     id: initial.id,
@@ -400,8 +412,7 @@ function ProviderForm({
     proxy: proxy.trim() || null,
   });
   const fail = (err: unknown) => {
-    const detail = errorDetail(err);
-    setNote({ ok: false, text: detail ? `${errorText(t, err)}（${detail}）` : errorText(t, err) });
+    setNote({ ok: false, text: errorText(t, err), detail: errorDetail(err) });
   };
 
   const loadModels = async (quiet = false) => {
@@ -514,6 +525,19 @@ function ProviderForm({
             <option key={m} value={m} />
           ))}
         </datalist>
+        {(() => {
+          const next = retiring.find(([old]) => old === model.trim().toLowerCase())?.[1];
+          if (!next) return null;
+          return (
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px] text-warning">
+              <TriangleAlert size={12} className="shrink-0" />
+              {t("ai.retiring", { model: model.trim(), next })}
+              <button type="button" onClick={() => setModel(next)} className="text-accent hover:underline">
+                {t("ai.useModel", { model: next })}
+              </button>
+            </p>
+          );
+        })()}
       </Field>
       {!initial.local && (
         <Field label={t("ai.proxy")}>
@@ -527,9 +551,12 @@ function ProviderForm({
         </Field>
       )}
       {note && (
-        <p role="status" className={"text-[12px] " + (note.ok ? "text-accent" : "text-danger")}>
-          {note.text}
-        </p>
+        <div role="status" className="text-[12px]">
+          <p className={note.ok ? "text-accent" : "text-danger"}>{note.text}</p>
+          {note.detail && (
+            <p className="mt-0.5 select-text break-words text-[11px] text-fg-3">{t("ai.serviceSaid", { text: note.detail })}</p>
+          )}
+        </div>
       )}
       <div className="flex items-center justify-between gap-2">
         <Button busy={busy === "test"} onClick={() => void test()}>

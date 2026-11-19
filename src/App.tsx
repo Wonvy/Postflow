@@ -5,6 +5,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { PlayerBridge } from "./components/Player";
 import { DownloadsBridge } from "./lib/episodes";
 import { SubtitlesBridge } from "./lib/subtitles";
+import { SubtitleTranslationBridge } from "./lib/subtitleTranslate";
 import { accentVars } from "./lib/accent";
 import { useCanHover, useLayout, useReaderOverlay, useReaderPopped } from "./lib/mobile";
 import { Unplug } from "lucide-react";
@@ -278,6 +279,7 @@ function Shell() {
       <PlayerBridge />
       <DownloadsBridge />
       <SubtitlesBridge />
+      <SubtitleTranslationBridge />
       <Toaster />
     </>
   );

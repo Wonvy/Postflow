@@ -7,15 +7,18 @@ license.workspace = true
 
 [dependencies]
 reqwest = "0.13.5"
+# Symphonia 不支持 Opus：用这个纯 Rust 的解码器（没有 C 依赖，过了 RFC 8251 的一致性测试）
+opus-decoder = "0.1.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.0"
 # 语音识别的运行库（Apache-2.0）。编译时从它的 GitHub Release 下载预编译的静态库链进程序，
 # 不用另外带动态库。模型不在这里：用户装好以后按需下载，见 catalog.rs。
 sherpa-onnx = "2.0.1"
-# 纯 Rust 的音频解码：播客常见的 MP3、AAC（M4A/MP4）、Vorbis、FLAC、WAV。Opus 还不支持。
+# 纯 Rust 的音频解码：播客常见的 MP3、AAC（M4A/MP4）、Vorbis、FLAC、WAV；Ogg、WebM 里的 Opus 交给 opus-decoder。
 symphonia = { version = "0.6.1", default-features = false, features = [
     "aac",
+    "caf",
     "flac",
     "isomp4",
     "mkv",

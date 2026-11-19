@@ -10,12 +10,14 @@ use sherpa_onnx::{
     OfflineNemoEncDecCtcModelConfig, OfflineParaformerModelConfig, OfflineRecognizer,
     OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig,
     OfflineWenetCtcModelConfig, OfflineWhisperModelConfig, OfflineZipformerCtcModelConfig,
-    SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
+    SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig,
+    VadModelConfig, VoiceActivityDetector,
 };
 
 use crate::audio::{AudioReader, SAMPLE_RATE};
 use crate::catalog::Model;
 use crate::cues::{self, Cue};
+use crate::speakers::Speakers;
 use crate::{Error, Result};
 
 /// VAD 一次吃这么多样本（Silero 的固定窗口）。
@@ -34,12 +36,41 @@ pub fn default_threads() -> i32 {
 pub struct Engine {
     recognizer: OfflineRecognizer,
     vad_model: String,
+    /// 装了声纹模型时，每段话算个声纹，分出是谁在说。
+    speaker: Option<SpeakerEmbeddingExtractor>,
+}
+
+/// 短于这个（秒）的一段不算声纹：太短了不准，也省点时间。
+const SPEAKER_MIN_SECONDS: f64 = 0.6;
+/// 一段话切成这么长（秒）的小块分别算声纹：对谈节目里换人很快，一段话里常常混着两个人。
+const SPEAKER_WINDOW: f64 = 3.0;
+
+/// 把 `seconds` 长的一段切成差不多长的几块（每块 2–4.5 秒，短于 4.5 秒的不切），返回每块的起止（秒）。
+fn speaker_windows(seconds: f64) -> Vec<(f64, f64)> {
+    let n = ((seconds / SPEAKER_WINDOW).round() as usize).max(1);
+    let size = seconds / n as f64;
+    (0..n)
+        .map(|i| (i as f64 * size, (i + 1) as f64 * size))
+        .collect()
+}
+
+/// 一句字幕（相对这段话开头的起止）是哪一块里说的：和它重叠最多、认出了人的那块。
+fn speaker_for(start: f64, end: f64, windows: &[(f64, f64, Option<u32>)]) -> Option<u32> {
+    windows
+        .iter()
+        .filter(|w| w.2.is_some())
+        .map(|&(a, b, who)| ((end.min(b) - start.max(a)).max(0.0), who))
+        .filter(|(overlap, _)| *overlap > 0.0)
+        .max_by(|x, y| x.0.total_cmp(&y.0))
+        .and_then(|(_, who)| who)
 }
 
 /// 转写的一步：新出来的几句，和已经处理到第几秒。
 pub struct Step {
     pub cues: Vec<Cue>,
     pub reached: f64,
+    /// 到这一步为止认出来的说话人，存盘时跟着字幕一起存。
+    pub speakers: Speakers,
 }
 
 /// 一次 `run` 的结果。
@@ -158,7 +189,14 @@ fn recognizer_config(dir: &Path, model: &Model, threads: i32) -> Result<OfflineR
 
 impl Engine {
     /// 加载模型。几百兆的模型要一两秒，放在阻塞线程里调用。
-    pub fn load(dir: &Path, model: &Model, vad: &Path, threads: i32) -> Result<Engine> {
+    /// `speaker` 是声纹模型（所在目录和目录里的那一条），装了才有；加载不了只记一条日志，照样识别。
+    pub fn load(
+        dir: &Path,
+        model: &Model,
+        vad: &Path,
+        speaker: Option<(&Path, &Model)>,
+        threads: i32,
+    ) -> Result<Engine> {
         if !model.supported() {
             return Err(Error::Unsupported(model.kind.clone()));
         }
@@ -168,10 +206,41 @@ impl Engine {
         let config = recognizer_config(dir, model, threads.max(1))?;
         let recognizer = OfflineRecognizer::create(&config)
             .ok_or_else(|| Error::Load(format!("cannot load {}", model.id)))?;
+        let speaker = speaker.and_then(|(dir, m)| {
+            let file = m.file("model")?;
+            let config = SpeakerEmbeddingExtractorConfig {
+                model: Some(path_str(&dir.join(&file.name)).ok()?),
+                num_threads: 1,
+                ..Default::default()
+            };
+            let extractor = SpeakerEmbeddingExtractor::create(&config);
+            if extractor.is_none() {
+                tracing::warn!(model = %m.id, "cannot load the speaker model; transcribing without speakers");
+            }
+            extractor
+        });
         Ok(Engine {
             recognizer,
             vad_model: path_str(vad)?,
+            speaker,
         })
+    }
+
+    /// 能不能分出说话人（装了声纹模型）。
+    pub fn has_speakers(&self) -> bool {
+        self.speaker.is_some()
+    }
+
+    /// 一段话的声纹。
+    fn embedding(&self, samples: &[f32]) -> Option<Vec<f32>> {
+        let extractor = self.speaker.as_ref()?;
+        let stream = extractor.create_stream()?;
+        stream.accept_waveform(SAMPLE_RATE as i32, samples);
+        stream.input_finished();
+        extractor
+            .is_ready(&stream)
+            .then(|| extractor.compute(&stream))
+            .flatten()
     }
 
     fn detector(&self) -> Result<VoiceActivityDetector> {
@@ -193,7 +262,13 @@ impl Engine {
     }
 
     /// 识别 VAD 里已经攒好的各段。
-    fn drain(&self, vad: &VoiceActivityDetector, base: f64, out: &mut Vec<Cue>) {
+    fn drain(
+        &self,
+        vad: &VoiceActivityDetector,
+        base: f64,
+        speakers: &mut Speakers,
+        out: &mut Vec<Cue>,
+    ) {
         let rate = f64::from(SAMPLE_RATE);
         while let Some(segment) = vad.front() {
             let start = base + segment.start() as f64 / rate;
@@ -203,13 +278,31 @@ impl Engine {
             stream.accept_waveform(SAMPLE_RATE as i32, samples);
             self.recognizer.decode(&stream);
             if let Some(result) = stream.get_result() {
-                out.extend(cues::split(
+                let mut new = cues::split(
                     start,
                     duration,
                     &result.text,
                     &result.tokens,
                     result.timestamps.as_deref(),
-                ));
+                );
+                // 有话才算声纹：切成几小块分别认，每句取和它重叠最多的那块
+                if !new.is_empty() && self.speaker.is_some() && duration >= SPEAKER_MIN_SECONDS {
+                    let windows: Vec<(f64, f64, Option<u32>)> = speaker_windows(duration)
+                        .into_iter()
+                        .map(|(a, b)| {
+                            let from = (a * rate) as usize;
+                            let to = ((b * rate) as usize).min(samples.len());
+                            let who = self
+                                .embedding(&samples[from..to])
+                                .and_then(|e| speakers.assign(&e, b - a));
+                            (a, b, who)
+                        })
+                        .collect();
+                    for cue in &mut new {
+                        cue.speaker = speaker_for(cue.start - start, cue.end - start, &windows);
+                    }
+                }
+                out.extend(new);
             }
             drop(segment);
             vad.pop();
@@ -220,10 +313,12 @@ impl Engine {
     ///
     /// 每识别完一段调用一次 `sink`；它返回 `false` 就尽快停下（已经听到一半的那段话丢掉，
     /// 返回的 `reached` 只算到确实处理完的地方）。
+    /// `speakers` 是这一期已经认出来的说话人，分出新的人会加进去。
     pub fn run(
         &self,
         reader: &mut AudioReader,
         until: f64,
+        speakers: &mut Speakers,
         sink: &mut dyn FnMut(Step) -> bool,
     ) -> Result<Outcome> {
         let vad = self.detector()?;
@@ -257,7 +352,7 @@ impl Engine {
 
             let had = !vad.is_empty();
             if had {
-                self.drain(&vad, base, &mut cues);
+                self.drain(&vad, base, speakers, &mut cues);
             }
             let now = base + fed as f64 / rate;
             if !vad.detected() {
@@ -270,6 +365,7 @@ impl Engine {
                 if !sink(Step {
                     cues: std::mem::take(&mut cues),
                     reached,
+                    speakers: speakers.clone(),
                 }) {
                     return Ok(Outcome {
                         reached,
@@ -285,13 +381,39 @@ impl Engine {
             vad.accept_waveform(&pending);
         }
         vad.flush();
-        self.drain(&vad, base, &mut cues);
+        self.drain(&vad, base, speakers, &mut cues);
         let reached = if eof {
             reader.position()
         } else {
             reader.position().min(until.max(base))
         };
-        sink(Step { cues, reached });
+        sink(Step {
+            cues,
+            reached,
+            speakers: speakers.clone(),
+        });
         Ok(Outcome { reached, eof })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_segments_are_split_for_speakers() {
+        assert_eq!(speaker_windows(2.0), [(0.0, 2.0)]);
+        assert_eq!(speaker_windows(4.4), [(0.0, 4.4)]);
+        let w = speaker_windows(12.0);
+        assert_eq!(w.len(), 4);
+        assert_eq!(w[3], (9.0, 12.0));
+
+        let labeled = [(0.0, 3.0, Some(0)), (3.0, 6.0, Some(1)), (6.0, 9.0, None)];
+        assert_eq!(speaker_for(0.5, 2.0, &labeled), Some(0));
+        // 跨两块的取重叠多的
+        assert_eq!(speaker_for(2.5, 5.0, &labeled), Some(1));
+        // 落在没认出人的那块里：退回旁边认出来的
+        assert_eq!(speaker_for(5.5, 8.5, &labeled), Some(1));
+        assert_eq!(speaker_for(6.5, 8.5, &labeled), None);
     }
 }

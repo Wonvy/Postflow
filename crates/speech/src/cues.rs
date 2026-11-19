@@ -6,11 +6,23 @@
 use serde::{Deserialize, Serialize};
 
 /// 一句字幕。时间是它在整期节目里的位置，秒。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Cue {
     pub start: f64,
     pub end: f64,
     pub text: String,
+    /// 每个字（按 Unicode 字符数）从这句开始算起第几个百分之一秒说出来，「唱词」那样一个字一个字地亮。
+    /// 模型给了词元时间就用它的，没给的按字数在这一段里平均分。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub t: Vec<u32>,
+    /// 第几个说话的人（从 0 数），分出了说话人才有。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<u32>,
+}
+
+/// 秒换成百分之一秒。
+fn centis(seconds: f64) -> u32 {
+    (seconds * 100.0).round().max(0.0) as u32
 }
 
 /// 一句最多这么宽（汉字算 2，字母算 1），大约两行。超过了就算没有标点也切开。
@@ -193,22 +205,32 @@ pub fn split(
 
     let mut cues: Vec<Cue> = Vec::new();
     for (a, b) in ranges {
-        let piece: String = chars[a..b].iter().map(|x| x.0).collect();
-        let piece = piece.trim();
-        if piece.is_empty() {
+        // 去掉两头的空白，字和它的时间一起去
+        let slice = &chars[a..b];
+        let (Some(first), Some(last)) = (
+            slice.iter().position(|x| !x.0.is_whitespace()),
+            slice.iter().rposition(|x| !x.0.is_whitespace()),
+        ) else {
             continue;
-        }
-        if !has_words(piece) {
+        };
+        let part = &slice[first..=last];
+        let text: String = part.iter().map(|x| x.0).collect();
+        if !has_words(&text) {
             // 落单的标点并到上一句
-            if let Some(last) = cues.last_mut() {
-                last.text.push_str(piece);
+            if let Some(prev) = cues.last_mut() {
+                prev.text.push_str(&text);
+                prev.t
+                    .extend(part.iter().map(|x| centis(start + x.1 - prev.start)));
             }
             continue;
         }
+        let t0 = part[0].1;
         cues.push(Cue {
-            start: start + chars[a].1,
+            start: start + t0,
             end: start + duration,
-            text: piece.to_string(),
+            text,
+            t: part.iter().map(|x| centis(x.1 - t0)).collect(),
+            speaker: None,
         });
     }
     // 每一句到下一句开始为止
@@ -445,6 +467,47 @@ mod tests {
     }
 
     #[test]
+    fn every_character_gets_its_time() {
+        // 模型给了逐字时间
+        let tokens: Vec<String> = ["你", "好", "朋", "友", "们", "。", "再", "见", "了", "。"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let times = [0.5, 0.7, 0.9, 1.1, 1.3, 1.4, 3.0, 3.2, 3.6, 3.7];
+        let cues = split(10.0, 5.0, "你好朋友们。再见了。", &tokens, Some(&times));
+        assert_eq!(texts(&cues), ["你好朋友们。", "再见了。"]);
+        assert_eq!(cues[0].t, [0, 20, 40, 60, 80, 90]);
+        assert_eq!(cues[1].t, [0, 20, 60, 70]);
+        assert_eq!(cues[1].start, 13.0);
+        assert!(cues.iter().all(|c| c.t.len() == c.text.chars().count()));
+
+        // 没给的按字数平均分；两头的空白去掉，不占时间
+        let cues = split(0.0, 4.0, "  one two  ", &[], None);
+        assert_eq!(cues[0].text, "one two");
+        assert_eq!(cues[0].t.len(), 7);
+        assert_eq!(cues[0].start, 0.0);
+        assert_eq!(cues[0].t.last(), Some(&343));
+        assert!(cues[0].t.windows(2).all(|w| w[0] <= w[1]));
+
+        // 并到上一句的标点也有时间
+        let cues = split(0.0, 4.0, "Is it you? !", &[], None);
+        assert_eq!(texts(&cues), ["Is it you?!"]);
+        assert_eq!(cues[0].t.len(), cues[0].text.chars().count());
+
+        // 存成 JSON 时，没有逐字时间、没有说话人就不写这两项
+        let plain = Cue {
+            start: 1.0,
+            end: 2.0,
+            text: "hi".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_string(&plain).unwrap(),
+            r#"{"start":1.0,"end":2.0,"text":"hi"}"#
+        );
+    }
+
+    #[test]
     fn covered_ranges_merge_and_report_gaps() {
         let mut c = Covered::default();
         assert_eq!(c.next_gap(0.0, 100.0), Some((0.0, 100.0)));
@@ -469,6 +532,7 @@ mod tests {
             start: s,
             end: s + 1.0,
             text: t.into(),
+            ..Default::default()
         };
         let mut all = vec![cue(1.0, "a"), cue(5.0, "old"), cue(9.0, "c")];
         merge(&mut all, 4.0, 8.0, vec![cue(6.0, "new2"), cue(4.5, "new1")]);

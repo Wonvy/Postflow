@@ -44,12 +44,14 @@ export type CoreEvent =
       type: "subtitles";
       id: string;
       state: "idle" | "downloading" | "loading" | "running" | "failed";
-      cues: { start: number; end: number; text: string }[];
+      cues: { start: number; end: number; text: string; t?: number[]; speaker?: number }[];
       from?: number;
       to?: number;
       covered: [number, number][];
       duration: number | null;
       complete: boolean;
+      /** 用哪个模型转的；模型加载好以前是空的。 */
+      model?: string;
       received: number;
       total: number | null;
       error?: string;

@@ -26,6 +26,12 @@ opt-level = 3
 # 解码出来的音频要逐个样本混成单声道、喂给人声检测，不优化的话开发时转写会慢好几倍
 opt-level = 3
 
+[profile.dev.package.opus-decoder]
+# 照着 C 版 libopus 移植的，有些移位按 C 的习惯会「溢出」（正式版编译本来就不检查）；
+# 开发和测试时也不检查，免得调试版一解 Opus 就停下。解码要快，也开优化
+opt-level = 3
+overflow-checks = false
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

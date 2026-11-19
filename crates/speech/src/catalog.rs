@@ -36,7 +36,13 @@ pub const KINDS: &[&str] = &[
     "zipformer_ctc",
     "wenet_ctc",
     "fire_red_asr_ctc",
+    // 说话人的声纹（区分是谁在说），不是识别模型
+    "speaker_embedding",
 ];
+
+/// 模型是做什么的。
+pub const TASK_ASR: &str = "asr";
+pub const TASK_SPEAKER: &str = "speaker";
 
 /// 要下载的一个文件。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,6 +57,45 @@ pub struct RemoteFile {
     pub sha256: String,
     /// 下载地址，按顺序试。
     pub urls: Vec<String>,
+    /// 内容不完全一样、但用起来一样的副本（比如同一个模型换了导出工具，文件里记的版本号不同），
+    /// 各有各的大小、校验值和地址。主地址都下不了时用它们，比如国内只有魔搭上的那一份下得动。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternates: Vec<Alternate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Alternate {
+    pub size: u64,
+    pub sha256: String,
+    pub urls: Vec<String>,
+}
+
+impl RemoteFile {
+    /// 这个文件所有的下载地址，连同每个地址下来的文件应有的大小和校验值。
+    pub fn sources(&self) -> Vec<(&str, u64, &str)> {
+        let mut out: Vec<(&str, u64, &str)> = self
+            .urls
+            .iter()
+            .map(|u| (u.as_str(), self.size, self.sha256.as_str()))
+            .collect();
+        for alt in &self.alternates {
+            out.extend(
+                alt.urls
+                    .iter()
+                    .map(|u| (u.as_str(), alt.size, alt.sha256.as_str())),
+            );
+        }
+        out
+    }
+
+    /// 一个文件的校验值对得上主文件或者某个副本。
+    pub fn accepts(&self, sha256: &str) -> bool {
+        self.sha256.eq_ignore_ascii_case(sha256)
+            || self
+                .alternates
+                .iter()
+                .any(|a| a.sha256.eq_ignore_ascii_case(sha256))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,6 +104,9 @@ pub struct Model {
     pub name: String,
     /// 模型类型，决定怎么加载。
     pub kind: String,
+    /// 做什么用：识别（`asr`，默认）还是区分说话人（`speaker`）。
+    #[serde(default = "asr")]
+    pub task: String,
     /// 能识别的语言（ISO 639 代码）。`multi` 表示很多种。
     #[serde(default)]
     pub languages: Vec<String>,
@@ -84,6 +132,10 @@ pub struct Model {
 
 fn one() -> u32 {
     1
+}
+
+fn asr() -> String {
+    TASK_ASR.to_string()
 }
 
 impl Model {
@@ -134,17 +186,21 @@ fn check_file(file: &RemoteFile) -> Result<(), String> {
     if !safe_file_name(&file.name) {
         return Err(format!("bad file name: {}", file.name));
     }
-    if file.sha256.len() != 64 || !file.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(format!("{}: missing or bad sha256", file.name));
-    }
     // 只认 https；本机地址例外（自己架的镜像，也方便测试）
     let allowed = |u: &String| {
         u.starts_with("https://")
             || u.starts_with("http://127.0.0.1:")
             || u.starts_with("http://localhost:")
     };
-    if file.urls.is_empty() || !file.urls.iter().all(allowed) {
-        return Err(format!("{}: download addresses must be https", file.name));
+    let groups = std::iter::once((&file.sha256, &file.urls))
+        .chain(file.alternates.iter().map(|a| (&a.sha256, &a.urls)));
+    for (sha256, urls) in groups {
+        if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(format!("{}: missing or bad sha256", file.name));
+        }
+        if urls.is_empty() || !urls.iter().all(allowed) {
+            return Err(format!("{}: download addresses must be https", file.name));
+        }
     }
     Ok(())
 }
@@ -200,7 +256,12 @@ mod tests {
         for m in &catalog.models {
             assert!(m.supported(), "{} is not loadable by this build", m.id);
             assert!(!m.name.is_empty() && !m.languages.is_empty(), "{}", m.id);
-            assert!(m.file("tokens").is_some(), "{} has no tokens file", m.id);
+            if m.task == TASK_ASR {
+                assert!(m.file("tokens").is_some(), "{} has no tokens file", m.id);
+            } else {
+                assert_eq!(m.task, TASK_SPEAKER, "{}", m.id);
+                assert!(m.file("model").is_some(), "{} has no model file", m.id);
+            }
             assert!(!m.license.is_empty(), "{} has no license", m.id);
             for lang in ["zh", "en"] {
                 assert!(

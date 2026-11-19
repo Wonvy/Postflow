@@ -18,6 +18,7 @@ pub mod audio;
 pub mod catalog;
 pub mod cues;
 pub mod engine;
+pub mod speakers;
 mod store;
 
 use std::collections::HashMap;
@@ -25,16 +26,19 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub use audio::AudioReader;
-pub use catalog::{Catalog, Model, RemoteFile};
+pub use catalog::{Catalog, Model, RemoteFile, TASK_ASR, TASK_SPEAKER};
 pub use cues::{Covered, Cue};
 pub use engine::{Engine, Outcome, Step, default_threads};
+pub use speakers::Speakers;
 pub use store::{Transcript, Transcripts};
+/// 自己实现的音频来源（比如还在下载的文件）要实现它，交给 `AudioReader::from_source`。
+pub use symphonia::core::io::MediaSource;
 
 /// 目录缓存多久以后联网更新一次。
 const CATALOG_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
@@ -43,6 +47,10 @@ const STATE_FILE: &str = "state.json";
 const MODEL_FILE: &str = "model.json";
 /// 一分钟收不到数据就换下一个下载地址。
 const STALL: Duration = Duration::from_secs(60);
+/// 下载一个模型前，每个下载源取这么多字节测速。
+const PROBE_BYTES: u64 = 1024 * 1024;
+/// 测速最多等这么久。没测完的按测到的算，连不上的排到最后。
+const PROBE_TIME: Duration = Duration::from_secs(8);
 /// 目录再大也不会超过这么多。
 const MAX_CATALOG: usize = 1024 * 1024;
 
@@ -139,6 +147,8 @@ pub struct Speech {
     /// 这次运行里联网更新过目录了（不管成没成）。
     refreshed: AtomicBool,
     downloads: Mutex<HashMap<String, Progress>>,
+    /// 下载源（`https://主机`）按上次测的速度排好，快的在前。
+    sources: Mutex<Vec<String>>,
 }
 
 impl Speech {
@@ -170,6 +180,7 @@ impl Speech {
             catalog: Mutex::new(None),
             refreshed: AtomicBool::new(false),
             downloads: Mutex::new(HashMap::new()),
+            sources: Mutex::new(Vec::new()),
         })
     }
 
@@ -310,17 +321,28 @@ impl Speech {
             .unwrap_or_default()
     }
 
-    /// 现在用哪个模型：用户选的那个（还装着的话），否则装着的第一个。
+    /// 现在用哪个识别模型：用户选的那个（还装着的话），否则装着的第一个。
     pub fn selected(&self) -> Option<String> {
-        let installed = self.installed();
+        let installed: Vec<Model> = self
+            .installed()
+            .into_iter()
+            .filter(|m| m.task == TASK_ASR)
+            .collect();
         self.read_state()
             .selected
             .filter(|id| installed.iter().any(|m| &m.id == id))
             .or_else(|| installed.first().map(|m| m.id.clone()))
     }
 
+    /// 装着的声纹模型（区分说话人用）。
+    pub fn speaker_model(&self) -> Option<Model> {
+        self.installed()
+            .into_iter()
+            .find(|m| m.task == TASK_SPEAKER && m.supported())
+    }
+
     pub fn select(&self, id: &str) -> Result<()> {
-        if self.installed_model(id).is_none() {
+        if self.installed_model(id).is_none_or(|m| m.task != TASK_ASR) {
             return Err(Error::NotInstalled(id.to_string()));
         }
         let state = State {
@@ -415,6 +437,13 @@ impl Speech {
         self.report(&progress, on_progress);
         let step = (progress.total / 200).max(256 * 1024);
 
+        // 同一个文件放在好几个地方（Hugging Face、魔搭……）：先测哪儿快，连不上的放到最后。
+        // 国内连不上 Hugging Face，国外从魔搭下又慢，按顺序挨个试要白等好久
+        if let Some(largest) = model.files.iter().max_by_key(|f| f.size) {
+            let urls: Vec<String> = largest.sources().iter().map(|s| s.0.to_string()).collect();
+            self.rank_sources(&urls).await;
+        }
+
         let partial = self.models_dir().join(format!(".{id}.partial"));
         std::fs::create_dir_all(&partial)?;
         for file in &model.files {
@@ -440,9 +469,9 @@ impl Speech {
             std::fs::remove_dir_all(&target)?;
         }
         std::fs::rename(partial, &target)?;
-        // 还没选过用哪个（第一次装），就用刚装的这个；以后再装别的不会悄悄换掉
+        // 还没选过用哪个识别模型（第一次装），就用刚装的这个；以后再装别的不会悄悄换掉
         let chosen = self.read_state().selected;
-        if chosen.is_none_or(|id| self.installed_model(&id).is_none()) {
+        if model.task == TASK_ASR && chosen.is_none_or(|id| self.installed_model(&id).is_none()) {
             self.select(&model.id)?;
         }
         Ok(())
@@ -465,20 +494,28 @@ impl Speech {
         on_progress: &mut impl FnMut(&Progress),
     ) -> Result<()> {
         let before = progress.received;
+        let sources = file.sources();
         // 上次已经下完整的不用再下
-        if std::fs::metadata(to).is_ok_and(|m| m.len() == file.size) && verify(to, &file.sha256)? {
+        if std::fs::metadata(to).is_ok_and(|m| sources.iter().any(|s| s.1 == m.len()))
+            && file.accepts(&sha256_of(to)?)
+        {
             progress.received = before + file.size;
             self.report(progress, on_progress);
             return Ok(());
         }
         let mut last = Error::Download("no download address".into());
-        for url in &file.urls {
+        let urls: Vec<String> = sources.iter().map(|s| s.0.to_string()).collect();
+        for url in &self.ordered(&urls) {
+            // 这个地址下来的文件应有的大小和校验值（主文件或者某个等价副本）
+            let Some(&(_, size, sha256)) = sources.iter().find(|s| s.0 == url) else {
+                continue;
+            };
             match self
-                .fetch_from(url, file, to, before, progress, step, on_progress)
+                .fetch_from(url, file, size, to, before, progress, step, on_progress)
                 .await
             {
                 Ok(()) => {
-                    if verify(to, &file.sha256)? {
+                    if sha256_of(to)?.eq_ignore_ascii_case(sha256) {
                         progress.received = before + file.size;
                         self.report(progress, on_progress);
                         return Ok(());
@@ -504,6 +541,7 @@ impl Speech {
         &self,
         url: &str,
         file: &RemoteFile,
+        size: u64,
         to: &Path,
         before: u64,
         progress: &mut Progress,
@@ -512,7 +550,7 @@ impl Speech {
     ) -> Result<()> {
         let failed = |e: reqwest::Error| Error::Download(e.to_string());
         let mut have = std::fs::metadata(to).map_or(0, |m| m.len());
-        if have >= file.size {
+        if have >= size {
             // 比应有的还大，肯定不对
             let _ = std::fs::remove_file(to);
             have = 0;
@@ -526,8 +564,18 @@ impl Speech {
             .await
             .and_then(|r| r.error_for_status())
             .map_err(failed)?;
-        // 服务器不认断点续传就从头来
-        let resumed = have > 0 && response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+        // 接着上次的下：看服务器给的是从哪儿开始的。有的服务器（魔搭的小文件）只给了要的那一段，
+        // 状态码却是 200，所以按 Content-Range 判断，不只看状态码。不认断点续传的就从头来
+        let resumed = match content_range_start(&response) {
+            Some(start) if have > 0 && start == have => true,
+            Some(start) if start != 0 => {
+                return Err(Error::Download(format!(
+                    "asked for bytes from {have} but got bytes from {start}"
+                )));
+            }
+            Some(_) => false,
+            None => have > 0 && response.status() == reqwest::StatusCode::PARTIAL_CONTENT,
+        };
         if !resumed {
             have = 0;
         }
@@ -546,7 +594,7 @@ impl Speech {
                 .map_err(failed)?;
             let Some(chunk) = chunk else { break };
             have += chunk.len() as u64;
-            if have > file.size {
+            if have > size {
                 return Err(Error::Checksum(file.name.clone()));
             }
             out.write_all(&chunk)?;
@@ -557,10 +605,74 @@ impl Speech {
             }
         }
         out.flush()?;
-        if have != file.size {
+        if have != size {
             return Err(Error::Download("the connection closed early".into()));
         }
         Ok(())
+    }
+
+    /// 给几个下载地址测速：每个网站取一个地址，下开头一小段，按快慢给网站排序，记下来。
+    /// 只有一个网站时不用测。
+    async fn rank_sources(&self, urls: &[String]) {
+        let mut origins: Vec<String> = Vec::new();
+        for url in urls {
+            let host = origin(url);
+            if !origins.contains(&host) {
+                origins.push(host);
+            }
+        }
+        if origins.len() < 2 {
+            return;
+        }
+        let mut tasks = tokio::task::JoinSet::new();
+        for host in &origins {
+            let Some(url) = urls.iter().find(|u| origin(u) == *host) else {
+                continue;
+            };
+            let (http, url, host) = (self.http.clone(), url.clone(), host.clone());
+            tasks.spawn(async move { (host, probe(&http, &url).await) });
+        }
+        let mut speeds: Vec<(String, f64)> = Vec::new();
+        while let Some(done) = tasks.join_next().await {
+            if let Ok((host, speed)) = done {
+                tracing::debug!(%host, speed, "download source speed");
+                speeds.push((host, speed));
+            }
+        }
+        // 快的在前；一样快（比如都连不上）的保持目录里的顺序
+        let at = |h: &str| origins.iter().position(|o| o == h);
+        speeds.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| at(&a.0).cmp(&at(&b.0))));
+        if let Some((best, speed)) = speeds.first() {
+            tracing::info!(source = %best, bytes_per_second = *speed as u64, "downloading the speech model from the fastest source");
+        }
+        *self.sources.lock().unwrap_or_else(|e| e.into_inner()) =
+            speeds.into_iter().map(|(h, _)| h).collect();
+    }
+
+    /// 上次测速排出来的下载源，快的在前。排查下载问题用。
+    pub fn sources(&self) -> Vec<String> {
+        self.sources
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// 按测出来的快慢排好的下载地址。没测过的网站排在测过的后面，各自保持原来的顺序。
+    fn ordered(&self, urls: &[String]) -> Vec<String> {
+        let ranking = self
+            .sources
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mut out = urls.to_vec();
+        out.sort_by_key(|u| {
+            let host = origin(u);
+            ranking
+                .iter()
+                .position(|h| *h == host)
+                .unwrap_or(ranking.len())
+        });
+        out
     }
 
     /// 从本机的一个文件夹装模型：给下载不动的人用。文件夹里（或者下一层）要有目录里列的那几个文件，
@@ -597,7 +709,7 @@ impl Speech {
                 for file in &model.files {
                     let from =
                         find(&file.name).ok_or_else(|| Error::MissingFile(file.name.clone()))?;
-                    if !verify(&from, &file.sha256)? {
+                    if !file.accepts(&sha256_of(&from)?) {
                         return Err(Error::Checksum(file.name.clone()));
                     }
                     std::fs::copy(&from, partial.join(&file.name))?;
@@ -646,10 +758,12 @@ impl Speech {
         let model = self
             .installed_model(id)
             .ok_or_else(|| Error::NotInstalled(id.to_string()))?;
+        let speaker = self.speaker_model().map(|m| (self.model_dir(&m.id), m));
         Engine::load(
             &self.model_dir(id),
             &model,
             &self.vad_path()?,
+            speaker.as_ref().map(|(dir, m)| (dir.as_path(), m)),
             default_threads(),
         )
     }
@@ -664,8 +778,67 @@ impl Speech {
     }
 }
 
-/// 文件内容是不是这个 SHA-256。
-fn verify(path: &Path, sha256: &str) -> Result<bool> {
+/// 网址的协议、主机和端口：`https://www.modelscope.cn`。按它给下载源排序。
+fn origin(url: &str) -> String {
+    let (scheme, rest) = url.split_once("://").unwrap_or(("", url));
+    let host = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    format!(
+        "{}://{}",
+        scheme.to_ascii_lowercase(),
+        host.to_ascii_lowercase()
+    )
+}
+
+/// `Content-Range: bytes 100-199/315894` 里的起点。没有这个头、或者读不懂时为空。
+fn content_range_start(response: &reqwest::Response) -> Option<u64> {
+    let value = response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)?
+        .to_str()
+        .ok()?;
+    parse_content_range_start(value)
+}
+
+fn parse_content_range_start(value: &str) -> Option<u64> {
+    let range = value.trim().strip_prefix("bytes")?.trim_start();
+    let (start, _) = range.split_once('-')?;
+    start.trim().parse().ok()
+}
+
+/// 从一个地址下开头一小段，返回每秒多少字节。连不上、出错是 0。
+async fn probe(http: &reqwest::Client, url: &str) -> f64 {
+    let started = Instant::now();
+    let mut got = 0u64;
+    let read = async {
+        let mut response = http
+            .get(url)
+            .header(
+                reqwest::header::RANGE,
+                format!("bytes=0-{}", PROBE_BYTES - 1),
+            )
+            .send()
+            .await
+            .ok()?
+            .error_for_status()
+            .ok()?;
+        while got < PROBE_BYTES {
+            match response.chunk().await.ok()? {
+                Some(chunk) => got += chunk.len() as u64,
+                None => break,
+            }
+        }
+        Some(())
+    };
+    // 超时了也按已经收到的算：慢，但是通的
+    let _ = tokio::time::timeout(PROBE_TIME, read).await;
+    if got == 0 {
+        return 0.0;
+    }
+    got as f64 / started.elapsed().as_secs_f64().max(0.001)
+}
+
+/// 文件内容的 SHA-256（小写十六进制）。
+fn sha256_of(path: &Path) -> Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 1024 * 1024];
@@ -677,8 +850,7 @@ fn verify(path: &Path, sha256: &str) -> Result<bool> {
         hasher.update(&buf[..n]);
     }
     let digest = hasher.finalize();
-    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-    Ok(hex.eq_ignore_ascii_case(sha256))
+    Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -702,4 +874,23 @@ fn dir_size(dir: &Path) -> u64 {
             Err(_) => 0,
         })
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn origins_and_content_ranges() {
+        assert_eq!(
+            origin("https://www.ModelScope.cn/models/a/b/resolve/master/x.onnx"),
+            "https://www.modelscope.cn"
+        );
+        assert_eq!(origin("http://127.0.0.1:9/good/x"), "http://127.0.0.1:9");
+        assert_eq!(origin("https://hf-mirror.com?x=1"), "https://hf-mirror.com");
+        assert_eq!(parse_content_range_start("bytes 100-199/315894"), Some(100));
+        assert_eq!(parse_content_range_start(" bytes  0-0/1"), Some(0));
+        assert_eq!(parse_content_range_start("bytes */315894"), None);
+        assert_eq!(parse_content_range_start("items 1-2/3"), None);
+    }
 }

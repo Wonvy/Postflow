@@ -155,7 +155,53 @@ export default function (api) {
 | `"new-mail"` | `{ account_id, mails: [{ id, from, subject, date }], total }`。新邮件经过用户的自动规则（设置 → 自动规则）处理之后发出。只包括最近的邮件；离线几天后补收的旧邮件不会触发。 |
 | `"items-changed"` | `{ scope: string[] }`。条目、订阅或设置有了变化（在这台设备上，或者从其他设备同步过来）。 |
 | `"item-open"` | `{ id }`，阅读区打开的条目（关掉时是 `null`）。 |
+| `"player"` | 播客播放器变了：换了一期、开始或暂停、改了速度、跳了一下。内容是 [`api.player.state()`](#apiplayer)（播放器关了是 `null`）。正常往前放不发；要进度时读 `state().position`。 |
+| `"subtitle"` | 屏幕上显示的那一句字幕换了（或者它的译文到了）。内容是 [`api.subtitles.cueAt()`](#apisubtitles)：那一句，两句之间是 `null`。 |
 | `"core"` | Postflow 核心发出的所有事件，不做筛选。 |
+
+### `api.player`
+
+列表底下和阅读区里的播客播放器。
+
+| 方法 | 作用 |
+| --- | --- |
+| `state()` | 正在放的一期，没在放是 `null`：`{ id, title, source, url, playing, position, duration, rate }`。`id` 是条目 ID；`position`、`duration` 是秒（还不知道多长时 `duration` 是 `null`）。 |
+| `play(id?, at?)` | 放条目 `id`（带音频的文章），可以从第 `at` 秒开始。不给 `id` 就是接着放现在这一期。条目没有音频时报错。 |
+| `pause()` · `stop()` | 暂停 · 关掉播放器。 |
+| `seek(seconds)` · `skip(seconds)` | 跳到某个时间 · 往前跳（负数往回）。 |
+| `setRate(rate)` | 播放速度，比如 `1.5`。 |
+
+### `api.subtitles`
+
+正在放的这一期的字幕：节目自带有时间的文字稿就用它，没有就是在这台设备上识别的。每一句是一个 `Cue`：
+
+```ts
+interface Cue {
+  start: number;              // 秒
+  end: number;
+  text: string;
+  speaker: number | null;     // 谁在说，按第一次开口的先后从 0 数；不知道是 null
+  speakerName: string | null; // 节目文字稿里写了的名字
+  translation: string | null; // 开了自动翻译、已经翻好的译文
+}
+```
+
+| 方法 | 返回 |
+| --- | --- |
+| `enabled()` · `setEnabled(on)` | 字幕开着没有 · 打开或关掉（和播放器上的字幕按钮是同一个开关）。 |
+| `current()` | 正在放的这一期：`{ id, source, complete, translatedFrom, translatedTo, cues }`；没开字幕或没在放是 `null`。`source` 是 `"feed"` 或 `"local"`；本机识别的边转边多，转完时 `complete` 变成 `true`。开了自动翻译时 `translatedFrom`、`translatedTo` 是语言代码。 |
+| `cueAt(seconds?)` | 那一秒（默认现在）显示的那一句，带它在 `cues` 里的下标 `index`；没有是 `null`。 |
+| `get(id)` | `{ id, complete, duration, cues }`：任意一期在这台设备上识别过的字幕，不管在不在放（没有就是空的 `cues`）。 |
+
+比如一个把说过的话记下来的插件：
+
+```js
+export default function (api) {
+  api.events.on("subtitle", (cue) => {
+    if (cue) console.log(`[${cue.start.toFixed(1)}s] ${cue.speaker ?? "?"}: ${cue.text}`);
+  });
+}
+```
 
 ### `api.storage`
 

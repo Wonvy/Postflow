@@ -32,6 +32,16 @@ pub(crate) struct Progress {
     pub received: u64,
     pub total: Option<u64>,
     pub error: Option<String>,
+    /// 下完以后的文件名（下载中的内容在旁边的 `.part` 里）。字幕边下边转时读它。
+    #[serde(skip)]
+    pub file: Option<PathBuf>,
+}
+
+impl Progress {
+    /// 正在写的那个文件。
+    pub(crate) fn partial(&self) -> Option<PathBuf> {
+        self.file.as_ref().map(|f| f.with_extension("part"))
+    }
 }
 
 pub(crate) struct Episodes {
@@ -203,7 +213,14 @@ impl Core {
             .episodes
             .dir
             .join(format!("{id}.{}", extension(&media.mime, &media.url)));
-        self.episodes.set(&id, Progress::default());
+        self.episodes.set(
+            &id,
+            Progress {
+                file: Some(to.clone()),
+                ..Progress::default()
+            },
+        );
+        let target = to.clone();
         let core = self.clone();
         tokio::spawn(async move {
             let result = core
@@ -215,6 +232,7 @@ impl Core {
                             received,
                             total,
                             error: None,
+                            file: Some(target.clone()),
                         },
                     );
                 })

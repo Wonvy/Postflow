@@ -15,13 +15,6 @@ import { Button, cx, IconButton, Spinner } from "./ui";
 /** 核心返回的错误，或者流式请求里带回来的错误码。 */
 type Failure = unknown;
 
-function useFailureText() {
-  const t = useT();
-  return (err: Failure) => {
-    const detail = errorDetail(err);
-    return detail ? `${errorText(t, err)}（${detail}）` : errorText(t, err);
-  };
-}
 
 export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean }) {
   const t = useT();
@@ -33,7 +26,6 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
   const list = providers.data?.providers ?? [];
   const main = list.find((p) => p.id === providers.data?.default) ?? list[0];
   const configured = list.length > 0;
-  const failureText = useFailureText();
 
   const resultsKey = ["ai", "results", item.id, lang];
   const results = useQuery({
@@ -234,7 +226,7 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
                   ))}
                 </div>
               )}
-              {error !== null && <AiError text={failureText(error)} onSettings={() => setDialog({ type: "settings", page: "ai" })} />}
+              {error !== null && <AiError error={error} onSettings={() => setDialog({ type: "settings", page: "ai" })} />}
             </section>
 
             <section className="mt-5 border-t border-line pt-3">
@@ -280,7 +272,7 @@ export function AiPanel({ item, autoRun }: { item: ItemDetail; autoRun: boolean 
                   ))}
               </div>
               {chatError !== null && (
-                <AiError text={failureText(chatError)} onSettings={() => setDialog({ type: "settings", page: "ai" })} />
+                <AiError error={chatError} onSettings={() => setDialog({ type: "settings", page: "ai" })} />
               )}
             </section>
           </div>
@@ -334,14 +326,17 @@ function Bubble({ role, text, streaming = false }: { role: "user" | "assistant";
   );
 }
 
-function AiError({ text, onSettings }: { text: string; onSettings: () => void }) {
+/** AI 出错时的提示：说明用界面语言；AI 服务自己回的原话（有的话）另起一行，淡一些。 */
+function AiError({ error, onSettings }: { error: Failure; onSettings: () => void }) {
   const t = useT();
+  const detail = errorDetail(error);
   return (
     <div className="mt-3 rounded-md border border-line bg-hover px-3 py-2 text-[12px] leading-relaxed text-fg-2">
-      {text}
+      {errorText(t, error)}
       <button type="button" onClick={onSettings} className="ml-1.5 text-accent hover:underline">
         {t("ai.openSettings")}
       </button>
+      {detail && <p className="mt-1 select-text break-words text-[11px] text-fg-3">{t("ai.serviceSaid", { text: detail })}</p>}
     </div>
   );
 }

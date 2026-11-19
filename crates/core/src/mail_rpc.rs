@@ -690,6 +690,8 @@ impl Core {
             "reply_to": rendered.reply_to,
             "attachments": rendered.attachments,
             "unsubscribe": postflow_mail::unsubscribe(&raw),
+            // 信里的验证码：阅读区顶上显示，一点就复制
+            "code": postflow_mail::summarize(&raw).code,
         });
         Ok(value)
     }

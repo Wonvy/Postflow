@@ -1,17 +1,24 @@
 //! 把音频文件读成识别要的样子：单声道、16 kHz、f32。
 //!
 //! 一边解码一边给，不把整期节目读进内存；可以从中间某个时间开始（边播边转写要用）。
+//! 来源可以是还在下载的文件（`MediaSource`），读到还没下到的地方由来源自己等。
+//!
+//! 解码用 Symphonia（MP3、AAC、Vorbis、FLAC、WAV）；Opus 它不支持，用纯 Rust 的 opus-decoder，
+//! 直接解成 16 kHz 单声道，不用再重采样。
 
 use std::fs::File;
 use std::path::Path;
 
+use opus_decoder::OpusDecoder;
 use sherpa_onnx::LinearResampler;
+use symphonia::core::codecs::audio::well_known::CODEC_ID_OPUS;
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
+use symphonia::core::packet::Packet;
 use symphonia::core::units::{Time, TimeBase};
 
 use crate::{Error, Result};
@@ -22,9 +29,46 @@ pub const SAMPLE_RATE: u32 = 16_000;
 /// 连着这么多个包解不出来就当文件坏了，免得在一个坏文件上空转。
 const MAX_BAD_PACKETS: usize = 200;
 
+/// Opus 的时间戳和「预跳过」都按 48 kHz 算。
+const OPUS_RATE: u32 = 48_000;
+
+enum Decoder {
+    Symphonia(Box<dyn AudioDecoder>),
+    Opus {
+        /// 解码器的状态有好几 KB，放在堆上。
+        decoder: Box<OpusDecoder>,
+        /// 开头还要丢掉多少个样本（编码器垫的「预跳过」，按 16 kHz 算）。
+        skip: usize,
+    },
+}
+
+impl Decoder {
+    fn reset(&mut self) {
+        match self {
+            Decoder::Symphonia(d) => d.reset(),
+            Decoder::Opus { decoder, skip } => {
+                decoder.reset();
+                *skip = 0;
+            }
+        }
+    }
+}
+
+/// 解出来的一包：采样率和声道数，样本在 `interleaved` 里。
+enum Decoded {
+    Samples {
+        rate: u32,
+        channels: usize,
+    },
+    /// 坏包，跳过去。
+    Bad,
+    /// 解码器要重新开始。
+    Reset,
+}
+
 pub struct AudioReader {
     format: Box<dyn FormatReader>,
-    decoder: Box<dyn AudioDecoder>,
+    decoder: Decoder,
     track_id: u32,
     time_base: Option<TimeBase>,
     duration: Option<f64>,
@@ -52,9 +96,15 @@ fn unsupported(err: SymError) -> Error {
 impl AudioReader {
     pub fn open(path: &Path) -> Result<AudioReader> {
         let file = File::open(path)?;
-        let stream = MediaSourceStream::new(Box::new(file), Default::default());
+        let ext = path.extension().and_then(|e| e.to_str());
+        Self::from_source(Box::new(file), ext)
+    }
+
+    /// 从任意来源读。`ext` 是文件扩展名，帮着认格式（还在下载的 `.part` 文件看不出来）。
+    pub fn from_source(source: Box<dyn MediaSource>, ext: Option<&str>) -> Result<AudioReader> {
+        let stream = MediaSourceStream::new(source, Default::default());
         let mut hint = Hint::new();
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        if let Some(ext) = ext {
             hint.with_extension(ext);
         }
         let format = symphonia::default::get_probe()
@@ -73,9 +123,22 @@ impl AudioReader {
             .as_ref()
             .and_then(|p| p.audio())
             .ok_or_else(|| Error::Audio("unknown audio codec".into()))?;
-        let decoder = symphonia::default::get_codecs()
-            .make_audio_decoder(params, &AudioDecoderOptions::default())
-            .map_err(unsupported)?;
+        let decoder = if params.codec == CODEC_ID_OPUS {
+            // 直接解成识别要的单声道 16 kHz；立体声由解码器混成单声道
+            let decoder =
+                OpusDecoder::new(SAMPLE_RATE, 1).map_err(|e| Error::Audio(format!("opus: {e}")))?;
+            let pre_skip = track.delay.unwrap_or(0) as usize;
+            Decoder::Opus {
+                decoder: Box::new(decoder),
+                skip: pre_skip * SAMPLE_RATE as usize / OPUS_RATE as usize,
+            }
+        } else {
+            Decoder::Symphonia(
+                symphonia::default::get_codecs()
+                    .make_audio_decoder(params, &AudioDecoderOptions::default())
+                    .map_err(unsupported)?,
+            )
+        };
         let duration = match (track.time_base, track.duration) {
             (Some(base), Some(d)) => base.calc_duration(d).map(|t| t.as_secs_f64()),
             _ => None,
@@ -132,6 +195,53 @@ impl AudioReader {
         Ok(self.position)
     }
 
+    /// 解一包，样本放进 `interleaved`。
+    fn decode(&mut self, packet: &Packet) -> Result<Decoded> {
+        match &mut self.decoder {
+            Decoder::Symphonia(decoder) => match decoder.decode(packet) {
+                Ok(buf) => {
+                    let spec = buf.spec();
+                    let (rate, channels) = (spec.rate(), spec.channels().count());
+                    buf.copy_to_vec_interleaved(&mut self.interleaved);
+                    Ok(Decoded::Samples { rate, channels })
+                }
+                Err(SymError::DecodeError(_) | SymError::IoError(_)) => Ok(Decoded::Bad),
+                Err(SymError::ResetRequired) => Ok(Decoded::Reset),
+                Err(e) => Err(unsupported(e)),
+            },
+            Decoder::Opus { decoder, skip } => {
+                self.interleaved
+                    .resize(decoder.max_frame_size_per_channel(), 0.0);
+                // 播客的音频是外来的：解码器遇到意外的包要是出了错（它不用 unsafe，出错的方式是 panic），
+                // 只当这一包坏了，把解码器重置了接着往下，不让整个转写任务停掉
+                let out = &mut self.interleaved;
+                let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    decoder.decode_float(&packet.data, out, false)
+                }));
+                let decoded = match decoded {
+                    Ok(result) => result,
+                    Err(_) => {
+                        decoder.reset();
+                        return Ok(Decoded::Bad);
+                    }
+                };
+                match decoded {
+                    Ok(n) => {
+                        self.interleaved.truncate(n);
+                        let dropped = (*skip).min(n);
+                        self.interleaved.drain(..dropped);
+                        *skip -= dropped;
+                        Ok(Decoded::Samples {
+                            rate: SAMPLE_RATE,
+                            channels: 1,
+                        })
+                    }
+                    Err(_) => Ok(Decoded::Bad),
+                }
+            }
+        }
+    }
+
     /// 下一块。读完了返回 `None`。
     pub fn read(&mut self) -> Result<Option<Chunk<'_>>> {
         let mut bad = 0usize;
@@ -143,6 +253,8 @@ impl AudioReader {
                 Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     return self.finish();
                 }
+                // 来源自己出的错（比如下载失败、被取消）原样交出去
+                Err(SymError::IoError(e)) => return Err(Error::Io(e)),
                 Err(SymError::ResetRequired) => {
                     self.decoder.reset();
                     continue;
@@ -158,26 +270,20 @@ impl AudioReader {
                     self.position = t.as_secs_f64().max(0.0);
                 }
             }
-            let (rate, channels) = match self.decoder.decode(&packet) {
-                Ok(buf) => {
-                    let spec = buf.spec();
-                    let (rate, channels) = (spec.rate(), spec.channels().count());
-                    buf.copy_to_vec_interleaved(&mut self.interleaved);
-                    (rate, channels)
-                }
+            let (rate, channels) = match self.decode(&packet)? {
+                Decoded::Samples { rate, channels } => (rate, channels),
                 // 个别坏包跳过去
-                Err(SymError::DecodeError(_) | SymError::IoError(_)) => {
+                Decoded::Bad => {
                     bad += 1;
                     if bad > MAX_BAD_PACKETS {
                         return Err(Error::Audio("too many undecodable packets".into()));
                     }
                     continue;
                 }
-                Err(SymError::ResetRequired) => {
+                Decoded::Reset => {
                     self.decoder.reset();
                     continue;
                 }
-                Err(e) => return Err(unsupported(e)),
             };
             if channels == 0 || rate == 0 || self.interleaved.is_empty() {
                 continue;

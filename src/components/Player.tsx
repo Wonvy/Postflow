@@ -3,16 +3,31 @@
 //   带视频附件的直接显示视频。
 // - 列表底下的迷你播放器：换条目、切到邮件都在，点标题回到那一期。
 // - PlayerBridge：播完标为已读。
-// - 字幕：开着的时候播放条和迷你播放器下面多一行，声音放到哪儿显示哪一句（lib/subtitles.ts）。
+// - 字幕：开着的时候播放条和迷你播放器下面多一行，声音放到哪儿显示哪一句（lib/subtitles.ts）；
+//   样子见 SubtitleStyles.tsx，译文来自 lib/subtitleTranslate.ts。
 // 播放本身在 lib/player.ts。
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Captions, Check, CircleCheck, Download, Gauge, Moon, Pause, Play, RotateCcw, RotateCw, X } from "lucide-react";
+import {
+  Captions,
+  Check,
+  ChevronDown,
+  CircleCheck,
+  Download,
+  Gauge,
+  Moon,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
+  Settings2,
+  X,
+} from "lucide-react";
 import { createContext, type CSSProperties, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, type Item } from "../lib/api";
 import { formatLength } from "../lib/duration";
 import { useDownloadActions, useDownloads } from "../lib/episodes";
-import { errorText, useLang, useT } from "../lib/i18n";
+import { errorText, type Translate, useLang, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
 import {
   BACK_SECONDS,
@@ -21,7 +36,6 @@ import {
   FORWARD_SECONDS,
   formatTime,
   play,
-  playbackTime,
   RATES,
   savedPosition,
   seek,
@@ -33,12 +47,17 @@ import {
   usePlayer,
 } from "../lib/player";
 import { keys } from "../lib/queries";
-import { coveredPercent, cueAt, isCovered } from "../lib/subtitleCues";
-import { redoLocal, startLocal, useSubtitles } from "../lib/subtitles";
+import { formatSize as formatBytes } from "../lib/platform";
+import type { Lang } from "../lib/time";
+import { coveredPercent, type Cue, cueAt, isCovered, speakerOrder } from "../lib/subtitleCues";
+import { redoLocal, startLocal, SUBTITLE_STYLES, useSubtitles } from "../lib/subtitles";
+import { type SubtitleTranslation, translationOf, useTranslationFor } from "../lib/subtitleTranslate";
 import { activeIndex, parseChapters, parseTranscript } from "../lib/transcript";
+import { languageName } from "../lib/translate";
 import { useUi } from "../lib/store";
+import { clockRate, SubtitleView, usePlaybackClock } from "./SubtitleStyles";
 import { toast } from "./Toast";
-import { cx, Favicon, IconButton, Menu, MenuItem, MenuSeparator, Spinner } from "./ui";
+import { cx, Favicon, IconButton, Menu, MenuItem, MenuSeparator, MenuSub, Spinner } from "./ui";
 
 /** 当前列表里能放的几期，按列表顺序：播完一期接着放下一期时用。 */
 function useQueue(): Episode[] {
@@ -321,9 +340,10 @@ function EpisodeBar({ item }: { item: Item }) {
   const resume = current ? 0 : savedPosition(item.id);
   return (
     <div className="mb-8 rounded-xl border border-line bg-surface px-4 py-3">
-      <div className="flex items-center gap-3">
+      {/* 窄的时候（三栏布局里的阅读区）按钮换到第二行，不把进度条挤没了 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <PlayButton episode={episode} queue={queue} size="lg" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[150px] flex-1">
           {current ? (
             <>
               <Scrubber position={position} duration={total} />
@@ -341,19 +361,22 @@ function EpisodeBar({ item }: { item: Item }) {
             </div>
           )}
         </div>
-        <DownloadButton id={item.id} />
-        {current && (
-          <div className="flex shrink-0 items-center gap-0.5">
-            <IconButton label={t("player.back", { n: BACK_SECONDS })} onClick={() => skip(-BACK_SECONDS)}>
-              <RotateCcw size={16} strokeWidth={1.75} />
-            </IconButton>
-            <IconButton label={t("player.forward", { n: FORWARD_SECONDS })} onClick={() => skip(FORWARD_SECONDS)}>
-              <RotateCw size={16} strokeWidth={1.75} />
-            </IconButton>
-            <SubtitleToggle />
-            <RateMenu />
-          </div>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <DownloadButton id={item.id} />
+          {current && (
+            <>
+              <IconButton label={t("player.back", { n: BACK_SECONDS })} onClick={() => skip(-BACK_SECONDS)}>
+                <RotateCcw size={16} strokeWidth={1.75} />
+              </IconButton>
+              <IconButton label={t("player.forward", { n: FORWARD_SECONDS })} onClick={() => skip(FORWARD_SECONDS)}>
+                <RotateCw size={16} strokeWidth={1.75} />
+              </IconButton>
+              <SubtitleToggle />
+              <SubtitleMenu />
+              <RateMenu />
+            </>
+          )}
+        </div>
       </div>
       {current && <SubtitleLine id={item.id} />}
       {error && (
@@ -420,35 +443,145 @@ function SubtitleToggle({ size = 16 }: { size?: number }) {
   );
 }
 
+/** 字幕的选项：样子、自动翻译、区分说话人。开着字幕时在字幕按钮旁边。 */
+function SubtitleMenu() {
+  const t = useT();
+  const on = useSubtitles((s) => s.on);
+  const style = useSubtitles((s) => s.style);
+  const setStyle = useSubtitles((s) => s.setStyle);
+  const translate = useSubtitles((s) => s.translate);
+  const setTranslate = useSubtitles((s) => s.setTranslate);
+  const speakers = useSubtitles((s) => s.speakers);
+  const setSpeakers = useSubtitles((s) => s.setSpeakers);
+  const setDialog = useUi((s) => s.setDialog);
+  if (!on) return null;
+  const mark = (yes: boolean) => (yes ? <Check size={14} /> : <span className="inline-block size-[14px]" />);
+  return (
+    <Menu
+      align="end"
+      trigger={
+        <button
+          type="button"
+          aria-label={t("subtitles.options")}
+          title={t("subtitles.options")}
+          className="-ml-1 inline-flex h-7 w-4 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg touch:h-10 touch:w-6"
+        >
+          <ChevronDown size={12} strokeWidth={2} />
+        </button>
+      }
+    >
+      <MenuSub
+        label={
+          <span className="flex items-center justify-between gap-3">
+            {t("subtitles.style")}
+            <span className="text-fg-3">{t(`subtitles.style.${style}`)}</span>
+          </span>
+        }
+      >
+        {SUBTITLE_STYLES.map((s) => {
+          const pick = () => {
+            setStyle(s);
+            // 双语要有译文
+            if (s === "bilingual") setTranslate(true);
+          };
+          return (
+            <MenuItem key={s} icon={mark(s === style)} onSelect={pick}>
+              {t(`subtitles.style.${s}`)}
+            </MenuItem>
+          );
+        })}
+      </MenuSub>
+      <MenuSeparator />
+      <MenuItem icon={mark(translate)} onSelect={() => setTranslate(!translate)}>
+        {t("subtitles.translate")}
+      </MenuItem>
+      <MenuItem icon={mark(speakers)} onSelect={() => setSpeakers(!speakers)}>
+        {t("subtitles.speakers")}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem icon={<Settings2 size={14} />} onSelect={() => setDialog({ type: "settings", page: "subtitles" })}>
+        {t("subtitles.settings")}
+      </MenuItem>
+    </Menu>
+  );
+}
+
+/** 译文那里的说明：缺翻译模型时问要不要下载，出错时可以再试，正在翻的时候说一声。没什么要说的是 null。 */
+function translationNote(t: Translate, lang: Lang, value: SubtitleTranslation, waiting: boolean): ReactNode {
+  const link = "underline decoration-dotted underline-offset-2 hover:text-accent";
+  switch (value.status) {
+    case "need": {
+      const { plan, download } = value;
+      const name = (code: string | null) => (code ? languageName(code, lang) : "");
+      const size = formatBytes(plan.missing.reduce((n, m) => n + m.size, 0));
+      return (
+        <>
+          {plan.missing.length > 1
+            ? t("translate.needPivot", { from: name(plan.from), to: name(plan.to), size })
+            : t("translate.need", { to: name(plan.to), size })}{" "}
+          <button type="button" className={link} onClick={download}>
+            {t("translate.download")}
+          </button>
+        </>
+      );
+    }
+    case "downloading":
+      return t("translate.downloading");
+    case "error":
+      return (
+        <>
+          <span className="text-danger">{errorText(t, value.error)}</span>{" "}
+          <button type="button" className={link} onClick={value.retry}>
+            {t("action.retry")}
+          </button>
+        </>
+      );
+    case "on":
+      return waiting && value.working ? t("subtitles.translating") : null;
+    default:
+      return null;
+  }
+}
+
 /**
- * 字幕行：声音放到哪儿显示哪一句。还没准备好的时候说明在等什么（下载这一期、加载模型、正在识别），
- * 没装识别模型就给一个去下载的入口。关着字幕、或者不是正在放的这一期时什么都不显示。
+ * 这一句是谁说的。本机分出来的按 `order`（speakerOrder）重新编号，没编号的不标；节目文字稿里的用名字。
+ */
+function speakerOf(
+  t: Translate,
+  cue: Cue,
+  order: Map<number, number> | null,
+  names: readonly string[] | undefined,
+): { index: number; name: string } | null {
+  if (cue.speaker === undefined) return null;
+  const index = order ? order.get(cue.speaker) : cue.speaker;
+  if (index === undefined) return null;
+  return { index, name: names?.[cue.speaker] ?? t("subtitles.speakerN", { n: index + 1 }) };
+}
+
+/**
+ * 字幕行：声音放到哪儿显示哪一句，样子按设置里选的（SubtitleStyles.tsx）。还没准备好的时候说明在等什么
+ * （下载这一期、加载模型、正在识别），没装识别模型就给一个去下载的入口。关着字幕、或者不是正在放的这一期时什么都不显示。
  */
 function SubtitleLine({ id, compact = false }: { id: string; compact?: boolean }) {
   const t = useT();
+  const lang = useLang();
   const on = useSubtitles((s) => s.on);
   const entry = useSubtitles((s) => (s.entry?.id === id ? s.entry : null));
   const needsModel = useSubtitles((s) => s.needsModel);
+  const style = useSubtitles((s) => s.style);
+  const showSpeakers = useSubtitles((s) => s.speakers);
+  const translation = useTranslationFor(id);
   const position = usePlayer((s) => (s.current?.id === id ? s.position : -1));
   const playing = usePlayer((s) => s.playing && s.current?.id === id);
   const setDialog = useUi((s) => s.setDialog);
   const cues = entry?.cues;
-  // 状态里的播放位置一秒才变一次，字幕要更细：放着的时候每秒看五次确切的时间，换了一句才重画
-  const [index, setIndex] = useState(-1);
-  useEffect(() => {
-    if (!on || !cues || position < 0) {
-      setIndex(-1);
-      return;
-    }
-    const update = () => setIndex(cueAt(cues, playbackTime() ?? position));
-    update();
-    if (!playing) return;
-    const timer = setInterval(update, 200);
-    return () => clearInterval(timer);
-  }, [on, cues, playing, position]);
+  // 状态里的播放位置一秒才变一次，字幕要更细：放着的时候按样子要的频率读确切的时间
+  const time = usePlaybackClock(on && playing && (cues?.length ?? 0) > 0, position, clockRate(style));
+  const order = useMemo(() => (entry?.source === "local" ? speakerOrder(cues ?? []) : null), [entry?.source, cues]);
   if (!on || position < 0) return null;
 
-  const text = index >= 0 ? cues?.[index]?.text : undefined;
+  const index = cues ? cueAt(cues, time) : -1;
+  const cue = index >= 0 ? cues?.[index] : undefined;
   let status: ReactNode = null;
   if (needsModel) {
     status = (
@@ -476,28 +609,29 @@ function SubtitleLine({ id, compact = false }: { id: string; compact?: boolean }
     status = percent === null ? t("subtitles.downloadingEpisode") : t("subtitles.downloadingEpisodeAt", { n: percent });
   } else if (entry.state === "loading") {
     status = t("subtitles.loadingModel");
-  } else if (!text && entry.source === "local" && entry.state === "running" && !isCovered(entry.covered, position)) {
-    status = t("subtitles.recognizing");
+  } else if (!cue && entry.source === "local" && entry.state === "running" && !isCovered(entry.covered, position)) {
+    // 边下边转：还没下到这儿时说下到哪儿了，下到了就是在识别
+    // 按时间粗算这个位置在文件里的哪儿（码率大致不变），下载还没到就是在等下载
+    const needed = entry.duration ? Math.min(1, position / entry.duration + 0.01) : 1;
+    const waiting = entry.total ? entry.received / entry.total < needed : false;
+    const percent = entry.total ? Math.floor((entry.received / entry.total) * 100) : 0;
+    status = waiting ? t("subtitles.downloadingEpisodeAt", { n: percent }) : t("subtitles.recognizing");
   }
 
-  if (compact) {
-    return (
-      <div
-        className="truncate px-3 pt-1.5 text-center text-[12px] leading-snug text-fg touch:text-[13px]"
-        aria-live="off"
-        title={text}
-      >
-        {text ?? <span className="text-fg-3">{status ?? "\u00a0"}</span>}
-      </div>
-    );
-  }
+  const speaker = showSpeakers && cue ? speakerOf(t, cue, order, entry?.speakerNames) : null;
+  const translated = cue ? translationOf(translation, cue) : undefined;
   return (
-    <div
-      className="mt-2 flex min-h-[44px] items-center justify-center px-2 text-center text-[15px] leading-snug text-fg"
-      aria-live="off"
-    >
-      {text ? <span className="select-text">{text}</span> : <span className="text-[12px] text-fg-3">{status}</span>}
-    </div>
+    <SubtitleView
+      style={style}
+      cues={cues ?? []}
+      index={index}
+      time={time}
+      translation={translated}
+      speaker={speaker}
+      compact={compact}
+      placeholder={status}
+      note={compact ? null : translationNote(t, lang, translation, !!cue && !translated)}
+    />
   );
 }
 
@@ -543,12 +677,29 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
     retry: false,
   });
   const position = usePlayer((s) => (s.current?.id === episode.id ? s.position : -1));
+  const showSpeakers = useSubtitles((s) => s.speakers);
+  const translation = useTranslationFor(episode.id);
   const hasChapters = (chapters.data?.length ?? 0) > 0;
-  const shown: { start: number | null; speaker?: string; text: string }[] | undefined = transcript
-    ? cues.data
-    : hasLocal
-      ? local?.cues
-      : undefined;
+  // 说话人：节目文字稿里写的名字按出现的先后编号，本机分出来的直接是编号；编号决定颜色
+  const shown = useMemo(() => {
+    if (transcript) {
+      const names: string[] = [];
+      return cues.data?.map((c) => {
+        let index: number | undefined;
+        if (c.speaker) {
+          index = names.indexOf(c.speaker);
+          if (index < 0) index = names.push(c.speaker) - 1;
+        }
+        return { start: c.start, text: c.text, speaker: c.speaker, index };
+      });
+    }
+    if (!hasLocal || !local) return undefined;
+    const order = speakerOrder(local.cues);
+    return local.cues.map((c) => {
+      const who = showSpeakers ? speakerOf(t, c, order, undefined) : null;
+      return { start: c.start as number | null, text: c.text, speaker: who?.name, index: who?.index };
+    });
+  }, [transcript, cues.data, hasLocal, local, showSpeakers, t]);
   const activeCue = panel === "transcript" && shown && position >= 0 ? activeIndex(shown, position) : -1;
   const activeRef = useRef<HTMLParagraphElement>(null);
   // 正在放的那一句跟着滚进面板里（只在面板里滚，不带着整页动）
@@ -630,8 +781,20 @@ function EpisodeExtras({ episode, queue }: { episode: Episode; queue: Episode[] 
                     {formatTime(c.start)}
                   </button>
                 )}
-                {c.speaker && <span className="mr-1 font-medium text-fg">{c.speaker}:</span>}
+                {c.speaker && (
+                  <span
+                    className="mr-1 font-medium text-fg"
+                    style={showSpeakers && c.index !== undefined ? { color: `var(--spk-${c.index % 8})` } : undefined}
+                  >
+                    {c.speaker}:
+                  </span>
+                )}
                 {c.text}
+                {c.start !== null && translationOf(translation, { start: c.start, text: c.text }) && (
+                  <span className="mt-0.5 block text-[12px] text-fg-3">
+                    {translationOf(translation, { start: c.start, text: c.text })}
+                  </span>
+                )}
               </p>
             ))
           )}

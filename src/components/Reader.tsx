@@ -12,6 +12,7 @@ import {
   Copy,
   ExternalLink,
   FilePen,
+  KeyRound,
   Forward,
   Globe,
   ImageOff,
@@ -979,6 +980,7 @@ function MailView({
       )}
 
       <FollowUpBanner item={item} />
+      <CodeBanner item={item} />
       <InviteCard item={item} />
       {bar}
       <PluginSections item={item} />
@@ -1015,6 +1017,33 @@ function MailView({
 }
 
 /** 已发送的信设了「没回复就提醒」：说什么时候提醒（或者已经到时间了），可以取消。 */
+/** 信里有验证码：顶上一条，验证码放大，一点就复制。 */
+function CodeBanner({ item }: { item: ItemDetail }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  const code = item.mail?.code;
+  if (!code) return null;
+  const copy = () => void copyText(code).then(() => setCopied(true));
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-line bg-hover px-3 py-2 text-[12px] text-fg-2">
+      <KeyRound size={14} strokeWidth={1.75} className="shrink-0 text-accent" />
+      <span className="text-fg-3">{t("codeNotice.title")}</span>
+      <button
+        type="button"
+        onClick={copy}
+        title={t("codeNotice.copy")}
+        className="tabular min-w-0 flex-1 select-text text-left text-[18px] font-semibold tracking-[0.1em] text-fg"
+      >
+        {code}
+      </button>
+      <Button variant="ghost" className="h-6 px-2 text-[12px]" onClick={copy}>
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? t("codeNotice.copied") : t("codeNotice.copy")}
+      </Button>
+    </div>
+  );
+}
+
 function FollowUpBanner({ item }: { item: ItemDetail }) {
   const t = useT();
   const lang = useLang();

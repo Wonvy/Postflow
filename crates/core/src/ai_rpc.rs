@@ -36,11 +36,21 @@ const TRANSLATE_CHUNK_TOKENS: usize = 1_800;
 const TRANSLATE_PARALLEL: usize = 3;
 
 /// 正在进行的请求，可以随时取消。
-#[derive(Default)]
 pub(crate) struct AiRuntime {
     pub(crate) client: Client,
     running: Mutex<HashMap<String, tokio::task::AbortHandle>>,
     next: AtomicU64,
+}
+
+impl AiRuntime {
+    /// 哪些模型会思考、哪些关不掉思考，记在本机目录的 `ai-models.json` 里，不同步。
+    pub(crate) fn new(local_dir: &std::path::Path) -> AiRuntime {
+        AiRuntime {
+            client: Client::with_memory(local_dir.join("ai-models.json")),
+            running: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(0),
+        }
+    }
 }
 
 impl From<postflow_ai::Error> for RpcError {
@@ -120,6 +130,9 @@ struct ProviderView {
     provider: Provider,
     has_key: bool,
     local: bool,
+    /// 服务商说这个模型要下线了，建议换成的模型。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replacement: Option<&'static str>,
 }
 
 #[derive(Deserialize)]
@@ -264,10 +277,16 @@ impl Core {
                 for provider in settings.providers {
                     let has_key = self.ai_key(&provider.id).await.is_some();
                     let local = provider.is_local();
+                    let replacement = postflow_ai::replacement(
+                        &provider.preset,
+                        &provider.base_url,
+                        &provider.model,
+                    );
                     providers.push(ProviderView {
                         provider,
                         has_key,
                         local,
+                        replacement,
                     });
                 }
                 reply(json!({
@@ -910,10 +929,10 @@ impl Core {
             .await?;
         let words = prompts::parse_keywords(&answer);
         if words.is_empty() {
-            return Err(RpcError::new(
-                "ai_bad_response",
-                "no keywords in the answer",
-            ));
+            // 回答的开头记进日志，排查用；界面上只说没找到关键词
+            let start: String = answer.chars().take(300).collect();
+            tracing::warn!(provider = %provider.preset, model = %provider.model, answer = %start, "no keywords in the AI answer");
+            return Err(RpcError::new("ai_no_keywords", "no keywords in the answer"));
         }
         let content = serde_json::to_string(&words).unwrap_or_default();
         let saved = self

@@ -74,6 +74,8 @@ export interface SpeechModel {
   id: string;
   name: string;
   kind: string;
+  /** 用来做什么：`asr` 是把声音转成文字，`speaker` 是分辨说话人。 */
+  task: string;
   /** 能识别的语言代码；`multi` 表示很多种。 */
   languages: string[];
   /** 推荐给这些界面语言的用户先装。 */
@@ -105,6 +107,10 @@ export interface SubtitleCue {
   start: number;
   end: number;
   text: string;
+  /** 每个字从这句开始算起第几个百分之一秒说出来。 */
+  t?: number[];
+  /** 第几个说话的人（从 0 数）。 */
+  speaker?: number;
 }
 
 export interface SubtitleSnapshot {
@@ -327,6 +333,8 @@ export interface MailDetail {
   rsvp?: string | null;
   /** 已发送的信设了「没回复就提醒」：提醒的时间（毫秒）。 */
   follow_up?: number | null;
+  /** 信里的验证码（找得到的话）。 */
+  code?: string | null;
 }
 
 /** 邮件里的会议邀请。时间是 UTC 毫秒；算不出时区时只有 `start_local`。 */
@@ -633,6 +641,8 @@ export interface AiProviderView extends AiProvider {
   has_key: boolean;
   /** 在这台电脑上运行（Ollama、LM Studio）。 */
   local: boolean;
+  /** 服务商说这个模型要下线了，建议换成的模型。 */
+  replacement?: string;
 }
 
 export interface AiPreset {
@@ -642,6 +652,8 @@ export interface AiPreset {
   model: string;
   key_url: string;
   local: boolean;
+  /** 服务商说要下线的模型，和建议换成的模型。 */
+  retiring: [string, string][];
 }
 
 export interface AiProviders {
@@ -815,6 +827,11 @@ export const api = {
   /** 删掉这一期的字幕（换个模型重新转之前）。 */
   subtitlesRemove: (id: string) => rpc<SubtitleSnapshot>("subtitles.remove", { id }),
   subtitlesClear: () => rpc<void>("subtitles.clear"),
+  /** 这一期字幕翻成 `lang` 的译文（存在本机）：`cueKey` 到译文。 */
+  subtitleTranslations: (id: string, lang: string) =>
+    rpc<{ entries: Record<string, string> }>("subtitles.translations", { id, lang }),
+  saveSubtitleTranslations: (id: string, lang: string, entries: Record<string, string>) =>
+    rpc<void>("subtitles.translations.save", { id, lang, entries }),
   /** 按节目名搜播客（苹果播客目录）。`country` 是两个字母的地区代码。 */
   searchPodcasts: (term: string, country: string) =>
     rpc<PodcastResult[]>("podcasts.search", { term, country }),

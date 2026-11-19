@@ -142,7 +142,9 @@ click **More info → Run anyway**.
 - Subtitles for podcasts: the CC button in the player shows what is being said as it plays. Shows with a timed
   transcript use it; the rest are transcribed on your own computer, starting where you're listening and running well
   ahead of playback, so the audio never leaves your device. Speech recognition models are downloaded on demand in
-  Settings → Subtitles and you can switch between them. See [Subtitles](docs/subtitles.md).
+  Settings → Subtitles and you can switch between them. Eleven animated styles (words light up as they're spoken
+  by default), a color for each speaker, and automatic translation under each line. See
+  [Subtitles](docs/subtitles.md).
 - Newsletters: right-click a mail and choose "Read with feeds" to read that sender's mail in Feeds, one row per sender
   under Newsletters, instead of in Mail. Right-click the sender to move it back.
 - Feeds are sorted into articles, videos and podcasts automatically (mostly audio means podcast; video sites or video

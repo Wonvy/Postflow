@@ -1,14 +1,24 @@
 {
   "schema": 1,
-  "updated": "2026-11-19T00:00:00Z",
+  "updated": "2026-11-19T18:00:00Z",
   "models": [
     {
       "id": "sense-voice-small",
       "name": "SenseVoice Small",
       "kind": "sense_voice",
-      "languages": ["zh", "yue", "en", "ja", "ko"],
-      "recommended": ["zh"],
-      "options": { "use_itn": "true" },
+      "languages": [
+        "zh",
+        "yue",
+        "en",
+        "ja",
+        "ko"
+      ],
+      "recommended": [
+        "zh"
+      ],
+      "options": {
+        "use_itn": "true"
+      },
       "license": "FunASR Model License 1.1",
       "license_url": "https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE",
       "homepage": "https://github.com/FunAudioLLM/SenseVoice",
@@ -23,7 +33,9 @@
           "size": 239233841,
           "sha256": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue/resolve/master/model.int8.onnx",
             "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/master/model.int8.onnx",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx"
           ]
         },
@@ -33,7 +45,9 @@
           "size": 315894,
           "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue/resolve/master/tokens.txt",
             "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/master/tokens.txt",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
           ]
         }
@@ -43,8 +57,12 @@
       "id": "whisper-small",
       "name": "Whisper Small",
       "kind": "whisper",
-      "languages": ["multi"],
-      "recommended": ["en"],
+      "languages": [
+        "multi"
+      ],
+      "recommended": [
+        "en"
+      ],
       "license": "MIT",
       "license_url": "https://github.com/openai/whisper/blob/main/LICENSE",
       "homepage": "https://github.com/openai/whisper",
@@ -59,7 +77,9 @@
           "size": 112442483,
           "sha256": "4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-small/resolve/master/small-encoder.int8.onnx",
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-encoder.int8.onnx",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-whisper-small/resolve/master/small-encoder.int8.onnx",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-encoder.int8.onnx"
           ]
         },
@@ -69,7 +89,9 @@
           "size": 262226114,
           "sha256": "acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-small/resolve/master/small-decoder.int8.onnx",
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-decoder.int8.onnx",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-whisper-small/resolve/master/small-decoder.int8.onnx",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-decoder.int8.onnx"
           ]
         },
@@ -79,7 +101,9 @@
           "size": 816730,
           "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-small/resolve/master/small-tokens.txt",
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-tokens.txt",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-whisper-small/resolve/master/small-tokens.txt",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small/resolve/main/small-tokens.txt"
           ]
         }
@@ -89,7 +113,9 @@
       "id": "whisper-base",
       "name": "Whisper Base",
       "kind": "whisper",
-      "languages": ["multi"],
+      "languages": [
+        "multi"
+      ],
       "license": "MIT",
       "license_url": "https://github.com/openai/whisper/blob/main/LICENSE",
       "homepage": "https://github.com/openai/whisper",
@@ -104,6 +130,7 @@
           "size": 29120534,
           "sha256": "0b8fb1304b6109976038efff5ace81720e00386f3ff6b54ee8c75291ca0a1e11",
           "urls": [
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-whisper-base/resolve/master/base-encoder.int8.onnx",
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-encoder.int8.onnx",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-encoder.int8.onnx"
           ]
@@ -114,7 +141,9 @@
           "size": 130672026,
           "sha256": "9759d217388a01b3a4c7c15533201067b48ae819c4daafc8624e64b9409dc02d",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-base/resolve/master/base-decoder.int8.onnx",
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-decoder.int8.onnx",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-whisper-base/resolve/master/base-decoder.int8.onnx",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-decoder.int8.onnx"
           ]
         },
@@ -124,7 +153,9 @@
           "size": 816730,
           "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
           "urls": [
+            "https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-base/resolve/master/base-tokens.txt",
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-tokens.txt",
+            "https://www.modelscope.cn/models/mariolux/sherpa-onnx-whisper-base/resolve/master/base-tokens.txt",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-base/resolve/main/base-tokens.txt"
           ]
         }
@@ -134,8 +165,36 @@
       "id": "parakeet-tdt-v3",
       "name": "Parakeet TDT 0.6B v3",
       "kind": "transducer",
-      "languages": ["en", "es", "fr", "de", "it", "pt", "nl", "pl", "ru", "uk", "sv", "da", "fi", "cs", "sk", "sl", "hr", "bg", "ro", "hu", "el", "et", "lv", "lt", "mt"],
-      "options": { "model_type": "nemo_transducer" },
+      "languages": [
+        "en",
+        "es",
+        "fr",
+        "de",
+        "it",
+        "pt",
+        "nl",
+        "pl",
+        "ru",
+        "uk",
+        "sv",
+        "da",
+        "fi",
+        "cs",
+        "sk",
+        "sl",
+        "hr",
+        "bg",
+        "ro",
+        "hu",
+        "el",
+        "et",
+        "lv",
+        "lt",
+        "mt"
+      ],
+      "options": {
+        "model_type": "nemo_transducer"
+      },
       "license": "CC BY 4.0",
       "license_url": "https://creativecommons.org/licenses/by/4.0/",
       "homepage": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
@@ -182,6 +241,46 @@
           "urls": [
             "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt",
             "https://hf-mirror.com/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "speaker-campplus",
+      "name": "3D-Speaker CAM++",
+      "kind": "speaker_embedding",
+      "task": "speaker",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/modelscope/3D-Speaker/blob/main/LICENSE",
+      "homepage": "https://github.com/modelscope/3D-Speaker",
+      "desc": {
+        "zh": "阿里 3D-Speaker 的声纹模型，用来分出是谁在说话，中文和英文都行。和识别模型一起用。",
+        "en": "Speaker embeddings from Alibaba's 3D-Speaker, used to tell who is speaking, in Chinese or English. Works alongside a recognition model."
+      },
+      "files": [
+        {
+          "name": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+          "role": "model",
+          "size": 28281165,
+          "sha256": "53cab20ba8f2eb2f6e2d89ecc18e88ef3222169b61b4419cbc13666744a4574b",
+          "urls": [
+            "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+            "https://hf-mirror.com/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+          ],
+          "alternates": [
+            {
+              "size": 28281164,
+              "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+              "urls": [
+                "https://www.modelscope.cn/models/fengge2024/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx/resolve/master/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+                "https://www.modelscope.cn/models/yuhang0329/3dspeaker_speech_campplus_sv_zh_en_16k_common_advanced/resolve/master/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+              ]
+            }
           ]
         }
       ]

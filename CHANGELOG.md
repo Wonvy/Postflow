@@ -7,8 +7,32 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Speech recognition models can be downloaded in mainland China: SenseVoice and Whisper are also fetched from ModelScope. Before downloading, Postflow tries each source briefly and uses the fastest, so a source your network can't reach no longer holds things up.
+- Fixed resuming a model download from servers that answer a partial request with status 200, which could leave a broken file.
+- Subtitle styles: eleven ways to show subtitles, each with a live preview in Settings → Subtitles: karaoke (the default: each word lights up as it's spoken), typewriter, bounce, glass, bilingual, emphasis, scroll, particles, speaker labels, waves and minimal. Switch from the small arrow next to the CC button too. Reduce Motion keeps the colors and drops the movement.
+- Subtitles tell speakers apart: each person gets a color, and the transcript names them. For speech recognized on your device, download the small voice model (3D-Speaker CAM++, 27 MB) in Settings → Subtitles; names from a show's own transcript are used as is.
+- Subtitles can be translated automatically: turn on Translate subtitles and a translation appears under each line, with the offline models or your AI service (as set in Settings → Translation). Translations are saved, so nothing is translated twice.
+- Subtitles start while the episode is still downloading, instead of after the whole file has arrived.
+- Subtitles for episodes in Opus format.
+- Plugins can use the podcast player and its subtitles: `api.player` (state, play, pause, seek, speed) and `api.subtitles` (lines with speakers and translations), with `player` and `subtitle` events. See the plugin guide.
+- Mail with a verification code shows the code at the top of the reader, with a Copy button.
+- AI: models that think before answering are asked not to for short tasks on DeepSeek, Kimi (Moonshot), Qwen, SiliconFlow, Gemini, Ollama and OpenRouter too, not just Zhipu. Postflow remembers which models insist on thinking, so it doesn't have to find out again after a restart.
+- AI errors are explained in plain words; what the AI service said is shown on a separate line when it helps.
+- Zhipu's suggested model is now GLM-4.7. If you use GLM-4.5, which Zhipu is retiring, Settings → AI suggests switching.
 
 ### 中文
+- 国内也能下载语音识别模型了：SenseVoice 和 Whisper 增加了魔搭社区（ModelScope）的下载地址。下载前会先对各个地址测速，从最快的下，连不上的地址不再拖慢下载。
+- 修复从部分服务器续传模型时可能把文件拼坏的问题（这些服务器对续传请求返回 200）。
+- 字幕样式：十一种字幕的样子，「设置 → 字幕」里每种都有实时预览：逐字高亮（默认，说到哪个字亮到哪个字）、打字机、弹跳入场、玻璃面板、双语、重点强调、滚动、粒子浮现、说话人标签、波浪背景、极简。也可以点字幕按钮旁边的小箭头换。系统开了「减少动态效果」时只保留颜色变化。
+- 字幕区分说话人：每个人一种颜色，文字稿里也标出是谁。本机识别的字幕要先在「设置 → 字幕」里下载一个小的声纹模型（3D-Speaker CAM++，27 MB）；节目文字稿里写了名字的直接用。
+- 字幕自动翻译：打开「自动翻译字幕」，每句下面显示译文，用离线模型或者你的 AI 服务（按「设置 → 翻译」里的选择）。译文会存下来，同一句不会翻两次。
+- 边下载边出字幕：不用等整期下载完，开头一部分到了就开始识别。
+- 支持 Opus 格式的单集出字幕。
+- 插件可以用播客播放器和字幕了：`api.player`（状态、播放、暂停、跳转、倍速）和 `api.subtitles`（带说话人和译文的字幕），还有 `player`、`subtitle` 两个事件。见插件开发说明。
+- 带验证码的邮件，阅读区顶上直接显示验证码，点一下就能复制。
+- AI：DeepSeek、Kimi（月之暗面）、通义千问、硅基流动、Gemini、Ollama、OpenRouter 上会思考的模型，做简短的任务时也会请它们别思考，不只是智谱。哪些模型一定要思考会记下来，重启后不用再试一遍。
+- AI 出错时用大白话说明原因；AI 服务原本的回答需要时单独列一行。
+- 智谱的推荐模型换成 GLM-4.7。还在用即将下线的 GLM-4.5 的，「设置 → AI」里会提示换一个。
 
 ## 0.1.35 — 2026-11-19
 

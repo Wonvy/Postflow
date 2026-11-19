@@ -58,3 +58,18 @@ jobs:
 
       - name: 测试
         run: cargo test --workspace
+
+      # 真的跑一次语音识别（crates/speech/tests/recognize.rs）：下载模型、解码 Opus、识别、分说话人。
+      # macOS 上开发时天天在跑，这里补上 Linux 和 Windows。模型缓存起来，模型目录变了才重新下载。
+      - name: 缓存语音识别模型
+        if: runner.os != 'macOS'
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/speech-smoke
+          key: speech-smoke-${{ runner.os }}-${{ hashFiles('public/catalog/speech.json') }}
+
+      - name: 真实语音识别
+        if: runner.os != 'macOS'
+        env:
+          POSTFLOW_SPEECH_SMOKE: ${{ runner.temp }}/speech-smoke
+        run: cargo test -p postflow-speech --test recognize -- --nocapture

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type Cue, coveredPercent, cueAt, isCovered, mergeCues } from "./subtitleCues.ts";
+import {
+  type Cue,
+  coveredPercent,
+  cueAt,
+  cueKey,
+  cueProgress,
+  isCovered,
+  mergeCues,
+  speakerOrder,
+  spokenChars,
+} from "./subtitleCues.ts";
 
 const cue = (start: number, text: string, end = start + 2): Cue => ({ start, end, text });
 
@@ -48,4 +58,45 @@ test("coverage", () => {
   assert.equal(coveredPercent(covered, 100), 70);
   assert.equal(coveredPercent(covered, null), null);
   assert.equal(coveredPercent([[0, 120]], 100), 100);
+});
+
+test("characters light up as they are spoken", () => {
+  // 有逐字时间：按它
+  const timed: Cue = { start: 10, end: 14, text: "你好朋友", t: [0, 50, 150, 160] };
+  assert.equal(spokenChars(timed, 9), 0);
+  assert.equal(spokenChars(timed, 10), 1);
+  assert.equal(spokenChars(timed, 10.6), 2);
+  assert.equal(spokenChars(timed, 11.55), 3);
+  assert.equal(spokenChars(timed, 13), 4);
+  assert.equal(cueProgress(timed, 10.6), 0.5);
+  // 没有：在时长里平均分，但一个字最多 0.32 秒，后面的停顿不拖慢
+  const plain: Cue = { start: 0, end: 30, text: "abcd" };
+  assert.equal(spokenChars(plain, 0), 1);
+  assert.equal(spokenChars(plain, 0.7), 3);
+  assert.equal(spokenChars(plain, 2), 4);
+  // 逐字时间的个数对不上（比如旧数据）就当没有
+  assert.equal(spokenChars({ start: 0, end: 1, text: "ab", t: [0] }, 0.6), 2);
+  // 按字符数算，不按 UTF-16
+  assert.equal(spokenChars({ start: 0, end: 1, text: "😀😀", t: [0, 50] }, 0.6), 2);
+});
+
+test("cue keys match the core", () => {
+  assert.equal(cueKey({ start: 12.345, text: "你好" }), "1235|你好");
+});
+
+test("speakers are numbered by who talks first, and one-off voices get no number", () => {
+  const said = (speaker: number | undefined, i: number): Cue => ({ start: i, end: i + 1, text: "x", speaker });
+  // 3 号先开口，然后是 0 号；1 号整期只有一句（插话、笑声），不给编号
+  const order = [3, 3, 0, 1, 3, 0, 0, 3, undefined, 0, 3, 0, 3];
+  const cues = order.map(said);
+  const map = speakerOrder(cues);
+  assert.equal(map.get(3), 0);
+  assert.equal(map.get(0), 1);
+  assert.equal(map.has(1), false);
+  // 字幕还很少时，说过一句的也算
+  const few = speakerOrder([said(2, 0), said(5, 1)]);
+  assert.deepEqual([...few.entries()], [
+    [2, 0],
+    [5, 1],
+  ]);
 });

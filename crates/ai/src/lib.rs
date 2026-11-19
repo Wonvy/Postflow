@@ -9,5 +9,5 @@ pub mod prompts;
 pub mod text;
 
 pub use client::{Client, Error, Message, Provider, Reply, Request, Role, Usage};
-pub use presets::{PRESETS, Preset, preset};
+pub use presets::{PRESETS, Preset, preset, replacement};
 pub use prompts::{Category, Doc};

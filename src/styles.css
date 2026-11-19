@@ -548,3 +548,347 @@
 .player-range-flat:hover::-webkit-slider-thumb {
   opacity: 1;
 }
+
+/*
+ * 播客字幕的样子（SubtitleStyles.tsx）。
+ * --sub-color 是这一句的颜色：分出了说话人就是这个人的颜色（--spk-0 … --spk-7），不然是强调色。
+ * 逐字的效果靠每个字上的 data-on（已经说出来了）和 data-now（正在说的那个字）。
+ */
+:root,
+[data-theme="dark"] {
+  --spk-0: #6aa8ff;
+  --spk-1: #ff9a5c;
+  --spk-2: #5fd38a;
+  --spk-3: #ff7eaa;
+  --spk-4: #b69dfc;
+  --spk-5: #4fd0de;
+  --spk-6: #f5c84c;
+  --spk-7: #d6a77a;
+}
+[data-theme="light"] {
+  --spk-0: #1d6bd6;
+  --spk-1: #d4500f;
+  --spk-2: #2b8a3e;
+  --spk-3: #c2255c;
+  --spk-4: #6b45e0;
+  --spk-5: #0b7285;
+  --spk-6: #a86700;
+  --spk-7: #8d5a3b;
+}
+
+.sub {
+  --sub-color: var(--accent);
+  --sub-soft: color-mix(in srgb, var(--sub-color) 22%, transparent);
+  position: relative;
+}
+.sub-char,
+.sub-ws {
+  transition:
+    color 0.16s ease,
+    opacity 0.2s ease,
+    background-size 0.25s ease;
+}
+/* 一句换成下一句时淡入、轻轻上浮 */
+@keyframes sub-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.sub-enter {
+  animation: sub-rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes sub-fade {
+  from {
+    opacity: 0;
+  }
+}
+.sub-fade {
+  animation: sub-fade 0.4s ease both;
+}
+/* 说话人的小圆点和名字 */
+.sub-dot-speaker {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--sub-color);
+  margin-right: 6px;
+  vertical-align: 0.1em;
+}
+.sub-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--sub-color);
+  background: var(--sub-soft);
+}
+
+/* 逐字高亮：说到哪个字，哪个字亮起来 */
+.sub-karaoke .sub-char {
+  color: var(--fg-3);
+}
+.sub-karaoke .sub-char[data-on] {
+  color: var(--sub-color);
+}
+.sub-karaoke .sub-char[data-now] {
+  text-shadow: 0 0 14px color-mix(in srgb, var(--sub-color) 60%, transparent);
+}
+
+/* 打字机：说一个字出现一个字，后面跟着闪烁的光标 */
+.sub-typewriter .sub-char:not([data-on]),
+.sub-typewriter .sub-ws:not([data-on]) {
+  opacity: 0;
+}
+.sub-typewriter .sub-char {
+  transition: none;
+}
+@keyframes sub-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.sub-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin: 0 1px 0 1px;
+  vertical-align: -0.16em;
+  background: var(--sub-color);
+  animation: sub-blink 1s steps(1) infinite;
+}
+
+/* 弹跳入场：每个字说到时弹一下，正在说的字用这一句的颜色 */
+.sub-pop .sub-char {
+  display: inline-block;
+  opacity: 0.3;
+}
+.sub-pop .sub-char[data-on] {
+  opacity: 1;
+  animation: sub-bounce 0.42s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.sub-pop .sub-char[data-now] {
+  color: var(--sub-color);
+}
+@keyframes sub-bounce {
+  0% {
+    opacity: 0.3;
+    transform: translateY(0.35em) scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-0.12em) scale(1.14);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* 玻璃面板：半透明、模糊背后慢慢飘的两团颜色 */
+.sub-glass {
+  overflow: hidden;
+  border-radius: 14px;
+  isolation: isolate;
+}
+.sub-glass::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -2;
+  background:
+    radial-gradient(closest-side at 30% 45%, color-mix(in srgb, var(--sub-color) 40%, transparent), transparent),
+    radial-gradient(closest-side at 72% 60%, color-mix(in srgb, var(--accent) 30%, transparent), transparent);
+  animation: sub-drift 9s ease-in-out infinite alternate;
+}
+.sub-glass-panel {
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+@keyframes sub-drift {
+  to {
+    transform: translate(8%, -6%) rotate(8deg);
+  }
+}
+.sub-bar {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--sub-color);
+  transform-origin: left;
+  transition: transform 0.2s linear;
+}
+
+/* 双语：原文在上，细线下面是译文 */
+.sub-bilingual .sub-rule {
+  width: 28px;
+  height: 2px;
+  margin: 6px auto;
+  border-radius: 2px;
+  background: var(--sub-color);
+  opacity: 0.7;
+}
+
+/* 重点强调：粗大的字，说过的部分像荧光笔划过 */
+.sub-emphasis {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.sub-emphasis .sub-char,
+.sub-emphasis .sub-ws {
+  color: var(--fg-3);
+  background-image: linear-gradient(var(--sub-soft), var(--sub-soft));
+  background-repeat: no-repeat;
+  background-position: 0 88%;
+  background-size: 0% 42%;
+}
+.sub-emphasis .sub-char[data-on],
+.sub-emphasis .sub-ws[data-on] {
+  color: var(--fg);
+  background-size: 100% 42%;
+}
+.sub-emphasis .sub-char[data-now] {
+  color: var(--sub-color);
+}
+
+/* 滚动：上一句、这一句、下一句排成一列，换句时整列往上滑 */
+.sub-scroll {
+  overflow: hidden;
+  mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+}
+@keyframes sub-scroll-up {
+  from {
+    transform: translateY(1.7em);
+  }
+}
+.sub-scroll-track {
+  animation: sub-scroll-up 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sub-scroll-side {
+  color: var(--fg-3);
+  font-size: 0.82em;
+  transition: color 0.3s ease;
+}
+
+/* 粒子浮现：字从模糊里浮出来，背后有几颗光点往上飘 */
+.sub-particles .sub-char {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(0.4em) scale(0.9);
+  transition:
+    opacity 0.5s ease,
+    filter 0.5s ease,
+    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sub-particles .sub-char[data-on] {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}
+.sub-spark {
+  position: absolute;
+  bottom: 4px;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 999px;
+  background: var(--sub-color);
+  opacity: 0;
+  pointer-events: none;
+  animation: sub-float var(--d) ease-in-out var(--delay) infinite;
+}
+@keyframes sub-float {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), -42px);
+  }
+}
+
+/* 说话人标签：名字做成彩色标签，换人时滑进来 */
+.sub-speaker-line {
+  border-left: 3px solid var(--sub-color);
+  transition: border-color 0.3s ease;
+}
+@keyframes sub-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+.sub-slide {
+  animation: sub-slide 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* 波浪背景：底下两层慢慢流动的浪 */
+.sub-wave {
+  overflow: hidden;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sub-color) 7%, transparent);
+  transition: background-color 0.4s ease;
+}
+.sub-wave svg {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 200%;
+  height: 60%;
+  pointer-events: none;
+}
+.sub-wave svg path {
+  fill: var(--sub-color);
+}
+.sub-wave .sub-wave-a {
+  opacity: 0.1;
+  animation: sub-flow 9s linear infinite;
+}
+.sub-wave .sub-wave-b {
+  opacity: 0.07;
+  height: 75%;
+  animation: sub-flow 14s linear infinite reverse;
+}
+@keyframes sub-flow {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* 极简：细一点的字，安静地淡入 */
+.sub-minimal {
+  font-weight: 350;
+  letter-spacing: 0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sub *,
+  .sub::before,
+  .sub-enter,
+  .sub-fade,
+  .sub-slide {
+    animation: none !important;
+    transition: none !important;
+  }
+  .sub-pop .sub-char,
+  .sub-particles .sub-char {
+    filter: none;
+    transform: none;
+  }
+  .sub-particles .sub-char:not([data-on]) {
+    opacity: 0.3;
+  }
+  .sub-spark {
+    display: none;
+  }
+}

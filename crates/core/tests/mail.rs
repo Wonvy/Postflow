@@ -1316,5 +1316,17 @@ async fn new_mail_events_carry_verification_codes() {
             ),
         ]
     );
+
+    // 打开这封信时也带着验证码（阅读区顶上显示）；普通的信没有
+    let coded = find(&core, "inbox", "[GitHub] Please verify your device")
+        .await
+        .unwrap();
+    let opened = call(&core, "items.get", json!({ "id": coded["id"] })).await;
+    assert_eq!(opened["mail"]["code"], "482019");
+    let plain = find(&core, "inbox", "Lunch on the 2026-11-20?")
+        .await
+        .unwrap();
+    let opened = call(&core, "items.get", json!({ "id": plain["id"] })).await;
+    assert!(opened["mail"]["code"].is_null());
     core.shutdown();
 }

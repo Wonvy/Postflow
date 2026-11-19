@@ -196,7 +196,8 @@ async fn an_older_model_that_rejects_the_parameter_still_works() {
 async fn thinking_written_into_the_answer_is_left_out() {
     let server = FakeAi::start(None).await;
     let client = Client::new();
-    let p = provider(&server, "ollama", "local-think-tags");
+    // 自定义的服务：不认识，不发「别思考」的参数，模型照常把思考写进正文
+    let p = provider(&server, "custom", "local-think-tags");
 
     let (text, streamed) = summary(&client, &p).await;
     assert_eq!(text, SUMMARY);
@@ -244,4 +245,67 @@ async fn ordinary_models_are_untouched() {
     assert_eq!(requests[0]["max_tokens"], 900);
     assert_eq!(requests[1]["max_tokens"], 300);
     assert!(requests.iter().all(|r| r.get("thinking").is_none()));
+}
+
+/// 各家服务各有各的「别思考」参数：对的服务发对的参数，一次请求拿到完整的回答。
+#[tokio::test]
+async fn other_services_are_asked_not_to_think_their_own_way() {
+    let server = FakeAi::start(None).await;
+    for (preset, key, value) in [
+        (
+            "deepseek",
+            "thinking",
+            serde_json::json!({ "type": "disabled" }),
+        ),
+        ("qwen", "enable_thinking", serde_json::json!(false)),
+        ("siliconflow", "enable_thinking", serde_json::json!(false)),
+        ("ollama", "reasoning_effort", serde_json::json!("none")),
+        ("gemini", "reasoning_effort", serde_json::json!("none")),
+        (
+            "openrouter",
+            "reasoning",
+            serde_json::json!({ "effort": "none" }),
+        ),
+    ] {
+        let client = Client::new();
+        let p = provider(&server, preset, &format!("{preset}-thinker"));
+        let before = server.requests().len();
+        let (text, _) = summary(&client, &p).await;
+        assert_eq!(text, SUMMARY, "{preset}");
+        let sent = &server.requests()[before..];
+        assert_eq!(sent.len(), 1, "{preset}: no retries");
+        assert_eq!(sent[0][key], value, "{preset}");
+        assert_eq!(sent[0]["max_tokens"], 900, "{preset}");
+    }
+}
+
+/// 发现的「会思考」「关不掉思考」存在本机，重启后（新的客户端）直接用，不再白试一次。
+#[tokio::test]
+async fn what_was_learned_about_models_survives_a_restart() {
+    let server = FakeAi::start(None).await;
+    let tmp = tempfile::tempdir().unwrap();
+    let memory = tmp.path().join("ai-models.json");
+
+    let first = Client::with_memory(&memory);
+    let thinker = provider(&server, "custom", "some-thinker");
+    let forced = provider(&server, "zhipu", "glm-thinker-forced");
+    summary(&first, &thinker).await;
+    summary(&first, &forced).await;
+    assert!(memory.exists());
+    let before = server.requests().len();
+
+    let second = Client::with_memory(&memory);
+    assert!(!keywords(&second, &thinker).await.is_empty());
+    assert!(!keywords(&second, &forced).await.is_empty());
+    let sent = &server.requests()[before..];
+    assert_eq!(sent.len(), 2, "one request each, nothing to find out again");
+    assert!(sent.iter().all(|r| r.get("max_tokens").is_none()));
+    assert!(sent.iter().all(|r| r.get("thinking").is_none()));
+
+    // 文件坏了就当什么都没记
+    std::fs::write(&memory, b"not json").unwrap();
+    let third = Client::with_memory(&memory);
+    let before = server.requests().len();
+    assert!(!keywords(&third, &thinker).await.is_empty());
+    assert_eq!(server.requests().len() - before, 2, "found out again");
 }

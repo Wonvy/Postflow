@@ -1,12 +1,17 @@
 //! 转写出来的字幕存在本机，一期一个 JSON 文件，不参与同步。
 //!
 //! 边播边转写时一期可能只转了几段（从听到的地方开始），所以除了字幕本身，还记着哪些时间段已经转过。
+//!
+//! 字幕的译文另存一个文件（`<条目 ID>.tr-<语言>.json`，句子到译文的对照表）。翻译可能用的是付费的
+//! AI 服务，存下来以后再听、换设备重开都不用再花一次钱。
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::cues::{Covered, Cue};
+use crate::speakers::Speakers;
 use crate::write_atomic;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -21,6 +26,9 @@ pub struct Transcript {
     pub covered: Covered,
     #[serde(default)]
     pub cues: Vec<Cue>,
+    /// 认出来的说话人（每人一个平均声纹），下次接着转时编号不乱。
+    #[serde(default, skip_serializing_if = "Speakers::is_empty")]
+    pub speakers: Speakers,
 }
 
 impl Transcript {
@@ -65,6 +73,49 @@ impl Transcripts {
         if let Some(path) = self.path(id) {
             let _ = std::fs::remove_file(path);
         }
+        // 译文跟着删
+        let prefix = format!("{id}.tr-");
+        if safe_id(id)
+            && let Ok(entries) = std::fs::read_dir(&self.dir)
+        {
+            for e in entries.flatten() {
+                if e.file_name().to_string_lossy().starts_with(&prefix) {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
+    }
+
+    fn translation_path(&self, id: &str, lang: &str) -> Option<PathBuf> {
+        let lang_ok = (2..=12).contains(&lang.len())
+            && lang
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b == b'_' || b == b'-');
+        (safe_id(id) && lang_ok).then(|| self.dir.join(format!("{id}.tr-{lang}.json")))
+    }
+
+    /// 这一期字幕翻成 `lang` 的译文：原文的句子（`cue_key`）到译文。
+    pub fn translations(&self, id: &str, lang: &str) -> BTreeMap<String, String> {
+        self.translation_path(id, lang)
+            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    /// 加几句译文（和已有的合在一起）。
+    pub fn add_translations(
+        &self,
+        id: &str,
+        lang: &str,
+        entries: BTreeMap<String, String>,
+    ) -> std::io::Result<()> {
+        let path = self
+            .translation_path(id, lang)
+            .ok_or_else(|| std::io::Error::other("invalid id or language"))?;
+        let mut all = self.translations(id, lang);
+        all.extend(entries);
+        let json = serde_json::to_vec(&all).map_err(std::io::Error::other)?;
+        write_atomic(&path, &json)
     }
 
     /// 有字幕的条目 ID。
@@ -109,6 +160,7 @@ mod tests {
             start: 1.0,
             end: 3.0,
             text: "你好".into(),
+            ..Default::default()
         });
         assert!(!t.complete());
         store.save("abc123", &t).unwrap();
@@ -116,10 +168,37 @@ mod tests {
         assert_eq!(store.list(), ["abc123"]);
         t.covered.add(30.0, 60.0);
         assert!(t.complete());
+        // 译文：合在一起存，删字幕时一起删
+        let entries = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<_, _>>()
+        };
+        store
+            .add_translations("abc123", "en", entries(&[("100|你好", "Hello")]))
+            .unwrap();
+        store
+            .add_translations("abc123", "en", entries(&[("300|再见", "Bye")]))
+            .unwrap();
+        assert_eq!(store.translations("abc123", "en").len(), 2);
+        assert!(store.translations("abc123", "ja").is_empty());
+        assert!(
+            store
+                .add_translations("abc123", "../x", BTreeMap::new())
+                .is_err()
+        );
+        assert_eq!(
+            store.list(),
+            ["abc123"],
+            "translation files aren't transcripts"
+        );
+
         // 不是字母数字的 ID 不碰文件系统
         assert!(store.save("../x", &t).is_err());
         assert!(store.load("../x").is_none());
         store.remove("abc123");
         assert!(store.list().is_empty());
+        assert!(store.translations("abc123", "en").is_empty());
     }
 }

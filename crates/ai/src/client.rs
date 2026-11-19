@@ -5,12 +5,14 @@
 //! 会「思考」的模型（智谱 GLM-4.5 以后、DeepSeek Reasoner、OpenAI 的推理模型……）要特别对待：
 //! 它们先写一段思考再写回答，思考也算在输出上限（`max_tokens`）里。总结、关键词这类短任务带的上限
 //! 只够写回答，思考一占，回答就被截断甚至一个字都没有。这里的做法：
-//! - 能关掉思考的服务（智谱），短任务直接让它别思考，又快又省；
+//! - 能关掉思考的服务（智谱、DeepSeek、通义千问、硅基流动、Kimi、Ollama、Gemini、OpenRouter），
+//!   短任务直接让它别思考，又快又省。各家的参数不一样，见 `quiet_param`；
 //! - 关不掉的，一发现模型在思考（回答之前先来了思考内容，或者回答被截断、是空的），就不带上限
 //!   重新请求一次，并记住这个模型，以后直接不带上限。
 //! - 思考内容不算回答：单独字段里的不读，写在正文开头 `<think>…</think>` 里的滤掉。
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -134,6 +136,9 @@ pub enum Error {
     Timeout,
     #[error("unexpected answer from the service: {0}")]
     BadResponse(String),
+    /// 回答是空的。`thinking`：模型思考了，但没写出回答。
+    #[error("the model returned an empty answer (thinking: {thinking})")]
+    Empty { thinking: bool },
     #[error("no model has been chosen")]
     NoModel,
     #[error("invalid proxy address: {0}")]
@@ -154,6 +159,8 @@ impl Error {
             Error::Network(_) => "ai_network",
             Error::Timeout => "ai_timeout",
             Error::BadResponse(_) => "ai_bad_response",
+            Error::Empty { thinking: false } => "ai_empty_answer",
+            Error::Empty { thinking: true } => "ai_thinking_only",
             Error::NoModel => "ai_no_model",
             Error::Proxy(_) => "ai_proxy",
         }
@@ -229,6 +236,17 @@ pub struct Client {
     thinkers: Mutex<HashSet<String>>,
     /// 不让关掉思考的模型：不再给它们发「别思考」的参数。
     always_think: Mutex<HashSet<String>>,
+    /// 上面两样存在哪儿（本机），下次启动不用再试一遍。不给就只记在内存里。
+    memory: Option<PathBuf>,
+}
+
+/// 存下来的「这个模型会思考」「这个模型关不掉思考」。
+#[derive(Default, Serialize, Deserialize)]
+struct Remembered {
+    #[serde(default)]
+    thinkers: Vec<String>,
+    #[serde(default)]
+    always_think: Vec<String>,
 }
 
 /// 一次请求带哪些可选参数。服务不认某个参数、或者发现模型在思考时，去掉对应的一项再试。
@@ -261,10 +279,43 @@ fn model_key(provider: &Provider) -> String {
     )
 }
 
-/// 这个服务认不认「别思考」的参数。目前只有智谱（`thinking: {"type": "disabled"}`）。
-fn can_disable_thinking(provider: &Provider) -> bool {
+/// 让这个服务的模型别思考的参数（加在请求体的最外层）。按预设或者地址认服务；认不出的不发，
+/// 靠「发现在思考就不限长度重来」兜底。各家文档（2026 年 11 月）：
+/// - 智谱、DeepSeek、Kimi：`thinking: {"type": "disabled"}`
+/// - 通义千问（百炼）、硅基流动：`enable_thinking: false`
+/// - Ollama、Gemini（OpenAI 兼容接口）：`reasoning_effort: "none"`
+/// - OpenRouter：`reasoning: {"effort": "none"}`
+///
+/// 有的模型不让关（智谱 GLM-5.3、Kimi K2.7 Code、Gemini 2.5 Pro……），会回 4xx：去掉参数再试，并记住。
+fn quiet_param(provider: &Provider) -> Option<(&'static str, Value)> {
     let url = provider.base_url.to_ascii_lowercase();
-    provider.preset == "zhipu" || url.contains("bigmodel.cn") || url.contains("api.z.ai")
+    let host = |h: &str| url.contains(h);
+    let preset = provider.preset.as_str();
+    if preset == "zhipu" || host("bigmodel.cn") || host("api.z.ai") {
+        return Some(("thinking", json!({ "type": "disabled" })));
+    }
+    if preset == "deepseek" || host("api.deepseek.com") {
+        return Some(("thinking", json!({ "type": "disabled" })));
+    }
+    if preset == "moonshot" || host("api.moonshot.cn") || host("api.moonshot.ai") {
+        return Some(("thinking", json!({ "type": "disabled" })));
+    }
+    if matches!(preset, "qwen" | "qwen_intl" | "siliconflow")
+        || host("dashscope")
+        || host("siliconflow")
+    {
+        return Some(("enable_thinking", json!(false)));
+    }
+    if matches!(preset, "ollama" | "gemini")
+        || host("generativelanguage.googleapis.com")
+        || host(":11434")
+    {
+        return Some(("reasoning_effort", json!("none")));
+    }
+    if preset == "openrouter" || host("openrouter.ai") {
+        return Some(("reasoning", json!({ "effort": "none" })));
+    }
+    None
 }
 
 /// 一条消息或者流式的一小段里有没有思考内容。各家字段名不一样。
@@ -406,11 +457,7 @@ fn add(a: Usage, b: Usage) -> Usage {
 
 /// 一个字都没有的回答。
 fn empty_answer(reasoned: bool) -> Error {
-    Error::BadResponse(if reasoned {
-        "the model spent its whole output on thinking and wrote no answer".into()
-    } else {
-        "the model returned an empty answer".into()
-    })
+    Error::Empty { thinking: reasoned }
 }
 
 impl Default for Client {
@@ -425,6 +472,23 @@ impl Client {
             clients: Mutex::new(HashMap::new()),
             thinkers: Mutex::new(HashSet::new()),
             always_think: Mutex::new(HashSet::new()),
+            memory: None,
+        }
+    }
+
+    /// 和 `new` 一样，但把发现的「会思考」「关不掉思考」的模型存在 `path`（本机的一个 JSON 文件），
+    /// 下次启动直接用，不用每个模型再白试一次。
+    pub fn with_memory(path: impl Into<PathBuf>) -> Client {
+        let path = path.into();
+        let saved: Remembered = std::fs::read(&path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
+        Client {
+            thinkers: Mutex::new(saved.thinkers.into_iter().collect()),
+            always_think: Mutex::new(saved.always_think.into_iter().collect()),
+            memory: Some(path),
+            ..Client::new()
         }
     }
 
@@ -513,14 +577,48 @@ impl Client {
         Shape {
             json: request.json,
             cap: short && !known(&self.thinkers),
-            quiet: short && can_disable_thinking(provider) && !known(&self.always_think),
+            quiet: short && quiet_param(provider).is_some() && !known(&self.always_think),
         }
     }
 
-    fn remember(set: &Mutex<HashSet<String>>, provider: &Provider) {
-        set.lock()
+    fn remember(&self, set: &Mutex<HashSet<String>>, provider: &Provider) {
+        let added = set
+            .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(model_key(provider));
+        if added {
+            self.save();
+        }
+    }
+
+    /// 把记住的模型写到本机。写不了只记一条日志：下次启动再试一遍而已。
+    fn save(&self) {
+        let Some(path) = &self.memory else { return };
+        let list = |set: &Mutex<HashSet<String>>| {
+            let mut v: Vec<String> = set
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .cloned()
+                .collect();
+            v.sort();
+            v
+        };
+        let data = Remembered {
+            thinkers: list(&self.thinkers),
+            always_think: list(&self.always_think),
+        };
+        let write = || -> std::io::Result<()> {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let tmp = path.with_extension("tmp");
+            std::fs::write(&tmp, serde_json::to_vec_pretty(&data)?)?;
+            std::fs::rename(&tmp, path)
+        };
+        if let Err(e) = write() {
+            tracing::warn!("cannot save which AI models think: {e}");
+        }
     }
 
     fn body(provider: &Provider, request: &Request, stream: bool, shape: Shape) -> Value {
@@ -539,8 +637,10 @@ impl Client {
         if shape.json {
             body["response_format"] = json!({ "type": "json_object" });
         }
-        if shape.quiet {
-            body["thinking"] = json!({ "type": "disabled" });
+        if shape.quiet
+            && let Some((key, value)) = quiet_param(provider)
+        {
+            body[key] = value;
         }
         body
     }
@@ -575,10 +675,10 @@ impl Client {
             let status = response.status().as_u16();
             if status < 400 {
                 if dropped_quiet {
-                    Self::remember(&self.always_think, provider);
+                    self.remember(&self.always_think, provider);
                 }
                 if dropped_cap {
-                    Self::remember(&self.thinkers, provider);
+                    self.remember(&self.thinkers, provider);
                 }
                 return Ok(response);
             }
@@ -624,7 +724,7 @@ impl Client {
             // 思考把输出上限占掉了，回答没写完：不带上限再来一次
             if shape.cap && parsed.reasoned && (parsed.cut || parsed.text.trim().is_empty()) {
                 tracing::debug!(model = %provider.model, "the model's thinking used up max_tokens; retrying without the limit");
-                Self::remember(&self.thinkers, provider);
+                self.remember(&self.thinkers, provider);
                 shape.cap = false;
                 continue;
             }
@@ -661,7 +761,7 @@ impl Client {
                 let parsed = parse_reply(&body)?;
                 spent = add(spent, parsed.usage);
                 if shape.cap && parsed.reasoned && (parsed.cut || parsed.text.trim().is_empty()) {
-                    Self::remember(&self.thinkers, provider);
+                    self.remember(&self.thinkers, provider);
                     shape.cap = false;
                     continue 'attempt;
                 }
@@ -711,7 +811,7 @@ impl Client {
                     // 趁回答还一个字没给出去，不带上限重新来
                     if shape.cap && reasoned && text.is_empty() {
                         tracing::debug!(model = %provider.model, "the model is thinking; restarting without max_tokens");
-                        Self::remember(&self.thinkers, provider);
+                        self.remember(&self.thinkers, provider);
                         shape.cap = false;
                         continue 'attempt;
                     }
@@ -824,20 +924,55 @@ mod tests {
     }
 
     #[test]
-    fn only_zhipu_is_told_not_to_think() {
-        let zhipu = Provider {
-            preset: "zhipu".into(),
-            ..provider("https://open.bigmodel.cn/api/paas/v4")
+    fn each_service_gets_its_own_switch_for_thinking() {
+        let with = |preset: &str, url: &str| {
+            quiet_param(&Provider {
+                preset: preset.into(),
+                ..provider(url)
+            })
         };
-        assert!(can_disable_thinking(&zhipu));
+        let disabled = Some(("thinking", json!({ "type": "disabled" })));
+        assert_eq!(
+            with("zhipu", "https://open.bigmodel.cn/api/paas/v4"),
+            disabled
+        );
         // 选了「自定义」但填的是智谱的地址
-        assert!(can_disable_thinking(&provider(
-            "https://open.bigmodel.cn/api/paas/v4/"
-        )));
-        assert!(!can_disable_thinking(&provider("https://api.deepseek.com")));
-        assert!(!can_disable_thinking(&provider(
-            "http://localhost:11434/v1"
-        )));
+        assert_eq!(
+            with("custom", "https://open.bigmodel.cn/api/paas/v4/"),
+            disabled
+        );
+        assert_eq!(with("deepseek", "https://api.deepseek.com"), disabled);
+        assert_eq!(with("moonshot", "https://api.moonshot.cn/v1"), disabled);
+        let off = Some(("enable_thinking", json!(false)));
+        assert_eq!(
+            with("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+            off
+        );
+        assert_eq!(with("siliconflow", "https://api.siliconflow.cn/v1"), off);
+        let none = Some(("reasoning_effort", json!("none")));
+        assert_eq!(with("ollama", "http://localhost:11434/v1"), none);
+        assert_eq!(with("custom", "http://127.0.0.1:11434/v1"), none);
+        assert_eq!(
+            with(
+                "gemini",
+                "https://generativelanguage.googleapis.com/v1beta/openai"
+            ),
+            none
+        );
+        assert_eq!(
+            with("openrouter", "https://openrouter.ai/api/v1"),
+            Some(("reasoning", json!({ "effort": "none" })))
+        );
+        // OpenAI 的普通模型不认 reasoning_effort，LM Studio 和不认识的服务都不发
+        assert_eq!(with("openai", "https://api.openai.com/v1"), None);
+        assert_eq!(with("lmstudio", "http://localhost:1234/v1"), None);
+        assert_eq!(with("custom", "https://llm.example.com/v1"), None);
+    }
+
+    #[test]
+    fn empty_answers_have_their_own_codes() {
+        assert_eq!(Error::Empty { thinking: false }.code(), "ai_empty_answer");
+        assert_eq!(Error::Empty { thinking: true }.code(), "ai_thinking_only");
     }
 
     #[test]
