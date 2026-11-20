@@ -7,8 +7,10 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Paged view: cards now size themselves so each page holds whole rows; the last row is no longer partly hidden behind the bottom of the list. Lists that can't be filled exactly (with date headings, for example) leave the cut-off row for the next page instead of showing half of it, and resizing the window keeps you at the start of a page.
 
 ### 中文
+- 分页视图：卡片的高度跟着页面自动调整，每页正好放下整数行，最后一行不再被列表底边遮住一截。凑不满的（比如有日期分段）放不全的那行留到下一页，不再露出半截；改变窗口大小后也会回到这一页的开头。
 
 ## 0.1.40 — 2026-11-20
 

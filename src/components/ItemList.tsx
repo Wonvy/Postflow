@@ -101,6 +101,7 @@ import {
   useArticleActions,
 } from "../lib/store";
 import { useLabelColor } from "../lib/labels";
+import { fitCardRows } from "../lib/paging";
 import { shortTime } from "../lib/time";
 import { ItemMenuItems } from "./ItemMenu";
 import { SenderIcon, useMixedAccounts } from "./SourceIcon";
@@ -132,6 +133,8 @@ const HEADER_HEIGHT = 30;
 const SECTION_HEIGHT = 30;
 /** 虚拟列表容器上下各留 6px；分页要把底部空隙从可用高度里扣掉。 */
 const LIST_VERTICAL_GUTTER = 6;
+/** 分页视图里为了凑满一页缩小卡片时，图片最矮这么高。 */
+const MIN_PAGED_IMAGE = 56;
 /** 每个列表上次滚到的位置，只在这次打开应用期间记着。 */
 const scrollPositions = new Map<string, number>();
 
@@ -148,6 +151,15 @@ type Line =
   | { kind: "cards"; rows: Row[] };
 
 /** 每一页从完整行开始，留出列表底部边距，避免卡片被滚动窗裁掉。 */
+/**
+ * 虚拟列表现在每行的位置。行高刚变的时候（窗口、卡片大小变了），`measurementsCache` 要等下一次重画才更新，
+ * 先取一次总高度让它按现在的行高重算。
+ */
+function measured(virtualizer: { getTotalSize: () => number; measurementsCache: readonly { start: number; end: number }[] }) {
+  virtualizer.getTotalSize();
+  return virtualizer.measurementsCache;
+}
+
 function pageStartsOf(items: readonly { start: number; end: number }[], height: number, gutter = LIST_VERTICAL_GUTTER): number[] {
   const starts = [0];
   let start = 0;
@@ -760,12 +772,16 @@ export function ItemList({ width }: { width: number }) {
   const scroller = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
 
-  // 卡片按列表的实际宽度排列
+  // 卡片按列表的实际宽度排列；分页视图还要知道一页有多高
   const [inner, setInner] = useState(width);
+  const [viewHeight, setViewHeight] = useState(0);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const update = () => setInner(Math.max(1, el.clientWidth - style.listPadding * 2));
+    const update = () => {
+      setInner(Math.max(1, el.clientWidth - style.listPadding * 2));
+      setViewHeight(el.clientHeight);
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(el);
@@ -774,11 +790,24 @@ export function ItemList({ width }: { width: number }) {
   const cardGap = metrics.cardGap;
   const columns = Math.max(1, Math.floor((inner + cardGap) / (cardSize + cardGap)));
   const cardWidth = Math.floor((inner - cardGap * (columns - 1)) / columns);
-  const imageHeight = style.showImage ? Math.round(cardWidth * 0.56) : 0;
-  const cardHeight = imageHeight + metrics.cardText;
+  const naturalImage = style.showImage ? Math.round(cardWidth * 0.56) : 0;
   // 一行卡片里都没有图时不留图的位置，只比有图时的文字多两行摘要（或一行标题），不会空出一大块
-  const textCardHeight =
-    metrics.cardText + (style.showSummary ? metrics.summary.line * 2 : metrics.bigTitle.line);
+  const naturalText = metrics.cardText + (style.showSummary ? metrics.summary.line * 2 : metrics.bigTitle.line);
+  // 分页视图：卡片的高度跟着一页的高度走，一页正好放下整数行，最后一行不会被遮住一截。
+  // 多出来、少掉的高度给图片（文字部分不变）；没有图时每行一样高，摘要下面多点空
+  const paging = useUi((s) => s.listPaging);
+  const fit =
+    paging === "pages" && view === "cards" && viewHeight > 0
+      ? fitCardRows(
+          viewHeight - style.listPadding,
+          style.showImage ? naturalImage + metrics.cardText : naturalText,
+          cardGap,
+          style.showImage ? metrics.cardText + MIN_PAGED_IMAGE : naturalText,
+        )
+      : null;
+  const imageHeight = style.showImage ? (fit ? Math.max(0, fit.height - metrics.cardText) : naturalImage) : 0;
+  const cardHeight = fit ? fit.height : naturalImage + metrics.cardText;
+  const textCardHeight = fit ? fit.height : naturalText;
   const cardsHeightOf = (rows: Row[]) =>
     style.showImage && rows.some((r) => (r.kind === "item" ? r.item : r.group.lead).image)
       ? cardHeight
@@ -848,14 +877,13 @@ export function ItemList({ width }: { width: number }) {
   }, []);
 
   // 分页视图：滚轮一下翻一页，每页从一整行开始，不出现被切掉一半的行
-  const paging = useUi((s) => s.listPaging);
   const pagingRef = useRef(paging);
   pagingRef.current = paging;
   const flipPage = useCallback(
     (dir: 1 | -1) => {
       const el = scroller.current;
       if (!el) return;
-      const items = virtualizer.measurementsCache;
+      const items = measured(virtualizer);
       const top = el.scrollTop;
       const height = el.clientHeight;
       const starts = pageStartsOf(items, height, style.listPadding);
@@ -889,6 +917,17 @@ export function ItemList({ width }: { width: number }) {
     return () => el.removeEventListener("wheel", onWheel);
   }, [flipPage]);
 
+  // 分页视图：窗口变了大小、卡片换了大小或列数以后，每页从哪儿开始也变了。停在两页中间的话，上面一行
+  // 被切掉一截、底下放不全的那行又不画，空出一大块：回到现在这页的开头
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 这些变了页的分法才变
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || paging !== "pages") return;
+    const starts = pageStartsOf(measured(virtualizer), el.clientHeight, style.listPadding);
+    const start = [...starts].reverse().find((s) => s <= el.scrollTop + 1) ?? 0;
+    if (Math.abs(el.scrollTop - start) > 1) el.scrollTo({ top: start });
+  }, [paging, viewHeight, cardHeight, textCardHeight, rowHeight, columns, style.listPadding, virtualizer]);
+
   // 分页视图状态栏上的「第几页」：按翻页的规则从头数一遍每页从哪一行开始
   const [pageInfo, setPageInfo] = useState({ page: 1, pages: 1, height: 0 });
   useEffect(() => {
@@ -896,7 +935,7 @@ export function ItemList({ width }: { width: number }) {
     if (!el || paging !== "pages") return;
     const update = () => {
       const height = Math.max(1, el.clientHeight);
-      const items = virtualizer.measurementsCache;
+      const items = measured(virtualizer);
       const starts = pageStartsOf(items, height, style.listPadding);
       const pages = starts.length;
       const page = Math.max(1, starts.filter((s) => s <= el.scrollTop + 1).length);
@@ -1190,6 +1229,16 @@ export function ItemList({ width }: { width: number }) {
             {virtualRows.map((virtual) => {
               const line = lines[virtual.index];
               if (!line) return null;
+              // 分页视图：放不全的那一行属于下一页（翻页也按这个规则，见 pageStartsOf），这一页不画，
+              // 免得底下露出被遮住一截的卡片。一页最上面那行总是画，免得窗口太矮时整页空白
+              if (
+                paging === "pages" &&
+                viewHeight > 0 &&
+                virtual.start > offset + 1 &&
+                virtual.end > offset + viewHeight - style.listPadding + 0.5
+              ) {
+                return null;
+              }
               const position = { transform: `translateY(${virtual.start}px)` };
 
               // 日期分段的标题
