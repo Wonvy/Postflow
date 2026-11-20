@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.40 — 2026-11-20
+
+### English
 - Listen to this list: clicking the headphones button again stops listening.
 - The play bar under the list shows the sentence being read as a subtitle; the subtitles button next to it turns it off and on.
 - Change the voice right from the play bar: the new voice button lists the voices for the language being read (and lets you switch between automatic, the system voice and your local voice models). The new voice starts from the current sentence, and the choice is the same one as in Settings → Read aloud.
