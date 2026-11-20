@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.41 — 2026-11-20
+
+### English
 - Paged view: cards now size themselves so each page holds whole rows; the last row is no longer partly hidden behind the bottom of the list. Lists that can't be filled exactly (with date headings, for example) leave the cut-off row for the next page instead of showing half of it, and resizing the window keeps you at the start of a page.
 - Windows: clicking the tray icon after closing the window brings it back more reliably. If the window was destroyed instead of hidden, Postflow stays in the tray and opens a new one; a window that ended up off screen is moved back; it comes to the front; and with hide-at-screen-edge on, it no longer slides away right after you open it from the tray. Quitting removes the tray icon, so no dead icon is left behind. What happens is now written to the log.
 
