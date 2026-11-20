@@ -1,10 +1,10 @@
 // 朗读控制条上直接换声音：不用打开设置。列出正在念的这种语言能用的声音，点一下就从这一句开头起换成它。
 // 上面一排是用什么念（自动、系统语音、装着的本机模型），下面是那种念法里的声音；本机声音的选择和
-// 「设置 → 朗读」里是同一份。
+// 「设置 → 朗读」里是同一份。每种声音前面有序号（和设置里的一样），顶上的 ‹ › 一个一个往下换，方便挨个试听。
 
 import * as Popover from "@radix-ui/react-popover";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Check, Settings2 } from "lucide-react";
+import { AudioLines, Check, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLang, useT } from "../lib/i18n";
 import { speechSupported, useSpeech } from "../lib/speech";
@@ -20,16 +20,17 @@ interface Choice {
   label: string;
   current: boolean;
   pick: () => void;
+  /** 序号（从 1 起，按列表里的顺序）。「自动挑选」没有。 */
+  n?: number;
 }
 
 /** 一行可选的声音：选中的打勾，打开时滚到它那里。 */
 function ChoiceRow({ choice }: { choice: Choice }) {
   const ref = useRef<HTMLButtonElement | null>(null);
+  // 打开时、用 ‹ › 换到它时，滚到看得见的地方
   useEffect(() => {
     if (choice.current) ref.current?.scrollIntoView({ block: "nearest" });
-    // 只在打开时滚一次
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [choice.current]);
   return (
     <button
       ref={ref}
@@ -45,6 +46,7 @@ function ChoiceRow({ choice }: { choice: Choice }) {
       <span className="flex size-4 shrink-0 items-center justify-center text-accent">
         {choice.current && <Check size={14} />}
       </span>
+      <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-fg-4">{choice.n ?? ""}</span>
       <span className="min-w-0 flex-1 truncate">{choice.label}</span>
     </button>
   );
@@ -140,6 +142,19 @@ export function VoicePicker() {
     });
   }
 
+  // 给声音编号：按列表里的顺序接着往下数（女声在前、男声在后），「自动挑选」不算
+  const numbered = groups.flatMap((g) => g.choices).filter((c) => c.key !== "");
+  numbered.forEach((c, i) => {
+    c.n = i + 1;
+  });
+  const at = numbered.findIndex((c) => c.current);
+  /** 换到前一个（-1）或后一个（1），到头了绕回来。 */
+  const step = (delta: number) => {
+    if (numbered.length === 0) return;
+    const from = at < 0 ? (delta > 0 ? -1 : 0) : at;
+    numbered[(from + delta + numbered.length) % numbered.length]?.pick();
+  };
+
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
@@ -156,8 +171,23 @@ export function VoicePicker() {
           aria-label={t("listen.voice")}
           className="anim-pop z-50 flex max-h-[min(70vh,460px)] w-[260px] flex-col rounded-lg bg-surface p-1 shadow-pop outline-none"
         >
-          <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium text-fg-3">
-            {t("voices.voiceFor", { lang: languageName(lang ?? code, ui) })}
+          <div className="flex items-center gap-1 pb-1 pl-2 pr-0.5 pt-0.5">
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-fg-3">
+              {t("voices.voiceFor", { lang: languageName(lang ?? code, ui) })}
+            </span>
+            {numbered.length > 1 && (
+              <>
+                <IconButton label={t("listen.prevVoice")} onClick={() => step(-1)}>
+                  <ChevronLeft size={14} strokeWidth={1.75} />
+                </IconButton>
+                <span className="min-w-[44px] text-center text-[11px] tabular-nums text-fg-3" aria-live="polite">
+                  {at >= 0 ? `${at + 1} / ${numbered.length}` : `– / ${numbered.length}`}
+                </span>
+                <IconButton label={t("listen.nextVoice")} onClick={() => step(1)}>
+                  <ChevronRight size={14} strokeWidth={1.75} />
+                </IconButton>
+              </>
+            )}
           </div>
           {lang && engines.length > 1 && (
             <div role="radiogroup" aria-label={t("voices.engine")} className="flex flex-wrap gap-1 px-1.5 pb-1.5">

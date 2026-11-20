@@ -68,6 +68,11 @@ export function voiceText(t: Translate, ui: string, name: string): string {
   return accent ? `${base} · ${t(accent === "uk" ? "voices.uk" : "voices.us")}` : base;
 }
 
+/** 列表里的声音前面加序号（和控制条上「换声音」里的一样），说起、找起来方便。 */
+export function numbered(n: number, label: string): string {
+  return `${n}. ${label}`;
+}
+
 /** 试听：同一时间只放一个。 */
 function usePreview() {
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -249,9 +254,9 @@ export function VoiceSettings({ open }: { open: boolean }) {
           >
             {sampleList
               .filter((s) => ready.includes(s.id))
-              .map((s) => (
+              .map((s, i) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {numbered(i + 1, s.name)}
                 </option>
               ))}
           </Select>
@@ -277,14 +282,14 @@ export function VoiceSettings({ open }: { open: boolean }) {
             }}
           >
             {[
-              [t("voices.female"), women],
-              [t("voices.male"), men],
-            ].map(([group, voices]) =>
+              [t("voices.female"), women, 0],
+              [t("voices.male"), men, women.length],
+            ].map(([group, voices, before]) =>
               (voices as string[]).length > 0 ? (
                 <optgroup key={group as string} label={group as string}>
-                  {(voices as string[]).map((v) => (
+                  {(voices as string[]).map((v, i) => (
                     <option key={v} value={v}>
-                      {voiceText(t, lang, v)}
+                      {numbered((before as number) + i + 1, voiceText(t, lang, v))}
                     </option>
                   ))}
                 </optgroup>
@@ -318,9 +323,9 @@ export function VoiceSettings({ open }: { open: boolean }) {
           }}
         >
           <option value="">{t("voices.systemAuto")}</option>
-          {mine.map((v) => (
+          {mine.map((v, i) => (
             <option key={v.voiceURI} value={v.voiceURI}>
-              {v.name}
+              {numbered(i + 1, v.name)}
             </option>
           ))}
         </Select>
