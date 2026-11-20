@@ -89,13 +89,24 @@ static ENGLISH_WORD: LazyLock<Regex> = LazyLock::new(|| re(r"[A-Za-z][A-Za-z'’
 
 /// 整理一句话。`words` 是英文词典里的词。
 pub fn prepare(text: &str, words: &Words) -> String {
+    prepare_with(text, words, false)
+}
+
+/// 和 [`prepare`] 一样；`hanzi_numbers` 时中文句子里的数字也写成汉字。模型自带的中文数字规则不起作用时用
+/// （这个版本的运行库里 ZipVoice 读了规则却不用，数字整个跳过）。
+pub fn prepare_with(text: &str, words: &Words, hanzi_numbers: bool) -> String {
     let text = URL.replace_all(text, " ");
     let zh = CJK.is_match(&text);
     let text = strip_thousands(&text);
     let text = dates(&text, zh);
     let text = split_letters_and_digits(&text);
     let text = if zh {
-        chinese_numbers(&text)
+        let text = chinese_numbers(&text);
+        if hanzi_numbers {
+            hanzi_digits(&text)
+        } else {
+            text
+        }
     } else {
         english_numbers(&text)
     };
@@ -153,6 +164,108 @@ fn split_letters_and_digits(text: &str) -> String {
             }
         })
         .into_owned()
+}
+
+static ZH_NUMBER: LazyLock<Regex> = LazyLock::new(|| re(r"\d+(?:\.\d+)?"));
+const HANZI: [char; 10] = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+
+/// 一位一位念：2026 → 二零二六。
+fn hanzi_each(digits: &str) -> String {
+    digits
+        .chars()
+        .filter_map(|c| c.to_digit(10))
+        .map(|d| HANZI[d as usize])
+        .collect()
+}
+
+/// 万以内：1234 → 一千二百三十四，105 → 一百零五，2000 → 两千。
+fn hanzi_section(n: u64, leading: bool) -> String {
+    let digits = [n / 1000, n / 100 % 10, n / 10 % 10, n % 10];
+    let units = ["千", "百", "十", ""];
+    let mut out = String::new();
+    let mut zero = false;
+    for (i, &d) in digits.iter().enumerate() {
+        if d == 0 {
+            zero = !out.is_empty();
+            continue;
+        }
+        if zero {
+            out.push('零');
+            zero = false;
+        }
+        // 「十二」不说「一十二」（只在整个数开头时）；千、百前面的 2 说「两」
+        if !(i == 2 && d == 1 && out.is_empty() && leading) {
+            out.push(if d == 2 && i < 2 {
+                '两'
+            } else {
+                HANZI[d as usize]
+            });
+        }
+        out.push_str(units[i]);
+    }
+    out
+}
+
+/// 整数念成汉字：12999 → 一万两千九百九十九。
+pub fn hanzi_number(n: u64) -> String {
+    if n == 0 {
+        return "零".into();
+    }
+    let parts = [
+        (n / 100_000_000, "亿"),
+        (n / 10_000 % 10_000, "万"),
+        (n % 10_000, ""),
+    ];
+    let mut out = String::new();
+    let mut gap = false;
+    for (value, unit) in parts {
+        if value == 0 {
+            gap = !out.is_empty();
+            continue;
+        }
+        if !out.is_empty() && (gap || value < 1000) {
+            out.push('零');
+        }
+        gap = false;
+        let section = hanzi_section(value, out.is_empty());
+        // 「两万」「两亿」
+        out.push_str(&if value == 2 && !unit.is_empty() {
+            "两".to_string()
+        } else {
+            section
+        });
+        out.push_str(unit);
+    }
+    out
+}
+
+/// 中文句子里剩下的阿拉伯数字写成汉字：年份一位一位念，小数点后面一位一位念，太长的（电话号码）一位一位念。
+fn hanzi_digits(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    for m in ZH_NUMBER.find_iter(text) {
+        out.push_str(&text[last..m.start()]);
+        last = m.end();
+        let number = m.as_str();
+        let after = text[m.end()..].chars().next();
+        let (whole, fraction) = number.split_once('.').unwrap_or((number, ""));
+        // 年份、太长的（电话号码）、0 开头的（编号）一位一位念
+        let each = (whole.len() == 4 && fraction.is_empty() && after == Some('年'))
+            || whole.len() > 8
+            || (whole.len() > 1 && whole.starts_with('0'));
+        let words = if each {
+            hanzi_each(whole)
+        } else {
+            hanzi_number(whole.parse().unwrap_or(0))
+        };
+        out.push_str(&words);
+        if !fraction.is_empty() {
+            out.push('点');
+            out.push_str(&hanzi_each(fraction));
+        }
+    }
+    out.push_str(&text[last..]);
+    out
 }
 
 fn chinese_numbers(text: &str) -> String {
@@ -656,6 +769,40 @@ mod tests {
             "英伟达C E O表示，Open AI发布了G P T 5，I Phone 17售价5999元。"
         );
         assert_eq!(prepare("5G网络", &w), "5 G网络");
+    }
+
+    #[test]
+    fn numbers_in_hanzi() {
+        assert_eq!(hanzi_number(0), "零");
+        assert_eq!(hanzi_number(10), "十");
+        assert_eq!(hanzi_number(12), "十二");
+        assert_eq!(hanzi_number(105), "一百零五");
+        assert_eq!(hanzi_number(110), "一百一十");
+        assert_eq!(hanzi_number(2000), "两千");
+        assert_eq!(hanzi_number(5999), "五千九百九十九");
+        assert_eq!(hanzi_number(12_999), "一万两千九百九十九");
+        assert_eq!(hanzi_number(20_000), "两万");
+        assert_eq!(hanzi_number(10_001), "一万零一");
+        assert_eq!(hanzi_number(100_500), "十万零五百");
+        assert_eq!(hanzi_number(300_000_000), "三亿");
+        assert_eq!(hanzi_number(100_002_000), "一亿零两千");
+        let w = words();
+        assert_eq!(
+            prepare_with(
+                "2026年11月19日，售价5,999元，增长5.2%，电话13812345678，第3季度，007号。",
+                &w,
+                true
+            ),
+            "二零二六年十一月十九日，售价五千九百九十九元，增长百分之五点二，电话一三八一二三四五六七八，第三季度，零零七号。"
+        );
+        assert_eq!(
+            prepare_with("会议于10:30开始", &w, true),
+            "会议于十点三十分开始"
+        );
+        // 不要汉字时数字留给模型自带的规则
+        assert_eq!(prepare_with("售价5999元", &w, false), "售价5999元");
+        // 英文句子不受影响
+        assert_eq!(prepare_with("in 2026", &w, true), "in twenty twenty-six");
     }
 
     #[test]

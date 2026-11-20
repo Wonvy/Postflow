@@ -28,7 +28,10 @@ async fn voices_without_a_model() {
     for m in models {
         assert_eq!(m["task"], "tts");
         assert_eq!(m["installed"], false);
-        assert!(!m["speakers"].as_array().unwrap().is_empty());
+        // ZipVoice 没有自带的声音，用声音样本
+        if m["kind"] == "kokoro" {
+            assert!(!m["speakers"].as_array().unwrap().is_empty());
+        }
     }
     let zh = models.iter().find(|m| m["id"] == "kokoro-v1.1-zh").unwrap();
     assert_eq!(zh["options"]["voice_zh"], "zf_094");
@@ -120,4 +123,128 @@ async fn speak_with_a_real_model() {
         .await,
         "voice_failed"
     );
+}
+
+/// 一段测试用的录音：`seconds` 秒的正弦波，16 位单声道 WAV，Base64。
+fn tone(seconds: f64, rate: u32) -> String {
+    let n = (seconds * f64::from(rate)) as usize;
+    let samples: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 440.0 * std::f32::consts::TAU / rate as f32).sin() * 0.3)
+        .collect();
+    postflow_mail::base64(&postflow_speech::tts::wav(&samples, rate))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn voice_samples() {
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    assert_eq!(
+        call(&core, "voices.samples", json!({})).await["samples"],
+        json!([])
+    );
+
+    // 太短、读不出来的录音不收
+    assert_eq!(
+        error(
+            &core,
+            "voices.samples.add",
+            json!({ "name": "short", "audio": tone(1.0, 16_000), "ext": "wav", "text": "你好" })
+        )
+        .await,
+        "voice_sample_short"
+    );
+    assert_eq!(
+        error(
+            &core,
+            "voices.samples.add",
+            json!({ "name": "junk", "audio": postflow_mail::base64(b"not audio at all"), "ext": "mp3" })
+        )
+        .await,
+        "voice_sample_unreadable"
+    );
+
+    // 44.1 kHz 的录音存成 24 kHz；没装识别模型时文字是空的，让用户自己填
+    let added = call(
+        &core,
+        "voices.samples.add",
+        json!({ "name": "  My voice  ", "audio": tone(4.0, 44_100), "ext": "wav" }),
+    )
+    .await;
+    let id = added["id"].as_str().unwrap().to_string();
+    assert_eq!(added["name"], "My voice");
+    assert_eq!(added["text"], "");
+    let seconds = added["seconds"].as_f64().unwrap();
+    assert!((3.8..=4.3).contains(&seconds), "{seconds}");
+
+    let updated = call(
+        &core,
+        "voices.samples.update",
+        json!({ "id": id, "text": " 今天天气不错。 ", "name": "" }),
+    )
+    .await;
+    assert_eq!(updated["text"], "今天天气不错。");
+    assert_eq!(updated["name"], "My voice");
+    let list = call(&core, "voices.samples", json!({})).await;
+    assert_eq!(list["samples"].as_array().unwrap().len(), 1);
+
+    let audio = call(&core, "voices.samples.audio", json!({ "id": id })).await;
+    assert!(audio["audio"].as_str().unwrap().starts_with("UklGR"));
+
+    // 没装 ZipVoice：念不了
+    assert_eq!(
+        error(
+            &core,
+            "voices.speak",
+            json!({ "model": "zipvoice-distill-zh-en", "voice": id, "text": "你好" })
+        )
+        .await,
+        "speech_not_installed"
+    );
+
+    // 不是我们生成的 ID 一律不认
+    assert_eq!(
+        error(&core, "voices.samples.audio", json!({ "id": "../../etc" })).await,
+        "voice_sample_missing"
+    );
+    let left = call(&core, "voices.samples.remove", json!({ "id": id })).await;
+    assert_eq!(left["samples"], json!([]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn speak_with_a_voice_sample() {
+    // POSTFLOW_ZIPVOICE_SMOKE=<放 ZipVoice 文件的文件夹>|<一段录音>|<录音里说的话>
+    let Ok(spec) = std::env::var("POSTFLOW_ZIPVOICE_SMOKE") else {
+        eprintln!("POSTFLOW_ZIPVOICE_SMOKE is not set; skipping");
+        return;
+    };
+    let mut parts = spec.splitn(3, '|');
+    let (folder, recording, text) = (
+        parts.next().unwrap(),
+        parts.next().unwrap(),
+        parts.next().unwrap(),
+    );
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    call(
+        &core,
+        "voices.import",
+        json!({ "id": "zipvoice-distill-zh-en", "path": folder }),
+    )
+    .await;
+    let bytes = std::fs::read(recording).unwrap();
+    let sample = call(
+        &core,
+        "voices.samples.add",
+        json!({ "name": "Anchor", "audio": postflow_mail::base64(&bytes), "ext": "wav", "text": text }),
+    )
+    .await;
+    let said = call(
+        &core,
+        "voices.speak",
+        json!({ "model": "zipvoice-distill-zh-en", "voice": sample["id"], "text": "售价5,999元，同比增长5.2%。" }),
+    )
+    .await;
+    let duration = said["duration"].as_f64().unwrap();
+    assert!(duration > 2.0 && duration < 15.0, "{duration}");
+    assert!(said["audio"].as_str().unwrap().starts_with("UklGR"));
 }

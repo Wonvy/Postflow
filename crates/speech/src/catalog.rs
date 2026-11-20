@@ -48,6 +48,7 @@ pub const KINDS: &[&str] = &[
     "speaker_embedding",
     // 朗读（文字转语音），见 tts.rs
     "kokoro",
+    "zipvoice",
 ];
 
 /// 模型是做什么的。
@@ -314,7 +315,19 @@ mod tests {
         for m in &catalog.models {
             assert!(m.supported(), "{} is not loadable by this build", m.id);
             assert_eq!(m.task, TASK_TTS, "{}", m.id);
-            for role in ["model", "voices", "tokens", "lexicon"] {
+            let roles: &[&str] = if m.kind == "zipvoice" {
+                &[
+                    "encoder",
+                    "decoder",
+                    "vocoder",
+                    "tokens",
+                    "lexicon",
+                    "lexicon_en",
+                ]
+            } else {
+                &["model", "voices", "tokens", "lexicon"]
+            };
+            for role in roles {
                 assert!(m.file(role).is_some(), "{} has no {role} file", m.id);
             }
             assert!(!m.license.is_empty(), "{} has no license", m.id);
@@ -324,6 +337,10 @@ mod tests {
                     "{} has no {lang} description",
                     m.id
                 );
+                // ZipVoice 没有自带的声音，用户自己加声音样本
+                if m.kind == "zipvoice" {
+                    continue;
+                }
                 // 默认的声音要在声音列表里，而且是这种语言的
                 let voice = &m.options[&format!("voice_{lang}")];
                 assert!(m.speakers.contains(voice), "{}: {voice}", m.id);

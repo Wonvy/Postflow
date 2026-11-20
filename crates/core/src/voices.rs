@@ -6,12 +6,19 @@
 //!
 //! 模型加载要一秒左右、占几百 MB 内存：加载一次留着，十分钟没用就放掉。同一时间只念一句，
 //! 免得几句抢 CPU、谁都念不完。
+//!
+//! ZipVoice 没有自带的声音，照着用户给的一段录音（声音样本）念。样本放在 `local_dir/voices/samples`：
+//! `<ID>.wav`（24 kHz 单声道，最长 12 秒）和 `<ID>.json`（名字、录音里说的话）。录音里说的话不填的话，
+//! 装了语音识别模型就自动识别出来，用户再改。
 
+use std::collections::HashMap;
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use postflow_speech::{Speech, Voice, tts};
-use serde::Deserialize;
+use postflow_speech::{AudioReader, Speaker, Speakers, Speech, Voice, tts};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::rpc::{RpcError, parse, reply};
@@ -21,6 +28,21 @@ use crate::{Core, Event, ModelState};
 const IDLE: Duration = Duration::from_secs(10 * 60);
 /// 一次最多念这么多字。界面按句子切，正常远到不了。
 const MAX_TEXT: usize = 2000;
+/// 声音样本至少要这么长（秒）：太短学不出音色。
+const SAMPLE_MIN_SECONDS: f64 = 2.0;
+/// 上传的录音文件最大多少字节（只取开头十几秒，但整个文件要传过来）。
+const SAMPLE_MAX_BYTES: usize = 30 * 1024 * 1024;
+
+/// 一段声音样本。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Sample {
+    pub id: String,
+    pub name: String,
+    /// 录音里说的话，要和录音一字不差。
+    pub text: String,
+    pub seconds: f64,
+    pub created_at: i64,
+}
 
 struct Loaded {
     id: String,
@@ -33,15 +55,72 @@ pub(crate) struct Voices {
     loaded: Arc<Mutex<Option<Loaded>>>,
     /// 念的时候拿着，一次只念一句。
     speaking: Arc<Mutex<()>>,
+    samples_dir: PathBuf,
+    /// 读过的声音样本：ID → 录音。念每一句都要用，不必每次读文件。
+    clips: Mutex<HashMap<String, Arc<Vec<f32>>>>,
 }
 
 impl Voices {
-    pub(crate) fn new(root: std::path::PathBuf) -> Result<Voices, postflow_speech::Error> {
+    pub(crate) fn new(root: PathBuf) -> Result<Voices, postflow_speech::Error> {
         Ok(Voices {
+            samples_dir: root.join("samples"),
             models: Arc::new(Speech::voices(root)?),
             loaded: Arc::new(Mutex::new(None)),
             speaking: Arc::new(Mutex::new(())),
+            clips: Mutex::new(HashMap::new()),
         })
+    }
+
+    fn clips(&self) -> MutexGuard<'_, HashMap<String, Arc<Vec<f32>>>> {
+        self.clips.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// ID 是我们自己生成的 12 位十六进制，别的一律不认（会拿来拼文件名）。
+    fn sample_path(&self, id: &str, ext: &str) -> Option<PathBuf> {
+        (id.len() == 12 && id.bytes().all(|b| b.is_ascii_hexdigit()))
+            .then(|| self.samples_dir.join(format!("{id}.{ext}")))
+    }
+
+    pub(crate) fn samples(&self) -> Vec<Sample> {
+        let Ok(entries) = std::fs::read_dir(&self.samples_dir) else {
+            return Vec::new();
+        };
+        let mut list: Vec<Sample> = entries
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+            .filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok())
+            .filter(|s: &Sample| self.sample_path(&s.id, "wav").is_some_and(|p| p.is_file()))
+            .collect();
+        list.sort_by_key(|s| s.created_at);
+        list
+    }
+
+    fn sample(&self, id: &str) -> Option<Sample> {
+        let path = self.sample_path(id, "json")?;
+        serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+    }
+
+    fn save_sample(&self, sample: &Sample) -> std::io::Result<()> {
+        let path = self
+            .sample_path(&sample.id, "json")
+            .ok_or_else(|| std::io::Error::other("bad sample id"))?;
+        let json = serde_json::to_vec_pretty(sample).map_err(std::io::Error::other)?;
+        write_atomic(&path, &json)
+    }
+
+    /// 念的时候用的录音：读过的直接给。
+    fn clip(&self, id: &str) -> Result<Arc<Vec<f32>>, RpcError> {
+        if let Some(clip) = self.clips().get(id) {
+            return Ok(clip.clone());
+        }
+        let path = self
+            .sample_path(id, "wav")
+            .filter(|p| p.is_file())
+            .ok_or_else(|| RpcError::new("voice_sample_missing", "no such voice sample"))?;
+        let reader = AudioReader::open(&path)?;
+        let clip = Arc::new(tts::read_sample(reader)?);
+        self.clips().insert(id.to_string(), clip.clone());
+        Ok(clip)
     }
 
     fn loaded(&self) -> MutexGuard<'_, Option<Loaded>> {
@@ -72,10 +151,32 @@ struct ImportParams {
 }
 
 #[derive(Deserialize)]
+struct AddSampleParams {
+    name: String,
+    /// 录音文件，Base64。
+    audio: String,
+    /// 文件扩展名，帮着认格式。
+    #[serde(default)]
+    ext: Option<String>,
+    /// 录音里说的话。不给就试着识别。
+    #[serde(default)]
+    text: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UpdateSampleParams {
+    id: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct SpeakParams {
     /// 哪个模型。
     model: String,
-    /// 模型里的哪种声音（目录里 `speakers` 的一项）。
+    /// 模型里的哪种声音（目录里 `speakers` 的一项）；ZipVoice 是声音样本的 ID。
     voice: String,
     text: String,
     #[serde(default = "normal_speed")]
@@ -137,25 +238,164 @@ impl Core {
                     return Err(RpcError::new("bad_params", "the text is too long"));
                 }
                 let voice = self.voice(&p.model).await?;
+                // ZipVoice 照着声音样本念：录音和录音里说的话
+                let sample = if voice.needs_sample() {
+                    let info = self.voices.sample(&p.voice).ok_or_else(|| {
+                        RpcError::new("voice_sample_missing", "no such voice sample")
+                    })?;
+                    if info.text.trim().is_empty() {
+                        return Err(RpcError::new(
+                            "voice_sample_text",
+                            "the voice sample has no transcript",
+                        ));
+                    }
+                    let voices = self.clone();
+                    let id = p.voice.clone();
+                    let clip = tokio::task::spawn_blocking(move || voices.voices.clip(&id))
+                        .await
+                        .map_err(|e| RpcError::new("internal", e.to_string()))??;
+                    Some((clip, info.text))
+                } else {
+                    None
+                };
                 let speaking = self.voices.speaking.clone();
-                let (samples, rate) = tokio::task::spawn_blocking(move || {
+                let (spoken, rate) = tokio::task::spawn_blocking(move || {
                     let _turn = speaking.lock().unwrap_or_else(|e| e.into_inner());
+                    let who = match &sample {
+                        Some((clip, text)) => Speaker::Sample { audio: clip, text },
+                        None => Speaker::Preset(&p.voice),
+                    };
                     voice
-                        .speak(&p.text, &p.voice, p.speed)
+                        .speak(&p.text, who, p.speed)
                         .map(|s| (s, voice.sample_rate()))
                 })
                 .await
                 .map_err(|e| RpcError::new("internal", e.to_string()))??;
-                let duration = samples.len() as f64 / f64::from(rate);
-                let audio = if samples.is_empty() {
+                let duration = spoken.samples.len() as f64 / f64::from(rate);
+                let audio = if spoken.samples.is_empty() {
                     String::new()
                 } else {
-                    postflow_mail::base64(&tts::wav(&samples, rate))
+                    postflow_mail::base64(&tts::wav(&spoken.samples, rate))
                 };
-                reply(json!({ "audio": audio, "duration": duration }))
+                // speed：实际按什么语速念的，比要的慢时界面放快一些
+                reply(json!({ "audio": audio, "duration": duration, "speed": spoken.speed }))
+            }
+            "voices.samples" => reply(json!({ "samples": self.voices.samples() })),
+            "voices.samples.add" => {
+                let p: AddSampleParams = parse(params)?;
+                let bytes = postflow_mail::base64_decode(&p.audio)
+                    .ok_or_else(|| RpcError::new("bad_params", "the audio is not Base64"))?;
+                if bytes.len() > SAMPLE_MAX_BYTES {
+                    return Err(RpcError::new(
+                        "voice_sample_large",
+                        "the recording is too large",
+                    ));
+                }
+                let core = self.clone();
+                let sample = tokio::task::spawn_blocking(move || core.add_sample(p, bytes))
+                    .await
+                    .map_err(|e| RpcError::new("internal", e.to_string()))??;
+                reply(sample)
+            }
+            "voices.samples.update" => {
+                let p: UpdateSampleParams = parse(params)?;
+                let mut sample = self
+                    .voices
+                    .sample(&p.id)
+                    .ok_or_else(|| RpcError::new("voice_sample_missing", "no such voice sample"))?;
+                if let Some(name) = p
+                    .name
+                    .map(|n| n.trim().to_string())
+                    .filter(|n| !n.is_empty())
+                {
+                    sample.name = name;
+                }
+                if let Some(text) = p.text {
+                    sample.text = text.trim().to_string();
+                }
+                self.voices
+                    .save_sample(&sample)
+                    .map_err(|e| RpcError::new("io", e.to_string()))?;
+                reply(sample)
+            }
+            "voices.samples.remove" => {
+                let p: IdParam = parse(params)?;
+                for ext in ["wav", "json"] {
+                    if let Some(path) = self.voices.sample_path(&p.id, ext) {
+                        let _ = std::fs::remove_file(path);
+                    }
+                }
+                self.voices.clips().remove(&p.id);
+                reply(json!({ "samples": self.voices.samples() }))
+            }
+            // 原来的录音，试听用
+            "voices.samples.audio" => {
+                let p: IdParam = parse(params)?;
+                let path = self
+                    .voices
+                    .sample_path(&p.id, "wav")
+                    .filter(|p| p.is_file())
+                    .ok_or_else(|| RpcError::new("voice_sample_missing", "no such voice sample"))?;
+                let bytes = std::fs::read(path).map_err(|e| RpcError::new("io", e.to_string()))?;
+                reply(json!({ "audio": postflow_mail::base64(&bytes) }))
             }
             _ => Err(RpcError::new("unknown_method", method.to_string())),
         }
+    }
+
+    /// 存一段声音样本：解码、去掉前后的静音、只留开头 12 秒，存成 24 kHz 的 WAV；没给文字就试着识别。
+    fn add_sample(&self, p: AddSampleParams, bytes: Vec<u8>) -> Result<Sample, RpcError> {
+        let ext = p
+            .ext
+            .as_deref()
+            .map(|e| e.trim_start_matches('.').to_ascii_lowercase());
+        let reader = AudioReader::from_source(Box::new(Cursor::new(bytes)), ext.as_deref())
+            .map_err(|_| RpcError::new("voice_sample_unreadable", "cannot read the recording"))?;
+        let clip = tts::read_sample(reader)
+            .map_err(|_| RpcError::new("voice_sample_unreadable", "cannot read the recording"))?;
+        let seconds = clip.len() as f64 / f64::from(tts::SAMPLE_RATE);
+        if seconds < SAMPLE_MIN_SECONDS {
+            return Err(RpcError::new(
+                "voice_sample_short",
+                "the recording is too short",
+            ));
+        }
+        std::fs::create_dir_all(&self.voices.samples_dir)
+            .map_err(|e| RpcError::new("io", e.to_string()))?;
+        let id = postflow_store::ids::new_device_id();
+        let wav = self
+            .voices
+            .sample_path(&id, "wav")
+            .ok_or_else(|| RpcError::new("internal", "bad sample id"))?;
+        write_atomic(&wav, &tts::wav(&clip, tts::SAMPLE_RATE))
+            .map_err(|e| RpcError::new("io", e.to_string()))?;
+        let text = match p
+            .text
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+        {
+            Some(text) => text,
+            None => transcribe(&self.speech, &wav).unwrap_or_default(),
+        };
+        let name = p.name.trim();
+        let sample = Sample {
+            id,
+            name: if name.is_empty() {
+                "Voice".into()
+            } else {
+                name.chars().take(60).collect()
+            },
+            text,
+            seconds: (seconds * 10.0).round() / 10.0,
+            created_at: crate::refresh::now(),
+        };
+        self.voices
+            .save_sample(&sample)
+            .map_err(|e| RpcError::new("io", e.to_string()))?;
+        self.voices
+            .clips()
+            .insert(sample.id.clone(), Arc::new(clip));
+        Ok(sample)
     }
 
     /// 要用的模型：加载着的直接用，没有就加载（换了模型就换掉原来那个）。
@@ -252,4 +492,30 @@ async fn download_model(core: Arc<Core>, id: String) {
         state,
         error,
     });
+}
+
+/// 先写到旁边的临时文件再改名，写到一半断电也不会留下坏文件。
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)
+}
+
+/// 用装着的语音识别模型把声音样本识别成文字。没装、识别不出来时是空的，让用户自己填。
+fn transcribe(speech: &Speech, wav: &Path) -> Option<String> {
+    let id = speech.selected()?;
+    let engine = speech.load(&id).ok()?;
+    let mut reader = AudioReader::open(wav).ok()?;
+    let mut speakers = Speakers::default();
+    let mut text = String::new();
+    engine
+        .run(&mut reader, f64::INFINITY, &mut speakers, &mut |step| {
+            for cue in step.cues {
+                text.push_str(cue.text.trim());
+            }
+            true
+        })
+        .ok()?;
+    let text = text.trim().to_string();
+    (!text.is_empty()).then_some(text)
 }

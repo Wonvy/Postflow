@@ -7,8 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Read aloud in a voice that sounds like a real person: the new ZipVoice model (about 180 MB, free and local) reads Chinese and English in the voice of a short recording you add in Settings → Read aloud → Voice samples. The recording is trimmed and transcribed automatically when a speech recognition model is installed; pick a recording for Chinese and one for English.
+- Fixed a local voice giving up on a whole article when one sentence couldn't be generated; that sentence now uses the system voice and reading continues.
 
 ### 中文
+- 朗读可以用像真人的声音：新的 ZipVoice 模型（约 180 MB，免费、在本机运行）照着你在「设置 → 朗读 → 声音样本」里添加的一段录音的声音念中文和英文。录音会自动裁剪，装了语音识别模型时自动识别出文字；中文、英文可以各选一段录音。
+- 修复本机声音有一句念不出来时整篇改用系统语音的问题：现在只有那一句用系统语音，后面接着用本机声音。
 
 ## 0.1.38 — 2026-11-19
 

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pickModel, pickVoice, voiceAccent, voiceGender, voiceLabel, voiceLang, voicesFor } from "./voiceNames.ts";
+import { pickModel, pickSample, pickVoice, voiceAccent, voiceGender, voiceLabel, voiceLang, voicesFor } from "./voiceNames.ts";
 
 const V11 = ["af_maple", "af_sol", "bf_vale", "zf_001", "zf_002", "zm_009", "zm_010"];
 const V10 = ["af_heart", "am_adam", "bm_george", "jf_alpha", "ff_siwis", "zf_xiaoxiao", "zm_yunxi"];
@@ -62,4 +62,21 @@ test("which model reads a language", () => {
   // 指定的模型被删了：用系统语音，不悄悄换成别的
   assert.equal(pickModel(one, "en", "kokoro-v1.0"), null);
   assert.equal(pickModel([], "zh", "auto"), null);
+});
+
+test("ZipVoice reads with the user's samples and comes first once it has one", () => {
+  const models = [
+    { id: "kokoro-v1.1-zh", kind: "kokoro", installed: true, supported: true, languages: ["zh", "en"], recommended: ["zh"], speakers: V11 },
+    { id: "zipvoice", kind: "zipvoice", installed: true, supported: true, languages: ["zh", "en"], recommended: [] },
+  ];
+  // 还没有声音样本：ZipVoice 用不了
+  assert.equal(pickModel(models, "zh", "auto"), "kokoro-v1.1-zh");
+  assert.equal(pickModel(models, "zh", "zipvoice"), null);
+  // 有了：自动时先用它，中英文都用它
+  assert.equal(pickModel(models, "zh", "auto", ["a1"]), "zipvoice");
+  assert.equal(pickModel(models, "en", "auto", ["a1"]), "zipvoice");
+  assert.equal(pickModel(models, "en", "kokoro-v1.1-zh", ["a1"]), "kokoro-v1.1-zh");
+  assert.equal(pickSample(["a1", "b2"], "b2"), "b2");
+  assert.equal(pickSample(["a1", "b2"], "gone"), "a1");
+  assert.equal(pickSample([], "gone"), null);
 });

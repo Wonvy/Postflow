@@ -145,6 +145,9 @@ function speakFrom(index: number) {
 
 // ---------------------------------------------------------------- 一篇的文字
 
+/** 这次朗读里本机声音整个用不了（模型被删了、加载失败）：后面的文章都用系统语音，不再一篇一篇地试。 */
+let localOff = false;
+
 /** 准备好的（或者正在准备的）文字：`条目|念法` → 文字。只留正在念的和下一篇。 */
 const prepared = new Map<string, Promise<string>>();
 /** 这次朗读里 AI 总结出过错（没设置 AI、余额不足……）：后面的都不再要，改念摘要。值是错误码。 */
@@ -297,7 +300,8 @@ function begin(item: ListenItem, shown: string | null, announce: boolean) {
     };
     // 用什么念最好马上定下来（还在点击里时系统语音才念得出来）
     const known = knownVoiceOverview();
-    if (known) ready(localVoiceFor(known, lang));
+    if (localOff) ready(null);
+    else if (known) ready(localVoiceFor(known, lang));
     else
       voiceOverview()
         .then((o) => localVoiceFor(o, lang))
@@ -341,8 +345,8 @@ function moveTo(next: ListenItem, from: string) {
 
 // ---------------------------------------------------------------- 系统语音
 
-/** 念第 `index` 段，念完自动接下一段。 */
-function systemFrom(index: number) {
+/** 念第 `index` 段，念完自动接下一段。`thenLocal`：只替本机声音念这一句，下一句接着用本机声音。 */
+function systemFrom(index: number, thenLocal = false) {
   const s = useSpeech.getState();
   generation++;
   const mine = generation;
@@ -365,7 +369,8 @@ function systemFrom(index: number) {
   if (voice) u.voice = voice;
   u.onend = () => {
     if (mine !== generation) return;
-    systemFrom(index + 1);
+    if (thenLocal) void localFrom(index + 1);
+    else systemFrom(index + 1);
   };
   u.onerror = (e) => {
     if (mine !== generation || e.error === "interrupted" || e.error === "canceled") return;
@@ -378,8 +383,14 @@ function systemFrom(index: number) {
 // ---------------------------------------------------------------- 本机声音
 
 let audio: HTMLAudioElement | null = null;
-/** 念好了（或者正在念）的句子：第几句 → 放的地址（没什么可念的句子是 null）。 */
-let clips = new Map<number, Promise<string | null>>();
+/** 念好的一句：放的地址，和实际按什么语速念的。 */
+interface Clip {
+  url: string;
+  speed: number;
+}
+
+/** 念好了（或者正在念）的句子：第几句 → 声音（没什么可念的句子是 null）。 */
+let clips = new Map<number, Promise<Clip | null>>();
 /** 这批句子是用什么念的：换了文章、声音或者语速就作废。 */
 let clipKey = "";
 /** 播放器里放着的是第几句：暂停以后接着放用。 */
@@ -400,8 +411,8 @@ function stopAudio() {
   audioIndex = -1;
 }
 
-function revoke(p: Promise<string | null>) {
-  p.then((url) => url && URL.revokeObjectURL(url)).catch(() => undefined);
+function revoke(p: Promise<Clip | null>) {
+  p.then((c) => c && URL.revokeObjectURL(c.url)).catch(() => undefined);
 }
 
 function forgetClips() {
@@ -411,7 +422,7 @@ function forgetClips() {
 }
 
 /** 第 `index` 句的声音：念过的直接给，没念过的向核心要。 */
-function clip(index: number): Promise<string | null> | undefined {
+function clip(index: number): Promise<Clip | null> | undefined {
   const s = useSpeech.getState();
   const text = s.parts[index];
   if (text === undefined || !s.local) return undefined;
@@ -423,11 +434,12 @@ function clip(index: number): Promise<string | null> | undefined {
   let p = clips.get(index);
   if (!p) {
     const batch = clips;
-    p = api.voicesSpeak(s.local.model, s.local.voice, text, s.rate).then((r) => {
+    const rate = s.rate;
+    p = api.voicesSpeak(s.local.model, s.local.voice, text, rate).then((r) => {
       const url = r.audio ? wavUrl(r.audio) : null;
       // 念好的时候这批已经作废了（换了声音、停了）：地址不用留
       if (url && clips !== batch) URL.revokeObjectURL(url);
-      return clips === batch ? url : null;
+      return clips === batch && url ? { url, speed: r.speed ?? rate } : null;
     });
     // 预先要的那几句出错不用管：轮到它的时候再报
     p.catch(() => undefined);
@@ -458,11 +470,17 @@ async function localFrom(index: number) {
   }
   useSpeech.setState({ index, playing: true, waiting: true });
   trimClips(index);
-  let url: string | null;
+  let got: Clip | null;
   try {
-    url = (await clip(index)) ?? null;
+    got = (await clip(index)) ?? null;
   } catch (err) {
     if (mine !== generation) return;
+    if (codeOf(err) === "voice_failed") {
+      // 只是这一句念不出来（模型对很短、很怪的句子有时会放弃）：这一句交给系统语音，没有就跳过
+      if (speechSupported()) systemFrom(index, true);
+      else void localFrom(index + 1);
+      return;
+    }
     fallBack(index, err);
     return;
   }
@@ -471,12 +489,16 @@ async function localFrom(index: number) {
   void clip(index + 1)
     ?.then(() => clip(index + 2))
     .catch(() => undefined);
-  if (!url) {
+  if (!got) {
     void localFrom(index + 1);
     return;
   }
   const el = player();
-  el.src = url;
+  el.src = got.url;
+  // 实际念得比要的慢（ZipVoice 的短句）：放快一些补上。换了地址以后要重新设
+  const playback = Math.min(3, Math.max(0.5, useSpeech.getState().rate / got.speed));
+  el.defaultPlaybackRate = playback;
+  el.playbackRate = playback;
   audioIndex = index;
   el.onended = () => {
     if (mine === generation) void localFrom(index + 1);
@@ -495,6 +517,7 @@ function fallBack(index: number, err: unknown) {
   const reason = errorText(t, voiceError(err));
   if (speechSupported()) {
     toast(t("voices.fellBack", { error: reason }));
+    localOff = true;
     useSpeech.setState({ local: null });
     systemFrom(index);
   } else {
@@ -587,6 +610,7 @@ export const useSpeech = create<Speech>()((set, get) => ({
     const fresh = get().itemId === null;
     if (fresh) {
       aiOff = null;
+      localOff = false;
       prepared.clear();
     }
     set({ queue: queue ?? [], ...(fresh ? { aiCount: 0 } : {}) });

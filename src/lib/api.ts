@@ -99,6 +99,16 @@ export interface SpeechModel {
   speakers?: string[];
 }
 
+/** ZipVoice 照着念的一段录音。 */
+export interface VoiceSample {
+  id: string;
+  name: string;
+  /** 录音里说的话，要和录音一字不差；空的时候这段录音还不能用。 */
+  text: string;
+  seconds: number;
+  created_at: number;
+}
+
 export interface SpeechOverview {
   models: SpeechModel[];
   selected: string | null;
@@ -835,7 +845,16 @@ export const api = {
   voicesImport: (id: string, path: string) => rpc<SpeechOverview>("voices.import", { id, path }),
   /** 用本机的声音念一句：返回 Base64 的 WAV（没什么可念的时候是空的）和时长（秒）。 */
   voicesSpeak: (model: string, voice: string, text: string, speed: number) =>
-    rpc<{ audio: string; duration: number }>("voices.speak", { model, voice, text, speed }),
+    rpc<{ audio: string; duration: number; speed?: number }>("voices.speak", { model, voice, text, speed }),
+  voicesSamples: () => rpc<{ samples: VoiceSample[] }>("voices.samples"),
+  /** 存一段录音（Base64）。`text` 不给的话，装了语音识别模型就自动识别。 */
+  voicesSampleAdd: (name: string, audio: string, ext: string, text?: string) =>
+    rpc<VoiceSample>("voices.samples.add", { name, audio, ext, text }),
+  voicesSampleUpdate: (id: string, patch: { name?: string; text?: string }) =>
+    rpc<VoiceSample>("voices.samples.update", { id, ...patch }),
+  voicesSampleRemove: (id: string) => rpc<{ samples: VoiceSample[] }>("voices.samples.remove", { id }),
+  /** 原来的录音（WAV，Base64），试听用。 */
+  voicesSampleAudio: (id: string) => rpc<{ audio: string }>("voices.samples.audio", { id }),
   /** 这一期在本机转写出来的字幕（没有就是空的）。 */
   subtitlesGet: (id: string) => rpc<SubtitleSnapshot>("subtitles.get", { id }),
   /**

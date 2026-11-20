@@ -8,12 +8,14 @@
 //! cargo run --release -p postflow-speech --example speak -- say <目录> <模型 ID> <声音> <文字> [输出.wav]
 //! ```
 //!
+//! ZipVoice 没有自带的声音：`<声音>` 写一段录音的路径，再用环境变量 `SAMPLE_TEXT` 给出录音里说的话。
+//!
 //! `<目录>` 相当于应用的 `本机目录/voices`，比如 `.postflow-dev/local/voices`。
 
 use std::path::Path;
 use std::time::Instant;
 
-use postflow_speech::{Speech, tts};
+use postflow_speech::{AudioReader, Speaker, Speech, tts};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -72,8 +74,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let voice = voices.load_voice(id)?;
             println!("loaded in {:.2}s", started.elapsed().as_secs_f64());
             println!("reading: {}", voice.prepare(text));
+            let clip;
+            let sample_text = std::env::var("SAMPLE_TEXT").unwrap_or_default();
+            let who = if voice.needs_sample() {
+                clip = tts::read_sample(AudioReader::open(Path::new(speaker))?)?;
+                println!(
+                    "sample: {:.1}s",
+                    clip.len() as f64 / f64::from(tts::SAMPLE_RATE)
+                );
+                Speaker::Sample {
+                    audio: &clip,
+                    text: &sample_text,
+                }
+            } else {
+                Speaker::Preset(speaker)
+            };
             let started = Instant::now();
-            let samples = voice.speak(text, speaker, 1.0)?;
+            let samples = voice.speak(text, who, 1.0)?.samples;
             let took = started.elapsed().as_secs_f64();
             let seconds = samples.len() as f64 / f64::from(voice.sample_rate());
             println!(

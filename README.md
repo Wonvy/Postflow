@@ -183,7 +183,7 @@ click **More info → Run anyway**.
   marking the sentence it's on. Pause, skip sentences and change the speed; it keeps going when you open another
   article, with controls under the list. Choose the voice in Settings → Read aloud: natural-sounding local voices
   (open-source Kokoro models, about 100 Chinese and 30 English voices, generated on your computer after a one-time
-  download) or your system's voice. Listen to the news: the headphones above the list read one article after
+  download), ZipVoice reading in the voice of a short recording you add, or your system's voice. Listen to the news: the headphones above the list read one article after
   another — the full text, the feed's summary, an AI summary or just the headlines — marking each as read, with a
   sleep timer. See [Read aloud](docs/read-aloud.md).
 - Feed stats (the chart icon on the Feeds heading): how often each feed posts, how many of its posts carry the full

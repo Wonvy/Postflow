@@ -75,6 +75,8 @@ pub struct AudioReader {
     resampler: Option<LinearResampler>,
     /// 现在这个重采样器是按哪个采样率建的。
     rate: u32,
+    /// 读出来的采样率。识别用 16 kHz（默认）；朗读的声音样本要 24 kHz，见 `output_rate`。
+    out: u32,
     interleaved: Vec<f32>,
     mono: Vec<f32>,
     /// 下一块样本从第几秒开始。
@@ -151,6 +153,7 @@ impl AudioReader {
             decoder,
             resampler: None,
             rate: 0,
+            out: SAMPLE_RATE,
             interleaved: Vec::new(),
             mono: Vec::new(),
             position: 0.0,
@@ -159,6 +162,12 @@ impl AudioReader {
     }
 
     /// 整期多长（秒）。有的文件头里没写，读到结尾才知道。
+    /// 换成按 `rate` 读出（默认 16 kHz）。要在读第一块之前调用。
+    pub fn output_rate(mut self, rate: u32) -> AudioReader {
+        self.out = rate.max(8_000);
+        self
+    }
+
     pub fn duration(&self) -> Option<f64> {
         self.duration
     }
@@ -299,10 +308,10 @@ impl AudioReader {
                         .map(|frame| frame.iter().sum::<f32>() * scale),
                 );
             }
-            if rate != SAMPLE_RATE {
+            if rate != self.out {
                 if self.rate != rate {
                     self.resampler = Some(
-                        LinearResampler::create(rate as i32, SAMPLE_RATE as i32)
+                        LinearResampler::create(rate as i32, self.out as i32)
                             .ok_or_else(|| Error::Audio(format!("cannot resample {rate} Hz")))?,
                     );
                     self.rate = rate;
@@ -315,7 +324,7 @@ impl AudioReader {
                 continue;
             }
             let start = self.position;
-            self.position += self.mono.len() as f64 / f64::from(SAMPLE_RATE);
+            self.position += self.mono.len() as f64 / f64::from(self.out);
             return Ok(Some(Chunk {
                 start,
                 samples: &self.mono,

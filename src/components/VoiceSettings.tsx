@@ -14,8 +14,18 @@ import { speechSupported, systemVoiceFor, useSpeech, voiceError } from "../lib/s
 import { LISTEN_CONTENTS, type ListenContent } from "../lib/listenText";
 import { languageName } from "../lib/translate";
 import { isTauri } from "../lib/transport";
-import { pickModel, pickVoice, voiceAccent, voiceGender, voiceLabel, type VoiceLang, voicesFor } from "../lib/voiceNames";
-import { forgetVoiceOverview, PREVIEW_TEXT, unlockAudio, useVoices, wavUrl } from "../lib/voices";
+import {
+  pickModel,
+  pickSample,
+  pickVoice,
+  voiceAccent,
+  voiceGender,
+  voiceLabel,
+  type VoiceLang,
+  voicesFor,
+} from "../lib/voiceNames";
+import { forgetVoiceOverview, PREVIEW_TEXT, readySamples, unlockAudio, useVoices, wavUrl } from "../lib/voices";
+import { VoiceSamples } from "./VoiceSamples";
 import { ModelList } from "./ModelList";
 import { CONTENT_LABEL } from "./ReadAloud";
 import { SettingRow, SettingsHeading } from "./SettingsParts";
@@ -69,11 +79,14 @@ function usePreview() {
     useSpeech.getState().stop();
     setLoading(key);
     try {
-      const r = await api.voicesSpeak(model, voice, PREVIEW_TEXT[lang], useSpeech.getState().rate);
+      const rate = useSpeech.getState().rate;
+      const r = await api.voicesSpeak(model, voice, PREVIEW_TEXT[lang], rate);
       if (mine !== token.current) return;
       const url = wavUrl(r.audio);
       const el = audio.current;
       el.src = url;
+      // 实际念得比要的慢（ZipVoice 的短句）：放快一些补上
+      el.defaultPlaybackRate = el.playbackRate = rate / (r.speed ?? rate);
       el.onended = () => {
         URL.revokeObjectURL(url);
         if (mine === token.current) setPlaying(null);
@@ -133,6 +146,12 @@ export function VoiceSettings({ open }: { open: boolean }) {
     enabled: open,
     staleTime: 0,
   });
+  const samples = useQuery({
+    queryKey: ["voice-samples"],
+    queryFn: api.voicesSamples,
+    enabled: open,
+    staleTime: 0,
+  });
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -148,6 +167,7 @@ export function VoiceSettings({ open }: { open: boolean }) {
       await action();
       forgetVoiceOverview();
       await qc.invalidateQueries({ queryKey: ["voices"] });
+      await qc.invalidateQueries({ queryKey: ["voice-samples"] });
       return true;
     } catch (err) {
       toast(errorText(t, errorOf(err)));
@@ -171,6 +191,9 @@ export function VoiceSettings({ open }: { open: boolean }) {
 
   const models = overview.data?.models ?? [];
   const installed = models.filter((m) => m.installed && m.supported);
+  const sampleList = samples.data?.samples ?? [];
+  const ready = readySamples(sampleList);
+  const zipvoice = installed.find((m) => m.kind === "zipvoice");
 
   const voiceText = (name: string) => {
     const label = voiceLabel(name, lang);
@@ -184,7 +207,7 @@ export function VoiceSettings({ open }: { open: boolean }) {
   };
 
   const languageRow = (l: VoiceLang) => {
-    const modelId = pickModel(models, l, engine);
+    const modelId = pickModel(models, l, engine, ready);
     const model = models.find((m) => m.id === modelId);
     const key = `${l}`;
     const previewButton = (onPlay: () => void) => (
@@ -201,6 +224,31 @@ export function VoiceSettings({ open }: { open: boolean }) {
         )}
       </IconButton>
     );
+    if (model?.kind === "zipvoice") {
+      const current = pickSample(ready, chosen[`${model.id}:${l}`]) ?? "";
+      return (
+        <SettingRow key={l} label={languageName(l, lang)} hint={t("voices.sampleHint", { model: model.name })}>
+          <Select
+            className="w-44"
+            aria-label={t("voices.voiceFor", { lang: languageName(l, lang) })}
+            value={current}
+            onChange={(e) => {
+              choose(model.id, l, e.target.value);
+              void preview.local(key, model.id, e.target.value, l, (err) => toast(errorText(t, errorOf(err))));
+            }}
+          >
+            {sampleList
+              .filter((s) => ready.includes(s.id))
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+          </Select>
+          {previewButton(() => void preview.local(key, model.id, current, l, (err) => toast(errorText(t, errorOf(err)))))}
+        </SettingRow>
+      );
+    }
     if (model) {
       const speakers = model.speakers ?? [];
       const current = pickVoice(speakers, model.options, l, chosen[`${model.id}:${l}`]) ?? "";
@@ -336,6 +384,17 @@ export function VoiceSettings({ open }: { open: boolean }) {
         onImport={(m, path) => run(`import:${m.id}`, () => api.voicesImport(m.id, path))}
         errorOf={errorOf}
       />
+
+      {(zipvoice || sampleList.length > 0) && (
+        <VoiceSamples
+          samples={sampleList}
+          model={zipvoice?.id ?? null}
+          onChanged={async () => {
+            forgetVoiceOverview();
+            await qc.invalidateQueries({ queryKey: ["voice-samples"] });
+          }}
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {isTauri && overview.data && (

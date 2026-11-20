@@ -44,7 +44,7 @@ pub use speakers::{Gender, Speakers};
 pub use store::{Transcript, Transcripts};
 /// 自己实现的音频来源（比如还在下载的文件）要实现它，交给 `AudioReader::from_source`。
 pub use symphonia::core::io::MediaSource;
-pub use tts::Voice;
+pub use tts::{Speaker, Spoken, Voice};
 
 /// 目录缓存多久以后联网更新一次。
 const CATALOG_MAX_AGE: Duration = Duration::from_secs(24 * 3600);

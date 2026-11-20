@@ -6,10 +6,10 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { api, type SpeechOverview } from "./api";
+import { api, type SpeechOverview, type VoiceSample } from "./api";
 import type { ListenContent } from "./listenText";
 import type { CoreEvent } from "./transport";
-import { pickModel, pickVoice, type VoiceLang } from "./voiceNames";
+import { pickModel, pickSample, pickVoice, type VoiceLang } from "./voiceNames";
 
 type VoiceModelEvent = Extract<CoreEvent, { type: "voice_model" }>;
 
@@ -84,17 +84,32 @@ export const useVoices = create<VoicePrefs>()(
   ),
 );
 
-let overview: Promise<SpeechOverview> | null = null;
-/** 上次取到的，不用等。 */
-let known: SpeechOverview | null = null;
+/** 核心那边的朗读模型，加上 ZipVoice 用的声音样本。 */
+export type VoiceState = SpeechOverview & { samples: VoiceSample[] };
 
-/** 核心那边的朗读模型。取一次留着，模型装上、删掉时重新取。 */
-export function voiceOverview(): Promise<SpeechOverview> {
+let overview: Promise<VoiceState> | null = null;
+/** 上次取到的，不用等。 */
+let known: VoiceState | null = null;
+
+/** 能用的声音样本（填了录音里说的话的）。 */
+export function readySamples(samples: readonly VoiceSample[]): string[] {
+  return samples.filter((s) => s.text.trim()).map((s) => s.id);
+}
+
+/** 核心那边的朗读模型和声音样本。取一次留着，模型、样本变了时重新取。 */
+export function voiceOverview(): Promise<VoiceState> {
   if (!overview) {
-    const pending = api.voicesOverview().then((o) => {
-      known = o;
-      useVoices.setState({ installed: o.models.some((m) => m.installed && m.supported) });
-      return o;
+    const pending = Promise.all([
+      api.voicesOverview(),
+      api.voicesSamples().catch(() => ({ samples: [] as VoiceSample[] })),
+    ]).then(([o, { samples }]) => {
+      const state: VoiceState = { ...o, samples };
+      known = state;
+      const ready = readySamples(samples).length > 0;
+      useVoices.setState({
+        installed: o.models.some((m) => m.installed && m.supported && (m.kind !== "zipvoice" || ready)),
+      });
+      return state;
     });
     pending.catch(() => {
       // 下次再试
@@ -106,7 +121,7 @@ export function voiceOverview(): Promise<SpeechOverview> {
 }
 
 /** 已经取到的朗读模型，还没取到时是 null。点「朗读」时要马上决定用什么念（见 unlockAudio）。 */
-export function knownVoiceOverview(): SpeechOverview | null {
+export function knownVoiceOverview(): VoiceState | null {
   return known;
 }
 
@@ -128,12 +143,15 @@ export function onVoiceModelEvent(event: VoiceModelEvent): void {
 }
 
 /** 用本机的哪个模型、哪种声音念这种语言；用系统语音时是 null。 */
-export function localVoiceFor(o: SpeechOverview, lang: string): { model: string; voice: string } | null {
+export function localVoiceFor(o: VoiceState, lang: string): { model: string; voice: string } | null {
   const { engine, chosen } = useVoices.getState();
-  const id = pickModel(o.models, lang, engine);
+  const samples = readySamples(o.samples);
+  const id = pickModel(o.models, lang, engine, samples);
   const model = id ? o.models.find((m) => m.id === id) : undefined;
   if (!model || (lang !== "zh" && lang !== "en")) return null;
-  const voice = pickVoice(model.speakers ?? [], model.options, lang, chosen[`${model.id}:${lang}`]);
+  const want = chosen[`${model.id}:${lang}`];
+  const voice =
+    model.kind === "zipvoice" ? pickSample(samples, want) : pickVoice(model.speakers ?? [], model.options, lang, want);
   return voice ? { model: model.id, voice } : null;
 }
 

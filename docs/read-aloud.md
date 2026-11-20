@@ -59,6 +59,7 @@ Models aren't bundled with the app. Download one in **Settings → Read aloud**:
 | --- | --- | --- | --- |
 | Kokoro v1.1-zh | 370 MB | 55 female and 45 male Mandarin voices, 3 English | Chinese |
 | Kokoro v1.0 | 345 MB | 28 American and British English voices, 8 Mandarin | English |
+| ZipVoice | 183 MB | The voice of a recording you add (see below) | Sounding like a real person |
 
 With both installed, Automatic reads Chinese with v1.1-zh and English with v1.0. Each file is checked against its
 SHA-256 after download; a copy on ModelScope is used where Hugging Face is slow or blocked. If neither downloads,
@@ -68,6 +69,28 @@ added without a new release.
 
 The default Chinese voice (female 94) was chosen because speech recognition understood it best across a few news
 passages, out of all 100 Chinese voices. That measures clarity, not taste: try a few in the voice menu.
+
+## Your own voice (ZipVoice)
+
+[ZipVoice](https://github.com/k2-fsa/ZipVoice) doesn't come with voices. It reads in the voice of a short recording
+you add under **Voice samples**, copying its timbre and tone, which makes it sound the most like a real person.
+
+1. Download ZipVoice in Settings → Read aloud.
+2. Click **Add a recording…** and choose an audio file (MP3, M4A, WAV, Ogg, FLAC…). Use 3–10 seconds of one person
+   speaking clearly, with no music or background noise. Postflow keeps the first 12 seconds and trims silence at the
+   ends.
+3. Check the text under the recording: it must match what is said, word for word. If a speech recognition model is
+   installed (Settings → Subtitles), it's filled in for you; otherwise type it.
+4. Pick the recording for Chinese and/or English at the top of the page. A recording in the same language works best:
+   with a Chinese recording, English comes out with an accent and some words get lost.
+
+Only use your own voice, or a recording the speaker agreed to. Recordings stay on this computer and aren't synced.
+
+ZipVoice is slower than Kokoro (about 1.5× real time on an Apple M4, against 4× for Kokoro), so on older computers it
+may not keep up and there will be pauses between sentences. Its dictionary has no English words, so Postflow also
+downloads Kokoro's English dictionary and converts it to standard IPA the first time ZipVoice loads. In this version of
+sherpa-onnx ZipVoice ignores the Chinese number rules, so Postflow writes numbers in Chinese sentences as characters
+itself. Very short sentences can't be generated fast; those are generated at normal speed and played faster.
 
 ## How it works
 

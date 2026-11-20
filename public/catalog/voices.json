@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-11-19T20:00:00Z",
+  "updated": "2026-11-20T02:00:00Z",
   "models": [
     {
       "id": "kokoro-v1.1-zh",
@@ -416,6 +416,89 @@
           "urls": [
             "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_0/resolve/main/number-zh.fst",
             "https://www.modelscope.cn/models/qiu6401/halfleaf-kokoro-multi-lang-v1_0/resolve/master/number-zh.fst"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zipvoice-distill-zh-en",
+      "name": "ZipVoice",
+      "kind": "zipvoice",
+      "task": "tts",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "recommended": [],
+      "options": {
+        "num_steps": "4"
+      },
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/k2-fsa/ZipVoice/blob/master/LICENSE",
+      "homepage": "https://github.com/k2-fsa/ZipVoice",
+      "desc": {
+        "zh": "最像真人：照着你给的一段 3–10 秒录音念，音色和语气都学那段录音。中文、英文都能念。装好以后在下面添加一段声音样本。比 Kokoro 慢，较老的电脑上可能跟不上朗读。",
+        "en": "Sounds most like a real person: it reads in the voice of a 3–10 second recording you provide, copying its tone. Reads Chinese and English. After installing, add a voice sample below. Slower than Kokoro; older computers may not keep up."
+      },
+      "files": [
+        {
+          "name": "encoder.int8.onnx",
+          "role": "encoder",
+          "size": 5570211,
+          "sha256": "f2de9a761a85e5ddd125dee6e05bad1c7ee92c11b83b4d775dab216a6aa41379",
+          "urls": [
+            "https://huggingface.co/k2-fsa/ZipVoice/resolve/main/zipvoice_distill/text_encoder_int8.onnx",
+            "https://www.modelscope.cn/models/roarson/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/encoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "decoder.int8.onnx",
+          "role": "decoder",
+          "size": 124657100,
+          "sha256": "3cc2e08a96610d7ea1b227398e97cdbbe0414499741d3aec0b8113db2a2ab251",
+          "urls": [
+            "https://huggingface.co/k2-fsa/ZipVoice/resolve/main/zipvoice_distill/fm_decoder_int8.onnx",
+            "https://www.modelscope.cn/models/roarson/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/decoder.int8.onnx"
+          ]
+        },
+        {
+          "name": "tokens.txt",
+          "role": "tokens",
+          "size": 2570,
+          "sha256": "ce98c1afc5f7a20c2484dffdd68a1fff0a4a2cc707328833750c4476c37cdbda",
+          "urls": [
+            "https://huggingface.co/k2-fsa/ZipVoice/resolve/main/zipvoice_distill/tokens.txt",
+            "https://www.modelscope.cn/models/roarson/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/tokens.txt"
+          ]
+        },
+        {
+          "name": "lexicon.txt",
+          "role": "lexicon",
+          "size": 1727147,
+          "sha256": "c94b049d970e971acdc2a7e5e7b23ca594222a9d640e417c711f2ad1e7bb7d46",
+          "urls": [
+            "https://www.modelscope.cn/models/roarson/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/lexicon.txt"
+          ]
+        },
+        {
+          "name": "lexicon-us-en.txt",
+          "role": "lexicon_en",
+          "size": 5956885,
+          "sha256": "7daaab53a181be9885b853a8582bf1838186317e5dadacbcef9c426d6fa0da14",
+          "urls": [
+            "https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/lexicon-us-en.txt",
+            "https://www.modelscope.cn/models/jackyhwei/kokoro-multi-lang-v1_1-onnx/resolve/master/lexicon-us-en.txt"
+          ]
+        },
+        {
+          "name": "vocos_24khz.onnx",
+          "role": "vocoder",
+          "size": 54157409,
+          "sha256": "bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0",
+          "urls": [
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx",
+            "https://www.modelscope.cn/models/liaowenbin/vocos-24khz/resolve/master/vocos_24khz.onnx",
+            "https://www.modelscope.cn/models/zyaztec/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/vocos_24khz.onnx"
           ]
         }
       ]

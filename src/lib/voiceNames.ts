@@ -65,6 +65,7 @@ export function pickVoice(
 
 export interface VoiceModelInfo {
   id: string;
+  kind?: string;
   installed: boolean;
   supported: boolean;
   languages: string[];
@@ -72,18 +73,37 @@ export interface VoiceModelInfo {
   speakers?: string[];
 }
 
+/** 这个模型念这种语言能用哪些声音：Kokoro 是自带的；ZipVoice 是用户加的声音样本（中英文都能念）。 */
+export function usableVoices(m: VoiceModelInfo, lang: VoiceLang, samples: readonly string[]): string[] {
+  return m.kind === "zipvoice" ? [...samples] : voicesFor(m.speakers ?? [], lang);
+}
+
+/** 用哪段声音样本：选过而且还在的，否则第一段。 */
+export function pickSample(samples: readonly string[], chosen?: string): string | null {
+  return chosen && samples.includes(chosen) ? chosen : (samples[0] ?? null);
+}
+
 /**
- * 用哪个本机模型念这种语言，`null` 是用系统语音。
+ * 用哪个本机模型念这种语言，`null` 是用系统语音。`samples` 是能用的声音样本（填了文字的）。
  * - `engine` 是 "system"：总用系统语音。
- * - 是某个模型的 ID：它装着、念得了这种语言就用它，否则用系统语音。
- * - "auto"：装着的模型里推荐给这种语言的，没有的话装着的第一个念得了的。
+ * - 是某个模型的 ID：它装着、念得了这种语言（ZipVoice 还要有声音样本）就用它，否则用系统语音。
+ * - "auto"：加了声音样本的 ZipVoice 最像真人，先用它；否则装着的模型里推荐给这种语言的，再否则装着的第一个念得了的。
  */
-export function pickModel(models: readonly VoiceModelInfo[], lang: string, engine: string): string | null {
+export function pickModel(
+  models: readonly VoiceModelInfo[],
+  lang: string,
+  engine: string,
+  samples: readonly string[] = [],
+): string | null {
   if (lang !== "zh" && lang !== "en") return null;
   const usable = models.filter(
-    (m) => m.installed && m.supported && m.languages.includes(lang) && voicesFor(m.speakers ?? [], lang).length > 0,
+    (m) => m.installed && m.supported && m.languages.includes(lang) && usableVoices(m, lang, samples).length > 0,
   );
   if (engine === "system") return null;
   if (engine !== "auto") return usable.some((m) => m.id === engine) ? engine : null;
-  return (usable.find((m) => m.recommended.includes(lang)) ?? usable[0])?.id ?? null;
+  return (
+    usable.find((m) => m.kind === "zipvoice") ??
+    usable.find((m) => m.recommended.includes(lang)) ??
+    usable[0]
+  )?.id ?? null;
 }
