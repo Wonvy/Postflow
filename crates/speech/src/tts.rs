@@ -27,6 +27,8 @@ use crate::{AudioReader, Error, Model, Result};
 pub const SAMPLE_RATE: u32 = 24_000;
 /// 声音样本最长用多少秒：再长也不会更像，每句都要多算一遍。
 pub const SAMPLE_MAX_SECONDS: f64 = 12.0;
+/// 声音样本整体的音量（均方根）低于这个就当没有声音：正常说话在 0.05 以上，安静房间的底噪在 0.002 左右。
+const SILENT_RMS: f32 = 0.005;
 /// 换成国际音标的英文词典，ZipVoice 第一次加载时写在模型目录里。
 const IPA_LEXICON: &str = "lexicon-en-ipa.txt";
 
@@ -126,19 +128,19 @@ pub fn read_sample(mut reader: AudioReader) -> Result<Vec<f32>> {
     out.truncate(max);
     // 开头结尾的静音去掉：录音里多出来的空白会让念出来的每句话前后也拖着空白
     let loud = |s: &f32| s.abs() > 0.01;
-    let start = out
-        .iter()
-        .position(loud)
-        .unwrap_or(0)
-        .saturating_sub(SAMPLE_RATE as usize / 10);
-    let end = out
-        .iter()
-        .rposition(loud)
-        .map_or(out.len(), |i| (i + SAMPLE_RATE as usize / 5).min(out.len()));
-    if start >= end {
-        return Err(Error::Audio("the recording is silent".into()));
+    // 一点声音都没有（以前这时整段照收，之后每句都念不出来）
+    let (Some(first), Some(last)) = (out.iter().position(loud), out.iter().rposition(loud)) else {
+        return Err(Error::Silent);
+    };
+    let start = first.saturating_sub(SAMPLE_RATE as usize / 10);
+    let end = (last + SAMPLE_RATE as usize / 5).min(out.len());
+    let clip = &out[start..end];
+    // 只有零星的杂音、整体很小声的，也学不出音色
+    let rms = (clip.iter().map(|s| s * s).sum::<f32>() / clip.len().max(1) as f32).sqrt();
+    if rms < SILENT_RMS {
+        return Err(Error::Silent);
     }
-    Ok(out[start..end].to_vec())
+    Ok(clip.to_vec())
 }
 
 impl Voice {
@@ -270,12 +272,12 @@ impl Voice {
                     .iter()
                     .position(|s| s == name)
                     .filter(|&i| i < self.available)
-                    .ok_or_else(|| Error::Speak(format!("no voice named {name}")))?;
+                    .ok_or_else(|| Error::VoiceSetup(format!("no voice named {name}")))?;
                 options.sid = i32::try_from(sid).unwrap_or(0);
             }
             (Kind::ZipVoice, Speaker::Sample { audio, text }) => {
                 if audio.is_empty() || text.trim().is_empty() {
-                    return Err(Error::Speak("the voice sample is empty".into()));
+                    return Err(Error::VoiceSetup("the voice sample is empty".into()));
                 }
                 options.reference_audio = Some(audio.to_vec());
                 options.reference_sample_rate = SAMPLE_RATE as i32;
@@ -284,10 +286,12 @@ impl Voice {
                 options.num_steps = self.steps;
             }
             (Kind::Kokoro, Speaker::Sample { .. }) => {
-                return Err(Error::Speak("this model has built-in voices only".into()));
+                return Err(Error::VoiceSetup(
+                    "this model has built-in voices only".into(),
+                ));
             }
             (Kind::ZipVoice, Speaker::Preset(_)) => {
-                return Err(Error::Speak("this model needs a voice sample".into()));
+                return Err(Error::VoiceSetup("this model needs a voice sample".into()));
             }
         }
         let text = self.prepare(text);
@@ -355,6 +359,43 @@ mod tests {
         assert_eq!(
             ipa,
             "hello h ə l ˈ o ʊ\njudge d ʒ ˈ ʌ d ʒ\nnow n ˈ a ʊ\nchocolate t ʃ ˈ ɑ k ə l ə t\n"
+        );
+    }
+
+    fn sample_of(samples: &[f32]) -> Result<Vec<f32>> {
+        let bytes = wav(samples, SAMPLE_RATE);
+        let reader = AudioReader::from_source(Box::new(std::io::Cursor::new(bytes)), Some("wav"))?;
+        read_sample(reader)
+    }
+
+    #[test]
+    fn silent_or_hissing_samples_are_refused() {
+        let rate = SAMPLE_RATE as usize;
+        // 三秒静音
+        assert!(matches!(
+            sample_of(&vec![0.0; rate * 3]),
+            Err(Error::Silent)
+        ));
+        // 三秒很轻的底噪，偶尔一下超过门限
+        let hiss: Vec<f32> = (0..rate * 3)
+            .map(|i| {
+                if i % 4000 == 0 {
+                    0.02
+                } else {
+                    0.001 * ((i % 7) as f32 - 3.0)
+                }
+            })
+            .collect();
+        assert!(matches!(sample_of(&hiss), Err(Error::Silent)));
+        // 前后各一秒静音、中间两秒正常音量的声音：留下中间（再带一点前后）
+        let mut tone = vec![0.0; rate];
+        tone.extend((0..rate * 2).map(|i| 0.3 * (i as f32 * 0.05).sin()));
+        tone.extend(vec![0.0; rate]);
+        let clip = sample_of(&tone).unwrap();
+        assert!(
+            clip.len() > rate * 2 && clip.len() < rate * 3,
+            "{}",
+            clip.len()
         );
     }
 

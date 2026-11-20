@@ -69,21 +69,28 @@ static DIGIT_LETTER: LazyLock<Regex> = LazyLock::new(|| re(r"(\d)([A-Za-z]+)"));
 static DATE: LazyLock<Regex> = LazyLock::new(|| re(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})"));
 
 // 中文句子
-static ZH_PERCENT: LazyLock<Regex> = LazyLock::new(|| re(r"(\d+(?:\.\d+)?)\s?[%％]"));
-static ZH_TIME: LazyLock<Regex> = LazyLock::new(|| re(r"(^|\D)(\d{1,2})[:：](\d{2})"));
-static ZH_RANGE: LazyLock<Regex> = LazyLock::new(|| re(r"(\d)\s?[-–~～]\s?(\d)"));
+/// 百分数，前面可能有负号（前一个字不是数字时才算负号，`3-5%` 里的不算）。
+static ZH_PERCENT: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(^|[^\d.])([-−－])?(\d+(?:\.\d+)?)\s?[%％]"));
+/// 冒号隔开的两个数：时间（`10:30`），或者比分、比例（`21:19`、`3:1`）。
+static ZH_COLON: LazyLock<Regex> = LazyLock::new(|| re(r"(^|\D)(\d+)[:：](\d+)"));
+/// 横线、波浪线隔开的两个数：范围（`3-5`），也可能是电话、年月（`010-12345678`、`2026-11`）。
+static ZH_RANGE: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(\d+(?:\.\d+)?)\s?([-–~～])\s?(\d+(?:\.\d+)?)"));
 
 // 英文句子
 static EN_MONEY: LazyLock<Regex> = LazyLock::new(|| {
     re(r"(?i)([$€£¥])\s?(\d+(?:\.\d+)?)(?:\s?(thousand|million|billion|trillion|bn|[kmb])\b)?")
 });
-static EN_PERCENT: LazyLock<Regex> = LazyLock::new(|| re(r"(\d+(?:\.\d+)?)\s?%"));
+static EN_PERCENT: LazyLock<Regex> = LazyLock::new(|| re(r"(^|[^\d.])([-−])?(\d+(?:\.\d+)?)\s?%"));
 static EN_TIME: LazyLock<Regex> = LazyLock::new(|| re(r"\b([01]?\d|2[0-3]):([0-5]\d)\b"));
-static EN_RANGE: LazyLock<Regex> = LazyLock::new(|| re(r"(\d)\s?[–-]\s?(\d)"));
+static EN_RANGE: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(\d+(?:\.\d+)?)\s?[–-]\s?(\d+(?:\.\d+)?)"));
 static EN_ORDINAL: LazyLock<Regex> = LazyLock::new(|| re(r"(?i)\b(\d+)(st|nd|rd|th)\b"));
 static EN_DECADE: LazyLock<Regex> = LazyLock::new(|| re(r"\b(1[1-9]\d0|20\d0)'?s\b"));
-/// 年份：前面不是数字或小数点；后面跟着小数部分的（第 3 组）不算。
-static EN_YEAR: LazyLock<Regex> = LazyLock::new(|| re(r"(^|[^.\d])(1[1-9]\d\d|20\d\d)(\.\d+)?\b"));
+/// 年份：前面不是数字或小数点；后面跟着小数部分、或者带过千分位（[`GROUPED`]）的（第 3 组）不算。
+static EN_YEAR: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(^|[^.\d])(1[1-9]\d\d|20\d\d)\b(\.\d+|\x{2060})?"));
 static EN_NUMBER: LazyLock<Regex> = LazyLock::new(|| re(r"\d+(?:\.\d+)?"));
 static ENGLISH_WORD: LazyLock<Regex> = LazyLock::new(|| re(r"[A-Za-z][A-Za-z'’]*"));
 
@@ -97,7 +104,7 @@ pub fn prepare(text: &str, words: &Words) -> String {
 pub fn prepare_with(text: &str, words: &Words, hanzi_numbers: bool) -> String {
     let text = URL.replace_all(text, " ");
     let zh = CJK.is_match(&text);
-    let text = strip_thousands(&text);
+    let text = strip_thousands(&text, !zh);
     let text = dates(&text, zh);
     let text = split_letters_and_digits(&text);
     let text = if zh {
@@ -112,7 +119,7 @@ pub fn prepare_with(text: &str, words: &Words, hanzi_numbers: bool) -> String {
     };
     let text = if zh { text } else { text.replace('&', " and ") };
     let text = ENGLISH_WORD.replace_all(&text, |c: &Captures| speakable_word(&c[0], words));
-    collapse_spaces(&text)
+    collapse_spaces(&text.replace(GROUPED, ""))
 }
 
 /// 多个空白并成一个，去掉开头结尾和标点前面的空白。
@@ -268,19 +275,103 @@ fn hanzi_digits(text: &str) -> String {
     out
 }
 
+/// 冒号前后出现这些词时，`21:19` 是比分、比例，不是时间。
+const SCORE_BEFORE: [&str; 14] = [
+    "比分", "比例", "比率", "以", "战胜", "击败", "负于", "输给", "赢了", "拿下", "打出", "比赛",
+    "胜", "负",
+];
+const SCORE_AFTER: [&str; 12] = [
+    "战胜",
+    "击败",
+    "获胜",
+    "取胜",
+    "告负",
+    "胜出",
+    "险胜",
+    "大胜",
+    "落败",
+    "赢",
+    "输",
+    "的比分",
+];
+
 fn chinese_numbers(text: &str) -> String {
-    let text = ZH_PERCENT.replace_all(text, "百分之$1");
-    let text = ZH_TIME.replace_all(&text, |c: &Captures| {
-        let hour: u32 = c[2].parse().unwrap_or(99);
-        let minute: u32 = c[3].parse().unwrap_or(99);
-        let before = &c[1];
-        match (hour, minute) {
-            (0..=23, 0) => format!("{before}{hour}点"),
-            (0..=23, 1..=59) => format!("{before}{hour}点{minute}分"),
-            _ => c[0].to_string(),
+    let text = ZH_PERCENT.replace_all(text, |c: &Captures| {
+        let minus = if c.get(2).is_some() { "负" } else { "" };
+        format!("{}{minus}百分之{}", &c[1], &c[3])
+    });
+    let text = ZH_COLON.replace_all(&text, |c: &Captures| {
+        let whole = c.get(0).map_or(0..0, |m| m.range());
+        // 前面的词要算到第一个数开始的地方：紧挨着的那个字（`以21:19` 的「以」）在匹配里
+        let first = c.get(2).map_or(whole.start, |m| m.start());
+        let before: String = text[..first]
+            .chars()
+            .rev()
+            .take(6)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        let after: String = text[whole.end..].chars().take(4).collect();
+        let (a, b) = (&c[2], &c[3]);
+        let hour: u32 = a.parse().unwrap_or(99);
+        let minute: u32 = b.parse().unwrap_or(99);
+        // 时间是一两位的小时加两位的分钟；比分、比例不限（`3:1`、`110:98`）
+        let looks_like_time = a.len() <= 2 && b.len() == 2 && hour <= 23 && minute <= 59;
+        let score = SCORE_BEFORE.iter().any(|w| before.contains(w))
+            || SCORE_AFTER.iter().any(|w| after.contains(w));
+        let lead = &c[1];
+        if looks_like_time && !score {
+            if minute == 0 {
+                format!("{lead}{hour}点")
+            } else {
+                format!("{lead}{hour}点{minute}分")
+            }
+        } else if b.len() <= 3 {
+            format!("{lead}{a}比{b}")
+        } else {
+            c[0].to_string()
         }
     });
-    ZH_RANGE.replace_all(&text, "${1}到$2").into_owned()
+    ZH_RANGE
+        .replace_all(&text, |c: &Captures| {
+            let (a, dash, b) = (&c[1], &c[2], &c[3]);
+            if matches!(dash, "~" | "～") {
+                return format!("{a}到{b}");
+            }
+            // 年月：2026-11
+            let month: u32 = b.parse().unwrap_or(0);
+            if a.len() == 4
+                && (a.starts_with("19") || a.starts_with("20"))
+                && b.len() <= 2
+                && (1..=12).contains(&month)
+            {
+                return format!("{a}年{month}月");
+            }
+            if is_phone_like(a, b) {
+                return c[0].to_string();
+            }
+            format!("{a}到{b}")
+        })
+        .into_owned()
+}
+
+/// 一个数字一个数字地念：`555` → five five five。
+fn spell_digits(digits: &str) -> String {
+    digits
+        .chars()
+        .filter_map(|d| d.to_digit(10))
+        .map(|d| cardinal(u64::from(d)))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// 横线隔开的两串数字更像电话、编号而不是范围：开头是 0（区号），或者后面那串很长，或者 3 位加 4 位。
+fn is_phone_like(a: &str, b: &str) -> bool {
+    let plain = |s: &str| !s.contains('.');
+    plain(a)
+        && plain(b)
+        && ((a.starts_with('0') && a.len() >= 3) || b.len() >= 5 || (a.len() == 3 && b.len() == 4))
 }
 
 fn english_numbers(text: &str) -> String {
@@ -305,7 +396,8 @@ fn english_numbers(text: &str) -> String {
         format!(" {}{scale} {unit} ", number_words(&c[2]))
     });
     let text = EN_PERCENT.replace_all(&text, |c: &Captures| {
-        format!("{} percent", number_words(&c[1]))
+        let minus = if c.get(2).is_some() { "minus " } else { "" };
+        format!("{}{minus}{} percent", &c[1], number_words(&c[3]))
     });
     let text = EN_TIME.replace_all(&text, |c: &Captures| {
         let hour = cardinal(c[1].parse().unwrap_or(0));
@@ -316,7 +408,14 @@ fn english_numbers(text: &str) -> String {
             _ => format!("{hour} {}", cardinal(minute)),
         }
     });
-    let text = EN_RANGE.replace_all(&text, "$1 to $2");
+    let text = EN_RANGE.replace_all(&text, |c: &Captures| {
+        if is_phone_like(&c[1], &c[2]) {
+            // 电话号码一个数字一个数字地念
+            format!(" {}, {} ", spell_digits(&c[1]), spell_digits(&c[2]))
+        } else {
+            format!("{} to {}", &c[1], &c[2])
+        }
+    });
     let text = EN_ORDINAL.replace_all(&text, |c: &Captures| {
         c[1].parse::<u64>()
             .map(ordinal)
@@ -383,10 +482,16 @@ fn dates(text: &str, zh: bool) -> String {
     .into_owned()
 }
 
-/// 去掉千分位逗号：`1,234,567` → `1234567`。逗号后面要正好是三位数字。
-fn strip_thousands(text: &str) -> String {
+/// 去掉过千分位的数后面做的记号（不念出来，最后去掉）：`1,850` 去掉逗号以后不能当成年份念。
+const GROUPED: char = '\u{2060}';
+
+/// 去掉千分位逗号：`1,234,567` → `1234567`。逗号后面要正好是三位数字。`mark` 时在这样的数后面
+/// 做个记号（[`GROUPED`]），英文的年份规则看到它就不把 `1,850` 念成 eighteen fifty。数后面紧跟着
+/// 字母、百分号这些的不做记号，免得挡住别的规则（这时也不会被当成年份）。
+fn strip_thousands(text: &str, mark: bool) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
+    let mut grouped = false;
     for (i, &ch) in chars.iter().enumerate() {
         if ch == ','
             && i > 0
@@ -395,9 +500,20 @@ fn strip_thousands(text: &str) -> String {
             && chars[i + 1..i + 4].iter().all(char::is_ascii_digit)
             && !chars.get(i + 4).is_some_and(char::is_ascii_digit)
         {
+            grouped = true;
             continue;
         }
+        let decimal = ch == '.' && chars.get(i + 1).is_some_and(char::is_ascii_digit);
+        if grouped && !ch.is_ascii_digit() && !decimal {
+            if mark && (ch.is_whitespace() || ",.;:!?)]}\"'’”…".contains(ch)) {
+                out.push(GROUPED);
+            }
+            grouped = false;
+        }
         out.push(ch);
+    }
+    if grouped && mark {
+        out.push(GROUPED);
     }
     out
 }
@@ -727,7 +843,53 @@ mod tests {
         let w = words();
         assert_eq!(prepare("发布于2026-11-19，", &w), "发布于2026年11月19日，");
         assert_eq!(prepare("日期2026/13/40", &w), "日期2026/13/40");
-        assert_eq!(prepare("比分是110:30", &w), "比分是110:30");
+        assert_eq!(prepare("比分是110:30", &w), "比分是110比30");
+    }
+
+    #[test]
+    fn scores_ranges_and_signs() {
+        let w = words();
+        // 比分、比例不当时间念
+        assert_eq!(prepare("湖人以21:19领先", &w), "湖人以21比19领先");
+        assert_eq!(prepare("最终3:1战胜对手", &w), "最终3比1战胜对手");
+        assert_eq!(prepare("比例为1:2", &w), "比例为1比2");
+        assert_eq!(prepare("晚上21:19出发", &w), "晚上21点19分出发");
+        // 电话、年月不当范围念
+        assert_eq!(prepare("电话010-12345678", &w), "电话010-12345678");
+        assert_eq!(prepare("2026-11发布", &w), "2026年11月发布");
+        assert_eq!(prepare("3-5天", &w), "3到5天");
+        assert_eq!(prepare("1~2周", &w), "1到2周");
+        // 负的百分数
+        assert_eq!(prepare("涨跌幅-3.2%", &w), "涨跌幅负百分之3.2");
+        assert_eq!(prepare("增长5%", &w), "增长百分之5");
+        assert_eq!(
+            prepare_with("涨跌幅-3.2%", &w, true),
+            "涨跌幅负百分之三点二"
+        );
+    }
+
+    #[test]
+    fn grouped_numbers_are_not_years() {
+        let w = words();
+        assert_eq!(
+            prepare("It sold 1,850 units", &w),
+            "It sold one thousand eight hundred fifty units"
+        );
+        assert_eq!(
+            prepare("1,999 to 2,026.", &w),
+            "one thousand nine hundred ninety-nine to two thousand twenty-six."
+        );
+        // 真的年份照旧
+        assert_eq!(prepare("in 1850", &w), "in eighteen fifty");
+        assert_eq!(
+            prepare("revenue fell -3.5% to $1,850", &w),
+            "revenue fell minus three point five percent to one thousand eight hundred fifty dollars"
+        );
+        assert_eq!(
+            prepare("call 555-1234", &w),
+            "call five five five, one two three four"
+        );
+        assert_eq!(prepare("from 3-5", &w), "from three to five");
     }
 
     #[test]

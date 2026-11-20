@@ -11,7 +11,7 @@
 //! `<ID>.wav`（24 kHz 单声道，最长 12 秒）和 `<ID>.json`（名字、录音里说的话）。录音里说的话不填的话，
 //! 装了语音识别模型就自动识别出来，用户再改。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -32,6 +32,8 @@ const MAX_TEXT: usize = 2000;
 const SAMPLE_MIN_SECONDS: f64 = 2.0;
 /// 上传的录音文件最大多少字节（只取开头十几秒，但整个文件要传过来）。
 const SAMPLE_MAX_BYTES: usize = 30 * 1024 * 1024;
+/// 界面说不要了的请求最多记这么多个（念完的请求不会从这里删掉，记太多就整个清掉）。
+const MAX_CANCELLED: usize = 512;
 
 /// 一段声音样本。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +57,8 @@ pub(crate) struct Voices {
     loaded: Arc<Mutex<Option<Loaded>>>,
     /// 念的时候拿着，一次只念一句。
     speaking: Arc<Mutex<()>>,
+    /// 界面不要了的句子（跳过了、换了一篇、停了）：还排着队的轮到时直接跳过，不白念。
+    cancelled: Arc<Mutex<HashSet<String>>>,
     samples_dir: PathBuf,
     /// 读过的声音样本：ID → 录音。念每一句都要用，不必每次读文件。
     clips: Mutex<HashMap<String, Arc<Vec<f32>>>>,
@@ -67,6 +71,7 @@ impl Voices {
             models: Arc::new(Speech::voices(root)?),
             loaded: Arc::new(Mutex::new(None)),
             speaking: Arc::new(Mutex::new(())),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
             clips: Mutex::new(HashMap::new()),
         })
     }
@@ -123,19 +128,31 @@ impl Voices {
         Ok(clip)
     }
 
-    fn loaded(&self) -> MutexGuard<'_, Option<Loaded>> {
-        self.loaded.lock().unwrap_or_else(|e| e.into_inner())
+    /// 放掉加载着的模型（删模型前、或者指定的就是它时）。加载模型时一直拿着锁（要一两秒），
+    /// 所以在阻塞线程里做，不卡异步线程。
+    async fn unload(&self, id: Option<&str>) {
+        let loaded = self.loaded.clone();
+        let id = id.map(str::to_string);
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut loaded = loaded.lock().unwrap_or_else(|e| e.into_inner());
+            if loaded
+                .as_ref()
+                .is_some_and(|l| id.as_deref().is_none_or(|id| l.id == id))
+            {
+                *loaded = None;
+            }
+        })
+        .await;
     }
 
-    /// 放掉加载着的模型（删模型前、或者指定的就是它时）。
-    fn unload(&self, id: Option<&str>) {
-        let mut loaded = self.loaded();
-        if loaded
-            .as_ref()
-            .is_some_and(|l| id.is_none_or(|id| l.id == id))
-        {
-            *loaded = None;
-        }
+    /// 这个请求界面已经不要了（顺便从记录里拿掉）。
+    fn take_cancelled(cancelled: &Mutex<HashSet<String>>, request: Option<&str>) -> bool {
+        request.is_some_and(|r| {
+            cancelled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(r)
+        })
     }
 }
 
@@ -173,6 +190,11 @@ struct UpdateSampleParams {
 }
 
 #[derive(Deserialize)]
+struct CancelParams {
+    requests: Vec<String>,
+}
+
+#[derive(Deserialize)]
 struct SpeakParams {
     /// 哪个模型。
     model: String,
@@ -181,6 +203,13 @@ struct SpeakParams {
     text: String,
     #[serde(default = "normal_speed")]
     speed: f32,
+    /// 界面给这次请求起的名字：之后可以用 `voices.cancel` 说不要了。
+    #[serde(default)]
+    request: Option<String>,
+}
+
+fn cancelled_error() -> RpcError {
+    RpcError::new("voice_cancelled", "the sentence is no longer needed")
 }
 
 fn normal_speed() -> f32 {
@@ -215,7 +244,7 @@ impl Core {
             }
             "voices.remove" => {
                 let p: IdParam = parse(params)?;
-                self.voices.unload(Some(&p.id));
+                self.voices.unload(Some(&p.id)).await;
                 let models = self.voices.models.clone();
                 tokio::task::spawn_blocking(move || models.remove(&p.id))
                     .await
@@ -228,14 +257,30 @@ impl Core {
                 if !folder.is_dir() {
                     return Err(RpcError::new("speech_import_missing", "no such folder"));
                 }
-                self.voices.unload(Some(&p.id));
+                self.voices.unload(Some(&p.id)).await;
                 self.voices.models.import(&p.id, &folder).await?;
                 reply(self.voices.models.overview())
+            }
+            "voices.cancel" => {
+                let p: CancelParams = parse(params)?;
+                let mut cancelled = self
+                    .voices
+                    .cancelled
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                if cancelled.len() + p.requests.len() > MAX_CANCELLED {
+                    cancelled.clear();
+                }
+                cancelled.extend(p.requests.into_iter().take(MAX_CANCELLED));
+                reply(json!({}))
             }
             "voices.speak" => {
                 let p: SpeakParams = parse(params)?;
                 if p.text.chars().count() > MAX_TEXT {
                     return Err(RpcError::new("bad_params", "the text is too long"));
+                }
+                if Voices::take_cancelled(&self.voices.cancelled, p.request.as_deref()) {
+                    return Err(cancelled_error());
                 }
                 let voice = self.voice(&p.model).await?;
                 // ZipVoice 照着声音样本念：录音和录音里说的话
@@ -259,8 +304,13 @@ impl Core {
                     None
                 };
                 let speaking = self.voices.speaking.clone();
+                let cancelled = self.voices.cancelled.clone();
                 let (spoken, rate) = tokio::task::spawn_blocking(move || {
                     let _turn = speaking.lock().unwrap_or_else(|e| e.into_inner());
+                    // 排队等着的时候界面已经不要了（用户跳过了这几句）：不念，让后面要的那句早点轮到
+                    if Voices::take_cancelled(&cancelled, p.request.as_deref()) {
+                        return Err(cancelled_error());
+                    }
                     let who = match &sample {
                         Some((clip, text)) => Speaker::Sample { audio: clip, text },
                         None => Speaker::Preset(&p.voice),
@@ -268,6 +318,7 @@ impl Core {
                     voice
                         .speak(&p.text, who, p.speed)
                         .map(|s| (s, voice.sample_rate()))
+                        .map_err(RpcError::from)
                 })
                 .await
                 .map_err(|e| RpcError::new("internal", e.to_string()))??;
@@ -351,8 +402,12 @@ impl Core {
             .map(|e| e.trim_start_matches('.').to_ascii_lowercase());
         let reader = AudioReader::from_source(Box::new(Cursor::new(bytes)), ext.as_deref())
             .map_err(|_| RpcError::new("voice_sample_unreadable", "cannot read the recording"))?;
-        let clip = tts::read_sample(reader)
-            .map_err(|_| RpcError::new("voice_sample_unreadable", "cannot read the recording"))?;
+        let clip = tts::read_sample(reader).map_err(|e| match e {
+            postflow_speech::Error::Silent => {
+                RpcError::new("voice_sample_silent", "the recording is silent")
+            }
+            _ => RpcError::new("voice_sample_unreadable", "cannot read the recording"),
+        })?;
         let seconds = clip.len() as f64 / f64::from(tts::SAMPLE_RATE);
         if seconds < SAMPLE_MIN_SECONDS {
             return Err(RpcError::new(
@@ -404,12 +459,12 @@ impl Core {
         let loaded = self.voices.loaded.clone();
         let models = self.voices.models.clone();
         let id = id.to_string();
-        let voice = tokio::task::spawn_blocking(move || -> Result<Arc<Voice>, RpcError> {
+        let (voice, fresh) = tokio::task::spawn_blocking(move || -> Result<(Arc<Voice>, bool), RpcError> {
             // 加载的时候也拿着锁：界面一下子要好几句时只加载一次
             let mut slot = loaded.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(l) = slot.as_mut().filter(|l| l.id == id) {
                 l.used = Instant::now();
-                return Ok(l.voice.clone());
+                return Ok((l.voice.clone(), false));
             }
             *slot = None;
             let started = Instant::now();
@@ -420,11 +475,14 @@ impl Core {
                 voice: voice.clone(),
                 used: Instant::now(),
             });
-            Ok(voice)
+            Ok((voice, true))
         })
         .await
         .map_err(|e| RpcError::new("internal", e.to_string()))??;
-        self.watch_idle_voice();
+        // 刚加载的才派一个看着它的任务（以前每念一句派一个，连听一小时攒下几百个）
+        if fresh {
+            self.watch_idle_voice();
+        }
         Ok(voice)
     }
 
@@ -442,7 +500,12 @@ impl Core {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(60)).await;
-                let mut slot = loaded.lock().unwrap_or_else(|e| e.into_inner());
+                // 正在加载模型时锁要拿一两秒：不在异步线程上等，下一分钟再看
+                let mut slot = match loaded.try_lock() {
+                    Ok(slot) => slot,
+                    Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+                    Err(std::sync::TryLockError::WouldBlock) => continue,
+                };
                 match slot.as_ref() {
                     Some(l) if l.id == id => {
                         if l.used.elapsed() >= IDLE {
@@ -477,7 +540,7 @@ async fn download_model(core: Arc<Core>, id: String) {
         Ok(_) => {
             tracing::info!(model = %id, "voice model installed");
             // 重新装的：内存里那份旧的放掉
-            core.voices.unload(Some(&id));
+            core.voices.unload(Some(&id)).await;
             (ModelState::Installed, None)
         }
         Err(e) => {

@@ -38,6 +38,7 @@ import { useTrayActions } from "./lib/trayActions";
 import { useExternalSaves, usePasteToSave } from "./components/ReadLater";
 import { useCoreEvents, useNav, useStatus } from "./lib/queries";
 import { useShortcuts } from "./lib/shortcuts";
+import { useSpeechBridge } from "./lib/speech";
 import { LIST_MIN, READER_MIN, useUi } from "./lib/store";
 import { isTauri, RpcError } from "./lib/transport";
 import { startUpdateChecks } from "./lib/updater";
@@ -387,6 +388,8 @@ export default function App() {
 function Body() {
   useAppearance();
   useCoreEvents();
+  // 念完的文章标为已读：放在这里一直挂着（列表在手机上打开文章、阅读区最大化时不在）
+  useSpeechBridge();
   const status = useStatus();
 
   if (status.isPending) {

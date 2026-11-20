@@ -265,6 +265,28 @@ async fn resumes_a_partial_download_and_rejects_corrupt_files() {
 }
 
 #[tokio::test]
+async fn a_partial_file_from_another_mirror_version_is_not_resumed() {
+    // 几个镜像上的同名文件不一定一样：上次从别的版本下了一半的，不能接着下（接出来的文件是坏的）
+    let (base, seen) = server().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let speech = speech(tmp.path(), &base).await;
+    let partial = tmp.path().join("models/.second.partial");
+    std::fs::create_dir_all(&partial).unwrap();
+    let half = model_bytes().len() / 2;
+    std::fs::write(partial.join("model.onnx"), &model_bytes()[..half]).unwrap();
+    std::fs::write(partial.join("model.onnx.variant"), "0".repeat(64)).unwrap();
+    download(&speech, "second").await.unwrap();
+    // 从头下的，没带 Range
+    assert_eq!(seen.list()[0], ("good/model.onnx".to_string(), None));
+    assert_eq!(
+        std::fs::read(tmp.path().join("models/second/model.onnx")).unwrap(),
+        model_bytes()
+    );
+    // 下完以后记录也清掉了
+    assert!(!tmp.path().join("models/second/model.onnx.variant").exists());
+}
+
+#[tokio::test]
 async fn imports_from_a_folder() {
     let (base, _) = server().await;
     let tmp = tempfile::tempdir().unwrap();

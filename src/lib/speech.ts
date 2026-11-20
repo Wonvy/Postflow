@@ -53,6 +53,8 @@ export interface ListenItem {
   summary: string;
   /** 开始念时已经读过了。 */
   read: boolean;
+  /** 阅读区里看的是全文（要念全文时取全文，不用订阅源给的那段）。 */
+  full?: boolean;
 }
 
 export function listenItemOf(item: Item): ListenItem {
@@ -147,6 +149,9 @@ function speakFrom(index: number) {
 
 /** 这次朗读里本机声音整个用不了（模型被删了、加载失败）：后面的文章都用系统语音，不再一篇一篇地试。 */
 let localOff = false;
+/** 本机声音连着几句念不出来了。 */
+let failedInRow = 0;
+const MAX_FAILED_IN_ROW = 3;
 
 /** 准备好的（或者正在准备的）文字：`条目|念法` → 文字。只留正在念的和下一篇。 */
 const prepared = new Map<string, Promise<string>>();
@@ -165,6 +170,14 @@ function htmlToText(html: string): string {
 }
 
 async function fullText(item: ListenItem): Promise<string> {
+  // 阅读区在看全文、全文还没取到（点朗读时还在加载）：等全文，别先念了订阅源给的那段摘要
+  if (item.full) {
+    const full = await api
+      .fullText(item.id)
+      .then((r) => r.full_text)
+      .catch(() => "");
+    if (full) return htmlToText(full);
+  }
   const d = await api.getItem(item.id);
   return htmlToText(d.full_text || d.content || d.mail?.body || "");
 }
@@ -268,6 +281,8 @@ function textNow(item: ListenItem, content: ListenContent, shown: string | null)
 function begin(item: ListenItem, shown: string | null, announce: boolean) {
   generation++;
   const mine = generation;
+  // 要出声了：播客在放的话先停下（接着念下一篇、换念法重念时也一样），两个声音叠在一起听不清
+  if (usePlayer.getState().playing) pausePodcast();
   if (speechSupported()) window.speechSynthesis.cancel();
   stopAudio();
   forgetClips();
@@ -395,6 +410,27 @@ let clips = new Map<number, Promise<Clip | null>>();
 let clipKey = "";
 /** 播放器里放着的是第几句：暂停以后接着放用。 */
 let audioIndex = -1;
+/** 还没念好的句子各是哪次请求：用不上了就撤回，核心那边排着队的不再念（不然跳过几句以后要等它们念完）。 */
+const inflight = new Map<Promise<Clip | null>, string>();
+/** 这个界面（标签页）的请求名字前缀：网页版和桌面应用可能同时在用同一个核心。 */
+const TAB = Math.random().toString(36).slice(2, 10);
+let requestSeq = 0;
+let toCancel: string[] = [];
+
+/** 撤回一句还没念好的。攒到这一轮事件结束一起发。 */
+function cancelRequest(p: Promise<Clip | null>) {
+  const request = inflight.get(p);
+  if (!request) return;
+  inflight.delete(p);
+  if (toCancel.length === 0) {
+    queueMicrotask(() => {
+      const requests = toCancel;
+      toCancel = [];
+      void api.voicesCancel(requests).catch(() => undefined);
+    });
+  }
+  toCancel.push(request);
+}
 
 function player(): HTMLAudioElement {
   if (!audio) {
@@ -412,6 +448,7 @@ function stopAudio() {
 }
 
 function revoke(p: Promise<Clip | null>) {
+  cancelRequest(p);
   p.then((c) => c && URL.revokeObjectURL(c.url)).catch(() => undefined);
 }
 
@@ -435,12 +472,16 @@ function clip(index: number): Promise<Clip | null> | undefined {
   if (!p) {
     const batch = clips;
     const rate = s.rate;
-    p = api.voicesSpeak(s.local.model, s.local.voice, text, rate).then((r) => {
+    const request = `${TAB}-${++requestSeq}`;
+    const asked = api.voicesSpeak(s.local.model, s.local.voice, text, rate, request).then((r) => {
       const url = r.audio ? wavUrl(r.audio) : null;
       // 念好的时候这批已经作废了（换了声音、停了）：地址不用留
       if (url && clips !== batch) URL.revokeObjectURL(url);
       return clips === batch && url ? { url, speed: r.speed ?? rate } : null;
     });
+    p = asked;
+    inflight.set(asked, request);
+    void asked.finally(() => inflight.delete(asked)).catch(() => undefined);
     // 预先要的那几句出错不用管：轮到它的时候再报
     p.catch(() => undefined);
     clips.set(index, p);
@@ -475,7 +516,17 @@ async function localFrom(index: number) {
     got = (await clip(index)) ?? null;
   } catch (err) {
     if (mine !== generation) return;
-    if (codeOf(err) === "voice_failed") {
+    const code = codeOf(err);
+    // 撤回的句子：已经不念它了（正常走不到这里，以防万一）
+    if (code === "voice_cancelled") return;
+    if (code === "voice_failed") {
+      failedInRow++;
+      // 一连几句都念不出来：多半是声音样本不行（噪音、静音），不是句子的问题。这次改用系统语音，
+      // 不再每一句先试本机声音、停顿一下
+      if (failedInRow >= MAX_FAILED_IN_ROW) {
+        fallBack(index, { code: "voice_keeps_failing" });
+        return;
+      }
       // 只是这一句念不出来（模型对很短、很怪的句子有时会放弃）：这一句交给系统语音，没有就跳过
       if (speechSupported()) systemFrom(index, true);
       else void localFrom(index + 1);
@@ -485,9 +536,17 @@ async function localFrom(index: number) {
     return;
   }
   if (mine !== generation) return;
-  // 这一句好了再要后面两句：同时要的话，核心可能先念后面的，这一句反而要等
+  if (got) failedInRow = 0;
+  // 这一句好了再要后面两句：同时要的话，核心可能先念后面的，这一句反而要等。
+  // 第二句要的时候还得是同一批、还在这附近念：用户这期间跳走了、换了一篇，就不要了
+  const batch = clips;
+  const itemId = useSpeech.getState().itemId;
   void clip(index + 1)
-    ?.then(() => clip(index + 2))
+    ?.then(() => {
+      const now = useSpeech.getState();
+      if (clips !== batch || now.itemId !== itemId || now.index < index || now.index > index + 1) return;
+      return clip(index + 2);
+    })
     .catch(() => undefined);
   if (!got) {
     void localFrom(index + 1);
@@ -572,7 +631,8 @@ function claimMediaSession() {
 /** 标为已读要走界面的查询缓存（列表马上变灰），由界面里一直在的组件交进来，见 useSpeechBridge。 */
 let markReadHandler: ((id: string) => void) | null = null;
 
-/** 让念完的文章能标为已读。放在一直显示着的组件里（列表底下的控制条）。 */
+/** 让念完的文章能标为已读。放在一直挂着的组件里（App 的 Body）：放在列表里的话，手机上打开文章、
+ *  阅读区最大化时列表不在，念完就标不了已读。 */
 export function useSpeechBridge() {
   const { mutate } = useSetItems();
   useEffect(() => {
@@ -611,6 +671,7 @@ export const useSpeech = create<Speech>()((set, get) => ({
     if (fresh) {
       aiOff = null;
       localOff = false;
+      failedInRow = 0;
       prepared.clear();
     }
     set({ queue: queue ?? [], ...(fresh ? { aiCount: 0 } : {}) });
@@ -720,10 +781,11 @@ export const useSpeech = create<Speech>()((set, get) => ({
   },
 }));
 
-// 播客开始放：朗读停下来（暂停，可以接着念），系统的播放键归播客
+// 播客开始放：朗读停下来（暂停，可以接着念），系统的播放键归播客。朗读本来就暂停着的时候也要把播放键
+// 还给播客：不然耳机上的暂停键还在找朗读，播客停不下来
 usePlayer.subscribe((p, prev) => {
-  if (p.playing && !prev.playing && useSpeech.getState().playing) {
-    useSpeech.getState().toggle();
-    restoreMediaSession();
-  }
+  if (!p.playing || prev.playing) return;
+  const speech = useSpeech.getState();
+  if (speech.playing) speech.toggle();
+  if (speech.itemId) restoreMediaSession();
 });

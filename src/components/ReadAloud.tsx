@@ -24,14 +24,7 @@ import { locate } from "../lib/highlightsText";
 import { type MessageKey, useT } from "../lib/i18n";
 import { useListModel } from "../lib/listModel";
 import { LISTEN_CONTENTS, type ListenContent, nextInQueue } from "../lib/listenText";
-import {
-  listenItemOf,
-  listenQueueOf,
-  SPEECH_RATES,
-  useReadAloudAvailable,
-  useSpeech,
-  useSpeechBridge,
-} from "../lib/speech";
+import { listenItemOf, listenQueueOf, SPEECH_RATES, useReadAloudAvailable, useSpeech } from "../lib/speech";
 import { useUi } from "../lib/store";
 import { useVoices, voiceOverview } from "../lib/voices";
 import { toast } from "./Toast";
@@ -179,7 +172,21 @@ function useHasNext(): boolean {
   return useSpeech((s) => (s.itemId ? nextInQueue(s.queue, s.itemId) !== undefined : false));
 }
 
-export function ReadAloud({ item, title, body }: { item: Item; title: string; body: RefObject<HTMLElement | null> }) {
+export function ReadAloud({
+  item,
+  title,
+  body,
+  full = false,
+  loadingFull = false,
+}: {
+  item: Item;
+  title: string;
+  body: RefObject<HTMLElement | null>;
+  /** 阅读区看的是全文。 */
+  full?: boolean;
+  /** 全文还在取：这时显示着的只是订阅源给的那段，不能拿来念。 */
+  loadingFull?: boolean;
+}) {
   const t = useT();
   const itemId = item.id;
   const mine = useSpeech((s) => s.itemId === itemId);
@@ -233,7 +240,11 @@ export function ReadAloud({ item, title, body }: { item: Item; title: string; bo
           type="button"
           onClick={() =>
             // 念的是显示着的标题和正文（开着翻译就是译文）；念完按列表往下念
-            start({ ...listenItemOf(item), title }, body.current?.innerText ?? "", listenQueueOf(items))
+            start(
+              { ...listenItemOf(item), title, full },
+              loadingFull ? null : (body.current?.innerText ?? ""),
+              listenQueueOf(items),
+            )
           }
           className="inline-flex items-center gap-1 rounded-md px-1 text-fg-3 transition-colors hover:text-fg"
         >
@@ -297,8 +308,6 @@ export function ReadAloud({ item, title, body }: { item: Item; title: string; bo
 /** 列表底下的朗读控制条：换了文章也接着念，点标题回到那一篇。 */
 export function SpeechBar() {
   const t = useT();
-  // 念完标为已读要用这里的查询缓存。这个组件一直挂着（不念的时候什么也不显示）
-  useSpeechBridge();
   const itemId = useSpeech((s) => s.itemId);
   const title = useSpeech((s) => s.title);
   const source = useSpeech((s) => s.source);

@@ -8,7 +8,9 @@ import { Mic, Play, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type VoiceSample } from "../lib/api";
 import { errorText, useT } from "../lib/i18n";
-import { wavUrl } from "../lib/voices";
+import { pause as pausePodcast, usePlayer } from "../lib/player";
+import { useSpeech } from "../lib/speech";
+import { unlockAudio, wavUrl } from "../lib/voices";
 import { SettingsHeading } from "./SettingsParts";
 import { toast } from "./Toast";
 import { Button, IconButton, Spinner, TextInput } from "./ui";
@@ -113,34 +115,46 @@ export function VoiceSamples({
   const audio = useRef<HTMLAudioElement | null>(null);
   const [adding, setAdding] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
+  /** 每点一次加一：点得快时，前一次的录音取回来晚了也不放。 */
+  const token = useRef(0);
+  /** 放着的那段录音的地址：停下、换一段、关掉时放掉。 */
+  const url = useRef<string | null>(null);
 
-  useEffect(
-    () => () => {
-      audio.current?.pause();
-    },
-    [],
-  );
+  const stop = () => {
+    token.current++;
+    audio.current?.pause();
+    if (url.current) URL.revokeObjectURL(url.current);
+    url.current = null;
+    setPlaying(null);
+  };
+  useEffect(() => stop, []);
 
   const play = async (id: string) => {
-    audio.current?.pause();
-    if (playing === id) {
-      setPlaying(null);
-      return;
-    }
+    const again = playing === id;
+    stop();
+    if (again) return;
+    const mine = token.current;
     const el = audio.current ?? new Audio();
     audio.current = el;
+    // 还在点击里：先解锁播放器（Safari 只允许在点击时开始放声音，下面要等录音取回来）
+    unlockAudio(el);
+    // 正在朗读文章、在放播客的话先停下，免得几个声音叠在一起
+    useSpeech.getState().stop();
+    if (usePlayer.getState().playing) pausePodcast();
     setPlaying(id);
     try {
       const { audio: data } = await api.voicesSampleAudio(id);
-      const url = wavUrl(data);
-      el.src = url;
+      if (mine !== token.current) return;
+      const clip = wavUrl(data);
+      url.current = clip;
+      el.src = clip;
       el.onended = () => {
-        URL.revokeObjectURL(url);
-        setPlaying(null);
+        if (mine === token.current) stop();
       };
       await el.play();
     } catch (err) {
-      setPlaying(null);
+      if (mine !== token.current) return;
+      stop();
       toast(errorText(t, err));
     }
   };

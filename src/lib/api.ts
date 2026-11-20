@@ -844,8 +844,10 @@ export const api = {
   voicesRemove: (id: string) => rpc<SpeechOverview>("voices.remove", { id }),
   voicesImport: (id: string, path: string) => rpc<SpeechOverview>("voices.import", { id, path }),
   /** 用本机的声音念一句：返回 Base64 的 WAV（没什么可念的时候是空的）和时长（秒）。 */
-  voicesSpeak: (model: string, voice: string, text: string, speed: number) =>
-    rpc<{ audio: string; duration: number; speed?: number }>("voices.speak", { model, voice, text, speed }),
+  /** 念一句。`request` 是这次请求的名字，之后可以用 voicesCancel 撤回（还在排队的就不念了）。 */
+  voicesSpeak: (model: string, voice: string, text: string, speed: number, request?: string) =>
+    rpc<{ audio: string; duration: number; speed?: number }>("voices.speak", { model, voice, text, speed, request }),
+  voicesCancel: (requests: string[]) => rpc<Record<string, never>>("voices.cancel", { requests }),
   voicesSamples: () => rpc<{ samples: VoiceSample[] }>("voices.samples"),
   /** 存一段录音（Base64）。`text` 不给的话，装了语音识别模型就自动识别。 */
   voicesSampleAdd: (name: string, audio: string, ext: string, text?: string) =>

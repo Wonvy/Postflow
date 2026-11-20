@@ -20,6 +20,14 @@ that heading into the version number and date.
 - When more than a thousand messages arrived between two syncs (after Postflow had been closed for a while, or in a busy list folder), some of the older ones in the middle were never downloaded. Postflow now keeps fetching until it has them all, without waiting for the next sync.
 - Skipping past a music intro while subtitles were being made could mark the whole episode as done, so no subtitles appeared for the rest of it. Only the part that was actually transcribed is marked now.
 - The desktop app on older macOS (Catalina and Big Sur with Safari 15) opened to a blank window; the interface now runs there. If Safari is older than 15.4, Postflow says so and asks you to update it instead of showing nothing.
+- Read aloud: skipping sentences, moving to the next article or stopping no longer leaves the computer busy with sentences you've skipped, so the next one starts sooner (most noticeable with ZipVoice).
+- Read aloud and podcasts no longer play at the same time, and the headphone and keyboard play keys go back to the podcast when you start one, even if reading was paused.
+- "Mark as read when finished" now also works on a phone and with the reader maximized.
+- Clicking Read aloud while the full text is still loading now waits for the full text instead of reading the feed's short summary.
+- Numbers read better: 1,850 is no longer read as a year, negative percentages keep their minus, scores like 21:19 and ratios are read as scores, and phone numbers and dates like 2026-11 aren't read as ranges.
+- A silent recording can no longer be added as a voice sample, and if a local voice can't read several sentences in a row, Postflow switches to the system voice and tells you why instead of pausing on every sentence.
+- Previewing a voice or a voice sample stops whatever else is playing, and quick clicks no longer play the wrong recording.
+- A voice or speech model download that resumes from a different mirror starts that file over instead of producing a broken file.
 
 ### 中文
 - 朗读可以用像真人的声音：新的 ZipVoice 模型（约 180 MB，免费、在本机运行）照着你在「设置 → 朗读 → 声音样本」里添加的一段录音的声音念中文和英文。录音会自动裁剪，装了语音识别模型时自动识别出文字；中文、英文可以各选一段录音。
@@ -35,6 +43,14 @@ that heading into the version number and date.
 - 两次收信之间来了一千多封（关了 Postflow 一阵子，或者订了很热闹的邮件列表文件夹）时，中间较早的一部分永远收不到。现在会一直接着取，直到取完，不用等下一次收信。
 - 字幕在转写纯音乐的片头时往后拖，整期可能被当成已经转完，之后再也不出字幕。现在只记真正转过的那一段。
 - 较旧的 macOS（Catalina、Big Sur 配 Safari 15）上桌面应用打开是一片空白，现在能正常用了。Safari 低于 15.4 时会提示你更新 Safari，不再什么都不显示。
+- 朗读：跳过几句、换到下一篇或者停下以后，电脑不再接着合成那些已经跳过的句子，下一句更快开始念（用 ZipVoice 时最明显）。
+- 朗读和播客不会再同时出声；开始放播客时，耳机和键盘上的播放键都交回给播客，朗读暂停着的时候也一样。
+- 「念完标为已读」在手机上、阅读区最大化时也能用了。
+- 全文还在加载时点朗读，会等全文取到再念，不再先念订阅源给的那段摘要。
+- 数字念得更准：1,850 不再念成年份，负的百分数不丢负号，21:19 这样的比分和比例念成「21比19」，电话号码和 2026-11 这样的年月不再念成「到」。
+- 没有声音的录音不能再存成声音样本；本机声音连着几句念不出来时，会改用系统语音并说明原因，不再每句都停顿一下。
+- 试听声音和声音样本时，会先停下正在放的其他声音；点得快时也不会放错录音。
+- 声音和识别模型的下载换到别的镜像续传时，会从头下那个文件，不会再拼出坏文件。
 
 ## 0.1.38 — 2026-11-19
 

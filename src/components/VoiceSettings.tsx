@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type SpeechModel } from "../lib/api";
 import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { revealFolder } from "../lib/platform";
+import { pause as pausePodcast, usePlayer } from "../lib/player";
 import { speechSupported, systemVoiceFor, useSpeech, voiceError } from "../lib/speech";
 import { LISTEN_CONTENTS, type ListenContent } from "../lib/listenText";
 import { languageName } from "../lib/translate";
@@ -60,10 +61,14 @@ function usePreview() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const token = useRef(0);
+  /** 放着的那段声音的地址：停下、换一段、关掉设置时放掉。 */
+  const url = useRef<string | null>(null);
 
   const stop = () => {
     token.current++;
     audio.current?.pause();
+    if (url.current) URL.revokeObjectURL(url.current);
+    url.current = null;
     if (speechSupported()) window.speechSynthesis.cancel();
     setPlaying(null);
     setLoading(null);
@@ -75,21 +80,22 @@ function usePreview() {
     const mine = token.current;
     if (!audio.current) audio.current = new Audio();
     unlockAudio(audio.current);
-    // 正在朗读文章的话先停下
+    // 正在朗读文章、在放播客的话先停下
     useSpeech.getState().stop();
+    if (usePlayer.getState().playing) pausePodcast();
     setLoading(key);
     try {
       const rate = useSpeech.getState().rate;
       const r = await api.voicesSpeak(model, voice, PREVIEW_TEXT[lang], rate);
       if (mine !== token.current) return;
-      const url = wavUrl(r.audio);
+      const clip = wavUrl(r.audio);
+      url.current = clip;
       const el = audio.current;
-      el.src = url;
+      el.src = clip;
       // 实际念得比要的慢（ZipVoice 的短句）：放快一些补上
       el.defaultPlaybackRate = el.playbackRate = rate / (r.speed ?? rate);
       el.onended = () => {
-        URL.revokeObjectURL(url);
-        if (mine === token.current) setPlaying(null);
+        if (mine === token.current) stop();
       };
       setLoading(null);
       setPlaying(key);
@@ -106,6 +112,7 @@ function usePreview() {
     stop();
     if (!speechSupported()) return;
     useSpeech.getState().stop();
+    if (usePlayer.getState().playing) pausePodcast();
     const mine = token.current;
     const u = new SpeechSynthesisUtterance(PREVIEW_TEXT[lang]);
     u.lang = lang === "zh" ? "zh-CN" : "en-US";

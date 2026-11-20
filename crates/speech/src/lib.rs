@@ -85,6 +85,12 @@ pub enum Error {
     Audio(String),
     #[error("cannot read this aloud: {0}")]
     Speak(String),
+    /// 声音本身用不了（没有这种声音、声音样本是空的、模型要样本却没给）：换句话念也一样。
+    #[error("this voice cannot be used: {0}")]
+    VoiceSetup(String),
+    /// 声音样本里没有声音。
+    #[error("the recording is silent")]
+    Silent,
     #[error("io: {0}")]
     Io(#[from] io::Error),
 }
@@ -102,6 +108,8 @@ impl Error {
             Error::Load(_) => "speech_load_failed",
             Error::Audio(_) => "speech_audio_failed",
             Error::Speak(_) => "voice_failed",
+            Error::VoiceSetup(_) => "voice_setup",
+            Error::Silent => "voice_sample_silent",
             Error::Io(_) => "io",
         }
     }
@@ -531,8 +539,9 @@ impl Speech {
         let sources = file.sources();
         // 上次已经下完整的不用再下
         if std::fs::metadata(to).is_ok_and(|m| sources.iter().any(|s| s.1 == m.len()))
-            && file.accepts(&sha256_of(to)?)
+            && file.accepts(&sha256_in_background(to).await?)
         {
+            let _ = std::fs::remove_file(variant_path(to));
             progress.received = before + file.size;
             self.report(progress, on_progress);
             return Ok(());
@@ -545,17 +554,29 @@ impl Speech {
                 continue;
             };
             match self
-                .fetch_from(url, file, size, to, before, progress, step, on_progress)
+                .fetch_from(
+                    url,
+                    file,
+                    size,
+                    sha256,
+                    to,
+                    before,
+                    progress,
+                    step,
+                    on_progress,
+                )
                 .await
             {
                 Ok(()) => {
-                    if sha256_of(to)?.eq_ignore_ascii_case(sha256) {
+                    if sha256_in_background(to).await?.eq_ignore_ascii_case(sha256) {
+                        let _ = std::fs::remove_file(variant_path(to));
                         progress.received = before + file.size;
                         self.report(progress, on_progress);
                         return Ok(());
                     }
                     // 内容不对：整个重来，换下一个地址
                     let _ = std::fs::remove_file(to);
+                    let _ = std::fs::remove_file(variant_path(to));
                     tracing::warn!(%url, file = %file.name, "downloaded file does not match its checksum");
                     last = Error::Checksum(file.name.clone());
                 }
@@ -576,6 +597,7 @@ impl Speech {
         url: &str,
         file: &RemoteFile,
         size: u64,
+        sha256: &str,
         to: &Path,
         before: u64,
         progress: &mut Progress,
@@ -584,8 +606,12 @@ impl Speech {
     ) -> Result<()> {
         let failed = |e: reqwest::Error| Error::Download(e.to_string());
         let mut have = std::fs::metadata(to).map_or(0, |m| m.len());
-        if have >= size {
-            // 比应有的还大，肯定不对
+        // 下了一半的是哪个版本的文件：几个镜像上的同名文件不一定一样（大小、校验值不同的等价副本），
+        // 不同版本的不能接着下，接上去的文件是坏的，校验失败又得整个重下
+        // 没有记录的（旧版本下了一半的）照旧接着下，最后的校验兜底
+        let other_variant = std::fs::read_to_string(variant_path(to))
+            .is_ok_and(|v| !v.trim().eq_ignore_ascii_case(sha256));
+        if have >= size || (have > 0 && other_variant) {
             let _ = std::fs::remove_file(to);
             have = 0;
         }
@@ -612,6 +638,8 @@ impl Speech {
         };
         if !resumed {
             have = 0;
+            // 从头下：记下这次下的是哪个版本
+            std::fs::write(variant_path(to), sha256)?;
         }
         let mut out = std::fs::OpenOptions::new()
             .create(true)
@@ -884,6 +912,21 @@ async fn probe(http: &reqwest::Client, url: &str) -> f64 {
 }
 
 /// 文件内容的 SHA-256（小写十六进制）。
+/// 下了一半的文件旁边记着它是哪个版本（应有的 SHA-256）的小文件。
+fn variant_path(to: &Path) -> PathBuf {
+    let mut name = to.file_name().unwrap_or_default().to_os_string();
+    name.push(".variant");
+    to.with_file_name(name)
+}
+
+/// 算校验值要把整个文件读一遍（几百 MB 要好几秒）：放在阻塞线程里，不占着异步线程。
+async fn sha256_in_background(path: &Path) -> Result<String> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || sha256_of(&path))
+        .await
+        .map_err(|e| Error::Io(io::Error::other(e.to_string())))?
+}
+
 fn sha256_of(path: &Path) -> Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();

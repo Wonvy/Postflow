@@ -248,3 +248,30 @@ async fn speak_with_a_voice_sample() {
     assert!(duration > 2.0 && duration < 15.0, "{duration}");
     assert!(said["audio"].as_str().unwrap().starts_with("UklGR"));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sentences_the_interface_no_longer_wants_are_skipped() {
+    // 跳过、换篇、停止时，界面把还没念的句子撤回：轮到它们时直接跳过，不白占着模型
+    let tmp = tempfile::tempdir().unwrap();
+    let core = Core::open(tmp.path().join("local")).await.unwrap();
+    call(
+        &core,
+        "voices.cancel",
+        json!({ "requests": ["tab-1", "tab-2"] }),
+    )
+    .await;
+    let speak = |request: &'static str| json!({ "model": "kokoro-v1.1-zh", "voice": "zf_094", "text": "你好", "request": request });
+    assert_eq!(
+        error(&core, "voices.speak", speak("tab-1")).await,
+        "voice_cancelled"
+    );
+    // 撤回只管一次；没撤回的照常去念（这里没装模型）
+    assert_ne!(
+        error(&core, "voices.speak", speak("tab-1")).await,
+        "voice_cancelled"
+    );
+    assert_ne!(
+        error(&core, "voices.speak", speak("tab-3")).await,
+        "voice_cancelled"
+    );
+}
