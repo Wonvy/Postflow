@@ -7,6 +7,12 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+
+### 中文
+
+## 0.1.39 — 2026-11-20
+
+### English
 - Read aloud in a voice that sounds like a real person: the new ZipVoice model (about 180 MB, free and local) reads Chinese and English in the voice of a short recording you add in Settings → Read aloud → Voice samples. The recording is trimmed and transcribed automatically when a speech recognition model is installed; pick a recording for Chinese and one for English.
 - Fixed a local voice giving up on a whole article when one sentence couldn't be generated; that sentence now uses the system voice and reading continues.
 - Podcasts hosted on Xiaoyuzhou can be subscribed again. Xiaoyuzhou only sends its feeds to approved apps, so these shows (罗永浩的十字路口, 忽左忽右, 张小珺商业访谈录 and 28 more in Discover, and any you find in Podcasts search) are now read from the Apple Podcasts directory: the latest 200 episodes, played from the show's own audio files. Shows you already subscribed to switch over on their next refresh.
