@@ -34,6 +34,7 @@ const LOCAL_TABLES: &[&str] = &[
     "mail_body",
     "mail_state",
     "mail_writes",
+    "mail_backlog",
     "ai_results",
     "ai_messages",
     "ai_usage",
@@ -170,6 +171,15 @@ CREATE TABLE IF NOT EXISTS mail_writes (
     account_id TEXT NOT NULL,
     op         TEXT NOT NULL
 );
+
+-- 一次同步取不完的新邮件（一下子来了很多）：还没取的最小 UID。之后的同步至少从这里往上列，直到取完，
+-- 免得「只核对最新 1000 封」的范围越过它们，中间那一段永远收不到
+CREATE TABLE IF NOT EXISTS mail_backlog (
+    account_id TEXT NOT NULL,
+    mailbox    TEXT NOT NULL,
+    floor      INTEGER NOT NULL,
+    PRIMARY KEY (account_id, mailbox)
+) WITHOUT ROWID;
 
 -- 收件箱以外另外同步的文件夹（垃圾邮件、已删除）在服务器上叫什么、UIDVALIDITY 是多少
 CREATE TABLE IF NOT EXISTS mail_folders (

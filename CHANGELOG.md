@@ -17,6 +17,9 @@ that heading into the version number and date.
 - Fixed turning subtitles off (or switching episodes) while an episode was still downloading, which could leave one CPU core busy until Postflow was quit.
 - Windows: online updates work again for installs made with the .msi package (they used to fail with a message saying you had declined the administrator prompt).
 - Using Postflow in a browser: the browser can no longer ask the computer to read or write files in arbitrary places, change the data folder, or install plugins; those stay in the desktop app. Pages on other sites can't embed Postflow in a frame.
+- When more than a thousand messages arrived between two syncs (after Postflow had been closed for a while, or in a busy list folder), some of the older ones in the middle were never downloaded. Postflow now keeps fetching until it has them all, without waiting for the next sync.
+- Skipping past a music intro while subtitles were being made could mark the whole episode as done, so no subtitles appeared for the rest of it. Only the part that was actually transcribed is marked now.
+- The desktop app on older macOS (Catalina and Big Sur with Safari 15) opened to a blank window; the interface now runs there. If Safari is older than 15.4, Postflow says so and asks you to update it instead of showing nothing.
 
 ### 中文
 - 朗读可以用像真人的声音：新的 ZipVoice 模型（约 180 MB，免费、在本机运行）照着你在「设置 → 朗读 → 声音样本」里添加的一段录音的声音念中文和英文。录音会自动裁剪，装了语音识别模型时自动识别出文字；中文、英文可以各选一段录音。
@@ -29,6 +32,9 @@ that heading into the version number and date.
 - 修复单集还在下载时关掉字幕（或者换一期），可能让一个 CPU 核一直满载、直到退出 Postflow 的问题。
 - Windows：用 .msi 安装的又能在线更新了（以前会失败，还提示是你拒绝了管理员授权）。
 - 在浏览器里用 Postflow 时，浏览器不能再让电脑在任意位置读写文件、改数据目录或安装插件，这些只能在桌面应用里做；别的网站也不能把 Postflow 嵌进框架里。
+- 两次收信之间来了一千多封（关了 Postflow 一阵子，或者订了很热闹的邮件列表文件夹）时，中间较早的一部分永远收不到。现在会一直接着取，直到取完，不用等下一次收信。
+- 字幕在转写纯音乐的片头时往后拖，整期可能被当成已经转完，之后再也不出字幕。现在只记真正转过的那一段。
+- 较旧的 macOS（Catalina、Big Sur 配 Safari 15）上桌面应用打开是一片空白，现在能正常用了。Safari 低于 15.4 时会提示你更新 Safari，不再什么都不显示。
 
 ## 0.1.38 — 2026-11-19
 

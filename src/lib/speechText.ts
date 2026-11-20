@@ -6,9 +6,13 @@ export const MAX_CHUNK = 220;
 
 /** 按句号、问号、叹号（中西文）和换行切开，过长的按逗号再切，再不行硬切。空的丢掉。 */
 export function chunks(text: string, max = MAX_CHUNK): string[] {
+  // 不用后行断言（`(?<=…)`）：Safari 16.4 以前不认，整个界面的脚本都会解析失败。先在句末标点后面
+  // 插一个记号再按它切，切出来的和用后行断言一样
   const sentences = text
     .replace(/\r/g, "")
-    .split(/(?<=[。！？!?；;])|(?<=\.)\s+|\n+/)
+    .replace(/[。！？!?；;]/g, "$&\u0000")
+    .replace(/\.\s+/g, ".\u0000")
+    .split(/\u0000|\n+/)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const out: string[] = [];

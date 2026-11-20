@@ -39,6 +39,22 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 太旧的浏览器（macOS 上就是太旧的 Safari，桌面应用用的也是它）跑不动界面，与其一片空白，不如说清楚。
+      // 界面用到的最新的东西要 Safari 15.4（Array.prototype.at 也是那一版加的）
+      try {
+        if (!Array.prototype.at) {
+          var box = document.getElementById("root");
+          box.setAttribute(
+            "style",
+            "max-width:420px;margin:20vh auto;padding:0 24px;font:15px/1.7 -apple-system,system-ui,sans-serif;text-align:center",
+          );
+          box.textContent =
+            "Postflow 需要 Safari 15.4 或更新的版本。请在「系统设置 → 软件更新」里更新 macOS 和 Safari 后再打开。" +
+            " Postflow needs Safari 15.4 or later. Please update macOS and Safari in System Settings → Software Update, then open it again.";
+        }
+      } catch (e) {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

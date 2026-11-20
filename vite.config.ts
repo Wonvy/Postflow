@@ -19,7 +19,9 @@ export default defineConfig({
   },
   clearScreen: false,
   build: {
-    target: "es2022",
+    // macOS 的桌面应用用系统的 WebKit：Catalina（10.15）最多只能升到 Safari 15.6。Safari 15 不认的语法
+    // （依赖里的类静态块 `static {}` 之类）要在打包时改写，否则整个界面的脚本解析失败、窗口一片空白
+    target: ["es2022", "safari15"],
     sourcemap: false,
   },
 });

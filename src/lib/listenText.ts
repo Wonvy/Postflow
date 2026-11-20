@@ -29,10 +29,13 @@ export function spokenSummary(markdown: string): string {
 
 /** 开头的几句：订阅源没给摘要时，念全文的开头代替。 */
 export function firstSentences(text: string, count = 3, max = 400): string {
+  // 不用后行断言，理由见 speechText.ts 的 chunks
   const sentences = text
     .replace(/\s+/g, " ")
     .trim()
-    .split(/(?<=[。！？!?])|(?<=\.)\s+/)
+    .replace(/[。！？!?]/g, "$&\u0000")
+    .replace(/\.\s+/g, ".\u0000")
+    .split("\u0000")
     .map((s) => s.trim())
     .filter(Boolean);
   let out = "";

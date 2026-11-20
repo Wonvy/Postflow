@@ -135,6 +135,10 @@ fn delete_account_mail(conn: &Connection, account_id: &str) -> Result<()> {
         [account_id],
     )?;
     conn.execute(
+        "DELETE FROM mail_backlog WHERE account_id = ?1",
+        [account_id],
+    )?;
+    conn.execute(
         "DELETE FROM mail_folders WHERE account_id = ?1",
         [account_id],
     )?;
@@ -410,6 +414,45 @@ impl Store {
         for id in ids {
             delete_mail(&guard.conn, &id)?;
         }
+        // 旧的 UID 都作废了，还没取完的那一段也一样
+        guard.conn.execute(
+            "DELETE FROM mail_backlog WHERE account_id = ?1 AND mailbox = ?2",
+            params![account_id, mailbox],
+        )?;
+        Ok(())
+    }
+
+    /// 这个文件夹上次没取完的新邮件里最小的 UID（见 `mail_backlog` 表）。
+    pub fn mail_backlog(&self, account_id: &str, mailbox: &str) -> Result<Option<u32>> {
+        Ok(self
+            .lock()
+            .conn
+            .query_row(
+                "SELECT floor FROM mail_backlog WHERE account_id = ?1 AND mailbox = ?2",
+                params![account_id, mailbox],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// 记下（`Some`）或清掉（`None`，都取完了）还没取完的新邮件从哪个 UID 起。
+    pub fn set_mail_backlog(
+        &self,
+        account_id: &str,
+        mailbox: &str,
+        floor: Option<u32>,
+    ) -> Result<()> {
+        let guard = self.lock();
+        match floor {
+            Some(floor) => guard.conn.execute(
+                "INSERT OR REPLACE INTO mail_backlog (account_id, mailbox, floor) VALUES (?1, ?2, ?3)",
+                params![account_id, mailbox, floor],
+            )?,
+            None => guard.conn.execute(
+                "DELETE FROM mail_backlog WHERE account_id = ?1 AND mailbox = ?2",
+                params![account_id, mailbox],
+            )?,
+        };
         Ok(())
     }
 

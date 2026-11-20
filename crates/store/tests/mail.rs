@@ -371,6 +371,7 @@ fn sync_adds_updates_and_removes_mail() {
             added: 0,
             updated: 1,
             removed: 1,
+            more: false,
             fresh: vec![],
         }
     );

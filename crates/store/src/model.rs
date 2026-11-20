@@ -597,6 +597,8 @@ pub struct MailSyncStats {
     pub added: usize,
     pub updated: usize,
     pub removed: usize,
+    /// 新邮件太多，这次没取完：马上再同步一次，不用等。
+    pub more: bool,
     /// 这次第一次出现在收件箱里的未读邮件（不算从别处移回来的），新邮件通知用。
     pub fresh: Vec<FreshMail>,
 }

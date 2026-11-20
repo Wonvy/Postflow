@@ -774,6 +774,8 @@ fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), Rp
         let mut last_emit = Instant::now();
         // 认出来的说话人在任务和字幕文件里各有一份：转写时用本地的，每一步抄回去
         let mut speakers = job.live().transcript.speakers.clone();
+        // 是不是这里叫停的（取消了、用户拖到了别处），不是读到头、读不出东西
+        let mut interrupted = false;
         let outcome = engine.run(&mut reader, to, &mut speakers, &mut |step| {
             let reached = step.reached.max(emitted);
             // 跳转通常落在要的位置前面一点，那一小段已经转过了，不要重复的句子
@@ -805,12 +807,15 @@ fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), Rp
                 save(job);
             }
             if job.cancelled() {
+                interrupted = true;
                 return false;
             }
             // 用户拖到了别处、那里还没转：停下，改从那里转
             let want = job.want();
             let nearby = want >= from - 1.0 && want <= reached + LOOKAHEAD;
-            nearby || job.live().transcript.covered.end_of(want).is_some()
+            let keep = nearby || job.live().transcript.covered.end_of(want).is_some();
+            interrupted |= !keep;
+            keep
         })?;
 
         {
@@ -820,8 +825,10 @@ fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), Rp
                 let end = reader.position();
                 live.transcript.duration = Some(end);
                 live.transcript.covered.add(from, end);
-            } else if live.transcript.covered == before && !job.cancelled() {
-                // 一点没往前走（这一小段读不出东西）：记成转过了，免得原地打转
+            } else if live.transcript.covered == before && !interrupted && !job.cancelled() {
+                // 自己停下、却一点没往前走（这一小段读不出东西）：记成转过了，免得原地打转。
+                // 被叫停的不算：片头是一段纯音乐时，识别器一直在听、还没出一句，这时用户往后拖，
+                // 不能把从这里到 `to`（常常是整期的结尾）都记成转过了，那样这一期再也不出字幕
                 let end = if to.is_finite() { to } else { from + 1.0 };
                 live.transcript.covered.add(from, end);
                 emitted = emitted.max(end);

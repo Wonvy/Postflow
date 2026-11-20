@@ -1409,3 +1409,54 @@ async fn changes_made_offline_survive_a_restart() {
     assert_eq!(item["read"], true, "{item}");
     assert!(find(&core, "inbox", "Archive me").await.is_none());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_flood_of_new_mail_is_fetched_without_a_gap() {
+    // 一次同步最多取 500 封、只核对最新 1000 封。以前两次同步之间来了 1000 多封时，先取最新的 500，
+    // 再取下一批，核对范围就越过了剩下最早的那一段，它们永远收不到
+    let server = FakeImap::start(USER, PASS).await;
+    server.deliver("INBOX", &mail("first@x", "a@x", "Before", "0"), &[]);
+    let tmp = tempfile::tempdir().unwrap();
+    let core =
+        Core::open_with_secrets(tmp.path().join("local"), Arc::new(MemorySecrets::default()))
+            .await
+            .unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    wait_for("initial sync", || async {
+        find(&core, "inbox", "Before").await.is_some()
+    })
+    .await;
+
+    const FLOOD: usize = 1300;
+    for i in 0..FLOOD {
+        server.deliver(
+            "INBOX",
+            &mail(&format!("m{i}@x"), "list@x", &format!("Post {i}"), "x"),
+            &[],
+        );
+    }
+    call(&core, "feeds.refresh", json!({})).await;
+    let unread = || async {
+        call(&core, "nav.get", json!({})).await["accounts"][0]["unread"]
+            .as_u64()
+            .unwrap_or(0)
+    };
+    for _ in 0..300 {
+        if unread().await as usize == FLOOD + 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    // 全是未读：计数对上就是一封不少（以前停在 1001 封，最早的 300 封永远收不到）
+    assert_eq!(
+        unread().await as usize,
+        FLOOD + 1,
+        "every new message arrives"
+    );
+}

@@ -923,6 +923,11 @@ async fn serve(
         }
         notify = true;
 
+        // 新邮件太多、这次没取完：马上接着取，不等新邮件。这次一封都没取到（服务器给不出那些信）时不追，
+        // 免得一直空转，等下一次正常同步
+        if stats.more && stats.added > 0 {
+            continue;
+        }
         let synced_at = std::time::Instant::now();
         // 等新邮件或用户的操作。每隔一会儿跟服务器说句话保持连接；没新邮件时不用每次都完整同步
         loop {
@@ -1013,6 +1018,7 @@ async fn sync_all_folders(
                 stats.added += s.added;
                 stats.updated += s.updated;
                 stats.removed += s.removed;
+                stats.more |= s.more;
             }
             Err(err) if is_connection_error(&err) => return Err(err),
             Err(err) => {
@@ -1054,8 +1060,8 @@ async fn sync_folder(
     }
 
     let (id, name) = (account_id.to_string(), mailbox.to_string());
-    let known = session
-        .db(move |s| s.known_mail(&id, &name))
+    let (known, backlog) = session
+        .db(move |s| Ok((s.known_mail(&id, &name)?, s.mail_backlog(&id, &name)?)))
         .await
         .unwrap_or_default();
     let mut window: Vec<u32> = known.iter().map(|k| k.uid).collect();
@@ -1066,9 +1072,13 @@ async fn sync_folder(
         MailFolder::Inbox => INITIAL_COUNT,
         _ => OTHER_INITIAL_COUNT,
     };
-    let listing: Vec<Listing> = match window.last() {
-        None => conn.list_newest(info.exists, initial).await?,
-        Some(&from) => conn.list_from(from).await?,
+    // 上次没取完的新邮件也要列进来：只核对最新 1000 封的范围会越过它们
+    let listing: Vec<Listing> = match (window.last(), backlog) {
+        (None, _) => conn.list_newest(info.exists, initial).await?,
+        (Some(&from), backlog) => {
+            conn.list_from(backlog.map_or(from, |b| b.min(from)))
+                .await?
+        }
     };
 
     let known_by_uid: HashMap<u32, &postflow_store::KnownMail> =
@@ -1086,7 +1096,12 @@ async fn sync_folder(
             None => new.push(l),
         }
     }
+    // 一次最多取最新的这么多封；剩下的（更早的）记下从哪个 UID 起，下次接着取
     new.sort_unstable_by_key(|l| std::cmp::Reverse(l.uid));
+    let left = new
+        .get(MAX_NEW_PER_SYNC..)
+        .and_then(|rest| rest.last())
+        .map(|l| l.uid);
     new.truncate(MAX_NEW_PER_SYNC);
     let vanished: Vec<u32> = window
         .iter()
@@ -1110,14 +1125,20 @@ async fn sync_folder(
         vanished,
     };
     let (id, name) = (account_id.to_string(), mailbox.to_string());
-    session
+    let mut stats = session
         .db(move |s| {
             let stats = s.apply_folder_sync(&id, folder, &name, sync)?;
             save_parts(s, &parts)?;
+            s.set_mail_backlog(&id, &name, left)?;
             Ok(stats)
         })
         .await
-        .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))
+        .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
+    if let Some(floor) = left {
+        tracing::info!(account = %account_id, mailbox, floor, "mail: more new mail than one sync takes; continuing");
+        stats.more = true;
+    }
+    Ok(stats)
 }
 
 /// 一个文件夹：哪个账户、什么用途、服务器上叫什么、这次的 UIDVALIDITY。
