@@ -9,7 +9,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, Runtime, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent};
 
 const TRAY_ID: &str = "main";
 /// 托盘菜单里要界面去做的事，发给界面的事件名。
@@ -28,22 +28,60 @@ impl Default for TrayState {
     }
 }
 
-/// 把主窗口拿出来放到最前面：关到后台藏起来的、最小化的、整个应用被隐藏（macOS ⌘H）的都行。
+/// 关窗口时是不是留在后台（托盘常驻）。
+pub fn keeps_running<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.state::<TrayState>()
+        .keep_running
+        .load(Ordering::Relaxed)
+}
+
+/// 应用真的要退出了：先把托盘图标拿掉。Windows 上进程退出时不会自己拿掉，留下一个点了没反应的图标，
+/// 鼠标划过才消失。
+pub fn remove(app: &AppHandle<impl Runtime>) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_visible(false);
+    }
+}
+
+/// 把主窗口拿出来放到最前面：关到后台藏起来的、最小化的、整个应用被隐藏（macOS ⌘H）的、
+/// 靠边藏着的都行。主窗口要是已经没了（关窗口没被拦住，见 `on_window_event`），照配置重新建一个。
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(target_os = "macos")]
     let _ = app.show();
     // 靠边藏着的窗口先拿出来
     crate::edge_hide::reveal(app);
     let Some(window) = app.get_webview_window("main") else {
+        // Windows 上在事件处理里建窗口会卡死（WebView2 的限制），放到别的线程去建
+        let app = app.clone();
+        std::thread::spawn(move || {
+            if let Some(window) = recreate_main(&app) {
+                bring_up(&window);
+            }
+        });
         return;
     };
+    bring_up(&window);
+}
+
+/// 把窗口显示出来、还原、放回屏幕上、拿到最前面。
+fn bring_up<R: Runtime>(window: &WebviewWindow<R>) {
+    let visible = window.is_visible().unwrap_or(false);
     let minimized = window.is_minimized().unwrap_or(false);
+    tracing::info!(visible, minimized, "showing the main window");
     let _ = window.show();
     let _ = window.unminimize();
+    keep_on_screen(window);
     let _ = window.set_focus();
+    // Windows 不一定让后台的程序把窗口放到最前面：临时置顶一下再取消，窗口就到了别的窗口前面
+    #[cfg(target_os = "windows")]
+    {
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_always_on_top(false);
+    }
     if minimized {
         // 从最小化还原有动画，动画结束前系统还当它是最小化的，上面的 set_focus 不起作用，
         // 窗口会回到别的程序后面。等它真的还原了再聚焦一次
+        let window = window.clone();
         std::thread::spawn(move || {
             for _ in 0..40 {
                 std::thread::sleep(Duration::from_millis(50));
@@ -54,6 +92,58 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
             }
         });
     }
+}
+
+/// 窗口不在任何一块屏幕上（拔掉了外接屏幕、靠边藏的时候被关掉之类）：挪回当前屏幕的正中。
+fn keep_on_screen<R: Runtime>(window: &WebviewWindow<R>) {
+    let (Ok(pos), Ok(size), Ok(monitors)) = (
+        window.outer_position(),
+        window.outer_size(),
+        window.available_monitors(),
+    ) else {
+        return;
+    };
+    // 标题栏那一带（顶边往下 40 像素、左右中间）在某块屏幕上就算看得见
+    let x = pos.x + size.width as i32 / 2;
+    let y = pos.y + 40;
+    let seen = monitors.iter().any(|m| {
+        let a = m.work_area();
+        x >= a.position.x
+            && x < a.position.x + a.size.width as i32
+            && y >= a.position.y
+            && y < a.position.y + a.size.height as i32
+    });
+    if !seen {
+        tracing::info!(
+            x = pos.x,
+            y = pos.y,
+            "main window was off screen; centering it"
+        );
+        let _ = window.center();
+    }
+}
+
+/// 照配置文件重新建主窗口。只在别的线程上调（见 `show_main`）。
+fn recreate_main<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "main")?
+        .clone();
+    tracing::warn!("the main window was gone; creating it again");
+    let window =
+        match tauri::WebviewWindowBuilder::from_config(app, &config).and_then(|b| b.build()) {
+            Ok(window) => window,
+            Err(err) => {
+                tracing::warn!("could not create the main window: {err}");
+                return None;
+            }
+        };
+    #[cfg(target_os = "windows")]
+    let _ = window.set_decorations(false);
+    Some(window)
 }
 
 /// 建托盘图标。菜单文字先用英文，界面加载后换成界面语言。
@@ -97,17 +187,20 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-/// 关窗口：设置了留在后台就只是藏起来。
+/// 关窗口：设置了留在后台就只是藏起来。万一主窗口还是被销毁了（有报告说 Windows 上最小化、
+/// 贴靠以后关窗口会拦不住），应用不跟着退出（见 lib.rs 的 `ExitRequested`），从托盘打开时重新建。
 pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEvent) {
-    if let WindowEvent::CloseRequested { api, .. } = event
-        && window.label() == "main"
-        && window
-            .state::<TrayState>()
-            .keep_running
-            .load(Ordering::Relaxed)
-    {
-        api.prevent_close();
-        let _ = window.hide();
+    if window.label() != "main" {
+        return;
+    }
+    match event {
+        WindowEvent::CloseRequested { api, .. } if keeps_running(window.app_handle()) => {
+            api.prevent_close();
+            let _ = window.hide();
+            tracing::info!("main window closed to the tray");
+        }
+        WindowEvent::Destroyed => tracing::info!("main window destroyed"),
+        _ => {}
     }
 }
 

@@ -226,7 +226,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Postflow")
         .run(|app, event| match event {
+            // 最后一个窗口没了（不是从托盘菜单退出）：设置了留在后台就不退出，托盘还在，
+            // 点托盘图标会重新建窗口（见 tray::show_main）
+            #[cfg(desktop)]
+            tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } if tray::keeps_running(app) => {
+                tracing::info!("last window closed; staying in the tray");
+                api.prevent_exit();
+            }
             tauri::RunEvent::Exit => {
+                #[cfg(desktop)]
+                tray::remove(app);
                 if let Some(state) = app.try_state::<AppState>() {
                     state.core.shutdown();
                 }

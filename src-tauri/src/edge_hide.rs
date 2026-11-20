@@ -4,9 +4,13 @@
 //! 一个后台线程每 80 毫秒看一次窗口位置和鼠标位置。只认屏幕真正的边缘：两块屏幕相接的那条边不算，
 //! 不然窗口会缩到另一块屏幕上。底边不认（任务栏、程序坞在那里）。最大化、全屏、最小化时不管。
 //!
-//! 锁的规矩：拿着 `state` 的锁时绝不碰窗口。后台线程问窗口的位置、屏幕这些，要主线程来回答；
+//! 锁的规矩：后台线程拿着 `state` 的锁时绝不碰窗口。后台线程问窗口的位置、屏幕这些，要主线程来回答；
 //! 主线程上的托盘点击、`tray_update` 又要拿这把锁。两边各等各的，整个应用就卡死了（托盘点了打不开窗口、
-//! 靠边也不动）。所以先在锁外面把窗口的样子读好（`Seen`），拿锁只算该怎么办（`step`），放了锁再挪窗口。
+//! 靠边也不动）。所以先在锁外面把窗口的样子读好（`Seen`），拿锁只算该怎么办（`step`），
+//! 要挪窗口就交给主线程去挪（主线程拿着锁碰窗口没事，它不用等别人）。
+//!
+//! 挪之前主线程再看一眼状态还是不是后台线程算出来的那个：后台线程算出「该藏了」到真的挪之间，
+//! 用户可能刚点了托盘图标把窗口拿出来，这时不能再把它挪到屏幕外面去。
 //!
 //! Windows 的「贴靠」会把拖到屏幕顶上的窗口最大化。开着靠边隐藏时把它还原，当成贴到了顶边。
 
@@ -192,6 +196,7 @@ pub fn set_enabled<R: Runtime>(app: &AppHandle<R>, enabled: bool) {
 }
 
 /// 窗口藏着的话拿出来（从托盘、程序坞、通知打开时）。拿出来以后鼠标进过窗口、再离开才会再藏。
+/// 正贴着边、鼠标刚离开、过一会儿就要藏的，也不藏了：用户刚从托盘把它叫出来，鼠标还在托盘那边。
 pub fn reveal<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -213,7 +218,19 @@ pub fn reveal<R: Runtime>(app: &AppHandle<R>) {
                 };
                 Some((edge, area))
             }
-            _ => None,
+            State::Shown {
+                edge, area, scale, ..
+            } => {
+                *state = State::Shown {
+                    edge,
+                    area,
+                    scale,
+                    entered: false,
+                    left_at: None,
+                };
+                None
+            }
+            State::Free => None,
         }
     };
     if let Some((edge, area)) = hidden
@@ -449,12 +466,29 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
             // 拿着锁只算，不碰窗口
             let target = {
                 let mut state = edge_hide.state.lock().unwrap_or_else(|e| e.into_inner());
-                step(&mut state, &seen, moving, was_focused, Instant::now())
+                step(&mut state, &seen, moving, was_focused, Instant::now()).map(|at| (at, *state))
             };
             was_focused = seen.focused;
-            if let Some(at) = target {
+            if let Some((at, decided)) = target {
                 tracing::debug!(x = at.0, y = at.1, "edge hide: move");
-                let _ = window.set_position(PhysicalPosition::new(at.0, at.1));
+                // 交给主线程挪，挪之前看状态有没有被托盘点击之类改掉（见模块说明）
+                let handle = app.clone();
+                let (done, moved) = std::sync::mpsc::channel();
+                let sent = app.run_on_main_thread(move || {
+                    let edge_hide = handle.state::<EdgeHide>();
+                    let state = edge_hide.state.lock().unwrap_or_else(|e| e.into_inner());
+                    if *state == decided
+                        && let Some(window) = handle.get_webview_window("main")
+                    {
+                        let _ = window.set_position(PhysicalPosition::new(at.0, at.1));
+                    }
+                    let _ = done.send(());
+                });
+                // 等主线程挪完再看下一眼（这里没拿着锁，等它不会卡住谁），不然下一眼看到的还是原来的位置，
+                // 会当成用户把窗口拖走了
+                if sent.is_ok() {
+                    let _ = moved.recv_timeout(Duration::from_millis(500));
+                }
                 // 自己挪的，下一眼别当成用户在拖
                 last = None;
             } else {
