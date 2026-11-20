@@ -101,6 +101,8 @@ interface Speech {
   restart: () => void;
   stop: () => void;
   setRate: (rate: number) => void;
+  /** 换了声音（在控制条上选的）：按现在的选择重新定用什么念，从这一句开头起用新的声音。 */
+  refreshVoice: () => void;
   /** 几分钟后停，"item" 念完这一篇停，null 不定时。 */
   setSleep: (sleep: number | "item" | null) => void;
 }
@@ -769,6 +771,25 @@ export const useSpeech = create<Speech>()((set, get) => ({
     const s = get();
     // 本机声音按语速念好的，换了语速要重念（clip 发现语速变了会自己作废旧的）
     if (s.playing && s.parts.length > 0) speakFrom(s.index);
+  },
+  refreshVoice: () => {
+    const s = get();
+    if (!s.itemId || s.parts.length === 0) return;
+    const known = knownVoiceOverview();
+    const local = known ? localVoiceFor(known, s.lang.slice(0, 2)) : null;
+    if (!local && !speechSupported()) return;
+    // 用户自己选的：之前因为念不出来改用了系统语音的，再给本机声音一次机会
+    localOff = false;
+    failedInRow = 0;
+    generation++;
+    if (speechSupported()) window.speechSynthesis.cancel();
+    stopAudio();
+    forgetClips();
+    set({ local });
+    if (s.playing) {
+      unlockAudio(player());
+      speakFrom(s.index);
+    }
   },
   setSleep: (sleep) => {
     if (sleepTimer) clearTimeout(sleepTimer);

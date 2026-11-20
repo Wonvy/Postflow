@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Play, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type SpeechModel } from "../lib/api";
-import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
+import { errorText, type MessageKey, type Translate, useLang, useT } from "../lib/i18n";
 import { revealFolder } from "../lib/platform";
 import { pause as pausePodcast, usePlayer } from "../lib/player";
 import { speechSupported, systemVoiceFor, useSpeech, voiceError } from "../lib/speech";
@@ -43,7 +43,8 @@ const CONTENT_HINT: Record<ListenContent, MessageKey> = {
 };
 
 /** 系统里的声音。有的浏览器一开始给空的，过一会儿（voiceschanged）才有。 */
-function useSystemVoices(): SpeechSynthesisVoice[] {
+/** 系统自带的声音。有的浏览器一开始是空的，加载好了才通知。 */
+export function useSystemVoices(): SpeechSynthesisVoice[] {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(() => (speechSupported() ? window.speechSynthesis.getVoices() : []));
   useEffect(() => {
     if (!speechSupported()) return;
@@ -53,6 +54,18 @@ function useSystemVoices(): SpeechSynthesisVoice[] {
     return () => window.speechSynthesis.removeEventListener("voiceschanged", update);
   }, []);
   return voices;
+}
+
+/** 本机声音的名字：「女声 94」「Heart（女声）· 美式」。 */
+export function voiceText(t: Translate, ui: string, name: string): string {
+  const label = voiceLabel(name, ui);
+  const gender = voiceGender(name);
+  const accent = voiceAccent(name);
+  const base =
+    "n" in label
+      ? t(gender === "male" ? "voices.maleN" : "voices.femaleN", { n: label.n })
+      : t("voices.named", { name: label.name, gender: t(gender === "male" ? "voices.male" : "voices.female") });
+  return accent ? `${base} · ${t(accent === "uk" ? "voices.uk" : "voices.us")}` : base;
 }
 
 /** 试听：同一时间只放一个。 */
@@ -202,16 +215,6 @@ export function VoiceSettings({ open }: { open: boolean }) {
   const ready = readySamples(sampleList);
   const zipvoice = installed.find((m) => m.kind === "zipvoice");
 
-  const voiceText = (name: string) => {
-    const label = voiceLabel(name, lang);
-    const gender = voiceGender(name);
-    const accent = voiceAccent(name);
-    const base =
-      "n" in label
-        ? t(gender === "male" ? "voices.maleN" : "voices.femaleN", { n: label.n })
-        : t("voices.named", { name: label.name, gender: t(gender === "male" ? "voices.male" : "voices.female") });
-    return accent ? `${base} · ${t(accent === "uk" ? "voices.uk" : "voices.us")}` : base;
-  };
 
   const languageRow = (l: VoiceLang) => {
     const modelId = pickModel(models, l, engine, ready);
@@ -281,7 +284,7 @@ export function VoiceSettings({ open }: { open: boolean }) {
                 <optgroup key={group as string} label={group as string}>
                   {(voices as string[]).map((v) => (
                     <option key={v} value={v}>
-                      {voiceText(v)}
+                      {voiceText(t, lang, v)}
                     </option>
                   ))}
                 </optgroup>

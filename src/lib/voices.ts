@@ -43,6 +43,9 @@ interface VoicePrefs {
   /** 念完一篇就标为已读。 */
   markRead: boolean;
   setMarkRead: (on: boolean) => void;
+  /** 列表底下的控制条上显示正在念的这一句（字幕）。 */
+  captions: boolean;
+  setCaptions: (on: boolean) => void;
 }
 
 export const useVoices = create<VoicePrefs>()(
@@ -68,6 +71,8 @@ export const useVoices = create<VoicePrefs>()(
       setAutoNext: (autoNext) => set({ autoNext }),
       markRead: true,
       setMarkRead: (markRead) => set({ markRead }),
+      captions: true,
+      setCaptions: (captions) => set({ captions }),
     }),
     {
       name: "postflow.voices",
@@ -79,6 +84,7 @@ export const useVoices = create<VoicePrefs>()(
         content: s.content,
         autoNext: s.autoNext,
         markRead: s.markRead,
+        captions: s.captions,
       }),
     },
   ),

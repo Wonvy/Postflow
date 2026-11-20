@@ -7,8 +7,14 @@ that heading into the version number and date.
 ## Unreleased
 
 ### English
+- Listen to this list: clicking the headphones button again stops listening.
+- The play bar under the list shows the sentence being read as a subtitle; the subtitles button next to it turns it off and on.
+- Change the voice right from the play bar: the new voice button lists the voices for the language being read (and lets you switch between automatic, the system voice and your local voice models). The new voice starts from the current sentence, and the choice is the same one as in Settings → Read aloud.
 
 ### 中文
+- 听这个列表：再点一下耳机按钮就停止。
+- 列表底下的播放条上方显示正在念的这一句（字幕），旁边的字幕按钮可以关掉或打开。
+- 在播放条上直接换声音：新的「换声音」按钮列出正在念的这种语言能用的声音（也能在自动、系统语音和本机声音模型之间切换），选了就从这一句开头起换成新的声音，和「设置 → 朗读」里的选择是同一份。
 
 ## 0.1.39 — 2026-11-20
 

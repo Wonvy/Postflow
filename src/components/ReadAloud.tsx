@@ -2,9 +2,11 @@
 // - 文章标题下面的「朗读」，念的时候换成一条控制条（暂停、上一句、下一句、下一篇、语速、选项、停止）。
 // - 列表底下的小控制条（SpeechBar）：看着别的文章时也能控制。
 // - 列表工具栏上的「听这个列表」（ListenButton）：从打开的那篇（或者第一篇）开始，一篇接一篇往下念。
-// 每篇念什么、念完接不接着念、标不标已读在控制条的选项菜单和「设置 → 朗读」里选。用什么声音念也在设置里选。
+// 每篇念什么、念完接不接着念、标不标已读在控制条的选项菜单和「设置 → 朗读」里选。用什么声音念在控制条上的
+// 「换声音」（VoicePicker）里直接换，也可以在设置里选。列表底下的控制条上方显示正在念的这一句（字幕，可以关）。
 
 import {
+  Captions,
   Check,
   ChevronsRight,
   Headphones,
@@ -29,6 +31,7 @@ import { useUi } from "../lib/store";
 import { useVoices, voiceOverview } from "../lib/voices";
 import { toast } from "./Toast";
 import { cx, ICON, IconButton, Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub, Spinner } from "./ui";
+import { VoicePicker } from "./VoicePicker";
 
 /** 每种念法的名字，以及标题下面那个按钮上的字。 */
 export const CONTENT_LABEL: Record<ListenContent, MessageKey> = {
@@ -168,6 +171,30 @@ function Progress() {
   return <>{preparing ? t("listen.preparing") : t("speech.progress", { n: index + 1, total })}</>;
 }
 
+/** 正在念的这一句，显示在列表底下的控制条上方。开着字幕、有在念的句子时才有。 */
+function Caption() {
+  const on = useVoices((s) => s.captions);
+  const text = useSpeech((s) => (s.preparing ? "" : (s.parts[s.index] ?? "")));
+  if (!on || !text) return null;
+  return (
+    <p key={text} aria-live="polite" className="anim-fade line-clamp-3 px-3 pt-2 text-[13px] leading-snug text-fg-2">
+      {text}
+    </p>
+  );
+}
+
+/** 字幕开关。 */
+function CaptionToggle() {
+  const t = useT();
+  const on = useVoices((s) => s.captions);
+  const setOn = useVoices((s) => s.setCaptions);
+  return (
+    <IconButton label={on ? t("subtitles.turnOff") : t("subtitles.turnOn")} active={on} aria-pressed={on} onClick={() => setOn(!on)}>
+      <Captions size={15} strokeWidth={1.75} />
+    </IconButton>
+  );
+}
+
 function useHasNext(): boolean {
   return useSpeech((s) => (s.itemId ? nextInQueue(s.queue, s.itemId) !== undefined : false));
 }
@@ -297,6 +324,7 @@ export function ReadAloud({
           </MenuItem>
         ))}
       </Menu>
+      <VoicePicker />
       <ListenMenu />
       <IconButton label={t("speech.stop")} onClick={stop}>
         <Square size={13} fill="currentColor" strokeWidth={0} />
@@ -319,39 +347,44 @@ export function SpeechBar() {
   // 正在看的就是这一篇时，控制条在文章里，这里不重复
   if (!itemId || openId === itemId) return null;
   return (
-    <div className="flex shrink-0 items-center gap-1 border-t border-line bg-surface py-1.5 pl-2.5 pr-1.5">
-      <button
-        type="button"
-        onClick={() => useUi.getState().open(itemId)}
-        title={source ? `${source} · ${title}` : title}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left"
-      >
-        <Volume2 size={16} strokeWidth={1.75} className="shrink-0 text-accent" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium text-fg">{title}</span>
-          <span className="block truncate text-[11px] tabular-nums text-fg-3">
-            {source && `${source} · `}
-            <Progress />
+    <div className="flex shrink-0 flex-col border-t border-line bg-surface">
+      <Caption />
+      <div className="flex items-center gap-1 py-1.5 pl-2.5 pr-1.5">
+        <button
+          type="button"
+          onClick={() => useUi.getState().open(itemId)}
+          title={source ? `${source} · ${title}` : title}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left"
+        >
+          <Volume2 size={16} strokeWidth={1.75} className="shrink-0 text-accent" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12px] font-medium text-fg">{title}</span>
+            <span className="block truncate text-[11px] tabular-nums text-fg-3">
+              {source && `${source} · `}
+              <Progress />
+            </span>
           </span>
-        </span>
-      </button>
-      <SleepMark />
-      <IconButton label={waiting ? t("voices.preparing") : playing ? t("speech.pause") : t("speech.play")} onClick={toggle}>
-        <PlayIcon playing={playing} waiting={waiting} />
-      </IconButton>
-      {hasNext ? (
-        <IconButton label={t("listen.nextArticle")} onClick={next}>
-          <ChevronsRight size={15} strokeWidth={1.75} />
+        </button>
+        <SleepMark />
+        <IconButton label={waiting ? t("voices.preparing") : playing ? t("speech.pause") : t("speech.play")} onClick={toggle}>
+          <PlayIcon playing={playing} waiting={waiting} />
         </IconButton>
-      ) : (
-        <IconButton label={t("speech.next")} onClick={() => jump(1)}>
-          <SkipForward size={14} strokeWidth={1.75} />
+        {hasNext ? (
+          <IconButton label={t("listen.nextArticle")} onClick={next}>
+            <ChevronsRight size={15} strokeWidth={1.75} />
+          </IconButton>
+        ) : (
+          <IconButton label={t("speech.next")} onClick={() => jump(1)}>
+            <SkipForward size={14} strokeWidth={1.75} />
+          </IconButton>
+        )}
+        <CaptionToggle />
+        <VoicePicker />
+        <ListenMenu />
+        <IconButton label={t("speech.stop")} onClick={stop}>
+          <Square size={13} fill="currentColor" strokeWidth={0} />
         </IconButton>
-      )}
-      <ListenMenu />
-      <IconButton label={t("speech.stop")} onClick={stop}>
-        <Square size={13} fill="currentColor" strokeWidth={0} />
-      </IconButton>
+      </div>
     </div>
   );
 }
@@ -366,6 +399,11 @@ export function ListenButton({ items }: { items: readonly Item[] }) {
   }, []);
   if (!available) return null;
   const listen = () => {
+    // 正在听：再点一下就停
+    if (listening) {
+      useSpeech.getState().stop();
+      return;
+    }
     const queue = listenQueueOf(items);
     if (queue.length === 0) {
       toast(t("listen.empty"));
@@ -376,7 +414,7 @@ export function ListenButton({ items }: { items: readonly Item[] }) {
     if (first) useSpeech.getState().start(first, null, queue, true);
   };
   return (
-    <IconButton label={t("listen.fromHere")} active={listening} onClick={listen}>
+    <IconButton label={listening ? t("listen.stopList") : t("listen.fromHere")} active={listening} aria-pressed={listening} onClick={listen}>
       <Headphones {...ICON} />
     </IconButton>
   );
