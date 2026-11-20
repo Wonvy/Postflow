@@ -64,6 +64,17 @@ impl Core {
         self.spawn_fill_feed_icons(session);
     }
 
+    /// 被拒绝的订阅源在苹果目录里的地址：按订阅时记下的节目名去搜。
+    async fn apple_lookup(&self, session: &Session, target: &FetchTarget) -> Option<String> {
+        let id = target.feed_id.clone();
+        let title = session
+            .db(move |s| Ok(s.feed(&id)?.map(|f| f.title)))
+            .await
+            .ok()
+            .flatten()?;
+        self.apple_lookup_for(&title, &target.url).await
+    }
+
     async fn refresh_one(&self, session: &Session, target: &FetchTarget, default_interval: i64) {
         let cond = Conditional {
             etag: target.etag.clone(),
@@ -73,7 +84,26 @@ impl Core {
             .interval_min
             .unwrap_or(default_interval)
             .max(MIN_INTERVAL_MIN);
-        let result = self.client.fetch_feed(&target.url, &cond).await;
+        let mut result = self.client.fetch_feed(&target.url, &cond).await;
+        // 小宇宙这类只给白名单客户端发订阅源的平台：在苹果播客目录里找到这个节目，改从那里读，
+        // 以后也直接用那个地址（和源永久搬家一样处理）
+        if matches!(result, Err(postflow_feed::Error::Refused(_)))
+            && postflow_feed::apple::feed_is_blocked(&target.url)
+            && let Some(lookup) = self.apple_lookup(session, target).await
+        {
+            tracing::info!(feed = %target.feed_id, to = %lookup, "feed refused; reading it from Apple Podcasts");
+            result = self
+                .client
+                .fetch_feed(&lookup, &Conditional::default())
+                .await
+                .map(|r| match r {
+                    FetchResult::Fetched(mut f) => {
+                        f.moved_to = Some(lookup);
+                        FetchResult::Fetched(f)
+                    }
+                    other => other,
+                });
+        }
         let now = now();
         let feed_id = target.feed_id.clone();
 

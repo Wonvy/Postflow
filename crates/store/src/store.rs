@@ -33,6 +33,7 @@ const LOCAL_TABLES: &[&str] = &[
     "mail_meta",
     "mail_body",
     "mail_state",
+    "mail_writes",
     "ai_results",
     "ai_messages",
     "ai_usage",
@@ -161,6 +162,14 @@ CREATE TABLE IF NOT EXISTS mail_state (
     error        TEXT,
     error_code   TEXT
 ) WITHOUT ROWID;
+
+-- 还没写回邮件服务器的改动（标已读、星标、归档、移动、删草稿），按先后顺序。写成了、或者服务器明确拒绝了
+-- 才删掉，断网时做的改动关掉应用也不会丢
+CREATE TABLE IF NOT EXISTS mail_writes (
+    seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL,
+    op         TEXT NOT NULL
+);
 
 -- 收件箱以外另外同步的文件夹（垃圾邮件、已删除）在服务器上叫什么、UIDVALIDITY 是多少
 CREATE TABLE IF NOT EXISTS mail_folders (

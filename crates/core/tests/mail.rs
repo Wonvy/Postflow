@@ -1330,3 +1330,82 @@ async fn new_mail_events_carry_verification_codes() {
     assert!(opened["mail"]["code"].is_null());
     core.shutdown();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changes_made_offline_survive_a_restart() {
+    // 连不上服务器时标的已读、归档，以前只放在内存里：关掉应用再打开，第一次同步按服务器的状态
+    // 把它们改回去，服务器上也一直没写。现在记在本机的写回队列里，重新打开后接着写回去
+    let server = FakeImap::start(USER, PASS).await;
+    server.deliver("INBOX", &mail("one@x", "a@x", "Read me", "1"), &[]);
+    server.deliver("INBOX", &mail("two@x", "a@x", "Archive me", "2"), &[]);
+    server.add_mailbox("Archive", Some("\\Archive"));
+    let tmp = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(MemorySecrets::default());
+    let open = || Core::open_with_secrets(tmp.path().join("local"), secrets.clone());
+    let core = open().await.unwrap();
+    call(
+        &core,
+        "app.setup",
+        json!({ "data_dir": tmp.path().join("data").to_str().unwrap() }),
+    )
+    .await;
+    call(&core, "accounts.add", account_params(server.port, PASS)).await;
+    wait_for("initial sync", || async {
+        find(&core, "inbox", "Archive me").await.is_some()
+    })
+    .await;
+
+    // 服务器连不上了
+    server.refuse_logins(Some("Service temporarily unavailable"));
+    server.drop_connections();
+    wait_for("the account is offline", || async {
+        call(&core, "nav.get", json!({})).await["accounts"][0]["error_code"] == "mail_auth"
+    })
+    .await;
+    let read_id = find(&core, "inbox", "Read me").await.unwrap()["id"].clone();
+    let archive_id = find(&core, "inbox", "Archive me").await.unwrap()["id"].clone();
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [read_id], "read": true }),
+    )
+    .await;
+    call(
+        &core,
+        "items.set",
+        json!({ "ids": [archive_id], "archived": true }),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !server
+            .flags("INBOX", "Read me")
+            .unwrap()
+            .contains(&"\\Seen".to_string()),
+        "nothing reaches the server while it's down"
+    );
+    core.shutdown();
+    drop(core);
+
+    // 服务器好了，应用重新打开
+    server.refuse_logins(None);
+    let core = open().await.unwrap();
+    wait_for("the read mark is written back", || async {
+        server
+            .flags("INBOX", "Read me")
+            .is_some_and(|f| f.contains(&"\\Seen".to_string()))
+    })
+    .await;
+    wait_for("the archived mail is moved on the server", || async {
+        server.contains("Archive", "Archive me") && !server.contains("INBOX", "Archive me")
+    })
+    .await;
+    // 本机也没被改回去
+    wait_for("the account is back", || async {
+        call(&core, "nav.get", json!({})).await["accounts"][0]["error_code"].is_null()
+    })
+    .await;
+    let item = find(&core, "inbox", "Read me").await.unwrap();
+    assert_eq!(item["read"], true, "{item}");
+    assert!(find(&core, "inbox", "Archive me").await.is_none());
+}

@@ -9,10 +9,26 @@ that heading into the version number and date.
 ### English
 - Read aloud in a voice that sounds like a real person: the new ZipVoice model (about 180 MB, free and local) reads Chinese and English in the voice of a short recording you add in Settings → Read aloud → Voice samples. The recording is trimmed and transcribed automatically when a speech recognition model is installed; pick a recording for Chinese and one for English.
 - Fixed a local voice giving up on a whole article when one sentence couldn't be generated; that sentence now uses the system voice and reading continues.
+- Podcasts hosted on Xiaoyuzhou can be subscribed again. Xiaoyuzhou only sends its feeds to approved apps, so these shows (罗永浩的十字路口, 忽左忽右, 张小珺商业访谈录 and 28 more in Discover, and any you find in Podcasts search) are now read from the Apple Podcasts directory: the latest 200 episodes, played from the show's own audio files. Shows you already subscribed to switch over on their next refresh.
+- Episode lengths written as minutes:seconds (common in Chinese podcasts, such as those on Ximalaya) showed as a few seconds, for example "1 min" for a 15-minute episode. They're read correctly now, and episodes already in your list are corrected on the next refresh.
+- A podcast that stops with "This episode can't be played" partway through now picks up again by itself: after a network hiccup it reconnects at the same spot (up to three times), and if a downloaded copy won't play it switches to the online one.
+- Mail changes made while offline (marking read, starring, archiving, moving, deleting a draft) are no longer lost when you quit: they're kept on this device and written to the server once it's reachable again, instead of being undone by the next sync.
+- Fixed a mailbox that stopped receiving mail for good when a large message had an attachment name with a % followed by Chinese characters. Attachment names that declare a charset such as GBK now show correctly.
+- Fixed turning subtitles off (or switching episodes) while an episode was still downloading, which could leave one CPU core busy until Postflow was quit.
+- Windows: online updates work again for installs made with the .msi package (they used to fail with a message saying you had declined the administrator prompt).
+- Using Postflow in a browser: the browser can no longer ask the computer to read or write files in arbitrary places, change the data folder, or install plugins; those stay in the desktop app. Pages on other sites can't embed Postflow in a frame.
 
 ### 中文
 - 朗读可以用像真人的声音：新的 ZipVoice 模型（约 180 MB，免费、在本机运行）照着你在「设置 → 朗读 → 声音样本」里添加的一段录音的声音念中文和英文。录音会自动裁剪，装了语音识别模型时自动识别出文字；中文、英文可以各选一段录音。
 - 修复本机声音有一句念不出来时整篇改用系统语音的问题：现在只有那一句用系统语音，后面接着用本机声音。
+- 小宇宙上的播客又能订阅了。小宇宙只给它认可的应用发订阅源，这些节目（发现里的罗永浩的十字路口、忽左忽右、张小珺商业访谈录等 31 个，以及在「播客」里搜到的）改从苹果播客目录读：最近 200 期，声音照常从节目自己的地址放。已经订阅了的，下次刷新时自动换过去。
+- 时长写成「分:秒」的单集（中文播客常见，比如喜马拉雅上的）以前只显示几秒，15 分钟的一期显示成「1 分钟」。现在读对了，列表里已有的单集下次刷新时改过来。
+- 播客放到一半提示「这一期放不了」时会自己接上：网络断了一下就从刚才的位置重新连接（最多三次），下载的那份放不了就改放网上的。
+- 断网时对邮件做的改动（标已读、星标、归档、移动、删草稿）关掉应用也不会丢了：先记在这台设备上，连上服务器后接着写回去，不会再被下一次同步改回去。
+- 修复大邮件的附件名里 % 后面跟着中文时，这个邮箱从此再也收不到信的问题。写明了 GBK 等字符集的附件名也能正确显示了。
+- 修复单集还在下载时关掉字幕（或者换一期），可能让一个 CPU 核一直满载、直到退出 Postflow 的问题。
+- Windows：用 .msi 安装的又能在线更新了（以前会失败，还提示是你拒绝了管理员授权）。
+- 在浏览器里用 Postflow 时，浏览器不能再让电脑在任意位置读写文件、改数据目录或安装插件，这些只能在桌面应用里做；别的网站也不能把 Postflow 嵌进框架里。
 
 ## 0.1.38 — 2026-11-19
 

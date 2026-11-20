@@ -240,7 +240,12 @@ impl Zone {
 /// `BYDAY=2SU`、`-1SU` 这样的写法。
 fn by_day(v: &str) -> Option<(i32, u32)> {
     let v = v.split(',').next()?.trim();
-    let (num, name) = v.split_at(v.len().checked_sub(2)?);
+    // 星期是最后两个字母；不是 ASCII 的（坏掉的邀请）直接不认，免得切在一个字的中间
+    let cut = v.len().checked_sub(2)?;
+    if !v.is_char_boundary(cut) {
+        return None;
+    }
+    let (num, name) = v.split_at(cut);
     let wd = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
         .iter()
         .position(|d| name.eq_ignore_ascii_case(d))? as u32;
@@ -719,6 +724,9 @@ SEQUENCE:2\r\nLOCATION:Room 3\r\nBEGIN:VALARM\r\nDESCRIPTION:REMINDER\r\nTRIGGER
         assert_eq!(at("20261101T090000"), utc(2026, 11, 1, 17));
         assert_eq!(by_day("-1SU"), Some((-1, 0)));
         assert_eq!(by_day("2SU"), Some((2, 0)));
+        // 坏掉的邀请里不是 ASCII 的写法：不认，不崩
+        assert_eq!(by_day("2日曜"), None);
+        assert_eq!(by_day("日"), None);
         // 最后一个星期日：2026 年 10 月是 25 日
         let rule = Rule {
             offset: 0,

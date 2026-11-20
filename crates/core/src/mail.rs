@@ -12,6 +12,7 @@ use postflow_mail::{
 use postflow_store::{
     Account, ItemPatch, MailFolder, MailRef, MailSync, MailSyncStats, NewMail, ids,
 };
+use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
@@ -50,8 +51,11 @@ pub(crate) enum Command {
     /// 应用自己发起的同步（窗口回到前台时）。和 `Sync` 一样，但不显示正在刷新，
     /// 也不会叫醒因为登录被拒而停着的任务：免得用户一切换窗口就去试一次错的密码。
     CatchUp,
-    /// 把本机改过的状态写回服务器。
-    Apply(Vec<MailRef>, ItemPatch),
+    /// 把本机做的一个改动写回服务器。`i64` 是它在本机写回队列里的序号（见 [`Write`]），写成了删掉；
+    /// 0 表示没能记进队列，只在内存里。
+    Write(i64, Write),
+    /// 写回队列里有新记下的改动，读出来执行。
+    Flush,
     /// 取一封邮件的原文，同步时没取的大邮件打开时用。
     FetchBody(MailRef, oneshot::Sender<Result<Vec<u8>, RpcError>>),
     /// 把一封草稿存进服务器的「草稿」，再删掉它替换的旧版本（`replace` 是旧版本的 Message-ID）。
@@ -60,16 +64,28 @@ pub(crate) enum Command {
         replace: Option<String>,
         reply: oneshot::Sender<Result<(), RpcError>>,
     },
-    /// 删掉一封草稿：发出去了，或者用户不要了。
-    DeleteDraft { message_id: String },
     /// 列出邮箱里的普通文件夹。
     ListFolders(oneshot::Sender<Result<Vec<FolderInfo>, RpcError>>),
     /// 用户打开了一个普通文件夹：马上同步它，这次连接期间每次同步都带上它。
     WatchFolder(String),
-    /// 把邮件移到另一个文件夹（服务器上的名字）。本机已经先删掉了，移成以后由目标文件夹的同步带回来。
-    MoveTo(Vec<MailRef>, String),
     /// 从服务器取更早的邮件：新加了几封、更早的还有没有。
     LoadOlder(OlderFrom, oneshot::Sender<Result<(usize, bool), RpcError>>),
+}
+
+/// 要写回邮件服务器的改动。先记进本机索引里的写回队列（`mail_writes`）再执行，写成了、或者服务器明确
+/// 拒绝了才删掉：断网时标的已读、归档、移动，关掉应用再打开也还在，连上以后接着写回去。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub(crate) enum Write {
+    /// 把本机改过的状态（已读、星标、归档）写回服务器。
+    Apply {
+        refs: Vec<MailRef>,
+        patch: ItemPatch,
+    },
+    /// 把邮件移到另一个文件夹（服务器上的名字）。本机已经先删掉了，移成以后由目标文件夹的同步带回来。
+    MoveTo { refs: Vec<MailRef>, target: String },
+    /// 删掉一封草稿：发出去了，或者用户不要了。
+    DeleteDraft { message_id: String },
 }
 
 /// 同时跟着同步的普通文件夹最多这么多个，多了先不管最早打开的。
@@ -389,7 +405,39 @@ impl Core {
             by_account.entry(r.account_id.clone()).or_default().push(r);
         }
         for (account, refs) in by_account {
-            self.send_mail(session, &account, Command::Apply(refs, patch.clone()));
+            self.queue_write(
+                session,
+                &account,
+                Write::Apply {
+                    refs,
+                    patch: patch.clone(),
+                },
+            );
+        }
+    }
+
+    /// 记下一个要写回服务器的改动，叫后台任务去写。没有后台任务（还没连上、在等密码）时改动留在队列里，
+    /// 任务启动时会读到。返回 false 表示既没记下、也没交给任务（这个改动丢了）。
+    ///
+    /// 直接在这里写索引、不交给后台线程：连续的两个改动（归档又马上移回来）要按先后记下。
+    pub(crate) fn queue_write(&self, session: &Session, account_id: &str, write: Write) -> bool {
+        let saved = serde_json::to_string(&write)
+            .map_err(|e| e.to_string())
+            .and_then(|op| {
+                session
+                    .store
+                    .queue_mail_write(account_id, &op)
+                    .map_err(|e| e.to_string())
+            });
+        match saved {
+            Ok(_) => {
+                self.send_mail(session, account_id, Command::Flush);
+                true
+            }
+            Err(e) => {
+                tracing::warn!(account = %account_id, "mail: could not queue a change, keeping it in memory: {e}");
+                self.send_mail(session, account_id, Command::Write(0, write))
+            }
         }
     }
 
@@ -426,6 +474,8 @@ async fn run(
     let mut watched: Vec<String> = Vec::new();
     // 这个邮箱多久要跟服务器说一句话，重连之间保留（连接在安静时被关掉会把它缩短）
     let mut keepalive = Keepalive::new();
+    // 已经从写回队列里读出来的改动到第几个了（重连之间保留，免得同一个改动读两次）
+    let mut last_write = 0i64;
     loop {
         let id = account_id.clone();
         let Ok(Some(account)) = session.db(move |s| s.account(&id)).await else {
@@ -547,6 +597,7 @@ async fn run(
             &mut watched,
             synced_before,
             &mut keepalive,
+            &mut last_write,
         )
         .await
         {
@@ -652,6 +703,44 @@ async fn park(
     }
 }
 
+/// 把写回队列里序号大于 `last` 的改动读出来，排到 `pending` 后面。读不了的坏记录直接删掉。
+async fn load_writes(
+    session: &Arc<Session>,
+    account_id: &str,
+    last: &mut i64,
+    pending: &mut Vec<Command>,
+) {
+    let id = account_id.to_string();
+    let after = *last;
+    let rows = match session.db(move |s| s.mail_writes(&id, after)).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::warn!(account = %account_id, "mail: could not read queued changes: {}", e.message);
+            return;
+        }
+    };
+    for (seq, op) in rows {
+        *last = (*last).max(seq);
+        match serde_json::from_str::<Write>(&op) {
+            Ok(write) => pending.push(Command::Write(seq, write)),
+            Err(e) => {
+                tracing::warn!(account = %account_id, seq, "mail: dropping an unreadable queued change: {e}");
+                finish_write(session, seq).await;
+            }
+        }
+    }
+}
+
+/// 一个改动写回完了，从写回队列里拿掉。
+async fn finish_write(session: &Arc<Session>, seq: i64) {
+    if seq <= 0 {
+        return;
+    }
+    if let Err(e) = session.db(move |s| s.finish_mail_write(seq)).await {
+        tracing::warn!(seq, "mail: could not clear a queued change: {}", e.message);
+    }
+}
+
 fn fail_fetches(pending: &mut Vec<Command>, err: &postflow_mail::Error) {
     let mut keep = Vec::new();
     for cmd in pending.drain(..) {
@@ -686,6 +775,7 @@ async fn serve(
     watched: &mut Vec<String>,
     synced_before: bool,
     keepalive: &mut Keepalive,
+    last_write: &mut i64,
 ) -> Result<(), postflow_mail::Error> {
     // 刚连上的第一次同步也在界面上显示，让用户知道在收信
     let mut announce = true;
@@ -693,22 +783,44 @@ async fn serve(
     let mut notify = synced_before;
     let mut healthy = false;
     loop {
+        // 写回队列里还没执行的改动（刚记下的，或者上次关掉应用前没写成的）排到要做的事里
+        load_writes(session, account_id, last_write, pending).await;
         // 先执行用户的操作，再同步，免得同步把刚做的改动又改回去
         let commands = std::mem::take(pending);
         let mut iter = commands.into_iter();
         while let Some(cmd) = iter.next() {
             match cmd {
                 Command::Sync => announce = true,
-                Command::CatchUp => {}
-                Command::Apply(refs, patch) => {
-                    if let Err(err) = apply(&mut conn, session, &refs, &patch).await {
-                        if is_connection_error(&err) {
-                            // 连接断了，留着重连后再写
-                            pending.push(Command::Apply(refs, patch));
+                Command::CatchUp | Command::Flush => {}
+                Command::Write(seq, write) => {
+                    let result = match &write {
+                        Write::Apply { refs, patch } => {
+                            apply(&mut conn, session, refs, patch).await
+                        }
+                        Write::MoveTo { refs, target } => move_mail(&mut conn, refs, target).await,
+                        Write::DeleteDraft { message_id } => {
+                            delete_draft(&mut conn, message_id).await
+                        }
+                    };
+                    match result {
+                        // 连接断了，留着重连后再写
+                        Err(err) if is_connection_error(&err) => {
+                            pending.push(Command::Write(seq, write));
                             pending.extend(iter);
                             return Err(err);
                         }
-                        tracing::warn!("mail: server rejected a change: {err}");
+                        // 服务器拒绝了（目标文件夹没了之类），再试也一样：不再写。移动没移成的，
+                        // 下次同步原来的文件夹时它会回到列表里
+                        Err(err) => {
+                            let what = match write {
+                                Write::Apply { .. } => "change",
+                                Write::MoveTo { .. } => "move",
+                                Write::DeleteDraft { .. } => "draft deletion",
+                            };
+                            tracing::warn!(account = %account_id, "mail: server rejected a {what}: {err}");
+                            finish_write(session, seq).await;
+                        }
+                        Ok(()) => finish_write(session, seq).await,
                     }
                 }
                 Command::FetchBody(r, reply) => match fetch_body(&mut conn, session, &r).await {
@@ -745,17 +857,6 @@ async fn serve(
                         return Err(err);
                     }
                 }
-                Command::MoveTo(refs, target) => {
-                    if let Err(err) = move_mail(&mut conn, &refs, &target).await {
-                        if is_connection_error(&err) {
-                            pending.push(Command::MoveTo(refs, target));
-                            pending.extend(iter);
-                            return Err(err);
-                        }
-                        // 没移成（目标文件夹没了之类）：下次同步原来的文件夹时它会回到列表里
-                        tracing::warn!(account = %account_id, "mail: could not move mail: {err}");
-                    }
-                }
                 Command::LoadOlder(from, reply) => {
                     let result = load_older(&mut conn, session, account_id, from).await;
                     let failed = result.as_ref().err().is_some_and(is_connection_error);
@@ -775,17 +876,6 @@ async fn serve(
                         watched.remove(0);
                     }
                     announce = true;
-                }
-                Command::DeleteDraft { message_id } => {
-                    if let Err(err) = delete_draft(&mut conn, &message_id).await {
-                        if is_connection_error(&err) {
-                            // 连接断了，重连后再删
-                            pending.push(Command::DeleteDraft { message_id });
-                            pending.extend(iter);
-                            return Err(err);
-                        }
-                        tracing::warn!(account = %account_id, "mail: could not delete a draft: {err}");
-                    }
                 }
             }
         }

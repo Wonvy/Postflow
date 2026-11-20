@@ -56,10 +56,14 @@ impl ParsedMedia {
     }
 }
 
-/// 解析抓到的内容：一般是订阅源；Telegram 频道的公开网页由 telegram.rs 读成订阅源。
+/// 解析抓到的内容：一般是订阅源；Telegram 频道的公开网页由 telegram.rs、苹果播客目录的查询结果由
+/// apple.rs 读成订阅源。
 pub(crate) fn parse_source(bytes: &[u8], url: &str) -> Result<ParsedFeed> {
     if crate::telegram::is_channel_page(url) {
         return crate::telegram::parse(&String::from_utf8_lossy(bytes), url);
+    }
+    if crate::apple::is_lookup(url) {
+        return crate::apple::parse(bytes, url);
     }
     parse_feed(bytes, url)
 }
@@ -93,8 +97,10 @@ pub fn parse_feed(bytes: &[u8], base_url: &str) -> Result<ParsedFeed> {
     if blocks.len() == entries.len() {
         for (entry, block) in entries.iter_mut().zip(blocks) {
             if let Some(media) = entry.media.as_mut() {
-                if media.duration.is_none() {
-                    media.duration = itunes_duration(block);
+                // feed-rs 把 `14:11`（分:秒）读成 14 秒，喜马拉雅等很多中文播客都这样写，所以
+                // 原文里有 `<itunes:duration>` 时以自己读的为准
+                if let Some(d) = itunes_duration(block) {
+                    media.duration = Some(d);
                 }
                 media.chapters = podcast_chapters(block);
                 media.transcript = podcast_transcript(block);
@@ -387,7 +393,7 @@ fn parse_duration(text: &str) -> Option<u64> {
 }
 
 /// 按文件扩展名猜音频、视频的 MIME 类型（有些源的附件不写 type）。
-fn mime_from_url(url: &str) -> Option<&'static str> {
+pub(crate) fn mime_from_url(url: &str) -> Option<&'static str> {
     let path = url
         .split(['?', '#'])
         .next()
@@ -792,7 +798,8 @@ mod tests {
   <enclosure url="https://cdn.example.com/ep2.mp3?x=1" length="31415926" type="audio/mpeg"/>
   <itunes:duration>1:02:03</itunes:duration></item>
 <item><title>Ep 1</title><guid>ep1</guid>
-  <enclosure url="https://cdn.example.com/ep1.m4a" length="0"/></item>
+  <enclosure url="https://cdn.example.com/ep1.m4a" length="0"/>
+  <itunes:author>Host</itunes:author><itunes:duration>14:11</itunes:duration></item>
 <item><title>Cover only</title><guid>img</guid>
   <enclosure url="https://cdn.example.com/cover.jpg" type="image/jpeg"/></item>
 </channel></rss>"#;
@@ -807,6 +814,8 @@ mod tests {
         let ep1 = feed.entries[1].media.clone().unwrap();
         assert_eq!(ep1.mime, "audio/mp4");
         assert_eq!(ep1.size, None);
+        // 分:秒（喜马拉雅这样写）：feed-rs 会读成 14 秒
+        assert_eq!(ep1.duration, Some(14 * 60 + 11));
         // 图片附件不是音视频
         assert_eq!(feed.entries[2].media, None);
     }

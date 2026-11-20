@@ -1,5 +1,6 @@
 //! 搜索播客：用苹果播客目录的公开搜索接口（iTunes Search API，免费、不要密钥），按节目名找到订阅地址。
-//! 只用它来找地址，订阅以后照常直接抓节目自己的 RSS。
+//! 只用它来找地址，订阅以后照常直接抓节目自己的 RSS。只给白名单客户端发订阅源的平台（小宇宙）上的节目
+//! 例外：订阅地址换成苹果目录的单集查询（见 postflow-feed 的 apple 模块）。
 
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,7 @@ struct Response {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Entry {
+    collection_id: Option<u64>,
     collection_name: Option<String>,
     artist_name: Option<String>,
     feed_url: Option<String>,
@@ -85,6 +87,13 @@ pub(crate) fn parse_results(json: &str) -> Result<Vec<Podcast>, serde_json::Erro
                 .feed_url
                 .map(|u| u.trim().to_string())
                 .filter(|u| u.starts_with("https://") || u.starts_with("http://"))?;
+            // 直接订阅会被拒绝的，改从苹果目录读
+            let feed_url = match e.collection_id {
+                Some(id) if postflow_feed::apple::feed_is_blocked(&feed_url) => {
+                    postflow_feed::apple::lookup_url(id)
+                }
+                _ => feed_url,
+            };
             if !seen.insert(feed_url.clone()) {
                 return None;
             }
@@ -103,7 +112,31 @@ pub(crate) fn parse_results(json: &str) -> Result<Vec<Podcast>, serde_json::Erro
         .collect())
 }
 
+/// 搜索结果里订阅地址正好是 `feed_url` 的节目在苹果目录里的编号。
+pub(crate) fn collection_for(json: &str, feed_url: &str) -> Option<u64> {
+    let response: Response = serde_json::from_str(json).ok()?;
+    let want = feed_url.trim().trim_end_matches('/');
+    response.results.into_iter().find_map(|e| {
+        let url = e.feed_url?;
+        (url.trim().trim_end_matches('/') == want).then_some(e.collection_id?)
+    })
+}
+
 impl Core {
+    /// 只给白名单客户端发订阅源的节目（小宇宙）改从苹果目录读：按节目名在目录里搜，订阅地址和
+    /// 这个一样的才算同一个节目。返回苹果目录的单集查询地址；找不到是 `None`。
+    pub(crate) async fn apple_lookup_for(&self, title: &str, feed_url: &str) -> Option<String> {
+        if title.trim().is_empty() {
+            return None;
+        }
+        let text = self
+            .client
+            .fetch_text(&search_url(title, "cn"))
+            .await
+            .ok()?;
+        collection_for(&text, feed_url).map(postflow_feed::apple::lookup_url)
+    }
+
     pub(crate) async fn search_podcasts(
         &self,
         term: &str,
@@ -150,5 +183,32 @@ mod tests {
         );
         assert_eq!(shows[0].episodes, Some(120));
         assert!(parse_results("not json").is_err());
+    }
+
+    #[test]
+    fn finds_the_show_by_its_feed() {
+        let json = r#"{"results":[
+          {"collectionId":1,"feedUrl":"https://feed.xyzfm.space/other"},
+          {"collectionId":1834069371,"feedUrl":"https://feed.xyzfm.space/wmnkvmrpwuww"}]}"#;
+        assert_eq!(
+            collection_for(json, "https://feed.xyzfm.space/wmnkvmrpwuww/"),
+            Some(1834069371)
+        );
+        assert_eq!(collection_for(json, "https://feed.xyzfm.space/nope"), None);
+        assert_eq!(
+            collection_for("oops", "https://feed.xyzfm.space/nope"),
+            None
+        );
+    }
+
+    #[test]
+    fn blocked_hosts_go_through_apple() {
+        let json = r#"{"results":[{"collectionId":1834069371,"collectionName":"罗永浩的十字路口",
+          "feedUrl":"https://feed.xyzfm.space/wmnkvmrpwuww"}]}"#;
+        let shows = parse_results(json).unwrap();
+        assert_eq!(
+            shows[0].feed_url,
+            "https://itunes.apple.com/lookup?id=1834069371&entity=podcastEpisode&limit=200"
+        );
     }
 }

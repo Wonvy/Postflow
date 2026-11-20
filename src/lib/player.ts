@@ -164,20 +164,75 @@ export function playbackTime(): number | null {
 export function switchToLocal(id: string, url: string): void {
   const el = audio;
   const s = usePlayer.getState();
-  if (!el || s.current?.id !== id || playingSrc === url) return;
-  const at = el.currentTime;
-  const wasPlaying = !el.paused;
-  playingSrc = url;
-  el.src = url;
-  el.playbackRate = s.rate;
-  const seekOnce = () => {
-    el.currentTime = at;
-    el.removeEventListener("loadedmetadata", seekOnce);
-  };
-  el.addEventListener("loadedmetadata", seekOnce);
-  if (wasPlaying) void el.play().catch(() => undefined);
+  if (!el || s.current?.id !== id || playingSrc === url || brokenLocal.has(id)) return;
+  clearTimeout(retryTimer);
+  retries = 0;
+  reload(el, url, el.currentTime, !el.paused);
 }
 let lastSaved = 0;
+
+// ---------------------------------------------------------------- 出错时自己接上
+
+/** 本机文件放不了的几期：这次打开应用期间改放网上的地址，不再换回本机文件。 */
+const brokenLocal = new Set<string>();
+/** 网上的地址连续出错后，隔多久重新接上（毫秒）。用完了才告诉用户放不了。 */
+const RETRY_DELAYS = [1000, 3000, 8000];
+let retries = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+/** 这个地址有没有放出过声音：一次都没放出来的「格式不支持」多半是地址本身坏了，不用重试。 */
+let srcStarted = false;
+
+/** 换到 `src` 并回到第 `at` 秒，原来在放就接着放。 */
+function reload(el: HTMLAudioElement, src: string, at: number, resume: boolean) {
+  playingSrc = src;
+  srcStarted = false;
+  el.src = src;
+  el.playbackRate = usePlayer.getState().rate;
+  if (at > 0) {
+    const seekOnce = () => {
+      el.currentTime = at;
+      el.removeEventListener("loadedmetadata", seekOnce);
+    };
+    el.addEventListener("loadedmetadata", seekOnce);
+  }
+  if (resume) void el.play().catch(() => undefined);
+}
+
+/**
+ * 播放出错时先自己接上，接不上才报错：
+ * - 放的是下载到本机的文件：改放网上的地址，接着刚才的位置（本机文件坏了、桌面应用读不了它都会这样）。
+ * - 放的是网上的地址：网络断了一下、服务器掐了长连接，隔一会儿从刚才的位置重新请求，最多三次。
+ */
+function recover(el: HTMLAudioElement) {
+  const s = usePlayer.getState();
+  const episode = s.current;
+  if (!episode) return;
+  const err = el.error;
+  console.warn("postflow: playback error", err?.code, err?.message, playingSrc);
+  const at = el.currentTime || s.position;
+  const resume = s.playing || s.waiting;
+  const remote = episode.media.url;
+  clearTimeout(retryTimer);
+  if (playingSrc && playingSrc !== remote) {
+    brokenLocal.add(episode.id);
+    usePlayer.setState({ waiting: resume });
+    reload(el, remote, at, resume);
+    return;
+  }
+  const hopeless = err?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED && !srcStarted;
+  if (hopeless || retries >= RETRY_DELAYS.length) {
+    usePlayer.setState({ playing: false, waiting: false, error: "load" });
+    return;
+  }
+  const delay = RETRY_DELAYS[retries++];
+  usePlayer.setState({ waiting: resume });
+  retryTimer = setTimeout(() => {
+    // 这期间换了一期或关掉了播放器，就不接了
+    if (usePlayer.getState().current?.id !== episode.id || playingSrc !== remote) return;
+    reload(el, remote, at, resume);
+  }, delay);
+}
+
 let onEnded: ((episode: Episode) => void) | null = null;
 
 /** 播完一期时调用（标为已读、放下一期）。由 PlayerBridge 设置。 */
@@ -211,9 +266,13 @@ function element(): HTMLAudioElement {
     if (s.current) savePosition(s.current.id, el.currentTime, s.duration);
   });
   el.addEventListener("waiting", () => usePlayer.setState({ waiting: true }));
-  el.addEventListener("playing", () => usePlayer.setState({ waiting: false }));
+  el.addEventListener("playing", () => {
+    srcStarted = true;
+    retries = 0;
+    usePlayer.setState({ waiting: false, error: null });
+  });
   el.addEventListener("canplay", () => usePlayer.setState({ waiting: false }));
-  el.addEventListener("error", () => usePlayer.setState({ playing: false, waiting: false, error: "load" }));
+  el.addEventListener("error", () => recover(el));
   el.addEventListener("ended", () => {
     const s = usePlayer.getState();
     const finished = s.current;
@@ -254,19 +313,13 @@ export function play(episode: Episode, queue: Episode[] = [], at?: number) {
     error: null,
     waiting: true,
   });
-  // 下载过的放本机文件，不用联网
-  playingSrc = localFiles[episode.id] ?? episode.media.url;
-  el.src = playingSrc;
-  el.playbackRate = s.rate;
+  // 下载过的放本机文件，不用联网（这次放出过错的除外）
+  clearTimeout(retryTimer);
+  retries = 0;
+  const local = brokenLocal.has(episode.id) ? undefined : localFiles[episode.id];
   const start = at ?? savedPosition(episode.id);
   lastSaved = start;
-  if (start > 0) {
-    const seekOnce = () => {
-      el.currentTime = start;
-      el.removeEventListener("loadedmetadata", seekOnce);
-    };
-    el.addEventListener("loadedmetadata", seekOnce);
-  }
+  reload(el, local ?? episode.media.url, start, false);
   void el.play().catch(() => usePlayer.setState({ playing: false, waiting: false }));
   updateMediaMetadata(episode);
 }
@@ -298,6 +351,8 @@ export function skip(delta: number) {
 export function stop() {
   setSleep(null);
   const s = usePlayer.getState();
+  clearTimeout(retryTimer);
+  retries = 0;
   if (audio) {
     if (s.current) savePosition(s.current.id, audio.currentTime, s.duration);
     audio.pause();

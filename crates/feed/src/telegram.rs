@@ -101,7 +101,7 @@ fn escape_text(s: &str) -> String {
 }
 
 /// `2026-05-14T16:08:31+00:00` 换成毫秒时间戳。
-fn parse_time(s: &str) -> Option<i64> {
+pub(crate) fn parse_time(s: &str) -> Option<i64> {
     let s = s.trim();
     let num = |a: usize, b: usize| s.get(a..b)?.parse::<i64>().ok();
     let (y, mo, d) = (num(0, 4)?, num(5, 7)?, num(8, 10)?);

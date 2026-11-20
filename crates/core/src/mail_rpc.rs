@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use crate::mail::{Command, mail_error, parse_security, security_str, verify, verify_login};
+use crate::mail::{Command, Write, mail_error, parse_security, security_str, verify, verify_login};
 use crate::oauth::imap_server;
 use crate::rpc::{parse, reply};
 use crate::{Core, RpcError, Scope, Session};
@@ -563,7 +563,7 @@ impl Core {
         let moved = refs.len();
         if moved > 0 {
             tracing::info!(account = %account, moved, "moving mail to another folder");
-            self.send_mail(session, &account, Command::MoveTo(refs, target));
+            self.queue_write(session, &account, Write::MoveTo { refs, target });
             self.emit_changed(&[Scope::Feeds, Scope::Items], None);
         }
         reply(json!({ "moved": moved }))

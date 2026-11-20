@@ -75,6 +75,12 @@ pub struct Media {
     pub transcript: Option<Transcript>,
 }
 
+/// 以前的版本把 `<itunes:duration>14:11</itunes:duration>`（分:秒）存成了 14 秒：存的正好是这次时长的
+/// 分钟数时改过来。只认这一种错法，免得源里的时长每次差一点就重记一次。
+fn fixes_duration(old: Option<u64>, new: Option<u64>) -> bool {
+    matches!((old, new), (Some(old), Some(new)) if new >= 60 && old == new / 60)
+}
+
 /// 单集的文字稿：地址和格式（text/vtt、application/x-subrip、application/json、text/html、text/plain）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Transcript {
@@ -83,7 +89,7 @@ pub struct Transcript {
 }
 
 impl Media {
-    /// 以前存下的附件少了这次源里有的章节或文字稿，要补上。
+    /// 以前存下的附件少了这次源里有的章节或文字稿，要补上；或者以前存错了时长，要改过来。
     /// 地址本身变了不算：有的源每次给的下载地址都带不同的签名，不能每抓一次就记一次。
     pub fn adds_to(&self, stored: Option<&Media>) -> bool {
         match stored {
@@ -91,6 +97,7 @@ impl Media {
             Some(old) => {
                 (old.chapters.is_none() && self.chapters.is_some())
                     || (old.transcript.is_none() && self.transcript.is_some())
+                    || fixes_duration(old.duration, self.duration)
             }
         }
     }
@@ -239,7 +246,7 @@ where
     Option::<T>::deserialize(de).map(Some)
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ItemPatch {
     pub read: Option<bool>,
     pub starred: Option<bool>,
@@ -497,7 +504,7 @@ pub struct Contact {
 }
 
 /// 一封邮件在服务器上的位置，写回服务器时用。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MailRef {
     pub id: String,
     pub account_id: String,
@@ -612,5 +619,32 @@ pub struct FreshMail {
 impl MailSyncStats {
     pub fn changed(&self) -> bool {
         self.added + self.updated + self.removed > 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn media(duration: Option<u64>) -> Media {
+        Media {
+            url: "https://cdn.example.com/ep.m4a".into(),
+            mime: "audio/mp4".into(),
+            duration,
+            size: None,
+            chapters: None,
+            transcript: None,
+        }
+    }
+
+    #[test]
+    fn a_duration_stored_as_minutes_is_corrected_once() {
+        // 以前把 14:11 存成了 14 秒
+        assert!(media(Some(851)).adds_to(Some(&media(Some(14)))));
+        // 改好以后不再重记；时长有出入但不是这种错法的也不动
+        assert!(!media(Some(851)).adds_to(Some(&media(Some(851)))));
+        assert!(!media(Some(851)).adds_to(Some(&media(Some(845)))));
+        assert!(!media(Some(30)).adds_to(Some(&media(Some(0)))));
+        assert!(!media(None).adds_to(Some(&media(Some(14)))));
     }
 }

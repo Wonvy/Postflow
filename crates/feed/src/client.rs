@@ -72,6 +72,9 @@ impl Client {
     /// 跳转由这里自己跟：一路都是永久跳转时，在 `moved_to` 里告诉调用方新地址。
     pub async fn fetch_feed(&self, url: &str, cond: &Conditional) -> Result<FetchResult> {
         let start = url::Url::parse(url).map_err(|_| Error::InvalidUrl(url.to_string()))?;
+        if crate::apple::is_lookup(url) {
+            tokio::time::sleep(apple_turn()).await;
+        }
         let mut current = start.clone();
         let mut permanent = true;
         // 校验值属于原地址；永久搬家后新地址的内容要完整取一次，这样也才会知道搬了家
@@ -226,6 +229,19 @@ fn conditional(
         }
     }
     req
+}
+
+/// 苹果目录的查询接口限速（大约每分钟 20 次）：订阅了一批只能从那里读的节目时，一个一个隔开查。
+const APPLE_GAP: Duration = Duration::from_secs(3);
+
+/// 轮到这次查询还要等多久（同时也把下一个名额往后排）。
+fn apple_turn() -> Duration {
+    static NEXT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+    let mut next = NEXT.lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    let at = next.map_or(now, |n| n.max(now));
+    *next = Some(at + APPLE_GAP);
+    at - now
 }
 
 /// 读完响应：304 返回 `None`，别的不成功的状态码报错，正文有大小上限。

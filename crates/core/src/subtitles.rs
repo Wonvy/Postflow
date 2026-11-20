@@ -60,7 +60,10 @@ impl Read for GrowingFile {
                 return Ok(n);
             }
             if self.job.cancelled() {
-                return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+                // 不能用 Interrupted：标准库的 read_exact 和 symphonia 遇到它都当「再试一次」，
+                // 文件不再变长时就一直空转，占满一个核、线程和已加载的模型都不释放。
+                // 是不是取消由调用方看 job.cancelled()，这里只要让读取停下来
+                return Err(io::Error::other("cancelled"));
             }
             match self.core.episodes.progress().remove(&self.job.id) {
                 Some(p) if p.error.is_some() => {
@@ -843,6 +846,41 @@ fn transcribe(core: &Arc<Core>, job: &Arc<Job>, source: Source) -> Result<(), Rp
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_cancelled_read_stops_instead_of_spinning() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = Core::open_with_secrets(dir.path(), Arc::new(crate::MemorySecrets::default()))
+            .await
+            .unwrap();
+        let part = dir.path().join("ep.part");
+        std::fs::write(&part, b"").unwrap();
+        let job = Arc::new(Job {
+            id: "ep".into(),
+            model: "m".into(),
+            cancel: AtomicBool::new(true),
+            want: AtomicU64::new(0),
+            live: Mutex::new(Live {
+                state: SubtitleState::Running,
+                transcript: Default::default(),
+                error: None,
+                received: 0,
+                total: None,
+            }),
+        });
+        let mut file = GrowingFile {
+            file: std::fs::File::open(&part).unwrap(),
+            core,
+            job,
+        };
+        // 解码器用 read_exact 读：取消后要报错返回，不能当成「再试一次」一直转
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 4];
+            let _ = tx.send(file.read_exact(&mut buf).is_err());
+        });
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)), Ok(true));
+    }
 
     #[test]
     fn seeking_from_the_end_counts_the_whole_file() {

@@ -18,10 +18,19 @@ struct Progress {
 }
 
 /// 应用所在的目录能不能写（试着建一个临时文件再删掉）。不是 Windows 时总是 true。
+///
+/// 用 MSI 装的也总是 true：MSI 装在 Program Files、本来就写不进去，但更新插件交给 msiexec 装，
+/// msiexec 自己会弹管理员授权窗口。这里的提权办法只会运行 NSIS 的 setup.exe，MSI 走它必然失败。
 #[tauri::command]
 pub fn install_dir_writable() -> bool {
     #[cfg(windows)]
     {
+        if matches!(
+            tauri::utils::platform::bundle_type(),
+            Some(tauri::utils::config::BundleType::Msi)
+        ) {
+            return true;
+        }
         let Some(dir) = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.to_path_buf()))
@@ -87,12 +96,31 @@ pub async fn install_update_elevated<R: Runtime>(app: AppHandle<R>) -> Result<()
             .await
             .map_err(|e| e.to_string())?;
 
-        // 更新包就是签过名的安装程序本身，download 已经校验过签名
-        let path = std::env::temp_dir().join(format!("Postflow_{}_x64-setup.exe", update.version));
+        // 更新包就是签过名的安装程序本身，download 已经校验过签名。这里只会运行 setup.exe：
+        // 不是 Windows 程序（比如 MSI）就说清楚，别当成用户在授权窗口点了「否」
+        if !bytes.starts_with(b"MZ") {
+            return Err("the update package is not an installer program".into());
+        }
+        // 放进一个名字不好猜的新文件夹，别的程序不容易抢先换掉它
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let dir =
+            std::env::temp_dir().join(format!("postflow-update-{}-{nonce:x}", std::process::id()));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = dir.join(format!("Postflow_{}_x64-setup.exe", update.version));
         std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
 
-        // Start-Process -Verb RunAs 弹出系统的管理员授权窗口；用户点「否」时它报错，退出码不为 0
-        let quoted = path.to_string_lossy().replace('\'', "''");
+        // Start-Process -Verb RunAs 弹出系统的管理员授权窗口；用户点「否」时它报错，退出码不为 0。
+        // PowerShell 把弯引号也当单引号，路径里的都要双写
+        let quoted: String = path
+            .to_string_lossy()
+            .chars()
+            .flat_map(|c| {
+                let twice = matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}');
+                std::iter::repeat_n(c, if twice { 2 } else { 1 })
+            })
+            .collect();
         let script = format!(
             "Start-Process -FilePath '{quoted}' -ArgumentList '/P','/R','/UPDATE' -Verb RunAs -ErrorAction Stop"
         );
@@ -109,7 +137,7 @@ pub async fn install_update_elevated<R: Runtime>(app: AppHandle<R>) -> Result<()
             .status()
             .map_err(|e| e.to_string())?;
         if !status.success() {
-            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_dir_all(&dir);
             return Err("elevation_declined".into());
         }
         tracing::info!("started the installer with administrator rights; exiting");

@@ -2,6 +2,7 @@
 //!
 //! 这个 crate 不碰存储，只负责把网络上的内容变成结构化数据。
 
+pub mod apple;
 mod client;
 mod discover;
 mod frame;

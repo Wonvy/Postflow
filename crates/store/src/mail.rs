@@ -131,6 +131,10 @@ fn delete_account_mail(conn: &Connection, account_id: &str) -> Result<()> {
     conn.execute("DELETE FROM mail_meta WHERE account_id = ?1", [account_id])?;
     conn.execute("DELETE FROM mail_state WHERE account_id = ?1", [account_id])?;
     conn.execute(
+        "DELETE FROM mail_writes WHERE account_id = ?1",
+        [account_id],
+    )?;
+    conn.execute(
         "DELETE FROM mail_folders WHERE account_id = ?1",
         [account_id],
     )?;
@@ -573,6 +577,34 @@ impl Store {
 
         tx.commit()?;
         Ok(stats)
+    }
+
+    /// 记下一个要写回邮件服务器的改动（`op` 由调用方序列化），返回它的序号。序号按记下的先后递增。
+    pub fn queue_mail_write(&self, account_id: &str, op: &str) -> Result<i64> {
+        let guard = self.lock();
+        guard.conn.execute(
+            "INSERT INTO mail_writes (account_id, op) VALUES (?1, ?2)",
+            params![account_id, op],
+        )?;
+        Ok(guard.conn.last_insert_rowid())
+    }
+
+    /// 这个邮箱还没写回的改动里，序号大于 `after` 的，按先后顺序。
+    pub fn mail_writes(&self, account_id: &str, after: i64) -> Result<Vec<(i64, String)>> {
+        let guard = self.lock();
+        let mut stmt = guard.conn.prepare_cached(
+            "SELECT seq, op FROM mail_writes WHERE account_id = ?1 AND seq > ?2 ORDER BY seq",
+        )?;
+        let rows = stmt.query_map(params![account_id, after], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// 写回成了（或者服务器拒绝了、不用再试）：从队列里拿掉。
+    pub fn finish_mail_write(&self, seq: i64) -> Result<()> {
+        self.lock()
+            .conn
+            .execute("DELETE FROM mail_writes WHERE seq = ?1", [seq])?;
+        Ok(())
     }
 
     pub fn record_mail_sync(&self, account_id: &str, error: Option<(&str, &str)>) -> Result<()> {

@@ -84,6 +84,19 @@ struct ApiState {
     core: Arc<Core>,
     /// 变成 true 时服务要停：事件流也随之结束，不然浏览器开着就停不下来。
     stop: watch::Receiver<bool>,
+    /// 桌面应用里的网页访问（有访问密钥）：只给浏览器用得上的那些方法，见 [`desktop_only`]。
+    restricted: bool,
+}
+
+/// 只能在桌面应用里调的：参数里带着这台电脑上的路径（把附件、OPML 写到哪里，从哪个文件夹导入模型，
+/// 数据目录放哪里），或者往插件目录写代码（桌面应用启用了的插件以应用自己的权限运行）。
+/// 网页界面本来就不传路径（附件、OPML 由浏览器自己下载），拿到访问链接的人也不该能读写这台电脑上的
+/// 任意文件。
+fn desktop_only(method: &str, params: &Value) -> bool {
+    matches!(method, "app.setup" | "plugins.install")
+        || ["path", "data_dir"]
+            .iter()
+            .any(|k| params.get(k).is_some_and(|v| !v.is_null()))
 }
 
 /// 下好的一期。文件在核心的本机目录里，ID 由核心检查过只有字母数字。
@@ -111,7 +124,11 @@ pub fn router(core: Arc<Core>, ui: Ui, access: Access, stop: watch::Receiver<boo
         .route("/api/events", get(events))
         // 下载下来离线听的播客单集，支持拖动进度（Range）
         .route("/api/episodes/{id}", get(episode))
-        .with_state(ApiState { core, stop });
+        .with_state(ApiState {
+            core,
+            stop,
+            restricted: access.key.is_some(),
+        });
     let app = match ui {
         Ui::Dir(dir) => {
             // 界面是单页应用，找不到的路径一律回到首页
@@ -127,6 +144,15 @@ pub fn router(core: Arc<Core>, ui: Ui, access: Access, stop: watch::Receiver<boo
     // 密钥比本机地址更严：有密钥时不用再限定回环地址（局域网访问靠它）
     let access = Arc::new(access);
     app.layer(middleware::from_fn_with_state(access, guard))
+        .layer(middleware::from_fn(no_framing))
+}
+
+/// 不许别的网页用 iframe 把界面嵌进去（点击劫持）：本机别的端口上的网页也算别的网页。
+async fn no_framing(req: Request, next: Next) -> Response {
+    let mut res = next.run(req).await;
+    res.headers_mut()
+        .insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    res
 }
 
 /// 运行服务，直到 `stop` 变成 true。
@@ -162,6 +188,11 @@ fn asset(get: &AssetFn, path: &str) -> Response {
 }
 
 async fn rpc(State(state): State<ApiState>, Json(req): Json<RpcRequest>) -> Response {
+    if state.restricted && desktop_only(&req.method, &req.params) {
+        tracing::warn!(method = %req.method, "rpc refused: desktop only");
+        let error = json!({ "code": "desktop_only", "message": "this can only be done in the desktop app" });
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": error }))).into_response();
+    }
     match state.core.rpc(&req.method, req.params, req.client).await {
         Ok(result) => Json(json!({ "result": result })).into_response(),
         Err(error) => {
@@ -460,6 +491,49 @@ mod tests {
             send(&app, no_cookie).await.status(),
             StatusCode::UNAUTHORIZED
         );
+
+        // 带着这台电脑上的路径、往插件目录写代码的，网页访问一律不给
+        let call = |body: &str| {
+            axum::http::Request::post("/api/rpc")
+                .header(header::HOST, "127.0.0.1:4319")
+                .header(header::COOKIE, &cookie)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap()
+        };
+        for body in [
+            r#"{"method":"mail.attachment","params":{"id":"x","index":0,"path":"/tmp/evil.sh"}}"#,
+            r#"{"method":"feeds.export_opml","params":{"path":"/tmp/x.opml"}}"#,
+            r#"{"method":"voices.import","params":{"id":"x","path":"//host/share"}}"#,
+            r#"{"method":"app.setup","params":{"data_dir":"/tmp/elsewhere"}}"#,
+            r#"{"method":"plugins.install","params":{"manifest":"{}","source":""}}"#,
+        ] {
+            let res = send(&app, call(body)).await;
+            assert_eq!(res.status(), StatusCode::FORBIDDEN, "{body}");
+            assert_eq!(res.headers()[header::X_FRAME_OPTIONS], "DENY");
+        }
+        // 不带路径的照常（OPML 的内容交给浏览器自己下载）
+        let res = send(
+            &app,
+            call(r#"{"method":"feeds.export_opml","params":{"path":null}}"#),
+        )
+        .await;
+        assert_ne!(res.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn only_paths_and_plugin_code_are_desktop_only() {
+        assert!(desktop_only(
+            "mail.attachment",
+            &json!({ "id": "x", "index": 0, "path": "/tmp/a" })
+        ));
+        assert!(!desktop_only(
+            "mail.attachment",
+            &json!({ "id": "x", "index": 0 })
+        ));
+        assert!(!desktop_only("feeds.export_opml", &json!({ "path": null })));
+        assert!(desktop_only("plugins.install", &json!({})));
+        assert!(!desktop_only("plugins.list", &Value::Null));
     }
 
     #[tokio::test]

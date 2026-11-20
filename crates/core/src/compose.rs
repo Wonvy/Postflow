@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use crate::mail::{Command, security_str, server_config, smtp_config};
+use crate::mail::{Command, Write, security_str, server_config, smtp_config};
 use crate::rpc::{parse, reply};
 use crate::{Core, RpcError, Session};
 
@@ -604,7 +604,7 @@ impl Core {
 
         // 发出去了：草稿不要了，附件也放掉
         if let Some(message_id) = p.draft.clone().filter(|d| !d.trim().is_empty()) {
-            self.send_mail(session, &account.id, Command::DeleteDraft { message_id });
+            self.queue_write(session, &account.id, Write::DeleteDraft { message_id });
         }
         {
             let mut uploads = self.uploads();
@@ -694,7 +694,7 @@ impl Core {
         if message_id.is_empty() {
             return Err(RpcError::new("bad_params", "message id is empty"));
         }
-        if !self.send_mail(session, &account_id, Command::DeleteDraft { message_id }) {
+        if !self.queue_write(session, &account_id, Write::DeleteDraft { message_id }) {
             return Err(RpcError::new(
                 "mail_unavailable",
                 "this account is not connected",

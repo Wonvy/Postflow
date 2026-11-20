@@ -1064,6 +1064,20 @@ mod tests {
             Some("预算.xlsx")
         );
         assert_eq!(structure_name(&p(&[("charset", "utf-8")])), None);
+        // `%` 后面跟着没编码的中文：以前会切在字的中间、整个收信任务崩掉
+        assert_eq!(
+            structure_name(&p(&[("filename*", "utf-8''50%折扣.pdf")])).as_deref(),
+            Some("50%折扣.pdf")
+        );
+        assert_eq!(
+            structure_name(&p(&[("filename*", "utf-8''100%")])).as_deref(),
+            Some("100%")
+        );
+        // 写明了 GBK 的按 GBK 解（「预算」）
+        assert_eq!(
+            structure_name(&p(&[("filename*", "gbk''%D4%A4%CB%E3.xlsx")])).as_deref(),
+            Some("预算.xlsx")
+        );
     }
 
     const HTML_MAIL: &str = "From: \"Ada Lovelace\" <ada@example.com>\r\n\
@@ -1389,24 +1403,37 @@ pub fn structure_name(params: &[(String, String)]) -> Option<String> {
             .map(|(_, v)| v)
     };
     if let Some(v) = find(&["filename*", "name*"]) {
-        // charset'language'percent-encoded
-        let encoded = v.splitn(3, '\'').nth(2).unwrap_or(v);
+        // charset'language'percent-encoded。按字节解码：`%` 后面可能跟着没编码的中文，
+        // 按字符串下标切会切在一个字的中间
+        let mut parts = v.splitn(3, '\'');
+        let (charset, encoded) = match (parts.next(), parts.next(), parts.next()) {
+            (Some(charset), Some(_), Some(rest)) => (charset, rest),
+            _ => ("", v.as_str()),
+        };
+        let hex = |c: u8| (c as char).to_digit(16);
         let mut bytes = Vec::new();
         let b = encoded.as_bytes();
         let mut i = 0;
         while i < b.len() {
             if b[i] == b'%'
-                && i + 2 < b.len()
-                && let Ok(x) = u8::from_str_radix(&encoded[i + 1..i + 3], 16)
+                && let (Some(hi), Some(lo)) = (
+                    b.get(i + 1).copied().and_then(hex),
+                    b.get(i + 2).copied().and_then(hex),
+                )
             {
-                bytes.push(x);
+                bytes.push((hi * 16 + lo) as u8);
                 i += 3;
                 continue;
             }
             bytes.push(b[i]);
             i += 1;
         }
-        let name = String::from_utf8_lossy(&bytes).trim().to_string();
+        // 写明了字符集（比如 gbk）就按它解，不认识的当 UTF-8
+        let name = match encoding_rs::Encoding::for_label(charset.trim().as_bytes()) {
+            Some(enc) if enc != encoding_rs::UTF_8 => enc.decode(&bytes).0.into_owned(),
+            _ => String::from_utf8_lossy(&bytes).into_owned(),
+        };
+        let name = name.trim().to_string();
         if !name.is_empty() {
             return Some(name);
         }

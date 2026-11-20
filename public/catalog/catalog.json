@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-11-18T20:35:21Z",
+  "updated": "2026-11-20T00:43:09Z",
   "feeds": [
     {
       "id": "bbc-news",
@@ -2240,7 +2240,7 @@
     {
       "id": "pod-1751641957",
       "name": "现场！现场！",
-      "url": "https://feed.xyzfm.space/9ec8fhfpuk7y",
+      "url": "https://itunes.apple.com/lookup?id=1751641957&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/6667bc1894977a26ef7f7f16?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2255,7 +2255,7 @@
     {
       "id": "pod-1794422481",
       "name": "资讯早7点",
-      "url": "https://feed.xyzfm.space/wb39te6k9gqw",
+      "url": "https://itunes.apple.com/lookup?id=1794422481&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/67891a429407dcd1bfbfcfcb?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2269,7 +2269,7 @@
     {
       "id": "pod-1846847443",
       "name": "摸鱼早报",
-      "url": "https://feed.xyzfm.space/p3uyn6vmyxn3",
+      "url": "https://itunes.apple.com/lookup?id=1846847443&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/66dddbf6bfd7110df42ba906?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2283,7 +2283,7 @@
     {
       "id": "pod-1791081576",
       "name": "灰度纪年",
-      "url": "https://feed.xyzfm.space/6keeqnqy6vrr",
+      "url": "https://itunes.apple.com/lookup?id=1791081576&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/6772652715a5fd520eb5f758?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2297,7 +2297,7 @@
     {
       "id": "pod-1834069371",
       "name": "罗永浩的十字路口",
-      "url": "https://feed.xyzfm.space/wmnkvmrpwuww",
+      "url": "https://itunes.apple.com/lookup?id=1834069371&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/68981df29e7bcd326eb91d88?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2312,7 +2312,7 @@
     {
       "id": "pod-1634356920",
       "name": "张小珺Jùn｜商业访谈录",
-      "url": "https://feed.xyzfm.space/dk4yh3pkpjp3",
+      "url": "https://itunes.apple.com/lookup?id=1634356920&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/626b46ea9cbbf0451cf5a962?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2341,7 +2341,7 @@
     {
       "id": "pod-1729552193",
       "name": "十字路口Crossing",
-      "url": "https://feed.xyzfm.space/68fyjknth9hj",
+      "url": "https://itunes.apple.com/lookup?id=1729552193&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/60502e253c92d4f62c2a9577?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2369,7 +2369,7 @@
     {
       "id": "pod-1591595410",
       "name": "乱翻书",
-      "url": "https://feed.xyzfm.space/yxuruh3f9mc4",
+      "url": "https://itunes.apple.com/lookup?id=1591595410&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/61358d971c5d56efe5bcb5d2?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2398,7 +2398,7 @@
     {
       "id": "pod-1559695855",
       "name": "知行小酒馆",
-      "url": "https://feed.xyzfm.space/j8yp8gxkmgqr",
+      "url": "https://itunes.apple.com/lookup?id=1559695855&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/6013f9f58e2f7ee375cf4216?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2427,7 +2427,7 @@
     {
       "id": "pod-1581271335",
       "name": "无人知晓",
-      "url": "https://feed.xyzfm.space/ypn9dydpbxpc",
+      "url": "https://itunes.apple.com/lookup?id=1581271335&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/611719d3cb0b82e1df0ad29e?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2455,7 +2455,7 @@
     {
       "id": "pod-1607724726",
       "name": "起朱楼宴宾客",
-      "url": "https://feed.xyzfm.space/ahng8d9qlywl",
+      "url": "https://itunes.apple.com/lookup?id=1607724726&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/61dd99a47b29652ff572257b?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2511,7 +2511,7 @@
     {
       "id": "pod-1815257407",
       "name": "阳谋开源",
-      "url": "https://feed.xyzfm.space/gppbltyvdg7v",
+      "url": "https://itunes.apple.com/lookup?id=1815257407&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/681cae7134d28fa2dc9d66c5?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2525,7 +2525,7 @@
     {
       "id": "pod-1778349074",
       "name": "菠萝健康派",
-      "url": "https://feed.xyzfm.space/qe8egag9eycv",
+      "url": "https://itunes.apple.com/lookup?id=1778349074&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/6693ae814ce7c8de0f47e220?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2540,7 +2540,7 @@
     {
       "id": "pod-1660230483",
       "name": "这病说来话长",
-      "url": "https://feed.xyzfm.space/xgeuu9mx3jag",
+      "url": "https://itunes.apple.com/lookup?id=1660230483&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/63995a333a2b7eba5ceb4658?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2554,7 +2554,7 @@
     {
       "id": "pod-1073852728",
       "name": "史蒂夫说",
-      "url": "https://feed.xyzfm.space/lkyt7bnmxc9k",
+      "url": "https://itunes.apple.com/lookup?id=1073852728&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/64379296ff8a107611a67208?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2568,7 +2568,7 @@
     {
       "id": "pod-1707385930",
       "name": "碳基生物生存指南",
-      "url": "https://feed.xyzfm.space/wyedwp8eyy3q",
+      "url": "https://itunes.apple.com/lookup?id=1707385930&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/64d8b36380c9ec4c5f22d225?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2582,7 +2582,7 @@
     {
       "id": "pod-1653520282",
       "name": "万物生长FM",
-      "url": "https://feed.xyzfm.space/qhtdbtr76cha",
+      "url": "https://itunes.apple.com/lookup?id=1653520282&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/63524ea82a992d56e91e63f7?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2596,7 +2596,7 @@
     {
       "id": "pod-1656204495",
       "name": "万象更新 Women's Health",
-      "url": "https://feed.xyzfm.space/7vr4h9dgettq",
+      "url": "https://itunes.apple.com/lookup?id=1656204495&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/637408e7adf2fc149f778c87?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2624,7 +2624,7 @@
     {
       "id": "pod-1838591433",
       "name": "IN核公园",
-      "url": "https://feed.xyzfm.space/dnqhkmefrbqd",
+      "url": "https://itunes.apple.com/lookup?id=1838591433&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/61658b9e538602a4ac9344ed?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2666,7 +2666,7 @@
     {
       "id": "pod-1752907735",
       "name": "严肃喧哗",
-      "url": "https://feed.xyzfm.space/3cdnxpambcc8",
+      "url": "https://itunes.apple.com/lookup?id=1752907735&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/6624f81d00c4d25805342943?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2694,7 +2694,7 @@
     {
       "id": "pod-1582119137",
       "name": "岩中花述",
-      "url": "https://feed.xyzfm.space/hwen8wf69c6g",
+      "url": "https://itunes.apple.com/lookup?id=1582119137&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/625635587bfca4e73e990703?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2738,7 +2738,7 @@
     {
       "id": "pod-1729071592",
       "name": "姐姐好读sisreads",
-      "url": "https://feed.xyzfm.space/h96wubyfk8xp",
+      "url": "https://itunes.apple.com/lookup?id=1729071592&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/65c0311a35dd8780ed84097c?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2752,7 +2752,7 @@
     {
       "id": "pod-1823494279",
       "name": "听起来不错！",
-      "url": "https://feed.xyzfm.space/68h6gg69dykj",
+      "url": "https://itunes.apple.com/lookup?id=1823494279&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/678a8c969b619eecc7bf6c1f?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2781,7 +2781,7 @@
     {
       "id": "pod-1680452998",
       "name": "足球第一视角",
-      "url": "https://feed.xyzfm.space/pwyjx9v6bwkj",
+      "url": "https://itunes.apple.com/lookup?id=1680452998&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/64098ebe092eb63cb030d073?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2795,7 +2795,7 @@
     {
       "id": "pod-1673666593",
       "name": "篮球昕事",
-      "url": "https://feed.xyzfm.space/phtrp44yr774",
+      "url": "https://itunes.apple.com/lookup?id=1673666593&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/63f23f76e99bdef7d3124626?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2823,7 +2823,7 @@
     {
       "id": "pod-1861247489",
       "name": "跑步播客「大概纸示」",
-      "url": "https://feed.xyzfm.space/46qg3r7u7xq7",
+      "url": "https://itunes.apple.com/lookup?id=1861247489&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/6697cbecf103d7b06d18488b?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2866,7 +2866,7 @@
     {
       "id": "pod-1696511339",
       "name": "三个火呛手",
-      "url": "https://feed.xyzfm.space/7fcrf8d7cmcr",
+      "url": "https://itunes.apple.com/lookup?id=1696511339&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/642ea4a1f54371d8b2d75168?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2894,7 +2894,7 @@
     {
       "id": "pod-1575323064",
       "name": "正经叭叭",
-      "url": "https://feed.xyzfm.space/t7hdrqbuxmqr",
+      "url": "https://itunes.apple.com/lookup?id=1575323064&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/60e43cecc4e7c8188c2f92a4?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2937,7 +2937,7 @@
     {
       "id": "pod-1493503146",
       "name": "忽左忽右",
-      "url": "https://feed.xyzfm.space/cv4bkgpuglwp",
+      "url": "https://itunes.apple.com/lookup?id=1493503146&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/5e4ee557418a84a0466737b7?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2952,7 +2952,7 @@
     {
       "id": "pod-1546599837",
       "name": "姜思达",
-      "url": "https://feed.xyzfm.space/tdjvf7vfnbqq",
+      "url": "https://itunes.apple.com/lookup?id=1546599837&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/5fe489dadee9c1e16dbe7524?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
@@ -2966,7 +2966,7 @@
     {
       "id": "pod-1770713549",
       "name": "西西弗高速",
-      "url": "https://feed.xyzfm.space/76evp7fxkeu8",
+      "url": "https://itunes.apple.com/lookup?id=1770713549&entity=podcastEpisode&limit=200",
       "site": "https://www.xiaoyuzhoufm.com/podcast/665c17db078f60650296f455?utm_source=rss",
       "lang": "zh",
       "category": "podcasts",
