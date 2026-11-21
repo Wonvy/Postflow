@@ -1461,7 +1461,10 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
     }
     if let Some(folder) = &filter.folder {
         args.push(SqlValue::Text(folder.clone()));
-        conds.push_str(&format!(" AND f.folder = ?{}", args.len()));
+        conds.push_str(&format!(
+            " AND (f.folder = ?{0} OR substr(f.folder, 1, length(?{0}) + 3) = ?{0} || ' / ')",
+            args.len()
+        ));
     }
     // 放到订阅里看的订阅邮件：在订阅（文章）那边，不在邮件那边
     if let Some(kind) = filter.kind {

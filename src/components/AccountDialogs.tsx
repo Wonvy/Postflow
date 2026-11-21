@@ -753,14 +753,16 @@ export function AddAccountDialog() {
     setError(null);
     try {
       const port = Number(server.port);
+      // 输入后可能还在等待自动识别；新浪地址交给核心按后缀选择服务器。
+      const autoSina = !touched.current && /@(?:vip\.)?sina\.(?:com|cn)$/i.test(address);
       const account = await api.addAccount({
         email: address,
         password,
         name: name.trim(),
-        imap_host: server.host.trim() || undefined,
-        imap_port: Number.isFinite(port) && port > 0 ? port : undefined,
-        imap_security: server.host.trim() ? server.security : undefined,
-        username: server.username.trim() || undefined,
+        imap_host: autoSina ? undefined : server.host.trim() || undefined,
+        imap_port: !autoSina && Number.isFinite(port) && port > 0 ? port : undefined,
+        imap_security: !autoSina && server.host.trim() ? server.security : undefined,
+        username: autoSina ? undefined : server.username.trim() || undefined,
       });
       void qc.invalidateQueries({ queryKey: keys.nav });
       void qc.invalidateQueries({ queryKey: ["items"] });
@@ -838,12 +840,13 @@ export function AddAccountDialog() {
             disabled={busy}
           />
         </Field>
+        {preset?.id === "sina" && <p className="-mt-2 text-[12px] text-fg-3">{t("account.sinaDomains")}</p>}
         {address !== email.trim() && (
           <p className="-mt-2 text-[12px] text-fg-3">{t("account.willUse", { address })}</p>
         )}
         {preset && (
           <p className="-mt-2 text-[12px] text-fg-3">
-            {t("account.detected", { name: providerName(preset, lang) })} · {preset.imap_host}
+            {t("account.detected", { name: providerName(preset, lang) })} · {server.host || preset.imap_host}
           </p>
         )}
         {canUseGoogle(preset) && (
@@ -977,7 +980,7 @@ function EditAccountForm({ account, onDone }: { account: Account; onDone: () => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Failure | null>(null);
 
-  const preset = presets.data?.find((p) => p.imap_host === account.imap_host) ?? null;
+  const preset = presets.data?.find((p) => p.id === providerOf(account, presets.data)) ?? null;
   const oauth = usesOAuth(preset);
   // Gmail：这台设备上是用 Google 账户登录的，就接着用；用户也可以换成应用专用密码
   const method = useQuery({

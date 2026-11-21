@@ -13,6 +13,18 @@ export type SavedEntry = string | { feed: string };
 
 type FeedLike = Pick<Feed, "id" | "folder">;
 
+export const FOLDER_SEPARATOR = " / ";
+export function folderParent(folder: string): string {
+  const at = folder.lastIndexOf(FOLDER_SEPARATOR);
+  return at < 0 ? "" : folder.slice(0, at);
+}
+export function folderName(folder: string): string {
+  return folder.slice(folderParent(folder).length + (folderParent(folder) ? FOLDER_SEPARATOR.length : 0));
+}
+export function inFolder(folder: string, parent: string): boolean {
+  return folder === parent || folder.startsWith(parent + FOLDER_SEPARATOR);
+}
+
 function savedFolders(saved: unknown): string[] {
   return Array.isArray(saved) ? saved.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
 }
@@ -20,7 +32,15 @@ function savedFolders(saved: unknown): string[] {
 /** 文件夹的显示顺序：设置里记着的在前（包括空文件夹），其余按名称排在后面。 */
 export function orderFolders(feeds: FeedLike[], saved: unknown): string[] {
   const used = [...new Set(feeds.map((f) => f.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  return [...new Set([...savedFolders(saved), ...used])];
+  const all = [...new Set([...savedFolders(saved), ...used])];
+  const result: string[] = [];
+  for (const folder of all) {
+    let parent = folderParent(folder);
+    const ancestors: string[] = [];
+    while (parent) { ancestors.unshift(parent); parent = folderParent(parent); }
+    for (const name of [...ancestors, folder]) if (!result.includes(name)) result.push(name);
+  }
+  return result;
 }
 
 /**

@@ -97,7 +97,7 @@ export type Dialog =
   | { type: "edit-account"; accountId: string }
   | { type: "remove-account"; accountId: string }
   /** 新建文件夹，或者给 `folder` 改名。 */
-  | { type: "folder"; folder?: string }
+  | { type: "folder"; folder?: string; parent?: string }
   /** 确认把当前列表全部标为已读。 */
   /** 自定义工具栏，打开时停在 `toolbar` 那一套。 */
   | { type: "toolbars"; toolbar?: ToolbarId }
@@ -449,7 +449,7 @@ export const useUi = create<UiState>()(
       readerLayout: "pane",
       feedKind: "all",
       hiddenViews: DEFAULT_HIDDEN_VIEWS,
-      viewsStyle: { mail: "rows", feeds: "icons" },
+      viewsStyle: { mail: "rows", feeds: "rows" },
       toggleViewLock: (media) =>
         set((s) => {
           const key = listKey(s.scope, s.space);
@@ -482,7 +482,7 @@ export const useUi = create<UiState>()(
       setReaderLayout: (readerLayout) => set({ readerLayout }),
       toggleViewsStyle: (space) =>
         set((s) => ({
-          viewsStyle: { ...s.viewsStyle, [space]: (s.viewsStyle?.[space] ?? (space === "mail" ? "rows" : "icons")) === "rows" ? "icons" : "rows" },
+          viewsStyle: { ...s.viewsStyle, [space]: (s.viewsStyle?.[space] ?? "rows") === "rows" ? "icons" : "rows" },
         })),
       toggleViewShown: (space, view) =>
         set((s) => {

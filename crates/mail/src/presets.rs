@@ -113,7 +113,7 @@ const PRESETS: &[(&[&str], Preset)] = &[
         p("188", "网易 188", "imap.188.com", "auth_code").smtp("smtp.188.com"),
     ),
     (
-        &["sina.com", "sina.cn", "vip.sina.com"],
+        &["sina.com", "sina.cn", "vip.sina.com", "vip.sina.cn"],
         p("sina", "新浪邮箱", "imap.sina.com", "auth_code").smtp("smtp.sina.com"),
     ),
     (
@@ -302,7 +302,19 @@ pub fn guess(email: &str) -> Option<(ServerConfig, Option<Preset>)> {
     let preset = PRESETS
         .iter()
         .find(|(domains, _)| domains.contains(&domain.as_str()))
-        .map(|(_, p)| p.clone());
+        .map(|(_, p)| {
+            let mut p = p.clone();
+            // 新浪的不同邮箱后缀有各自的收发服务器，界面仍只显示一个新浪入口。
+            if p.id == "sina" {
+                (p.imap_host, p.smtp_host) = match domain.as_str() {
+                    "sina.cn" => ("imap.sina.cn", "smtp.sina.cn"),
+                    "vip.sina.com" => ("imap.vip.sina.com", "smtp.vip.sina.com"),
+                    "vip.sina.cn" => ("imap.vip.sina.cn", "smtp.vip.sina.cn"),
+                    _ => ("imap.sina.com", "smtp.sina.com"),
+                };
+            }
+            p
+        });
     let config = match &preset {
         Some(p) => ServerConfig {
             host: p.imap_host.to_string(),
@@ -395,6 +407,29 @@ mod tests {
         assert!(guess("not-an-address").is_none());
         assert!(guess("@example.org").is_none());
         assert!(guess("me@localhost").is_none());
+    }
+
+    #[test]
+    fn sina_domains_use_their_own_servers() {
+        for (domain, host, smtp) in [
+            ("sina.com", "imap.sina.com", "smtp.sina.com"),
+            ("sina.cn", "imap.sina.cn", "smtp.sina.cn"),
+            ("vip.sina.com", "imap.vip.sina.com", "smtp.vip.sina.com"),
+            ("vip.sina.cn", "imap.vip.sina.cn", "smtp.vip.sina.cn"),
+        ] {
+            let email = format!("user@{domain}");
+            let (config, preset) = guess(&email).unwrap();
+            assert_eq!(config.host, host);
+            assert_eq!(config.username, email);
+            assert_eq!(config.port, 993);
+            assert_eq!(config.security, Security::Tls);
+            assert_eq!(preset.unwrap().password_kind, "auth_code");
+            let outgoing = smtp_for(&email, &config);
+            assert_eq!(
+                (outgoing.host.as_str(), outgoing.port, outgoing.security),
+                (smtp, 465, Security::Tls)
+            );
+        }
     }
 
     #[test]

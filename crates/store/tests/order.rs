@@ -33,6 +33,43 @@ fn titles(store: &Store) -> Vec<(String, String)> {
 }
 
 #[test]
+fn folder_filter_includes_descendants_but_not_similar_names() {
+    let tmp = TempDir::new().unwrap();
+    let store = open(&tmp, "aaaaaaaaaaaa");
+    for (n, folder) in ["Tools", "Tools / Code", "Tools / Code / Rust", "Toolshed"]
+        .iter()
+        .enumerate()
+    {
+        let id = feed(&store, &format!("https://example{n}.org/feed"), folder);
+        store
+            .reorder_feeds(folder, std::slice::from_ref(&id))
+            .unwrap();
+        store
+            .add_articles(vec![Article {
+                id: ids::item_id(&id, "post"),
+                feed: id,
+                guid: "post".into(),
+                url: None,
+                title: folder.to_string(),
+                author: None,
+                published: 1000,
+                fetched: 1000,
+                summary: String::new(),
+                content: String::new(),
+                image: None,
+                media: None,
+            }])
+            .unwrap();
+    }
+    let filter = ItemFilter {
+        folder: Some("Tools".into()),
+        ..Default::default()
+    };
+    assert_eq!(store.items(&filter, None, 10).unwrap().len(), 3);
+    assert_eq!(store.mark_all_read(&filter).unwrap().0, 3);
+}
+
+#[test]
 fn feeds_keep_the_order_they_were_dragged_into() {
     let tmp = TempDir::new().unwrap();
     let a = open(&tmp, "aaaaaaaaaaaa");

@@ -8,7 +8,17 @@ that heading into the version number and date.
 
 ### English
 
+- Organize subscriptions into nested groups: right-click a group to create a subgroup. Parent groups include articles and unread counts from their subgroups; deleting a group keeps its feeds and moves its subgroups up. OPML import and export preserve the hierarchy.
+- Subscription views now default to a column. Right-click anywhere in the views area to change the layout or choose which views to show. The redundant feeds heading is gone.
+- Subscribing and unsubscribing show progress and a result, including errors; repeated unsubscribe clicks no longer send duplicate requests.
+- Adding Sina Mail now picks the correct IMAP and SMTP servers for @sina.com, @sina.cn and VIP addresses.
+
 ### 中文
+
+- 订阅可以分成多级：右键分组可新建子分组。父分组会包含子分组的文章和未读数；删除分组会保留订阅，并把子分组提升一级。OPML 导入导出保留分组层级。
+- 订阅视图默认排成一列，在视图区域任意位置右键都能切换布局或选择显示哪些视图；去掉了多余的「订阅源」标题。
+- 添加订阅和退订时显示进度及成功或失败提示，退订时重复点击不会重复提交。
+- 添加新浪邮箱时，按 @sina.com、@sina.cn 和 VIP 邮箱后缀选择对应的收发服务器。
 
 ## 0.1.41 — 2026-11-20
 

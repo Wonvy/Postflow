@@ -16,6 +16,7 @@ import { httpStatusOf, type RsshubRoute } from "../lib/rsshub";
 import { RpcError } from "../lib/transport";
 import { FolderPicker } from "./FolderPicker";
 import { DiscoverPane } from "./FeedCatalog";
+import { toast } from "./Toast";
 import { QuickForm, QuickGrid } from "./QuickSources";
 import { RadarSuggestions, RsshubForm, RsshubSearch } from "./RsshubPicker";
 import { RsshubStatus } from "./RsshubServer";
@@ -334,6 +335,7 @@ export function AddFeedDialog() {
       void qc.invalidateQueries({ queryKey: ["items"] });
       setScope({ kind: "feed", feedId: feed.id });
       setDialog(null);
+      toast(t("podcast.added", { name: feed.title || feed.url }));
     } catch (err) {
       setError(explain(err, feedUrlRef.current));
       setPhase("idle");

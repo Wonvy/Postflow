@@ -9,6 +9,8 @@ import { useCallback, useMemo } from "react";
 import { api, type Nav, type Settings } from "./api";
 import {
   insertFolder,
+  folderParent,
+  inFolder,
   orderFolders,
   removeFolder,
   renameFolder,
@@ -122,23 +124,47 @@ export function useFolderActions() {
     (from: string, to: string) => {
       const clean = to.trim();
       if (!clean || clean === from) return;
-      const ids = [...feedsIn(clean), ...feedsIn(from)];
-      saveTop(qc, renameFolder(currentTop(qc), from, clean));
-      if (ids.length > 0) moveFeeds(clean, ids);
+      const paths = folders.filter((path) => inFolder(path, from));
+      let top = currentTop(qc);
+      for (const path of paths) top = renameFolder(top, path, clean + path.slice(from.length));
+      saveTop(qc, top);
+      for (const path of paths) {
+        const target = clean + path.slice(from.length);
+        const ids = [...feedsIn(target), ...feedsIn(path)];
+        if (ids.length) moveFeeds(target, ids);
+      }
       const ui = useUi.getState();
-      if (ui.scope.kind === "folder" && ui.scope.folder === from) ui.setScope({ kind: "folder", folder: clean });
+      if (ui.scope.kind === "folder" && inFolder(ui.scope.folder, from))
+        ui.setScope({ kind: "folder", folder: clean + ui.scope.folder.slice(from.length) });
     },
-    [feedsIn, moveFeeds, qc],
+    [feedsIn, folders, moveFeeds, qc],
   );
 
   /** 删掉文件夹，里面的订阅源留在文件夹原来的位置，不会退订。 */
   const remove = useCallback(
     (name: string) => {
-      arrangeTop(removeFolder(currentTop(qc), name, feedsIn(name)));
+      const parent = folderParent(name);
+      const children = folders.filter((path) => path !== name && inFolder(path, name));
+      let top = currentTop(qc);
+      for (const child of children) {
+        const target = parent + child.slice(name.length);
+        const dest = parent ? target : target.slice(3);
+        top = renameFolder(top, child, dest);
+        const ids = [...feedsIn(dest), ...feedsIn(child)];
+        if (ids.length) moveFeeds(dest, ids);
+      }
+      const ids = feedsIn(name);
+      if (parent) {
+        top = top.filter((e) => e.kind !== "folder" || e.name !== name);
+        if (ids.length) moveFeeds(parent, [...feedsIn(parent), ...ids]);
+        saveTop(qc, top);
+      } else {
+        arrangeTop(removeFolder(top, name, ids));
+      }
       const ui = useUi.getState();
-      if (ui.scope.kind === "folder" && ui.scope.folder === name) ui.setScope({ kind: "view", view: "inbox" });
+      if (ui.scope.kind === "folder" && inFolder(ui.scope.folder, name)) ui.setScope({ kind: "view", view: "inbox" });
     },
-    [arrangeTop, feedsIn, qc],
+    [arrangeTop, feedsIn, folders, moveFeeds, qc],
   );
 
   return {

@@ -76,6 +76,8 @@ export function useCatalogSubscribe(catalog: readonly CatalogFeed[]) {
           if (!entry) break;
           try {
             await api.addFeed(entry.url, folderOf(entry), { title: entry.name });
+            await qc.invalidateQueries({ queryKey: keys.nav });
+            if (todo.length === 1) toast(t("podcast.added", { name: entry.name }));
           } catch (err) {
             failed.push(entry.name);
             if (todo.length === 1) toast(`${entry.name}: ${errorText(t, err)}`);
@@ -85,13 +87,15 @@ export function useCatalogSubscribe(catalog: readonly CatalogFeed[]) {
               n.delete(entry.id);
               return n;
             });
-            void qc.invalidateQueries({ queryKey: keys.nav });
           }
         }
       }),
     );
     void qc.invalidateQueries({ queryKey: ["items"] });
-    if (failed.length > 0 && todo.length > 1) toast(t("catalog.someFailed", { names: failed.join("、") }));
+    if (todo.length > 1) {
+      if (failed.length > 0) toast(t("catalog.someFailed", { names: failed.join("、") }));
+      else toast(t("catalog.addedCount", { n: todo.length }));
+    }
   };
 
   return { subscribed, adding, subscribe };
@@ -414,7 +418,7 @@ function SubscribeButton({
       onClick={onClick}
     >
       {busy ? <Spinner size={12} /> : <Plus size={13} strokeWidth={2} />}
-      {t("catalog.subscribe")}
+      {busy ? t("feed.subscribing") : t("catalog.subscribe")}
     </Button>
   );
 }

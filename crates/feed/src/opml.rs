@@ -77,15 +77,39 @@ pub fn write(title: &str, feeds: &[OpmlFeed]) -> Result<String> {
     };
 
     let mut top_level = Vec::new();
-    let mut folders: BTreeMap<&str, Vec<Outline>> = BTreeMap::new();
+    #[derive(Default)]
+    struct FolderTree {
+        feeds: Vec<Outline>,
+        children: BTreeMap<String, FolderTree>,
+    }
+    fn folder_outlines(tree: FolderTree) -> Vec<Outline> {
+        tree.children
+            .into_iter()
+            .map(|(name, child)| {
+                let mut outlines = folder_outlines(FolderTree {
+                    feeds: Vec::new(),
+                    children: child.children,
+                });
+                outlines.extend(child.feeds);
+                Outline {
+                    text: name.clone(),
+                    title: Some(name),
+                    outlines,
+                    ..Outline::default()
+                }
+            })
+            .collect()
+    }
+    let mut folders = FolderTree::default();
     for feed in feeds {
         if feed.folder.is_empty() {
             top_level.push(as_outline(feed));
         } else {
-            folders
-                .entry(&feed.folder)
-                .or_default()
-                .push(as_outline(feed));
+            let mut node = &mut folders;
+            for name in feed.folder.split(" / ") {
+                node = node.children.entry(name.to_string()).or_default();
+            }
+            node.feeds.push(as_outline(feed));
         }
     }
 
@@ -97,14 +121,7 @@ pub fn write(title: &str, feeds: &[OpmlFeed]) -> Result<String> {
         }),
         ..OPML::default()
     };
-    for (name, outlines) in folders {
-        doc.body.outlines.push(Outline {
-            text: name.to_string(),
-            title: Some(name.to_string()),
-            outlines,
-            ..Outline::default()
-        });
-    }
+    doc.body.outlines.extend(folder_outlines(folders));
     doc.body.outlines.extend(top_level);
 
     let body = doc.to_string().map_err(|e| Error::Opml(e.to_string()))?;

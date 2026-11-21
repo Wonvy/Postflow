@@ -70,7 +70,7 @@ export function ApplePodcastResults({
     try {
       await api.addFeed(show.feed_url, folder, { title: show.title, icon_url: show.artwork });
       toast(t("podcast.added", { name: show.title }));
-      void qc.invalidateQueries({ queryKey: keys.nav });
+      await qc.invalidateQueries({ queryKey: keys.nav });
       void qc.invalidateQueries({ queryKey: ["items"] });
     } catch (err) {
       toast(`${show.title}: ${errorText(t, err)}`);
@@ -119,7 +119,7 @@ export function ApplePodcastResults({
                 ) : (
                   <Button className="h-7 shrink-0 px-2.5" disabled={busy} onClick={() => void subscribe(show)}>
                     {busy ? <Spinner size={12} /> : <Plus size={13} strokeWidth={2} />}
-                    {t("podcast.subscribe")}
+                    {busy ? t("feed.subscribing") : t("podcast.subscribe")}
                   </Button>
                 )}
               </li>

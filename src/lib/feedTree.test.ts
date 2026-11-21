@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   insertFolder,
+  folderParent,
+  folderName,
+  inFolder,
   moveTop,
   orderFolders,
   removeFolder,
@@ -21,6 +24,15 @@ const feeds = [
 ];
 const F = (name: string): TopEntry => ({ kind: "folder", name });
 const S = (id: string): TopEntry => ({ kind: "feed", id });
+
+test("nested folders retain ancestors and distinct boundaries", () => {
+  assert.equal(folderParent("Tools / Code / Rust"), "Tools / Code");
+  assert.equal(folderName("Tools / Code / Rust"), "Rust");
+  assert.equal(inFolder("Tools / Code", "Tools"), true);
+  assert.equal(inFolder("Toolshed", "Tools"), false);
+  assert.deepEqual(orderFolders([{ id: "x", folder: "Tools / Code / Rust" }], []),
+    ["Tools", "Tools / Code", "Tools / Code / Rust"]);
+});
 
 test("old settings (folder names only): folders first, then loose feeds in their order", () => {
   assert.deepEqual(topLevel(feeds, ["News"]), [F("News"), F("Blogs"), S("a"), S("c")]);
