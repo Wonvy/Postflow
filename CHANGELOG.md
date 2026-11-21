@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.42 — 2026-11-22
+
+### English
+
 - Organize subscriptions into nested groups: right-click a group to create a subgroup. Parent groups include articles and unread counts from their subgroups; deleting a group keeps its feeds and moves its subgroups up. OPML import and export preserve the hierarchy.
 - Subscription views now default to a column. Right-click anywhere in the views area to change the layout or choose which views to show. The redundant feeds heading is gone.
 - Subscribing and unsubscribing show progress and a result, including errors; repeated unsubscribe clicks no longer send duplicate requests.
