@@ -147,7 +147,7 @@ function Row({
   /** 邮箱里的文件夹按层级往里缩：第 1 层和订阅源一样缩一格。 */
   depth?: number;
   leading: ReactNode;
-  label: string;
+  label: ReactNode;
   /** 可选的悬停说明。 */
   title?: string;
   trailing?: ReactNode;
@@ -365,6 +365,65 @@ function AccountRow({
   const label = account.name || account.email;
   const needsPassword = account.error_code === "mail_no_password";
   const provider = providerOf(account, presets.data);
+  const qc = useQueryClient();
+  const [editingName, setEditingName] = useState(false);
+  const [name, setName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const savingNameRef = useRef(false);
+  const cancelNameRef = useRef(false);
+  const nameReadyRef = useRef(false);
+  const renameFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (!editingName) return;
+    // 菜单关闭时会恢复焦点；等它关闭后再选中名称。
+    const timer = setTimeout(() => {
+      nameInput.current?.focus();
+      nameInput.current?.select();
+      nameReadyRef.current = true;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [editingName]);
+
+  const rename = () => {
+    renameFocusRef.current = true;
+    cancelNameRef.current = false;
+    nameReadyRef.current = false;
+    setName(account.name || account.email);
+    setEditingName(true);
+  };
+  const keepRenameFocus = (e: Event) => {
+    if (renameFocusRef.current) {
+      e.preventDefault();
+      renameFocusRef.current = false;
+    }
+  };
+  const saveName = async () => {
+    if (cancelNameRef.current || savingNameRef.current) return;
+    const next = name.trim();
+    if (next === account.name || (!next && !account.name)) {
+      setEditingName(false);
+      return;
+    }
+    savingNameRef.current = true;
+    setSavingName(true);
+    try {
+      const updated = await api.updateAccount(account.id, { name: next });
+      qc.setQueryData<Nav>(keys.nav, (old) => old ? {
+        ...old,
+        accounts: old.accounts.map((a) => a.id === account.id ? { ...a, name: updated.name } : a),
+      } : old);
+      setEditingName(false);
+      void qc.invalidateQueries({ queryKey: keys.nav });
+      toast(t("account.renamed"));
+    } catch (err) {
+      toast(t("account.renameFailed", { error: errorText(t, err) }));
+    } finally {
+      savingNameRef.current = false;
+      setSavingName(false);
+    }
+  };
 
   const items = (
     <>
@@ -375,6 +434,9 @@ function AccountRow({
       </MenuItem>
       <MenuItem icon={<SquarePen size={14} />} onSelect={() => setDialog({ type: "compose", mode: "new", accountId: account.id })}>
         {t("compose.fromAccount")}
+      </MenuItem>
+      <MenuItem icon={<Pencil size={14} />} onSelect={rename}>
+        {t("account.rename")}
       </MenuItem>
       <MenuItem icon={<Pencil size={14} />} onSelect={() => setDialog({ type: "edit-account", accountId: account.id })}>
         {t("action.accountSettings")}
@@ -398,11 +460,11 @@ function AccountRow({
 
   return (
     <>
-      <ContextMenu items={items}>
+      <ContextMenu items={items} onCloseAutoFocus={keepRenameFocus}>
         <Row
           active={active}
           onClick={() => setScope({ kind: "account", accountId: account.id })}
-          drag={drag}
+          drag={editingName ? undefined : drag}
           drop={drop}
           title={label.trim().toLowerCase() === account.email.trim().toLowerCase() ? undefined : account.email}
           leading={
@@ -412,10 +474,27 @@ function AccountRow({
               <Avatar name={label} seed={account.email} />
             )
           }
-          label={label}
+          label={editingName ? (
+            <input
+              ref={nameInput}
+              aria-label={t("account.name")}
+              value={name}
+              disabled={savingName}
+              onChange={(e) => setName(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") { e.preventDefault(); void saveName(); }
+                if (e.key === "Escape") { e.preventDefault(); cancelNameRef.current = true; setEditingName(false); }
+              }}
+              onBlur={() => { if (nameReadyRef.current) void saveName(); }}
+              className="h-6 w-full rounded border border-accent bg-bg px-1 text-[13px] text-fg outline-none"
+            />
+          ) : label}
           trailing={
             <>
-              <button
+              {!editingName && <button
                 type="button"
                 aria-label={expanded ? t("folders.hide") : t("folders.show")}
                 aria-expanded={expanded}
@@ -431,8 +510,8 @@ function AccountRow({
                 )}
               >
                 <ChevronRight size={13} strokeWidth={2} className={cx("transition-transform", expanded && "rotate-90")} />
-              </button>
-              {account.error_code ? (
+              </button>}
+              {!editingName && (account.error_code ? (
                 <Tip
                   label={
                     needsPassword
@@ -460,9 +539,11 @@ function AccountRow({
                 <span className="group-hover:hidden group-has-[[data-state=open]]:hidden">
                   <Count n={account.unread} />
                 </span>
-              )}
+              ))}
+              {!editingName && (
               <Menu
                 align="start"
+                onCloseAutoFocus={keepRenameFocus}
                 trigger={
                   <button
                     type="button"
@@ -477,6 +558,8 @@ function AccountRow({
               >
                 {items}
               </Menu>
+              )}
+              {savingName && <Spinner size={13} />}
             </>
           }
         />

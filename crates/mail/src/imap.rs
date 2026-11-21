@@ -164,6 +164,7 @@ pub enum IdleOutcome {
 pub(crate) enum Stream {
     Plain(TcpStream),
     Tls(Box<TlsStream<TcpStream>>),
+    NativeTls(Box<tokio_native_tls::TlsStream<TcpStream>>),
 }
 
 impl fmt::Debug for Stream {
@@ -171,6 +172,7 @@ impl fmt::Debug for Stream {
         f.write_str(match self {
             Stream::Plain(_) => "Stream::Plain",
             Stream::Tls(_) => "Stream::Tls",
+            Stream::NativeTls(_) => "Stream::NativeTls",
         })
     }
 }
@@ -184,6 +186,7 @@ impl AsyncRead for Stream {
         match self.get_mut() {
             Stream::Plain(s) => Pin::new(s).poll_read(cx, buf),
             Stream::Tls(s) => Pin::new(s.as_mut()).poll_read(cx, buf),
+            Stream::NativeTls(s) => Pin::new(s.as_mut()).poll_read(cx, buf),
         }
     }
 }
@@ -197,6 +200,7 @@ impl AsyncWrite for Stream {
         match self.get_mut() {
             Stream::Plain(s) => Pin::new(s).poll_write(cx, buf),
             Stream::Tls(s) => Pin::new(s.as_mut()).poll_write(cx, buf),
+            Stream::NativeTls(s) => Pin::new(s.as_mut()).poll_write(cx, buf),
         }
     }
 
@@ -204,6 +208,7 @@ impl AsyncWrite for Stream {
         match self.get_mut() {
             Stream::Plain(s) => Pin::new(s).poll_flush(cx),
             Stream::Tls(s) => Pin::new(s.as_mut()).poll_flush(cx),
+            Stream::NativeTls(s) => Pin::new(s.as_mut()).poll_flush(cx),
         }
     }
 
@@ -211,6 +216,7 @@ impl AsyncWrite for Stream {
         match self.get_mut() {
             Stream::Plain(s) => Pin::new(s).poll_shutdown(cx),
             Stream::Tls(s) => Pin::new(s.as_mut()).poll_shutdown(cx),
+            Stream::NativeTls(s) => Pin::new(s.as_mut()).poll_shutdown(cx),
         }
     }
 }
@@ -237,6 +243,33 @@ pub(crate) async fn upgrade(host: &str, tcp: TcpStream) -> Result<Stream> {
         .await
         .map_err(|e| Error::Tls(e.to_string()))?;
     Ok(Stream::Tls(Box::new(tls)))
+}
+
+/// 新浪的 IMAP 只提供 DHE 密钥交换，rustls 不支持；使用系统 TLS，仍验证证书和主机名。
+fn needs_native_imap_tls(host: &str) -> bool {
+    matches!(
+        host.trim_end_matches('.').to_ascii_lowercase().as_str(),
+        "imap.sina.com"
+            | "imap.sina.cn"
+            | "imap.vip.sina.com"
+            | "imap.vip.sina.cn"
+            | "imap.sina.com.cn"
+    )
+}
+
+async fn upgrade_imap(host: &str, tcp: TcpStream) -> Result<Stream> {
+    if !needs_native_imap_tls(host) {
+        return upgrade(host, tcp).await;
+    }
+    let connector = native_tls::TlsConnector::builder()
+        .min_protocol_version(Some(native_tls::Protocol::Tlsv12))
+        .build()
+        .map_err(|e| Error::Tls(e.to_string()))?;
+    let tls = tokio_native_tls::TlsConnector::from(connector)
+        .connect(host.trim_end_matches('.'), tcp)
+        .await
+        .map_err(|e| Error::Tls(e.to_string()))?;
+    Ok(Stream::NativeTls(Box::new(tls)))
 }
 
 async fn timed<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
@@ -297,7 +330,7 @@ impl Connection {
             let _ = tcp.set_nodelay(true);
 
             let stream = match cfg.security {
-                Security::Tls => upgrade(host, tcp).await?,
+                Security::Tls => upgrade_imap(host, tcp).await?,
                 Security::None => Stream::Plain(tcp),
                 Security::Starttls => {
                     let mut client = Client::new(Stream::Plain(tcp));
@@ -306,7 +339,7 @@ impl Connection {
                     let Stream::Plain(tcp) = client.into_inner() else {
                         unreachable!("the stream was created as plain text above");
                     };
-                    upgrade(host, tcp).await?
+                    upgrade_imap(host, tcp).await?
                 }
             };
             let mut client = Client::new(stream);
@@ -1109,6 +1142,46 @@ fn structure_attachments(bs: &BodyStructure<'_>) -> Vec<crate::AttachmentInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_tls_is_limited_to_sina_imap_hosts() {
+        for host in [
+            "imap.sina.cn",
+            "IMAP.SINA.COM",
+            "imap.vip.sina.cn",
+            "imap.vip.sina.com",
+            "imap.sina.com.cn.",
+        ] {
+            assert!(needs_native_imap_tls(host), "{host}");
+        }
+        for host in [
+            "smtp.sina.cn",
+            "imap.example.com",
+            "imap.sina.cn.example.com",
+        ] {
+            assert!(!needs_native_imap_tls(host), "{host}");
+        }
+    }
+
+    // 真实服务器兼容性检查，不需要邮箱账号或密码。
+    #[tokio::test]
+    #[ignore = "requires network access to Sina Mail"]
+    async fn sina_native_tls_accepts_valid_certificate_and_rejects_wrong_name() {
+        use tokio::io::AsyncReadExt;
+        let tcp = TcpStream::connect(("imap.sina.cn", 993)).await.unwrap();
+        let mut stream = upgrade_imap("imap.sina.cn", tcp).await.unwrap();
+        let mut greeting = [0; 256];
+        let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut greeting))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(greeting[..n].starts_with(b"* OK"));
+
+        let tcp = TcpStream::connect(("imap.sina.cn", 993)).await.unwrap();
+        let connector =
+            tokio_native_tls::TlsConnector::from(native_tls::TlsConnector::new().unwrap());
+        assert!(connector.connect("example.com", tcp).await.is_err());
+    }
 
     #[test]
     fn attachments_from_the_mail_structure() {

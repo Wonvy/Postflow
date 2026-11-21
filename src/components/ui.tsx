@@ -519,6 +519,7 @@ export function ContextMenu({
   bare,
   disabled,
   onContextMenu,
+  onCloseAutoFocus,
 }: {
   items: ReactNode;
   children: ReactNode;
@@ -526,6 +527,7 @@ export function ContextMenu({
   disabled?: boolean;
   /** 菜单打开前调用，可以在这里记下右键点在了什么上面。 */
   onContextMenu?: (e: MouseEvent) => void;
+  onCloseAutoFocus?: (e: Event) => void;
 }) {
   return (
     <Context.Root>
@@ -539,7 +541,7 @@ export function ContextMenu({
         )}
       </Context.Trigger>
       <Context.Portal>
-        <Context.Content onCloseAutoFocus={keepDialogFocus} className={MENU_CONTENT}>
+        <Context.Content onCloseAutoFocus={(e) => { keepDialogFocus(e); onCloseAutoFocus?.(e); }} className={MENU_CONTENT}>
           <MenuKind.Provider value="context">{items}</MenuKind.Provider>
         </Context.Content>
       </Context.Portal>
@@ -574,12 +576,14 @@ export function Menu({
   trigger,
   align = "start",
   hover = false,
+  onCloseAutoFocus,
   children,
 }: {
   trigger: ReactNode;
   align?: "start" | "end";
   /** 鼠标移上去就打开。 */
   hover?: boolean;
+  onCloseAutoFocus?: (e: Event) => void;
   children: ReactNode;
 }) {
   const hovering = useHoverOpen();
@@ -594,7 +598,7 @@ export function Menu({
         <Dropdown.Content
           align={align}
           sideOffset={4}
-          onCloseAutoFocus={keepDialogFocus}
+          onCloseAutoFocus={(e) => { keepDialogFocus(e); onCloseAutoFocus?.(e); }}
           className={MENU_CONTENT}
           {...hoverProps}
         >
