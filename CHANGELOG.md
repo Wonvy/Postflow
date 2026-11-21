@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.43 — 2026-11-22
+
+### English
+
 - Rename an email account directly from its sidebar menu: the name is editable in place, with Enter to save and Escape to cancel.
 - Fixed Sina Mail accounts failing to connect because their IMAP servers require a TLS cipher that the previous connection did not support. Certificate and hostname checks still apply.
 
