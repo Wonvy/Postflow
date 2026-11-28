@@ -445,7 +445,7 @@ export const useUi = create<UiState>()(
       groupModes: {},
       lockedLists: [],
       rememberViews: false,
-      focusPane: true,
+      focusPane: false,
       collapsedDates: [],
       spaceOpensHovered: true,
       skippedModels: [],

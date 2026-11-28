@@ -8,7 +8,11 @@ that heading into the version number and date.
 
 ### English
 
+- "Focus the column under the pointer" (fading the other two columns on hover) is now off by default and can be turned on in Settings → Appearance.
+
 ### 中文
+
+- 「聚焦鼠标所在的一栏」（悬停一栏时其余两栏变淡遮罩）改为默认关闭，可在「设置 → 外观」中手动开启。
 
 ## 0.1.45 — 2026-11-28
 
