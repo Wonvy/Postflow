@@ -270,6 +270,9 @@ interface UiState {
   /** 收到带验证码的邮件时，右下角弹出验证码（应用不在前台时发系统通知）。只在这台设备上。 */
   notifyCodes: boolean;
   setNotifyCodes: (on: boolean) => void;
+  /** 打开邮件时自动加载所有远程图片，不再拦截询问。只在这台设备上。 */
+  mailAllowRemoteImages: boolean;
+  setMailAllowRemoteImages: (on: boolean) => void;
   setNotifyVipOnly: (on: boolean) => void;
   /** 图标上显示收件箱的未读邮件数。 */
   badgeUnread: boolean;
@@ -545,6 +548,7 @@ export const useUi = create<UiState>()(
       notifyMail: true,
       notifyVipOnly: false,
       notifyCodes: false,
+      mailAllowRemoteImages: false,
       badgeUnread: true,
       senderLogos: true,
       toolbars: {},
@@ -674,6 +678,7 @@ export const useUi = create<UiState>()(
       setNotifyMail: (notifyMail) => set({ notifyMail }),
       setNotifyVipOnly: (notifyVipOnly) => set({ notifyVipOnly }),
       setNotifyCodes: (notifyCodes) => set({ notifyCodes }),
+      setMailAllowRemoteImages: (mailAllowRemoteImages) => set({ mailAllowRemoteImages }),
       setBadgeUnread: (badgeUnread) => set({ badgeUnread }),
       setSenderLogos: (senderLogos) => set({ senderLogos }),
       setToolbar: (id, layout) =>
@@ -805,6 +810,7 @@ export const useUi = create<UiState>()(
         notifyMail: s.notifyMail,
         notifyVipOnly: s.notifyVipOnly,
         notifyCodes: s.notifyCodes,
+        mailAllowRemoteImages: s.mailAllowRemoteImages,
         badgeUnread: s.badgeUnread,
         senderLogos: s.senderLogos,
         toolbars: s.toolbars,

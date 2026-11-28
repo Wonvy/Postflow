@@ -261,8 +261,9 @@ function interceptLinks(e: MouseEvent) {
 function Article({ id }: { id: string }) {
   const t = useT();
   const qc = useQueryClient();
+  const mailAllowRemoteImages = useUi((s) => s.mailAllowRemoteImages);
   const [allowRemote, setAllowRemote] = useState(false);
-  const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote);
+  const { data: item, isLoading, error, refetch, isFetching } = useItem(id, allowRemote || mailAllowRemoteImages);
   const { items, apply, toggle, openOriginal, openTargets, compose, deleteDrafts } = useActions();
   const fullscreenOn = useFullscreen((s) => s.on);
   // 「更多」里只放工具栏上没有的：用户把哪个按钮放回了工具栏，菜单里就不再重复

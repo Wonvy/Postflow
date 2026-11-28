@@ -14,6 +14,7 @@ import {
   type LucideIcon,
   Palette,
   Plus,
+  RotateCcw,
   Rss,
   SlidersHorizontal,
   Sparkles,
@@ -25,7 +26,7 @@ import { type ChangeEvent, type KeyboardEvent, type ReactNode, useEffect, useMem
 import CHANGELOG from "../../CHANGELOG.md?raw";
 import { api, type View } from "../lib/api";
 import { compareVersions, parseChangelog } from "../lib/changelog";
-import { ACCENT_PRESETS, accentKind, accentVars } from "../lib/accent";
+import { ACCENT_PRESETS, DEFAULT_ACCENT, PAPER_DEFAULT_ACCENT, accentKind, accentVars, parseHex } from "../lib/accent";
 import { errorText, type MessageKey, useLang, useT } from "../lib/i18n";
 import { copyText, exportOpml, formatSize, revealFolder } from "../lib/platform";
 import { isTauri } from "../lib/transport";
@@ -40,7 +41,7 @@ import { INTERVALS, intervalLabel } from "./FeedDialogs";
 import { AiSettings, CategorySettings, useAiProviders } from "./AiSettings";
 import { SettingRow, SettingsHeading } from "./SettingsParts";
 import { NotesSection } from "./UpdateDialog";
-import { Button, cx, Modal, Segmented, Select, Switch, TextInput, Tip } from "./ui";
+import { Button, cx, Modal, Segmented, Select, Switch, TextInput } from "./ui";
 import { StorageSettings } from "./StorageSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { RulesSettings } from "./RulesSettings";
@@ -88,6 +89,8 @@ export function SettingsDialog() {
   const notifyMail = useUi((s) => s.notifyMail);
   const notifyCodes = useUi((s) => s.notifyCodes);
   const setNotifyCodes = useUi((s) => s.setNotifyCodes);
+  const mailAllowRemoteImages = useUi((s) => s.mailAllowRemoteImages);
+  const setMailAllowRemoteImages = useUi((s) => s.setMailAllowRemoteImages);
   const setNotifyMail = useUi((s) => s.setNotifyMail);
   const badgeUnread = useUi((s) => s.badgeUnread);
   const senderLogos = useUi((s) => s.senderLogos);
@@ -211,9 +214,7 @@ export function SettingsDialog() {
             <Switch label={t("settings.paperGrain")} checked={paperGrain} onChange={setPaperGrain} />
           </SettingRow>
         )}
-        <SettingRow label={t("settings.accent")} hint={t("settings.accentHint")}>
-          <AccentPicker />
-        </SettingRow>
+        <AccentPicker />
         <SettingRow label={t("settings.density")}>
           <Segmented<Density>
             value={density}
@@ -301,6 +302,13 @@ export function SettingsDialog() {
         {notifyMail && <VipSettings />}
         <SettingRow label={t("settings.notifyCodes")} hint={t("settings.notifyCodesHint")}>
           <Switch label={t("settings.notifyCodes")} checked={notifyCodes} onChange={setNotifyCodes} />
+        </SettingRow>
+        <SettingRow label={t("settings.mailAllowRemoteImages")} hint={t("settings.mailAllowRemoteImagesHint")}>
+          <Switch
+            label={t("settings.mailAllowRemoteImages")}
+            checked={mailAllowRemoteImages}
+            onChange={setMailAllowRemoteImages}
+          />
         </SettingRow>
         <TemplateSettings />
         <SettingsHeading>{t("settings.groupApp")}</SettingsHeading>
@@ -918,13 +926,12 @@ function ShownViews({ space }: { space: Space }) {
   );
 }
 
-/** 主题色：几种预设的色块，最后一个是自己挑颜色。 */
+/** 主题强调色：参考 ShibaPlan 排版（5 列色卡网格 + 自定义 HEX 取色器 + 恢复默认）。 */
 function AccentPicker() {
   const t = useT();
   const choice = useUi((s) => s.accentColor);
   const setChoice = useUi((s) => s.setAccentColor);
   const theme = useUi((s) => s.theme);
-  // 色块用现在界面主题下的那个深浅，看到的就是用上以后的样子
   const resolvedTheme =
     theme === "system"
       ? typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: light)").matches
@@ -932,53 +939,96 @@ function AccentPicker() {
         : "dark"
       : theme;
   const kind = accentKind(choice);
-  const custom = kind === "custom" ? choice : "#5e6ad2";
-  const swatch = (selected: boolean) =>
-    cx(
-      "relative flex size-6 shrink-0 items-center justify-center rounded-full ring-offset-2 ring-offset-surface transition-shadow touch:size-9",
-      selected ? "ring-2 ring-fg-2" : "hover:ring-2 hover:ring-line-strong",
-    );
+  const defaultId = resolvedTheme === "paper" ? PAPER_DEFAULT_ACCENT : DEFAULT_ACCENT;
+  const activeHex = accentVars(choice, resolvedTheme).accent;
+  const [hexInput, setHexInput] = useState(activeHex);
+
+  useEffect(() => {
+    setHexInput(activeHex);
+  }, [activeHex]);
+
+  const pickerHex = parseHex(hexInput) ? (hexInput.trim().startsWith("#") ? hexInput.trim() : `#${hexInput.trim()}`) : activeHex;
+  const canReset = kind !== defaultId;
+
   return (
-    <div role="radiogroup" aria-label={t("settings.accent")} className="flex max-w-[300px] flex-wrap justify-end gap-1.5">
-      {ACCENT_PRESETS.map((p) => {
-        const color = accentVars(p.id, resolvedTheme).accent;
-        const selected = kind === p.id;
-        return (
-          <Tip key={p.id} label={t(`accent.${p.id}` as MessageKey)} side="top">
+    <div className="space-y-3 py-1">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[13px] font-medium text-fg">{t("settings.accent")}</div>
+          <div className="mt-0.5 text-[12px] leading-relaxed text-fg-3">{t("settings.accentHint")}</div>
+        </div>
+        {canReset && (
+          <Button type="button" variant="ghost" className="h-7 shrink-0 gap-1 px-2 text-[12px] text-fg-2" onClick={() => setChoice(defaultId)}>
+            <RotateCcw size={12} strokeWidth={2} />
+            {t("accent.reset")}
+          </Button>
+        )}
+      </div>
+
+      <div role="radiogroup" aria-label={t("settings.accent")} className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        {ACCENT_PRESETS.map((p) => {
+          const color = accentVars(p.id, resolvedTheme).accent;
+          const selected = kind === p.id;
+          const label = t(`accent.${p.id}` as MessageKey);
+          return (
             <button
+              key={p.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-label={t(`accent.${p.id}` as MessageKey)}
+              aria-label={label}
+              title={label}
               onClick={() => setChoice(p.id)}
-              className={swatch(selected)}
-              style={{ background: color }}
+              className={cx(
+                "flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] transition-colors touch:py-2.5",
+                selected ? "bg-active font-medium text-fg shadow-xs" : "bg-hover text-fg-2 hover:bg-active hover:text-fg",
+              )}
             >
-              {selected && <Check size={13} strokeWidth={3} className="text-white" />}
+              <span
+                className="flex size-4 shrink-0 items-center justify-center rounded-full shadow-inner"
+                style={{ background: color }}
+              >
+                {selected && <Check size={10} strokeWidth={3} className="text-white drop-shadow-xs" />}
+              </span>
+              <span className="truncate">{label}</span>
             </button>
-          </Tip>
-        );
-      })}
-      <Tip label={t("accent.custom")} side="top">
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-2.5 rounded-lg bg-hover p-2">
         <label
-          className={cx(swatch(kind === "custom"), "cursor-pointer overflow-hidden")}
-          style={{
-            background:
-              kind === "custom"
-                ? accentVars(choice, resolvedTheme).accent
-                : "conic-gradient(#f87171, #fb923c, #facc15, #4ade80, #2dd4bf, #60a5fa, #a25bff, #f472b6, #f87171)",
-          }}
+          className="relative flex h-7 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md shadow-xs"
+          style={{ background: pickerHex }}
+          title={t("accent.custom")}
         >
-          {kind === "custom" ? <Check size={13} strokeWidth={3} className="text-white" /> : <Plus size={13} strokeWidth={3} className="text-white" />}
           <input
             type="color"
             aria-label={t("accent.custom")}
-            value={custom}
-            onChange={(e) => setChoice(e.target.value)}
-            className="absolute inset-0 cursor-pointer opacity-0"
+            value={pickerHex}
+            onChange={(e) => {
+              setHexInput(e.target.value);
+              setChoice(e.target.value);
+            }}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
         </label>
-      </Tip>
+        <TextInput
+          type="text"
+          value={hexInput}
+          onChange={(e) => {
+            const v = e.target.value;
+            setHexInput(v);
+            if (parseHex(v)) {
+              const normalized = v.trim().startsWith("#") ? v.trim().toLowerCase() : `#${v.trim().toLowerCase()}`;
+              setChoice(normalized);
+            }
+          }}
+          placeholder="#0284c7"
+          className="h-7 flex-1 font-mono text-[12px]"
+        />
+        <span className="hidden pr-1 text-[12px] text-fg-3 sm:inline">{t("accent.custom")}</span>
+      </div>
     </div>
   );
 }

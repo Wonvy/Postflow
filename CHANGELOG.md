@@ -8,7 +8,13 @@ that heading into the version number and date.
 
 ### English
 
+- Added an "Always load remote mail images" option under Settings → General → Mail so external images in emails can load automatically without prompting.
+- Redesigned the Accent colour picker in Settings → Appearance as a labelled 5-column swatch grid with a custom HEX input, colour picker, and Reset button.
+
 ### 中文
+
+- 在「设置 → 通用 → 邮件」中新增「允许加载所有邮箱图片」开关，开启后打开邮件时自动加载远程图片，不再拦截询问。
+- 优化「设置 → 外观 → 主题色」排版为 5 列带名称的色卡网格，并配备自定义 HEX 取色器与「恢复默认」按钮。
 
 ## 0.1.47 — 2026-11-28
 
