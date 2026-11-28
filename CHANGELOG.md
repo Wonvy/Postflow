@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.45 — 2026-11-28
+
+### English
+
 - Updated the accent colour presets to a 9-colour palette (Linear indigo, Deep indigo, Violet, Sky blue, Emerald, Amber, Terracotta, Rose, and Slate) tuned for contrast across Dark, Light, and Paper themes, with automatic migration from previous preset selections.
 
 ### 中文
