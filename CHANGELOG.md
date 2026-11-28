@@ -8,7 +8,11 @@ that heading into the version number and date.
 
 ### English
 
+- Preset accent colours now keep their exact palette hex values across Dark, Light, and Paper themes instead of being darkened on Paper (Sky blue `#0284c7`, Amber `#f59e0b`, Terracotta `#ea580c`, etc.).
+
 ### 中文
+
+- 主题强调色预设不再在纸张主题下自动压暗，完整保留原色值（晴空蓝 `#0284c7`、暖金琥珀 `#f59e0b`、赤陶橙 `#ea580c` 等）。
 
 ## 0.1.46 — 2026-11-28
 

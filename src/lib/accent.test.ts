@@ -4,27 +4,23 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ACCENT_PRESETS, DEFAULT_ACCENT, PAPER_DEFAULT_ACCENT, accentKind, accentVars, contrast, parseHex } from "./accent.ts";
 
-test("every preset reads well on all themes", () => {
+test("every preset keeps its exact configured colour across themes", () => {
   for (const p of ACCENT_PRESETS) {
-    assert.ok(contrast(p.light, "#ffffff") >= 4.5, `${p.id} light ${contrast(p.light, "#ffffff")}`);
-    assert.ok(contrast(p.dark, "#0f1012") >= 4.5, `${p.id} dark ${contrast(p.dark, "#0f1012")}`);
-    const paper = accentVars(p.id, "paper").accent;
-    assert.ok(
-      contrast(paper, "#f1ece2") >= 4.5 && contrast(paper, "#eae3d7") >= 4.5,
-      `${p.id} paper ${paper} (${contrast(paper, "#eae3d7")})`,
-    );
+    assert.equal(accentVars(p.id, "light").accent, p.light);
+    assert.equal(accentVars(p.id, "dark").accent, p.dark);
+    assert.equal(accentVars(p.id, "paper").accent, p.light);
   }
 });
 
 test("defaults and legacy preset ids resolve properly", () => {
-  assert.equal(accentVars(DEFAULT_ACCENT, "light").accent, "#5a66d1");
-  assert.equal(accentVars(DEFAULT_ACCENT, "dark").accent, "#7580de");
-  assert.equal(accentVars(PAPER_DEFAULT_ACCENT, "paper").accent, "#026a9f");
+  assert.equal(accentVars(DEFAULT_ACCENT, "light").accent, "#5e6ad2");
+  assert.equal(accentVars(DEFAULT_ACCENT, "dark").accent, "#5e6ad2");
+  assert.equal(accentVars(PAPER_DEFAULT_ACCENT, "paper").accent, "#0284c7");
   // 旧预设 ID 平滑映射
   assert.equal(accentKind("postflow"), "violet");
   assert.equal(accentKind("graphite"), "slate");
   // 认不出的当作默认
-  assert.equal(accentVars("nonsense", "dark").accent, "#7580de");
+  assert.equal(accentVars("nonsense", "dark").accent, "#5e6ad2");
   assert.equal(accentKind("nonsense"), DEFAULT_ACCENT);
 });
 

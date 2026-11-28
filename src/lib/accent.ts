@@ -10,17 +10,17 @@ export interface AccentPreset {
   dark: string;
 }
 
-/** 预设（参考 ShibaPlan 9 色板：Linear 靛蓝、深靛青、紫罗兰、晴空蓝、青黛绿、暖金琥珀、赤陶橙、绯红、墨灰）。 */
+/** 预设（与 ShibaPlan 9 色板完全一致的精确色值）。 */
 export const ACCENT_PRESETS: AccentPreset[] = [
-  { id: "linear", light: "#5a66d1", dark: "#7580de" },
-  { id: "indigo", light: "#4f46e5", dark: "#756eeb" },
-  { id: "violet", light: "#7c3aed", dark: "#9a66f5" },
-  { id: "sky", light: "#0277b3", dark: "#38bdf8" },
-  { id: "emerald", light: "#04825b", dark: "#10b981" },
-  { id: "amber", light: "#9e6506", dark: "#f59e0b" },
-  { id: "orange", light: "#c3490a", dark: "#f97316" },
-  { id: "rose", light: "#dc1c47", dark: "#f43f5e" },
-  { id: "slate", light: "#52525b", dark: "#9494a0" },
+  { id: "linear", light: "#5e6ad2", dark: "#5e6ad2" },
+  { id: "indigo", light: "#4f46e5", dark: "#4f46e5" },
+  { id: "violet", light: "#7c3aed", dark: "#7c3aed" },
+  { id: "sky", light: "#0284c7", dark: "#0284c7" },
+  { id: "emerald", light: "#059669", dark: "#059669" },
+  { id: "amber", light: "#f59e0b", dark: "#f59e0b" },
+  { id: "orange", light: "#ea580c", dark: "#ea580c" },
+  { id: "rose", light: "#e11d48", dark: "#e11d48" },
+  { id: "slate", light: "#52525b", dark: "#52525b" },
 ];
 
 export const DEFAULT_ACCENT = "linear";
@@ -142,19 +142,19 @@ export function accentVars(choice: string, theme: ResolvedTheme): AccentVars {
   const polarity = theme === "dark" ? "dark" : "light";
   const resolvedId = resolvePresetId(choice);
   const preset = ACCENT_PRESETS.find((p) => p.id === resolvedId);
+  const isCustom = !preset && Boolean(parseHex(choice));
   const base = preset
     ? preset[polarity]
-    : parseHex(choice)
+    : isCustom
       ? choice.toLowerCase()
       : (ACCENT_PRESETS[0] as AccentPreset)[polarity];
-  const accent =
-    theme === "paper"
+  const accent = isCustom
+    ? theme === "paper"
       ? adjust(base, [PAPER_BG, PAPER_SIDEBAR], -0.01)
-      : preset
-        ? base
-        : theme === "light"
-          ? adjust(base, [LIGHT_BG, LIGHT_SIDEBAR], -0.01)
-          : adjust(base, [DARK_BG], 0.01);
+      : theme === "light"
+        ? adjust(base, [LIGHT_BG, LIGHT_SIDEBAR], -0.01)
+        : adjust(base, [DARK_BG], 0.01)
+    : base;
   const rgb = parseHex(accent) ?? [0, 0, 0];
   return {
     accent,

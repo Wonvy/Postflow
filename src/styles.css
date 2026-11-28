@@ -21,10 +21,10 @@
   --fg-2: #a3a6ad;
   --fg-3: #6f737b;
   --fg-4: #4a4d54;
-  /* 默认强调色（Linear 靛蓝），深色界面用更亮的一头 */
-  --accent: #7580de;
-  --accent-strong: #626ed9;
-  --accent-soft: rgb(117 128 222 / 0.16);
+  /* 默认强调色（Linear 靛蓝 #5e6ad2） */
+  --accent: #5e6ad2;
+  --accent-strong: #4b57c8;
+  --accent-soft: rgb(94 106 210 / 0.16);
   --danger: #e5646a;
   --warning: #d9a03f;
   --overlay: rgb(0 0 0 / 0.55);
@@ -46,10 +46,10 @@
   --fg-2: #5d6068;
   --fg-3: #8b8e96;
   --fg-4: #b9bbc1;
-  /* 浅色界面默认强调色（Linear 靛蓝） */
-  --accent: #5a66d1;
-  --accent-strong: #4351c9;
-  --accent-soft: rgb(90 102 209 / 0.1);
+  /* 浅色界面默认强调色（Linear 靛蓝 #5e6ad2） */
+  --accent: #5e6ad2;
+  --accent-strong: #4b57c8;
+  --accent-soft: rgb(94 106 210 / 0.1);
   --danger: #c93f46;
   --warning: #b07a16;
   --overlay: rgb(0 0 0 / 0.3);
@@ -71,10 +71,10 @@
   --fg-2: #5d5146;
   --fg-3: #837669;
   --fg-4: #afa396;
-  /* 纸张质感默认用晴空蓝，在暖纸主背景与侧栏上保持足够对比度 */
-  --accent: #026a9f;
-  --accent-strong: #025682;
-  --accent-soft: rgb(2 106 159 / 0.11);
+  /* 纸张质感默认用晴空蓝 #0284c7 */
+  --accent: #0284c7;
+  --accent-strong: #026fa7;
+  --accent-soft: rgb(2 132 199 / 0.11);
   --danger: #b83b3b;
   --warning: #9e6a14;
   --overlay: rgb(44 36 30 / 0.34);
