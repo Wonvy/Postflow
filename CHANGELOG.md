@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.50 — 2026-11-28
+
+### English
+
 - Rebranded the project as **ShibaPost** (including app identifiers, URL scheme `shibapost://`, package/crate names, documentation, and repository URLs).
 
 ### 中文

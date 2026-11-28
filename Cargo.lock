@@ -5255,7 +5255,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-ai"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "reqwest",
  "serde",
@@ -5269,7 +5269,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-core"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "axum",
  "futures",
@@ -5296,7 +5296,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-desktop"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "local-ip-address",
  "serde",
@@ -5318,7 +5318,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-feed"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "ammonia",
  "bytes",
@@ -5338,7 +5338,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-mail"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "ammonia",
  "async-imap",
@@ -5365,7 +5365,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-speech"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "axum",
  "opus-decoder",
@@ -5385,7 +5385,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-store"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "rand",
  "rusqlite",
@@ -5398,7 +5398,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-testkit"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "serde_json",
  "sha2 0.11.1",
@@ -5407,7 +5407,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-translate"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "axum",
  "flate2",
@@ -5425,7 +5425,7 @@ dependencies = [
 
 [[package]]
 name = "shibapost-web"
-version = "0.1.49"
+version = "0.1.50"
 dependencies = [
  "axum",
  "futures",
