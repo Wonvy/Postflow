@@ -8,7 +8,11 @@ that heading into the version number and date.
 
 ### English
 
+- Added a Paper theme with warm archival stationery colours, a toggleable subtle matte paper grain texture, and a new Sky blue accent preset (used by default on the Paper theme).
+
 ### 中文
+
+- 新增「纸张」质感主题：采用温润的档案纸配色与可开关的细微哑光纤维颗粒纹理，并新增「晴空蓝」主题色预设（纸张主题默认使用晴空蓝）。
 
 ## 0.1.43 — 2026-11-22
 

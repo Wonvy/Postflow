@@ -2,18 +2,24 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACCENT_PRESETS, accentKind, accentVars, contrast, parseHex } from "./accent.ts";
+import { ACCENT_PRESETS, PAPER_DEFAULT_ACCENT, accentKind, accentVars, contrast, parseHex } from "./accent.ts";
 
-test("every preset reads well on both themes", () => {
+test("every preset reads well on all themes", () => {
   for (const p of ACCENT_PRESETS) {
     assert.ok(contrast(p.light, "#ffffff") >= 4.5, `${p.id} light ${contrast(p.light, "#ffffff")}`);
     assert.ok(contrast(p.dark, "#0f1012") >= 4.5, `${p.id} dark ${contrast(p.dark, "#0f1012")}`);
+    const paper = accentVars(p.id, "paper").accent;
+    assert.ok(
+      contrast(paper, "#f1ece2") >= 4.5 && contrast(paper, "#eae3d7") >= 4.5,
+      `${p.id} paper ${paper} (${contrast(paper, "#eae3d7")})`,
+    );
   }
 });
 
 test("the default matches the logo", () => {
   assert.equal(accentVars("postflow", "light").accent, "#7533e8");
   assert.equal(accentVars("postflow", "dark").accent, "#a25bff");
+  assert.equal(accentVars(PAPER_DEFAULT_ACCENT, "paper").accent, "#026a9f");
   // 认不出的当作默认
   assert.equal(accentVars("nonsense", "dark").accent, "#a25bff");
   assert.equal(accentKind("nonsense"), "postflow");

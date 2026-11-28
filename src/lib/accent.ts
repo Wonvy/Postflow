@@ -15,6 +15,7 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { id: "postflow", light: "#7533e8", dark: "#a25bff" },
   { id: "indigo", light: "#5661c8", dark: "#7b86e2" },
   { id: "blue", light: "#2563eb", dark: "#60a5fa" },
+  { id: "sky", light: "#0277b3", dark: "#38bdf8" },
   { id: "teal", light: "#0f766e", dark: "#2dd4bf" },
   { id: "green", light: "#15803d", dark: "#4ade80" },
   { id: "orange", light: "#c2410c", dark: "#fb923c" },
@@ -24,10 +25,14 @@ export const ACCENT_PRESETS: AccentPreset[] = [
 ];
 
 export const DEFAULT_ACCENT = "postflow";
+/** 纸张质感主题默认使用晴空蓝。 */
+export const PAPER_DEFAULT_ACCENT = "sky";
 
-/** 浅色、深色界面的背景（和 styles.css 里的 --bg 一样），用来算对比度。 */
+/** 浅色、深色、纸张界面的背景（和 styles.css 里的 --bg / --bg-sidebar 一样），用来算对比度。 */
 const LIGHT_BG = "#ffffff";
 const LIGHT_SIDEBAR = "#f7f7f8";
+const PAPER_BG = "#f1ece2";
+const PAPER_SIDEBAR = "#eae3d7";
 const DARK_BG = "#0f1012";
 const MIN_CONTRAST = 4.5;
 
@@ -116,20 +121,30 @@ export interface AccentVars {
   soft: string;
 }
 
+export type ResolvedTheme = "light" | "dark" | "paper";
+
 /** 选的主题色（预设的 ID，或者 #rrggbb）在这个界面主题下的几个颜色。认不出的当作默认。 */
-export function accentVars(choice: string, theme: "light" | "dark"): AccentVars {
+export function accentVars(choice: string, theme: ResolvedTheme): AccentVars {
+  const polarity = theme === "dark" ? "dark" : "light";
   const preset = ACCENT_PRESETS.find((p) => p.id === choice);
-  const base = preset ? preset[theme] : parseHex(choice) ? choice.toLowerCase() : (ACCENT_PRESETS[0] as AccentPreset)[theme];
-  const accent = preset
-    ? base
-    : theme === "light"
-      ? adjust(base, [LIGHT_BG, LIGHT_SIDEBAR], -0.01)
-      : adjust(base, [DARK_BG], 0.01);
+  const base = preset
+    ? preset[polarity]
+    : parseHex(choice)
+      ? choice.toLowerCase()
+      : (ACCENT_PRESETS[0] as AccentPreset)[polarity];
+  const accent =
+    theme === "paper"
+      ? adjust(base, [PAPER_BG, PAPER_SIDEBAR], -0.01)
+      : preset
+        ? base
+        : theme === "light"
+          ? adjust(base, [LIGHT_BG, LIGHT_SIDEBAR], -0.01)
+          : adjust(base, [DARK_BG], 0.01);
   const rgb = parseHex(accent) ?? [0, 0, 0];
   return {
     accent,
     strong: shade(accent, -0.06),
-    soft: `rgb(${rgb.join(" ")} / ${theme === "light" ? 0.1 : 0.16})`,
+    soft: `rgb(${rgb.join(" ")} / ${theme === "dark" ? 0.16 : theme === "paper" ? 0.11 : 0.1})`,
   };
 }
 

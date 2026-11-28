@@ -34,6 +34,7 @@
           theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
         }
         document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.grain = saved.paperGrain === false ? "off" : "on";
       } catch (e) {}
     </script>
   </head>

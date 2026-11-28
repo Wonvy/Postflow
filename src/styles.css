@@ -57,6 +57,31 @@
   --shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 30px rgb(0 0 0 / 0.14);
 }
 
+/* 纸张质感（参考 ShibaPlan Warm Archival Stationery：暖档案纸底色、深棕墨字、暖褐细边线与阴影） */
+[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #f1ece2;
+  --bg-sidebar: #eae3d7;
+  --surface: #faf7f0;
+  --hover: rgb(78 58 38 / 0.055);
+  --active: rgb(78 58 38 / 0.1);
+  --line: rgb(78 58 38 / 0.12);
+  --line-strong: rgb(78 58 38 / 0.2);
+  --fg: #2c241e;
+  --fg-2: #5d5146;
+  --fg-3: #837669;
+  --fg-4: #afa396;
+  /* 纸张质感默认用晴空蓝，在暖纸主背景与侧栏上保持足够对比度 */
+  --accent: #026a9f;
+  --accent-strong: #025682;
+  --accent-soft: rgb(2 106 159 / 0.11);
+  --danger: #b83b3b;
+  --warning: #9e6a14;
+  --overlay: rgb(44 36 30 / 0.34);
+  --overlay-reader: rgb(44 36 30 / 0.5);
+  --shadow-pop: 0 0 0 1px rgb(94 72 48 / 0.14), 0 10px 32px rgb(62 46 30 / 0.16);
+}
+
 @theme inline {
   --font-sans:
     "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
@@ -170,6 +195,19 @@
   ::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+/* 纸张主题的细微哑光纤维颗粒层（与 ShibaPlan 同款 SVG fractalNoise 纹理，可独立关闭） */
+[data-theme="paper"][data-grain="on"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+  background-size: 180px 180px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.55'/%3E%3C/svg%3E");
 }
 
 @utility tabular {
@@ -565,7 +603,8 @@
   --spk-6: #f5c84c;
   --spk-7: #d6a77a;
 }
-[data-theme="light"] {
+[data-theme="light"],
+[data-theme="paper"] {
   --spk-0: #1d6bd6;
   --spk-1: #d4500f;
   --spk-2: #2b8a3e;

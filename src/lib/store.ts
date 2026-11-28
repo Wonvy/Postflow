@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_ACCENT, PAPER_DEFAULT_ACCENT } from "./accent";
 import type { ContentKind, ItemFilter, ItemKind, View } from "./api";
 import type { ComposeMode } from "./compose";
 import type { GroupMode } from "./grouping";
@@ -23,7 +24,7 @@ export type ListScope =
   /** 订阅里的一个 Newsletter 发件人（放到订阅里看的订阅邮件）。 */
   | { kind: "newsletter"; address: string };
 
-export type ThemePref = "system" | "dark" | "light";
+export type ThemePref = "system" | "dark" | "light" | "paper";
 /** 列表的显示方式：一行一条、带摘要和缩略图、卡片。 */
 export type ListView = "list" | "summary" | "cards";
 
@@ -159,6 +160,9 @@ interface UiState {
 
   // 以下是这台设备上的界面偏好，存在浏览器本地
   theme: ThemePref;
+  /** 纸张主题下叠加细微的哑光纤维颗粒。只存在这台设备上。 */
+  paperGrain: boolean;
+  setPaperGrain: (on: boolean) => void;
   /** 主题色：预设的 ID（见 accent.ts），或者自己挑的 #rrggbb。只存在这台设备上。 */
   accentColor: string;
   setAccentColor: (color: string) => void;
@@ -423,6 +427,7 @@ export const useUi = create<UiState>()(
       searchFocus: 0,
 
       theme: "system",
+      paperGrain: true,
       accentColor: "postflow",
       density: "compact",
       lang: "system",
@@ -625,7 +630,13 @@ export const useUi = create<UiState>()(
             ? [...new Set([...s.expandedGroups, key])]
             : s.expandedGroups.filter((k) => k !== key),
         })),
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) =>
+        set((s) =>
+          theme === "paper" && s.theme !== "paper" && s.accentColor === DEFAULT_ACCENT
+            ? { theme, accentColor: PAPER_DEFAULT_ACCENT }
+            : { theme },
+        ),
+      setPaperGrain: (paperGrain) => set({ paperGrain }),
       setAccentColor: (accentColor) => set({ accentColor }),
       setDensity: (density) => set({ density }),
       setLang: (lang) => set({ lang }),
@@ -743,6 +754,7 @@ export const useUi = create<UiState>()(
       },
       partialize: (s) => ({
         theme: s.theme,
+        paperGrain: s.paperGrain,
         accentColor: s.accentColor,
         density: s.density,
         lang: s.lang,

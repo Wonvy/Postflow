@@ -81,6 +81,8 @@ export function SettingsDialog() {
   const setDialog = useUi((s) => s.setDialog);
   const theme = useUi((s) => s.theme);
   const setTheme = useUi((s) => s.setTheme);
+  const paperGrain = useUi((s) => s.paperGrain);
+  const setPaperGrain = useUi((s) => s.setPaperGrain);
   const density = useUi((s) => s.density);
   const setDensity = useUi((s) => s.setDensity);
   const notifyMail = useUi((s) => s.notifyMail);
@@ -200,9 +202,15 @@ export function SettingsDialog() {
               { value: "system", label: t("settings.themeSystem") },
               { value: "dark", label: t("settings.themeDark") },
               { value: "light", label: t("settings.themeLight") },
+              { value: "paper", label: t("settings.themePaper") },
             ]}
           />
         </SettingRow>
+        {theme === "paper" && (
+          <SettingRow label={t("settings.paperGrain")} hint={t("settings.paperGrainHint")}>
+            <Switch label={t("settings.paperGrain")} checked={paperGrain} onChange={setPaperGrain} />
+          </SettingRow>
+        )}
         <SettingRow label={t("settings.accent")} hint={t("settings.accentHint")}>
           <AccentPicker />
         </SettingRow>
@@ -917,8 +925,12 @@ function AccentPicker() {
   const setChoice = useUi((s) => s.setAccentColor);
   const theme = useUi((s) => s.theme);
   // 色块用现在界面主题下的那个深浅，看到的就是用上以后的样子
-  const dark =
-    theme === "dark" || (theme === "system" && typeof matchMedia === "function" && !matchMedia("(prefers-color-scheme: light)").matches);
+  const resolvedTheme =
+    theme === "system"
+      ? typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark"
+      : theme;
   const kind = accentKind(choice);
   const custom = kind === "custom" ? choice : "#7533e8";
   const swatch = (selected: boolean) =>
@@ -929,7 +941,7 @@ function AccentPicker() {
   return (
     <div role="radiogroup" aria-label={t("settings.accent")} className="flex max-w-[300px] flex-wrap justify-end gap-1.5">
       {ACCENT_PRESETS.map((p) => {
-        const color = dark ? p.dark : p.light;
+        const color = accentVars(p.id, resolvedTheme).accent;
         const selected = kind === p.id;
         return (
           <Tip key={p.id} label={t(`accent.${p.id}` as MessageKey)} side="top">
@@ -953,7 +965,7 @@ function AccentPicker() {
           style={{
             background:
               kind === "custom"
-                ? accentVars(choice, dark ? "dark" : "light").accent
+                ? accentVars(choice, resolvedTheme).accent
                 : "conic-gradient(#f87171, #fb923c, #facc15, #4ade80, #2dd4bf, #60a5fa, #a25bff, #f472b6, #f87171)",
           }}
         >

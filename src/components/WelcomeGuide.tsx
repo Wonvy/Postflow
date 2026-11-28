@@ -145,6 +145,7 @@ function Hello() {
               { value: "system", label: t("settings.themeSystem") },
               { value: "dark", label: t("settings.themeDark") },
               { value: "light", label: t("settings.themeLight") },
+              { value: "paper", label: t("settings.themePaper") },
             ]}
           />
         </Row>
