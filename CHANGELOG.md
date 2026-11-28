@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.49 — 2026-11-28
+
+### English
+
 - Fixed an issue where clicking the tray icon after closing the window could fail to bring the window back once the reader's original web page mode had been used, and also kept edge auto-hide working in that state.
 
 ### 中文
