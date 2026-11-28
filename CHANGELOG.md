@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.44 — 2026-11-28
+
+### English
+
 - Added a Paper theme with warm archival stationery colours, a toggleable subtle matte paper grain texture, and a new Sky blue accent preset (used by default on the Paper theme).
 
 ### 中文
