@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.48 — 2026-11-28
+
+### English
+
 - Added an "Always load remote mail images" option under Settings → General → Mail so external images in emails can load automatically without prompting.
 - Redesigned the Accent colour picker in Settings → Appearance as a labelled 5-column swatch grid with a custom HEX input, colour picker, and Reset button.
 
