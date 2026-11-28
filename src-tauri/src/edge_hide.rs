@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Manager, PhysicalPosition, Runtime, WebviewWindow};
+use tauri::{AppHandle, Manager, PhysicalPosition, Runtime, Window};
 
 /// 藏起来时露在屏幕里的宽度（逻辑像素）。
 const STRIP: f64 = 4.0;
@@ -148,7 +148,7 @@ fn over_window(win: Rect, scale: f64, cx: f64, cy: f64) -> bool {
     cx >= win.x - m && cx <= win.x + win.w + m && cy >= win.y - m && cy <= win.y + win.h + m
 }
 
-fn screens<R: Runtime>(window: &WebviewWindow<R>) -> Vec<(Area, f64)> {
+fn screens<R: Runtime>(window: &Window<R>) -> Vec<(Area, f64)> {
     window
         .available_monitors()
         .unwrap_or_default()
@@ -168,7 +168,7 @@ fn screens<R: Runtime>(window: &WebviewWindow<R>) -> Vec<(Area, f64)> {
         .collect()
 }
 
-fn rect<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
+fn rect<R: Runtime>(window: &Window<R>) -> Option<Rect> {
     let p = window.outer_position().ok()?;
     let s = window.outer_size().ok()?;
     Some(Rect {
@@ -179,7 +179,7 @@ fn rect<R: Runtime>(window: &WebviewWindow<R>) -> Option<Rect> {
     })
 }
 
-fn move_to<R: Runtime>(window: &WebviewWindow<R>, (x, y): (f64, f64)) -> (i32, i32) {
+fn move_to<R: Runtime>(window: &Window<R>, (x, y): (f64, f64)) -> (i32, i32) {
     let at = (x.round() as i32, y.round() as i32);
     let _ = window.set_position(PhysicalPosition::new(at.0, at.1));
     at
@@ -198,7 +198,8 @@ pub fn set_enabled<R: Runtime>(app: &AppHandle<R>, enabled: bool) {
 /// 窗口藏着的话拿出来（从托盘、程序坞、通知打开时）。拿出来以后鼠标进过窗口、再离开才会再藏。
 /// 正贴着边、鼠标刚离开、过一会儿就要藏的，也不藏了：用户刚从托盘把它叫出来，鼠标还在托盘那边。
 pub fn reveal<R: Runtime>(app: &AppHandle<R>) {
-    let Some(window) = app.get_webview_window("main") else {
+    // 必须用 get_window：原网页模式加上子网页视图后 get_webview_window("main") 会返回 None
+    let Some(window) = app.get_window("main") else {
         return;
     };
     // 锁里只改状态；碰窗口放到锁外面（见模块说明）
@@ -252,7 +253,7 @@ struct Seen {
     screens: Vec<(Area, f64)>,
 }
 
-fn observe<R: Runtime>(window: &WebviewWindow<R>) -> Option<Seen> {
+fn observe<R: Runtime>(window: &Window<R>) -> Option<Seen> {
     let maximized = window.is_maximized().unwrap_or(false);
     let usable = window.is_visible().unwrap_or(false)
         && !window.is_minimized().unwrap_or(false)
@@ -440,7 +441,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
                 std::thread::sleep(Duration::from_millis(400));
                 continue;
             }
-            let Some(window) = app.get_webview_window("main") else {
+            let Some(window) = app.get_window("main") else {
                 continue;
             };
             // 先在锁外面把窗口的样子读好
@@ -478,7 +479,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
                     let edge_hide = handle.state::<EdgeHide>();
                     let state = edge_hide.state.lock().unwrap_or_else(|e| e.into_inner());
                     if *state == decided
-                        && let Some(window) = handle.get_webview_window("main")
+                        && let Some(window) = handle.get_window("main")
                     {
                         let _ = window.set_position(PhysicalPosition::new(at.0, at.1));
                     }

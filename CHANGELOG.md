@@ -8,7 +8,11 @@ that heading into the version number and date.
 
 ### English
 
+- Fixed an issue where clicking the tray icon after closing the window could fail to bring the window back once the reader's original web page mode had been used, and also kept edge auto-hide working in that state.
+
 ### 中文
+
+- 修复在阅读区使用过「原网页」模式后，关闭窗口再点击托盘图标无法重新唤出窗口的问题，并同步修复该状态下靠边自动隐藏失效的问题。
 
 ## 0.1.48 — 2026-11-28
 

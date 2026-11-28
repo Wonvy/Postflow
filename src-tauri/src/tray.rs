@@ -9,7 +9,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Window, WindowEvent};
 
 const TRAY_ID: &str = "main";
 /// 托盘菜单里要界面去做的事，发给界面的事件名。
@@ -50,7 +50,9 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.show();
     // 靠边藏着的窗口先拿出来
     crate::edge_hide::reveal(app);
-    let Some(window) = app.get_webview_window("main") else {
+    // 必须用 get_window 而不是 get_webview_window：阅读区「原网页」模式会给主窗口加上子网页视图
+    // （Window::add_child），窗口里超过一个网页视图后 get_webview_window("main") 会返回 None。
+    let Some(window) = app.get_window("main") else {
         // Windows 上在事件处理里建窗口会卡死（WebView2 的限制），放到别的线程去建
         let app = app.clone();
         std::thread::spawn(move || {
@@ -64,7 +66,7 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
 }
 
 /// 把窗口显示出来、还原、放回屏幕上、拿到最前面。
-fn bring_up<R: Runtime>(window: &WebviewWindow<R>) {
+fn bring_up<R: Runtime>(window: &Window<R>) {
     let visible = window.is_visible().unwrap_or(false);
     let minimized = window.is_minimized().unwrap_or(false);
     tracing::info!(visible, minimized, "showing the main window");
@@ -95,7 +97,7 @@ fn bring_up<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 /// 窗口不在任何一块屏幕上（拔掉了外接屏幕、靠边藏的时候被关掉之类）：挪回当前屏幕的正中。
-fn keep_on_screen<R: Runtime>(window: &WebviewWindow<R>) {
+fn keep_on_screen<R: Runtime>(window: &Window<R>) {
     let (Ok(pos), Ok(size), Ok(monitors)) = (
         window.outer_position(),
         window.outer_size(),
@@ -124,7 +126,7 @@ fn keep_on_screen<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 /// 照配置文件重新建主窗口。只在别的线程上调（见 `show_main`）。
-fn recreate_main<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
+fn recreate_main<R: Runtime>(app: &AppHandle<R>) -> Option<Window<R>> {
     let config = app
         .config()
         .app
@@ -143,7 +145,7 @@ fn recreate_main<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
         };
     #[cfg(target_os = "windows")]
     let _ = window.set_decorations(false);
-    Some(window)
+    app.get_window("main")
 }
 
 /// 建托盘图标。菜单文字先用英文，界面加载后换成界面语言。
