@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.47 — 2026-11-28
+
+### English
+
 - Preset accent colours now keep their exact palette hex values across Dark, Light, and Paper themes instead of being darkened on Paper (Sky blue `#0284c7`, Amber `#f59e0b`, Terracotta `#ea580c`, etc.).
 
 ### 中文
