@@ -7,7 +7,7 @@ use reqwest::header::{
 use crate::parse::{ParsedFeed, parse_source};
 use crate::{Error, Result};
 
-const USER_AGENT: &str = concat!("Postflow/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("ShibaPost/", env!("CARGO_PKG_VERSION"));
 /// 单个响应的大小上限，防止异常的源把内存吃光。
 const MAX_BODY_MB: usize = 16;
 /// 最多跟几次跳转。

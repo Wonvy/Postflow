@@ -1,7 +1,7 @@
 //! 对着本机的假服务器走一遍：模型列表、一次返回、流式返回、JSON 任务、错误。
 
-use postflow_ai::{Client, Provider, prompts};
-use postflow_testkit::FakeAi;
+use shibapost_ai::{Client, Provider, prompts};
+use shibapost_testkit::FakeAi;
 
 fn provider(server: &FakeAi, model: &str) -> Provider {
     Provider {

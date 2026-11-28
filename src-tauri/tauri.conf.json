@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Postflow",
+  "productName": "ShibaPost",
   "version": "../package.json",
-  "identifier": "app.postflow.desktop",
+  "identifier": "app.shibapost.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Postflow",
+        "title": "ShibaPost",
         "width": 1280,
         "height": 800,
         "minWidth": 920,
@@ -39,10 +39,10 @@
     "targets": "all",
     "publisher": "Wonvy",
     "copyright": "© 2026 Wonvy",
-    "homepage": "https://github.com/Wonvy/Postflow",
+    "homepage": "https://github.com/Wonvy/ShibaPost",
     "category": "Productivity",
     "shortDescription": "Mail and RSS in one inbox",
-    "longDescription": "Postflow brings your email and RSS feeds into one inbox. Your data stays on your own devices; no server or account needed.",
+    "longDescription": "ShibaPost brings your email and RSS feeds into one inbox. Your data stays on your own devices; no server or account needed.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -77,13 +77,13 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["postflow"]
+        "schemes": ["shibapost"]
       }
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM0NDFERjIwNzQzNEU4MzcKUldRMzZEUjBJTjlCeE9iMlBsQkNMVHRKOTQ5WlpuTytJY2Rib1hMQVRsYW5BcHJ4YkVaTzhRRzgK",
       "endpoints": [
-        "https://github.com/Wonvy/Postflow/releases/latest/download/latest.json"
+        "https://github.com/Wonvy/ShibaPost/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

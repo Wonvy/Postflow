@@ -10,9 +10,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::StreamExt;
-use postflow_feed::{favicon_url, host_of};
-use postflow_store::Feed;
 use serde_json::{Map, json};
+use shibapost_feed::{favicon_url, host_of};
+use shibapost_store::Feed;
 
 use crate::{Core, Scope, Session};
 
@@ -36,7 +36,7 @@ pub(crate) fn icon_domain(feed: &Feed) -> Option<String> {
     let domain = host_of(site)
         .or_else(|| host_of(&feed.url))?
         .to_ascii_lowercase();
-    postflow_feed::valid_domain(&domain).then_some(domain)
+    shibapost_feed::valid_domain(&domain).then_some(domain)
 }
 
 impl Core {
@@ -101,7 +101,7 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::icon_domain;
-    use postflow_store::Feed;
+    use shibapost_store::Feed;
 
     fn feed(url: &str, site: Option<&str>, icon: Option<&str>) -> Feed {
         Feed {

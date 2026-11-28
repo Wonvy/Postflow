@@ -57,7 +57,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       # 真的跑一次语音识别（crates/speech/tests/recognize.rs）：下载模型、解码 Opus、识别、分说话人。
-      # macOS 上开发时天天在跑，这里补上 Linux 和 Windows：设了 POSTFLOW_SPEECH_SMOKE 它才跑。
+      # macOS 上开发时天天在跑，这里补上 Linux 和 Windows：设了 SHIBAPOST_SPEECH_SMOKE 它才跑。
       # 模型缓存起来，模型目录变了才重新下载。
       - name: 缓存语音识别模型
         if: runner.os != 'macOS'
@@ -73,7 +73,7 @@ jobs:
       - name: 测试
         shell: bash
         env:
-          POSTFLOW_SPEECH_SMOKE: ${{ runner.os != 'macOS' && format('{0}/speech-smoke', runner.temp) || '' }}
+          SHIBAPOST_SPEECH_SMOKE: ${{ runner.os != 'macOS' && format('{0}/speech-smoke', runner.temp) || '' }}
         run: |
           set -o pipefail
           if ! cargo test --workspace 2>&1 | tee test.log; then

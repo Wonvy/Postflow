@@ -1,6 +1,6 @@
 //! 分类：AI 分的、用户改的、按分类筛选和计数、找出还没分类的。
 
-use postflow_store::{
+use shibapost_store::{
     AccountConfig, Article, ItemFilter, ItemPatch, MailSync, NewFeed, NewMail, Store, View, ids,
 };
 use tempfile::TempDir;

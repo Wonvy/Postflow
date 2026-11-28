@@ -1,6 +1,6 @@
 //! 稍后提醒：没到时间时从收件箱里藏起来，到了时间回来；提醒时间同步到其他设备。
 
-use postflow_store::{Article, ItemFilter, NewFeed, Store, View, ids};
+use shibapost_store::{Article, ItemFilter, NewFeed, Store, View, ids};
 use tempfile::TempDir;
 
 fn now() -> i64 {

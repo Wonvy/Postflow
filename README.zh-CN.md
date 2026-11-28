@@ -1,4 +1,4 @@
-# Postflow
+# ShibaPost
 
 [English](README.md) | **简体中文**
 
@@ -9,12 +9,12 @@
 - **键盘优先**：安静的三栏界面，常用操作都有单键快捷键。
 
 <p align="center">
-  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg"><img alt="下载 macOS 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-macOS-7533e8?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe"><img alt="下载 Windows 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows-7533e8?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage"><img alt="下载 Linux 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Linux-7533e8?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-macOS.dmg"><img alt="下载 macOS 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-macOS-7533e8?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Windows-setup.exe"><img alt="下载 Windows 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows-7533e8?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.AppImage"><img alt="下载 Linux 版" src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Linux-7533e8?style=for-the-badge&logo=linux&logoColor=white"></a>
   <br>
-  <a href="https://github.com/Wonvy/Postflow/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/Wonvy/Postflow?label=%E6%9C%80%E6%96%B0%E7%89%88&color=7533e8"></a>
-  <a href="https://github.com/Wonvy/Postflow/releases">所有版本和更新说明</a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/Wonvy/ShibaPost?label=%E6%9C%80%E6%96%B0%E7%89%88&color=7533e8"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases">所有版本和更新说明</a>
 </p>
 
 ![按发件人折叠的邮件收件箱，侧栏顶部是「邮件 | 订阅」切换条](docs/screenshots/zh/inbox.png)
@@ -32,16 +32,16 @@
 
 ## 下载
 
-点击你的系统直接下载最新版。所有版本的安装包都在 [Releases](https://github.com/Wonvy/Postflow/releases) 页面（也就是 GitHub 仓库页面右边的
+点击你的系统直接下载最新版。所有版本的安装包都在 [Releases](https://github.com/Wonvy/ShibaPost/releases) 页面（也就是 GitHub 仓库页面右边的
 **Releases** 一栏）。
 
 | 系统 | 下载 |
 |---|---|
-| macOS（Apple 芯片和 Intel 通用） | [Postflow-macOS.dmg](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg) |
-| Windows 10 / 11 | [Postflow-Windows-setup.exe](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe)（推荐）或 [.msi](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows.msi) |
-| Linux（x86-64） | [.AppImage](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage)、[.deb](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.deb)（Debian、Ubuntu）或 [.rpm](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.rpm)（Fedora、openSUSE） |
+| macOS（Apple 芯片和 Intel 通用） | [ShibaPost-macOS.dmg](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-macOS.dmg) |
+| Windows 10 / 11 | [ShibaPost-Windows-setup.exe](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Windows-setup.exe)（推荐）或 [.msi](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Windows.msi) |
+| Linux（x86-64） | [.AppImage](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.AppImage)、[.deb](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.deb)（Debian、Ubuntu）或 [.rpm](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.rpm)（Fedora、openSUSE） |
 
-装好以后 Postflow 会自己检查更新，有新版本时提示安装。
+装好以后 ShibaPost 会自己检查更新，有新版本时提示安装。
 
 安装包还没有经过苹果和微软的开发者签名。macOS 第一次打开时，到「系统设置 → 隐私与安全性」里点「仍要打开」；
 Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
@@ -72,7 +72,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
   邮箱列表下面有「草稿」，打开一封就能接着写。发出去或者删掉时，服务器上的草稿也一起删掉。
 - 「已发送」里是所有邮箱发出的信，包括在手机和网页邮箱里发的；填收件人时，你写过信的人排在前面。
 - 自己建的文件夹：点邮箱右边的小箭头（或者邮箱菜单里的「显示文件夹」），按服务器上的层级列出它的其他文件夹。
-  打开一个文件夹才开始同步它，之后 Postflow 开着时一直跟着同步。Gmail 的标签也会显示成文件夹。
+  打开一个文件夹才开始同步它，之后 ShibaPost 开着时一直跟着同步。Gmail 的标签也会显示成文件夹。
 - 每个文件夹先收最近的邮件。邮箱或文件夹的列表拉到底，点「从邮箱服务器加载更早的邮件」再取 100 封。
 - 把邮件移进文件夹：右键菜单里的「移到文件夹」，或者直接拖到侧栏的文件夹上。
 - 每个邮箱可以设一个签名（在邮箱设置里），写信时加在正文后面，回复时在引文上面。
@@ -93,7 +93,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
   系统通知里也写着验证码。
 - 只通知重要联系人（设置 → 通用）：在发件人卡片里把人设为重要联系人，只有他们的来信才弹通知。名单会同步到你的
   其他设备。
-- Outlook.com、Hotmail 和 Microsoft 365 用微软账户登录（OAuth 2.0），登录在浏览器里完成，Postflow 拿不到你的密码。
+- Outlook.com、Hotmail 和 Microsoft 365 用微软账户登录（OAuth 2.0），登录在浏览器里完成，ShibaPost 拿不到你的密码。
   登录状态存在这台设备的钥匙串里，会自动续期。详见 [Outlook.com 和 Microsoft 365](#outlookcom-和-microsoft-365)。
   Gmail 也可以这样用 Google 账户登录，或者用应用专用密码，见 [用 Google 账户登录 Gmail](#用-google-账户登录-gmail)。
 
@@ -106,11 +106,11 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 粘贴网站或订阅地址，自动找到订阅源。支持 RSS、Atom 和 JSON Feed。一粘贴就显示预览：网站图标、名称和介绍、
   更新频率，以及最近的几篇，订阅前就知道是什么内容。网站提供好几个源时可以挑一个。
 - YouTube 频道和播放列表：贴进 `https://www.youtube.com/@名字` 这样的地址就能订阅博主的新视频，图标用频道头像。
-- Telegram 公开频道：贴进 `https://t.me/频道名`。频道没有订阅源，Postflow 读频道的公开网页（最近的消息，带图片和链接预览）。
+- Telegram 公开频道：贴进 `https://t.me/频道名`。频道没有订阅源，ShibaPost 读频道的公开网页（最近的消息，带图片和链接预览）。
   私有频道和群组订阅不了。
 - 「添加订阅 → 网址」里的常用网站：YouTube、GitHub、GitLab、Codeberg、Reddit、Bluesky、Mastodon、Lemmy、Telegram、Medium、
   Substack、DEV、Tumblr、Stack Overflow、Hacker News、Lobsters、V2EX、Discourse 论坛、arXiv、PyPI、Steam、Vimeo、Pinterest、
-  Letterboxd，点图标、填个名字，Postflow 就拼出订阅地址，不需要 RSSHub。直接粘贴这些网站的主页、项目页或商店页也行。
+  Letterboxd，点图标、填个名字，ShibaPost 就拼出订阅地址，不需要 RSSHub。直接粘贴这些网站的主页、项目页或商店页也行。
 - 播客：在「添加订阅 → 播客」里按节目名搜索（结果来自苹果播客的公开目录，订阅的是节目自己的 RSS）。单集在阅读区里播放，
   换条目时列表底下的迷你播放器接着放：后退 15 秒、前进 30 秒、0.8×–3× 倍速，每一期记住听到哪里（只存在这台设备上）。
   听完自动标为已读；在倍速菜单里打开「播完接着放下一期」可以连着听。带视频附件的条目在阅读区里直接播放。
@@ -133,7 +133,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
   拖到文件夹上沿或下沿就留在文件夹外，文件夹外的源和文件夹可以随意交错排列。邮箱也能拖动排序，
   顺序会同步到其他设备。在邮箱、订阅源或文件夹上点右键打开它的菜单。
 - 订阅源旁边的黄色三角表示上次刷新失败，鼠标悬停能看到原因。源用永久跳转搬了家的，会自动换成新地址；
-  没有跳转的，可以在它的「编辑」里到网站上重新找订阅源，或者直接填新地址：Postflow 先检查新地址能用才换，
+  没有跳转的，可以在它的「编辑」里到网站上重新找订阅源，或者直接填新地址：ShibaPost 先检查新地址能用才换，
   还是同一个订阅源，已读、星标和以前的文章都保留。
 - 只给摘要的源，可以从原网页抓取全文。阅读区的全文按钮是个开关，打开后点开的每篇文章都直接显示全文。
   支持微信公众号文章，以及在结构化数据里写了正文的网页。抓不到时会说明原因（网站不让应用抓、要登录、
@@ -142,7 +142,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
   按 `⌘V` / `Ctrl+V` 粘贴链接；或者在文章、邮件里右键链接，选「存到稍后读」。网页连同正文一起存下，原网页改了、
   没了也还能读，也会同步到你的其他设备。存下的网页不混进「全部文章」，读完归档即可。「导入」可以读 Pocket、
   Instapaper 的导出文件（CSV 或 HTML）和浏览器书签；归档过的照样归档，正文在打开时再去抓。「导入」旁边的书签按钮
-  给出一个可以拖到浏览器书签栏的「存到 Postflow」按钮。
+  给出一个可以拖到浏览器书签栏的「存到 ShibaPost」按钮。
 - 划线和笔记：在文章或邮件里选中文字，点「划线」或「笔记」。划线显示在正文里，也列在文章下面，可以写笔记、删除，
   或者复制成 Markdown。命令面板里的「导出全部划线和笔记」把所有的按文章分组，复制成 Markdown。会同步到你的其他设备。
 - 朗读（文章标题下面日期旁边）：念文章，开着翻译时念译文，正在念的那一句会标出来。可以暂停、
@@ -196,7 +196,7 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 深色与浅色主题，紧凑与宽松两种列表密度，中英文界面。
 - 也能在浏览器里用：在桌面应用的「设置 → 网页访问」里打开，应用会在你选的端口上提供同一套界面和数据。
   见 [在浏览器中使用](#在浏览器中使用)。
-- 在线更新：有新版本时，Postflow 会提示下载、安装并重启。更新包经过签名，签名对不上的包不会被安装。Linux 上用
+- 在线更新：有新版本时，ShibaPost 会提示下载、安装并重启。更新包经过签名，签名对不上的包不会被安装。Linux 上用
   `.deb`、`.rpm` 安装的，更新时系统会请你输入管理员密码。
 
 **高效处理**
@@ -204,11 +204,11 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 - 稍后提醒（阅读区的闹钟按钮，或右键）：稍后、今晚、明早、这个周末、下周，或者自己挑时间。到时间前从收件箱里拿走，
   放在「稍后提醒」里；到时间回到收件箱顶部，标为未读并弹提醒。提醒时间会同步到其他设备，邮件也一样。
 - 撤销发送：点「发送」后有几秒钟可以撤回（设置 → 通用，默认 5 秒，也可以关掉）。
-- 定时发送（「发送」旁边的时钟）：挑一个时间，到时 Postflow 自动发出。等着发的在邮件侧栏的「定时发送」里，
-  可以立即发送或取消（存回草稿）。到时间时 Postflow 要开着才能发；关着的话下次打开时补发。
+- 定时发送（「发送」旁边的时钟）：挑一个时间，到时 ShibaPost 自动发出。等着发的在邮件侧栏的「定时发送」里，
+  可以立即发送或取消（存回草稿）。到时间时 ShibaPost 要开着才能发；关着的话下次打开时补发。
 - 命令面板（`⌘K` / `Ctrl+K`，或侧栏底部的按钮）：前往任意视图、邮箱、订阅源、文件夹、分类、设置页，或者处理打开的这一条。
 - 关闭窗口后留在托盘（菜单栏）里继续收信，图标上显示未读数。可以在「设置 → 通用」里关掉。托盘菜单里有未读数，
-  可以打开 Postflow、写邮件、检查新邮件和订阅、打开设置或退出。
+  可以打开 ShibaPost、写邮件、检查新邮件和订阅、打开设置或退出。
 - 靠边自动隐藏（默认关，在「设置 → 通用」或托盘菜单里打开）：把窗口拖到屏幕的上、左、右边缘，鼠标离开后窗口缩进屏幕外，
   只露一条细边；鼠标碰到那条边，窗口滑回来。Windows 上拖到顶边时贴在顶边，不会被系统的「贴靠」最大化。
 - 手机上也能用：屏幕窄时一次只显示一栏，侧栏从左边滑出来，阅读区左上角返回。一行往左滑归档，往右滑标为已读或未读。通过[网页访问](#在浏览器中使用)在手机上打开，再「添加到主屏幕」，就能像应用一样用。
@@ -264,12 +264,12 @@ Windows 出现 SmartScreen 提示时，点「更多信息 → 仍要运行」。
 
 ## Outlook.com 和 Microsoft 365
 
-微软已经不允许邮件应用用密码登录 Outlook.com、Hotmail 和 Microsoft 365。Postflow 按微软对桌面应用的要求登录：
+微软已经不允许邮件应用用密码登录 Outlook.com、Hotmail 和 Microsoft 365。ShibaPost 按微软对桌面应用的要求登录：
 在浏览器里打开微软的登录页，微软登录完把浏览器带回你自己电脑上的一个临时地址（`http://localhost:端口`），
-Postflow 用它换来令牌（OAuth 2.0 授权码 + PKCE）。刷新令牌和密码一样存在系统钥匙串里，不进数据目录，
+ShibaPost 用它换来令牌（OAuth 2.0 授权码 + PKCE）。刷新令牌和密码一样存在系统钥匙串里，不进数据目录，
 所以每台设备各自登录一次。整个过程没有我们的服务器参与。
 
-这需要一个在微软注册的应用 ID。Postflow 不自带，由你自己注册，登录走的是你自己的应用。免费，几分钟就好：
+这需要一个在微软注册的应用 ID。ShibaPost 不自带，由你自己注册，登录走的是你自己的应用。免费，几分钟就好：
 
 1. 用任意微软账户登录 [Microsoft Entra 管理中心](https://entra.microsoft.com)（或 Azure 门户），打开
    「应用注册 → 新注册」。
@@ -278,15 +278,15 @@ Postflow 用它换来令牌（OAuth 2.0 授权码 + PKCE）。刷新令牌和密
 4. 在概述页复制「应用程序(客户端) ID」。它不是密钥，可以放心填。
 5. 可选，工作账户常常需要：在「API 权限」里添加委托权限 `IMAP.AccessAsUser.All`、`SMTP.Send` 和 `offline_access`。
 
-然后在 Postflow 里添加 Outlook 或 Microsoft 365 邮箱，按提示粘贴这个 ID，点「用微软账户登录」。ID 存在设置里，
+然后在 ShibaPost 里添加 Outlook 或 Microsoft 365 邮箱，按提示粘贴这个 ID，点「用微软账户登录」。ID 存在设置里，
 会同步到你的其他设备；登录按钮下面的「更换应用 ID」可以换一个（已经登录的邮箱不受影响）。开发时也可以用环境变量
-`POSTFLOW_MICROSOFT_CLIENT_ID`。工作和学校邮箱要开启 IMAP，
+`SHIBAPOST_MICROSOFT_CLIENT_ID`。工作和学校邮箱要开启 IMAP，
 管理员可能需要先批准这个应用。要发信的话，Microsoft 365 还要允许这个邮箱用 SMTP 发信（经过身份验证的 SMTP）。
-在 Postflow 能发信之前登录的邮箱照常收信；要发信时在邮箱设置里重新登录一次即可。
+在 ShibaPost 能发信之前登录的邮箱照常收信；要发信时在邮箱设置里重新登录一次即可。
 
 ## 用 Google 账户登录 Gmail
 
-Gmail 和 Google Workspace 用应用专用密码就能登录，这是最快的办法。Postflow 也可以用 Google 账户登录
+Gmail 和 Google Workspace 用应用专用密码就能登录，这是最快的办法。ShibaPost 也可以用 Google 账户登录
 （OAuth 2.0 + PKCE，在浏览器里完成，和微软的一样）。和微软一样，Google 也需要一个你自己注册的 OAuth 客户端，
 注册一次就好：
 
@@ -294,18 +294,18 @@ Gmail 和 Google Workspace 用应用专用密码就能登录，这是最快的�
    并设置好（选「外部」；Workspace 域名可以选「内部」），把自己的邮箱加为测试用户。
 2. 在「凭据」里新建「OAuth 客户端 ID」，类型选「桌面应用」，复制客户端 ID 和客户端密钥。
    Google 要求桌面应用也带上密钥，但它在桌面应用里并不保密。
-3. 在 Postflow 里添加 Gmail 邮箱，选「Google 账户登录」，粘贴 ID 和密钥，点「用 Google 账户登录」。
+3. 在 ShibaPost 里添加 Gmail 邮箱，选「Google 账户登录」，粘贴 ID 和密钥，点「用 Google 账户登录」。
    它们存在设置里，会同步到你的其他设备。
 
 同意屏幕处于「测试」状态时，Google 会在七天后让登录失效；改成「正式版」就不会。之后 Google 会提示应用未经验证
 （因为要的是完整的邮件权限），只有你自己用的话，在「高级」里选择继续即可。开发时也可以改用环境变量
-`POSTFLOW_GOOGLE_CLIENT_ID` 和 `POSTFLOW_GOOGLE_CLIENT_SECRET`。
+`SHIBAPOST_GOOGLE_CLIENT_ID` 和 `SHIBAPOST_GOOGLE_CLIENT_SECRET`。
 
 ## 在浏览器中使用
 
-桌面应用可以把 Postflow 提供给浏览器，这台电脑上的、或者手机上的都行：
+桌面应用可以把 ShibaPost 提供给浏览器，这台电脑上的、或者手机上的都行：
 
-1. 打开「设置 → 网页访问」，打开「在浏览器中使用 Postflow」。
+1. 打开「设置 → 网页访问」，打开「在浏览器中使用 ShibaPost」。
 2. 点链接旁边的打开按钮，浏览器里就是和应用里一样的邮箱和订阅。
 3. 要在手机或同一网络里的其他电脑上用，打开「允许局域网访问」，扫二维码（或者把链接发给自己）。
 
@@ -358,7 +358,7 @@ npm install
 npm run app
 ```
 
-开发版叫 Postflow Dev，设置和索引都和正式版分开，可以和装好的 Postflow 同时开着、互不影响。它问数据文件夹时选一个单独的，
+开发版叫 ShibaPost Dev，设置和索引都和正式版分开，可以和装好的 ShibaPost 同时开着、互不影响。它问数据文件夹时选一个单独的，
 除非你就是要拿真实数据测试同步。
 
 在普通浏览器里开发界面（两个终端）：
@@ -371,7 +371,7 @@ npm run server
 npm run dev
 ```
 
-然后打开 <http://localhost:1420>。这种方式下数据放在仓库里的 `.postflow-dev/`，不会碰你真实的数据。
+然后打开 <http://localhost:1420>。这种方式下数据放在仓库里的 `.shibapost-dev/`，不会碰你真实的数据。
 
 ### 演示数据
 
@@ -389,7 +389,7 @@ npm run demo
 不想让演示密码进系统钥匙串的话，把 `npm run server` 换成 `npm run server:demo`，密码只存在内存里。
 
 演示里还有一个像 Outlook.com 一样只接受 OAuth 登录的邮箱，配了一个假的微软登录页。启动应用或服务时带上
-`POSTFLOW_MICROSOFT_AUTHORITY=http://127.0.0.1:1145/common` 和 `POSTFLOW_MICROSOFT_CLIENT_ID=demo`，
+`SHIBAPOST_MICROSOFT_AUTHORITY=http://127.0.0.1:1145/common` 和 `SHIBAPOST_MICROSOFT_CLIENT_ID=demo`，
 添加 **Outlook** 邮箱 `outlook-demo@example.com`，服务器设置填 `127.0.0.1`、端口 `1147`、加密选「不加密」，
 再点「用微软账户登录」、在假登录页上点 **Allow**。
 
@@ -432,10 +432,10 @@ git push --follow-tags
 ```
 
 第一条命令把 `package.json`、`Cargo.toml` 和两个锁文件里的版本号改成 0.2.0，提交并打上 `v0.2.0` 标签。
-推送标签后，GitHub Actions 会在 macOS、Windows、Linux 上分别打包，三个都成功后自动发布 Release。每个安装包还会多一份文件名不带版本号的副本（`Postflow-macOS.dmg` 等），本文开头的下载链接指向它们。
+推送标签后，GitHub Actions 会在 macOS、Windows、Linux 上分别打包，三个都成功后自动发布 Release。每个安装包还会多一份文件名不带版本号的副本（`ShibaPost-macOS.dmg` 等），本文开头的下载链接指向它们。
 带横线的版本号（例如 `0.2.0-beta.1`）会发布成预发布版本。
 
-每个 Release 里还有签过名的更新包和一个 `latest.json`，已安装的 Postflow 靠它们在线更新。
+每个 Release 里还有签过名的更新包和一个 `latest.json`，已安装的 ShibaPost 靠它们在线更新。
 签名用的私钥要放在仓库的 Secret `TAURI_SIGNING_PRIVATE_KEY` 里（Settings → Secrets and variables → Actions），
 对应的公钥在 `src-tauri/tauri.conf.json`。请备份好私钥：丢了的话，已安装的版本就无法验证以后的更新。
 
@@ -475,4 +475,4 @@ src/              React 界面，桌面应用和浏览器共用
 翻译使用 [Firefox Translations](https://github.com/mozilla/translations) 的模型（MPL-2.0），
 由 [fxtranslate](https://crates.io/crates/fxtranslate)（MPL-2.0）运行。模型按需下载，不随应用打包。
 
-Postflow 是自由软件，采用 [GNU 通用公共许可证 第 3 版或更新版本](LICENSE)（GPL-3.0-or-later）：可以使用、研究、分享和修改，但基于它发布的作品也必须用同样的许可证开源。
+ShibaPost 是自由软件，采用 [GNU 通用公共许可证 第 3 版或更新版本](LICENSE)（GPL-3.0-or-later）：可以使用、研究、分享和修改，但基于它发布的作品也必须用同样的许可证开源。

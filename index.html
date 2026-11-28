@@ -20,15 +20,15 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Postflow" />
+    <meta name="apple-mobile-web-app-title" content="ShibaPost" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#16161a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <title>Postflow</title>
+    <title>ShibaPost</title>
     <script>
       // 在样式加载前就定好主题，避免启动时闪一下
       try {
-        var saved = JSON.parse(localStorage.getItem("postflow.ui") || "{}").state || {};
+        var saved = JSON.parse(localStorage.getItem("shibapost.ui") || "{}").state || {};
         var theme = saved.theme || "system";
         if (theme === "system") {
           theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
@@ -51,8 +51,8 @@
             "max-width:420px;margin:20vh auto;padding:0 24px;font:15px/1.7 -apple-system,system-ui,sans-serif;text-align:center",
           );
           box.textContent =
-            "Postflow 需要 Safari 15.4 或更新的版本。请在「系统设置 → 软件更新」里更新 macOS 和 Safari 后再打开。" +
-            " Postflow needs Safari 15.4 or later. Please update macOS and Safari in System Settings → Software Update, then open it again.";
+            "ShibaPost 需要 Safari 15.4 或更新的版本。请在「系统设置 → 软件更新」里更新 macOS 和 Safari 后再打开。" +
+            " ShibaPost needs Safari 15.4 or later. Please update macOS and Safari in System Settings → Software Update, then open it again.";
         }
       } catch (e) {}
     </script>

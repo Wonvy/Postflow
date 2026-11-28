@@ -1,4 +1,4 @@
-// 添加订阅里的「常用网站」：这些网站有官方的订阅源（或者 Postflow 自己能解析，比如 YouTube），
+// 添加订阅里的「常用网站」：这些网站有官方的订阅源（或者 ShibaPost 自己能解析，比如 YouTube），
 // 不需要 RSSHub。点图标、填一个名字，就拼出订阅地址，交给正常的预览和订阅流程。
 // 每个输入框也接受直接粘贴整个网页地址，从里面取出要的部分。
 // 这里只有纯函数，方便测试：npm run test:ui
@@ -42,7 +42,7 @@ export interface QuickSource {
   /** simple-icons 里的图标名，界面按它取图标。 */
   icon: string;
   fields: QuickField[];
-  /** 拼出订阅地址（或者 Postflow 能解析的网页地址）。填得不对返回 null。 */
+  /** 拼出订阅地址（或者 ShibaPost 能解析的网页地址）。填得不对返回 null。 */
   build: (values: Record<string, string>) => string | null;
 }
 
@@ -219,7 +219,7 @@ export const QUICK_SOURCES: QuickSource[] = [
     },
   },
   {
-    // 没有订阅源：Postflow 自己读频道的公开网页（t.me/s/频道名）
+    // 没有订阅源：ShibaPost 自己读频道的公开网页（t.me/s/频道名）
     id: "telegram",
     icon: "siTelegram",
     fields: [{ name: "channel" }],

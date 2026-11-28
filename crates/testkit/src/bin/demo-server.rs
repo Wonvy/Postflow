@@ -1,4 +1,4 @@
-//! Demo data for trying Postflow and for the README screenshots. Everything here is fictional.
+//! Demo data for trying ShibaPost and for the README screenshots. Everything here is fictional.
 //!
 //! Starts two fake IMAP servers and a small HTTP server with three feeds, all on this machine:
 //!
@@ -11,11 +11,11 @@
 //! A new message arrives in the work mailbox every minute, to show live delivery.
 //!
 //! With `DEMO_QUIET_IDLE=1` the servers behave like providers that never announce new mail
-//! during IDLE and only send keepalives, to test that Postflow still picks it up.
+//! during IDLE and only send keepalives, to test that ShibaPost still picks it up.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use postflow_testkit::{FakeImap, FakeSmtp};
+use shibapost_testkit::{FakeImap, FakeSmtp};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -24,7 +24,7 @@ const AI_PORT: u16 = 1146;
 /// 用微软账户登录的演示邮箱（假的登录服务在 FEED_PORT 上）。
 const OUTLOOK_PORT: u16 = 1147;
 const OUTLOOK_USER: &str = "outlook-demo@example.com";
-/// 演示邮箱共用的发信服务器。本机收信服务器的发信端口，Postflow 自动猜的就是它。
+/// 演示邮箱共用的发信服务器。本机收信服务器的发信端口，ShibaPost 自动猜的就是它。
 const SMTP_PORT: u16 = 1025;
 const MINUTE: i64 = 60;
 const HOUR: i64 = 60 * MINUTE;
@@ -396,7 +396,7 @@ fn seed_mail(work: &FakeImap, personal: &FakeImap) {
             w,
             "Build #1201 passed on main",
             40 * MINUTE,
-            "All checks passed in 6m 12s.\r\n\r\nhttps://builds.example/postflow/1201",
+            "All checks passed in 6m 12s.\r\n\r\nhttps://builds.example/shibapost/1201",
         ),
         &[],
     );
@@ -631,7 +631,7 @@ fn podcast() -> String {
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\
          <rss version=\"2.0\" xmlns:itunes=\"http://www.itunes.com/dtds/podcast-1.0.dtd\"><channel>\
          <title>Slow Signals</title><link>{base}/</link>\
-         <description>Conversations about calm, personal software. A fictional show for the Postflow demo.</description>\
+         <description>Conversations about calm, personal software. A fictional show for the ShibaPost demo.</description>\
          <itunes:author>Mira &amp; Jonas</itunes:author>\
          <itunes:image href=\"{base}/artwork.svg\"/>\
          <image><url>{base}/artwork.svg</url><title>Slow Signals</title><link>{base}/</link></image>\
@@ -909,7 +909,7 @@ fn fake_services(
                 format!(
                     "<!doctype html><html><head><meta charset=\"utf-8\"><title>Demo sign-in</title></head>\
                      <body style=\"font:15px system-ui;max-width:420px;margin:12vh auto\">\
-                     <h2>Demo {who} sign-in</h2><p>Postflow wants to read mail for <b>{user}</b>.</p>\
+                     <h2>Demo {who} sign-in</h2><p>ShibaPost wants to read mail for <b>{user}</b>.</p>\
                      <p>This page is fake and only exists for the demo.</p>\
                      <p><a id=\"allow\" href=\"{}\">Allow</a> &nbsp; <a id=\"deny\" href=\"{}\">Deny</a></p></body></html>",
                     escape(&allow),
@@ -1013,7 +1013,7 @@ async fn main() {
             OUTLOOK_USER,
             "Signed in with OAuth",
             10 * MINUTE,
-            "This mailbox only accepts XOAUTH2 sign-in, like Outlook.com.\r\n\r\nIf you can read this, Postflow signed in through the browser.",
+            "This mailbox only accepts XOAUTH2 sign-in, like Outlook.com.\r\n\r\nIf you can read this, ShibaPost signed in through the browser.",
         ),
         &[],
     );
@@ -1056,9 +1056,9 @@ async fn main() {
     });
     tokio::spawn(serve_feeds());
     // 假的 AI 服务，不需要密钥，回答是从正文里拼出来的
-    let _ai = postflow_testkit::FakeAi::start_on(None, AI_PORT).await;
+    let _ai = shibapost_testkit::FakeAi::start_on(None, AI_PORT).await;
 
-    println!("Postflow demo data is ready. Everything below is fictional.");
+    println!("ShibaPost demo data is ready. Everything below is fictional.");
     println!();
     println!("Mail (server 127.0.0.1, encryption: none, password: demo):");
     println!("  work@example.com  port 1143");
@@ -1079,14 +1079,14 @@ async fn main() {
     println!();
     println!("Microsoft sign-in (OAuth): start the app with");
     println!(
-        "  POSTFLOW_MICROSOFT_AUTHORITY=http://127.0.0.1:{FEED_PORT}/common POSTFLOW_MICROSOFT_CLIENT_ID=demo"
+        "  SHIBAPOST_MICROSOFT_AUTHORITY=http://127.0.0.1:{FEED_PORT}/common SHIBAPOST_MICROSOFT_CLIENT_ID=demo"
     );
     println!(
         "  then add an Outlook account {OUTLOOK_USER}, server 127.0.0.1 port {OUTLOOK_PORT}, encryption none."
     );
     println!("Google sign-in (OAuth): start the app with");
     println!(
-        "  POSTFLOW_GOOGLE_AUTHORITY=http://127.0.0.1:{FEED_PORT}/google POSTFLOW_GOOGLE_CLIENT_ID=demo POSTFLOW_GOOGLE_CLIENT_SECRET=demo"
+        "  SHIBAPOST_GOOGLE_AUTHORITY=http://127.0.0.1:{FEED_PORT}/google SHIBAPOST_GOOGLE_CLIENT_ID=demo SHIBAPOST_GOOGLE_CLIENT_SECRET=demo"
     );
     println!(
         "  then add a Gmail account me@example.org, server 127.0.0.1 port 1144, encryption none."

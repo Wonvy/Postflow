@@ -503,7 +503,7 @@ fn clip(text: &str) -> String {
 }
 
 impl Store {
-    /// 收录一批等着的条目。`mail_text` 把邮件原文变成纯文字（解析邮件在 postflow-mail 里）。
+    /// 收录一批等着的条目。`mail_text` 把邮件原文变成纯文字（解析邮件在 shibapost-mail 里）。
     /// 返回这次处理了几条，0 表示都收录完了。
     pub fn index_search(
         &self,
@@ -794,7 +794,7 @@ mod tests {
     fn chinese_is_split_into_pairs() {
         assert_eq!(index_text("添加订阅时"), "添加 加订 订阅 阅时 时");
         assert_eq!(index_text("李"), "李");
-        assert_eq!(index_text("Postflow 的iPhone版"), "Postflow 的 iPhone 版");
+        assert_eq!(index_text("ShibaPost 的iPhone版"), "ShibaPost 的 iPhone 版");
         assert_eq!(index_text("Re: Q4 budget, v2.0!"), "Re Q4 budget v2 0");
         assert_eq!(index_text("こんにちは"), "こん んに にち ちは は");
     }
@@ -804,8 +804,8 @@ mod tests {
         assert_eq!(match_query("订阅").as_deref(), Some("\"订阅\"*"));
         assert_eq!(match_query("订阅时").as_deref(), Some("\"订阅 阅时\"*"));
         assert_eq!(
-            match_query("Postflow的").as_deref(),
-            Some("\"Postflow 的\"*")
+            match_query("ShibaPost的").as_deref(),
+            Some("\"ShibaPost 的\"*")
         );
         assert_eq!(match_query("雷").as_deref(), Some("\"雷\"*"));
         assert_eq!(

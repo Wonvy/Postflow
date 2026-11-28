@@ -15,7 +15,7 @@ export type InstanceCheck =
 
 /** 部署指南：中文界面看中文版。 */
 export function guideUrl(lang: string): string {
-  const base = "https://github.com/Wonvy/Postflow/blob/main/docs/";
+  const base = "https://github.com/Wonvy/ShibaPost/blob/main/docs/";
   return lang === "zh" ? `${base}rsshub.zh-CN.md` : `${base}rsshub.md`;
 }
 
@@ -112,7 +112,7 @@ export function plainDescription(text: string): string {
 }
 
 /**
- * 有些网站 Postflow 自己就能订阅，不需要 RSSHub（YouTube 的频道和播放列表）。
+ * 有些网站 ShibaPost 自己就能订阅，不需要 RSSHub（YouTube 的频道和播放列表）。
  * 能的话返回该网站的网页地址，交给「网址」那边直接订阅；不能返回 null。
  */
 export function directUrl(route: Pick<RsshubRoute, "namespace" | "path">, values: Record<string, string>): string | null {

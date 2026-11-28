@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use postflow_mail::{Auth, Connection, Error, FlagChange, IdleOutcome, Security, ServerConfig};
-use postflow_testkit::{FakeImap, mail};
+use shibapost_mail::{Auth, Connection, Error, FlagChange, IdleOutcome, Security, ServerConfig};
+use shibapost_testkit::{FakeImap, mail};
 
 fn config(port: u16, user: &str) -> ServerConfig {
     ServerConfig {

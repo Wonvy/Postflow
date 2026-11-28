@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::routing::get;
-use postflow_translate::Translator;
 use sha2::{Digest, Sha256};
+use shibapost_translate::Translator;
 
 fn gzip(data: &[u8]) -> Vec<u8> {
     let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
@@ -114,7 +114,7 @@ async fn downloads_and_installs_a_model() {
         .translate(
             "en",
             "zh",
-            vec![postflow_translate::Segment::plain("Hello there, friend.")],
+            vec![shibapost_translate::Segment::plain("Hello there, friend.")],
         )
         .unwrap_err();
     assert_eq!(err.code(), "translate_load_failed");

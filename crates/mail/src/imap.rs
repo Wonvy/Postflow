@@ -383,7 +383,7 @@ impl Connection {
         if caps.has_str("ID") {
             // 网易邮箱不发 ID 就拒绝打开收件箱。对其他服务器这只是礼貌。
             let version = env!("CARGO_PKG_VERSION");
-            let identity = [("name", Some("Postflow")), ("version", Some(version))];
+            let identity = [("name", Some("ShibaPost")), ("version", Some(version))];
             let _ = timed(async { Ok(conn.session.id(identity).await?) }).await;
         }
         Ok(conn)

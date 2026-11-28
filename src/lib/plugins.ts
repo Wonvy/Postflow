@@ -257,7 +257,7 @@ interface Loaded {
 const loaded = new Map<string, Loaded>();
 
 function storageKey(pluginId: string, key: string) {
-  return `postflow.plugin.${pluginId}.${key}`;
+  return `shibapost.plugin.${pluginId}.${key}`;
 }
 
 /** 交给插件的接口。说明见 docs/plugins.md，那里的内容要和这里一致。 */
@@ -414,7 +414,7 @@ function setStatus(id: string, status: PluginStatus | null) {
 export async function loadPlugin(manifest: PluginManifest): Promise<void> {
   if (loaded.has(manifest.id)) return;
   if (manifest.minApiVersion > API_VERSION) {
-    setStatus(manifest.id, { state: "error", error: `needs plugin API ${manifest.minApiVersion}, this Postflow has ${API_VERSION}` });
+    setStatus(manifest.id, { state: "error", error: `needs plugin API ${manifest.minApiVersion}, this ShibaPost has ${API_VERSION}` });
     return;
   }
   const entry: Loaded = { dispose: [] };

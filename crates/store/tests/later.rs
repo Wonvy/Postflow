@@ -1,6 +1,6 @@
 //! 稍后读：存下的网页只在「稍后读」里，不混进订阅的文章流，订阅源列表和刷新也看不到它。
 
-use postflow_store::{Article, ItemFilter, ItemKind, NewFeed, Store, View, ids, later_feed_id};
+use shibapost_store::{Article, ItemFilter, ItemKind, NewFeed, Store, View, ids, later_feed_id};
 
 fn store() -> (tempfile::TempDir, Store) {
     let tmp = tempfile::tempdir().unwrap();
@@ -97,7 +97,7 @@ fn saved_pages_stay_in_read_later() {
 
 #[test]
 fn highlights_are_kept_per_article() {
-    use postflow_store::Highlight;
+    use shibapost_store::Highlight;
     let (_tmp, store) = store();
     let later = store.ensure_later_feed().unwrap();
     store

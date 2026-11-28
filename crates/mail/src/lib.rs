@@ -1,6 +1,6 @@
 //! 邮件相关的一切：服务商预设、IMAP 连接与操作、邮件解析与安全渲染。
 //!
-//! 和 `postflow-feed` 一样，这个 crate 不碰存储，只负责和邮件服务器打交道、把邮件变成结构化数据。
+//! 和 `shibapost-feed` 一样，这个 crate 不碰存储，只负责和邮件服务器打交道、把邮件变成结构化数据。
 
 pub mod calendar;
 mod code;

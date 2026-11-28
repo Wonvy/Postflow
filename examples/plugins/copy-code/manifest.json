@@ -3,8 +3,8 @@
   "name": "Copy code",
   "version": "1.0.0",
   "description": "Copies the verification code from the open message, and copies titles with links.",
-  "author": "Postflow",
-  "url": "https://github.com/Wonvy/Postflow/tree/main/examples/plugins/copy-code",
+  "author": "ShibaPost",
+  "url": "https://github.com/Wonvy/ShibaPost/tree/main/examples/plugins/copy-code",
   "main": "main.js",
   "minApiVersion": 1
 }

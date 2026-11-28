@@ -9,7 +9,7 @@ import { isTauri } from "./transport";
 /** 启动后等一会儿再查，不和首屏加载抢网络。 */
 const FIRST_CHECK_DELAY = 4_000;
 /** 用户已经看过提示的版本：同一个版本只弹一次提示，之后只在侧栏顶上留一个图标。 */
-const SEEN_KEY = "postflow.updateSeen";
+const SEEN_KEY = "shibapost.updateSeen";
 
 function readSeen(): string | null {
   try {
@@ -21,7 +21,7 @@ function readSeen(): string | null {
 /** 应用一直开着时，隔多久再查一次。 */
 const CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 
-export const RELEASES_URL = "https://github.com/Wonvy/Postflow/releases";
+export const RELEASES_URL = "https://github.com/Wonvy/ShibaPost/releases";
 
 export type UpdatePhase =
   | "idle"
@@ -125,7 +125,7 @@ async function installElevatedIfNeeded(): Promise<boolean> {
   const writable = await invoke<boolean>("install_dir_writable").catch(() => true);
   if (writable) return false;
   const { listen } = await import("@tauri-apps/api/event");
-  const stop = await listen<{ downloaded: number; total: number | null }>("postflow:update-progress", (e) =>
+  const stop = await listen<{ downloaded: number; total: number | null }>("shibapost:update-progress", (e) =>
     useUpdater.setState({ downloaded: e.payload.downloaded, total: e.payload.total }),
   );
   try {

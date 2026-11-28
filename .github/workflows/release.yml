@@ -39,7 +39,7 @@ jobs:
         run: |
           # 应用里的在线更新只认用这把私钥签过名的安装包，缺了它打包会在最后一步失败
           if [ -z "$KEY" ]; then
-            echo "::error::仓库还没有配置 TAURI_SIGNING_PRIVATE_KEY。到 Settings → Secrets and variables → Actions 里添加，内容是 ~/.tauri/postflow-updater.key 这个文件的全文。"
+            echo "::error::仓库还没有配置 TAURI_SIGNING_PRIVATE_KEY。到 Settings → Secrets and variables → Actions 里添加，内容是 ~/.tauri/shibapost-updater.key 这个文件的全文。"
             exit 1
           fi
 
@@ -68,7 +68,7 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
               -f tag_name="$TAG" --jq .body >> notes.md || true
             id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
-                   -f tag_name="$TAG" -f name="Postflow $TAG" \
+                   -f tag_name="$TAG" -f name="ShibaPost $TAG" \
                    -F body=@notes.md -F draft=true \
                    -F prerelease=$([[ "$TAG" == *-* ]] && echo true || echo false) \
                    --jq .id)
@@ -194,7 +194,7 @@ jobs:
             "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" \
             > /dev/null
 
-      # README 的下载链接指向 releases/latest/download/Postflow-macOS.dmg 这样不带版本号的文件名
+      # README 的下载链接指向 releases/latest/download/ShibaPost-macOS.dmg 这样不带版本号的文件名
       - name: 加一份固定文件名的安装包
         run: bash .github/scripts/stable-names.sh "$RELEASE_ID"
 

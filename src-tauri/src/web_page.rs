@@ -17,7 +17,7 @@ use tauri::{
 use tauri_plugin_opener::OpenerExt;
 
 /// 网页视图加载状态在界面一侧的事件名。
-const EVENT_NAME: &str = "postflow:web";
+const EVENT_NAME: &str = "shibapost:web";
 
 /// 换页面时网页视图先收着，新页面加载完再显示，免得先闪一下空白页。加载太慢时最多等这么久。
 const REVEAL_AFTER: Duration = Duration::from_millis(2500);

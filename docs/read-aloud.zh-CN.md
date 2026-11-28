@@ -8,7 +8,7 @@
 
 ## 听新闻
 
-点列表顶上的**耳机**按钮（听这个列表），Postflow 就从打开的那篇（没打开的话从第一篇）开始，一篇接一篇往下念；
+点列表顶上的**耳机**按钮（听这个列表），ShibaPost 就从打开的那篇（没打开的话从第一篇）开始，一篇接一篇往下念；
 点文章标题下面的「朗读」也一样，从那篇开始。每篇开头先报来源和标题。阅读区开着的正是刚念完的那篇时，会跟着打开下一篇；
 否则在后台接着念，列表底下有控制条。
 
@@ -23,7 +23,7 @@
 
 ### AI 总结和花费
 
-AI 总结和 AI 面板里的总结是同一份，存在这台设备上，已经写过的不再花钱。Postflow 只让 AI 写正在念的这一篇和下一篇
+AI 总结和 AI 面板里的总结是同一份，存在这台设备上，已经写过的不再花钱。ShibaPost 只让 AI 写正在念的这一篇和下一篇
 （提前准备好，换篇时不用等），不会把整个列表都送去总结。选项菜单里显示这次让 AI 写了几篇。AI 用不了的时候（没设置服务、
 余额不足、没网），只提示一次原因，这次后面都改念订阅源的摘要，不会反复重试。邮件只有在「设置 → AI」里允许了才会发给云端 AI，
 否则那封念它自己的摘要。
@@ -65,15 +65,15 @@ AI 总结和 AI 面板里的总结是同一份，存在这台设备上，已经�
 
 1. 在「设置 → 朗读」里下载 ZipVoice。
 2. 点「添加录音…」，选一个音频文件（MP3、M4A、WAV、Ogg、FLAC……）。最好是 3–10 秒、一个人清楚地说话，
-   没有音乐和杂音。Postflow 只留开头 12 秒，并去掉前后的静音。
+   没有音乐和杂音。ShibaPost 只留开头 12 秒，并去掉前后的静音。
 3. 检查录音下面的文字：要和录音里说的一字不差。装了语音识别模型（设置 → 字幕）会自动识别出来，否则自己填。
 4. 在页面上面给中文、英文分别选一段录音。用同语言的录音效果最好：中文录音念英文会带口音，有的词念不清。
 
 只用你自己的声音，或者得到本人同意的录音。录音只存在这台电脑上，不同步。
 
 ZipVoice 比 Kokoro 慢（Apple M4 上大约是实时的 1.5 倍，Kokoro 是 4 倍），较老的电脑上可能跟不上，句子之间会停顿。
-它的词典里没有英文词，所以 Postflow 同时下载 Kokoro 的英文词典，第一次加载时换成标准国际音标。这个版本的
-sherpa-onnx 里 ZipVoice 不用中文数字规则，所以中文句子里的数字由 Postflow 自己写成汉字。很短的句子没法念快，
+它的词典里没有英文词，所以 ShibaPost 同时下载 Kokoro 的英文词典，第一次加载时换成标准国际音标。这个版本的
+sherpa-onnx 里 ZipVoice 不用中文数字规则，所以中文句子里的数字由 ShibaPost 自己写成汉字。很短的句子没法念快，
 按正常语速念好以后再放快。
 
 ## 怎么念的
@@ -83,11 +83,11 @@ sherpa-onnx 里 ZipVoice 不用中文数字规则，所以中文句子里的数�
 
 念的时候模型约占 700 MB 内存，十分钟不用就会释放。
 
-在别的设备上用浏览器打开 Postflow（设置 → 网页访问）时，是运行 Postflow 的那台电脑念好、浏览器来放，所以手机上也是同样的声音。
+在别的设备上用浏览器打开 ShibaPost（设置 → 网页访问）时，是运行 ShibaPost 的那台电脑念好、浏览器来放，所以手机上也是同样的声音。
 
 ## 念之前的整理
 
-Kokoro 按词典念词，词典里没有的词直接跳过，而新闻里偏偏全是缩写和品牌名。Postflow 先把每句话整理一遍：
+Kokoro 按词典念词，词典里没有的词直接跳过，而新闻里偏偏全是缩写和品牌名。ShibaPost 先把每句话整理一遍：
 
 - 网址不念。
 - 缩写逐个字母念（`GPU` → G P U），连写的名字拆开（`OpenAI` → Open AI，`MacBook` → Mac Book），
@@ -101,10 +101,10 @@ Kokoro 按词典念词，词典里没有的词直接跳过，而新闻里偏偏�
 ## 在命令行里试
 
 ```sh
-cargo run --release -p postflow-speech --example speak -- models .postflow-dev/local/voices
-cargo run --release -p postflow-speech --example speak -- download .postflow-dev/local/voices kokoro-v1.1-zh
-cargo run --release -p postflow-speech --example speak -- prepare .postflow-dev/local/voices kokoro-v1.1-zh "OpenAI 发布了 GPT-5"
-cargo run --release -p postflow-speech --example speak -- say .postflow-dev/local/voices kokoro-v1.1-zh zf_094 "你好" out.wav
+cargo run --release -p shibapost-speech --example speak -- models .shibapost-dev/local/voices
+cargo run --release -p shibapost-speech --example speak -- download .shibapost-dev/local/voices kokoro-v1.1-zh
+cargo run --release -p shibapost-speech --example speak -- prepare .shibapost-dev/local/voices kokoro-v1.1-zh "OpenAI 发布了 GPT-5"
+cargo run --release -p shibapost-speech --example speak -- say .shibapost-dev/local/voices kokoro-v1.1-zh zf_094 "你好" out.wav
 ```
 
 `prepare` 打印出整理后要念的句子，某个词念错时可以用它查原因。

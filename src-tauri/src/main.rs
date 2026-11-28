@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    postflow_desktop_lib::run();
+    shibapost_desktop_lib::run();
 }

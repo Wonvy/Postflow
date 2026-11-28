@@ -86,7 +86,7 @@ export const usePlayer = create<PlayerState>()(
       setCatchUp: (catchUp) => set({ catchUp }),
     }),
     {
-      name: "postflow.player",
+      name: "shibapost.player",
       partialize: (s) => ({ rate: s.rate, autoNext: s.autoNext, catchUp: s.catchUp }),
     },
   ),
@@ -94,7 +94,7 @@ export const usePlayer = create<PlayerState>()(
 
 // ---------------------------------------------------------------- 听到哪里
 
-const PROGRESS_KEY = "postflow.playback";
+const PROGRESS_KEY = "shibapost.playback";
 const PROGRESS_LIMIT = 300;
 /** 离结尾不到这么多秒就算听完了，下次从头放。 */
 const DONE_MARGIN = 20;
@@ -208,7 +208,7 @@ function recover(el: HTMLAudioElement) {
   const episode = s.current;
   if (!episode) return;
   const err = el.error;
-  console.warn("postflow: playback error", err?.code, err?.message, playingSrc);
+  console.warn("shibapost: playback error", err?.code, err?.message, playingSrc);
   const at = el.currentTime || s.position;
   const resume = s.playing || s.waiting;
   const remote = episode.media.url;

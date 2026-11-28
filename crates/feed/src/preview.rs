@@ -228,7 +228,7 @@ impl Client {
 }
 
 /// 正文里第一张像样的配图（没有媒体缩略图的源，比如 RSSHub 的 B 站视频，封面在正文里）。
-/// 列表里的封面图由存档按同样的思路另算（postflow-store 的 `first_image`）。
+/// 列表里的封面图由存档按同样的思路另算（shibapost-store 的 `first_image`）。
 fn content_image(html: &str, base: Option<&str>) -> Option<String> {
     if !html.contains("<img") {
         return None;

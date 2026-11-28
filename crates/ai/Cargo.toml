@@ -1,5 +1,5 @@
 [package]
-name = "postflow-ai"
+name = "shibapost-ai"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,6 +13,6 @@ thiserror = "2.0.21"
 tracing = "0.1.44"
 
 [dev-dependencies]
-postflow-testkit = { path = "../testkit" }
+shibapost-testkit = { path = "../testkit" }
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["full"] }

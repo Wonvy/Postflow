@@ -9,9 +9,9 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use postflow_speech::{Error, Speech};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use shibapost_speech::{Error, Speech};
 
 /// 假模型的两个文件。
 fn model_bytes() -> Vec<u8> {

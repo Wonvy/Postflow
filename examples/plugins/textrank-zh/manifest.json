@@ -3,8 +3,8 @@
   "name": "TextRank 关键词与摘要",
   "version": "1.0.0",
   "description": "为中文文章和邮件离线提取关键词和摘要句 · Offline keywords and summary for Chinese text",
-  "author": "Postflow",
-  "url": "https://github.com/Wonvy/Postflow/tree/main/examples/plugins/textrank-zh",
+  "author": "ShibaPost",
+  "url": "https://github.com/Wonvy/ShibaPost/tree/main/examples/plugins/textrank-zh",
   "main": "main.js",
   "minApiVersion": 1
 }

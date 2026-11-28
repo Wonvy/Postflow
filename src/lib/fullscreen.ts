@@ -1,5 +1,5 @@
 // 全屏：桌面应用让整个窗口全屏，浏览器里让页面全屏。
-// 从 Postflow 的全屏按钮（或 Shift+F）进入时，阅读区同时最大化，退出全屏后回到原来的样子；
+// 从 ShibaPost 的全屏按钮（或 Shift+F）进入时，阅读区同时最大化，退出全屏后回到原来的样子；
 // 用户用系统的方式让窗口全屏（macOS 的绿色按钮）时只是窗口变大，布局不动。
 
 import { create } from "zustand";
@@ -8,7 +8,7 @@ import { isTauri } from "./transport";
 
 interface FullscreenState {
   on: boolean;
-  /** 这次全屏是不是 Postflow 自己开的（开的时候顺便最大化了阅读区）。 */
+  /** 这次全屏是不是 ShibaPost 自己开的（开的时候顺便最大化了阅读区）。 */
   ours: boolean;
   /** 进全屏前阅读区是不是已经最大化了，退出时恢复。 */
   wasMaximized: boolean;
@@ -16,7 +16,7 @@ interface FullscreenState {
 
 export const useFullscreen = create<FullscreenState>()(() => ({ on: false, ours: false, wasMaximized: false }));
 
-/** 下一次进入全屏是 Postflow 的按钮触发的。 */
+/** 下一次进入全屏是 ShibaPost 的按钮触发的。 */
 let requested = false;
 
 async function tauriWindow() {

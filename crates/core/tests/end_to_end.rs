@@ -10,8 +10,8 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use postflow_core::{Core, Event};
 use serde_json::{Value, json};
+use shibapost_core::{Core, Event};
 
 #[derive(Clone, Default)]
 struct Site {
@@ -305,9 +305,9 @@ async fn changes_written_by_another_device_are_picked_up() {
     // 另一台设备（另一个索引、另一个设备 ID）往同一个数据目录里写了一条订阅，
     // 相当于同步工具把它的日志文件放了进来
     let other_index = tmp.path().join("other/index.db");
-    let other = postflow_store::Store::open(&data_dir, &other_index, "ffffffffffff").unwrap();
+    let other = shibapost_store::Store::open(&data_dir, &other_index, "ffffffffffff").unwrap();
     other
-        .put_feed(postflow_store::NewFeed {
+        .put_feed(shibapost_store::NewFeed {
             url: "https://elsewhere.example/feed.xml".into(),
             title: "From the other device".into(),
             ..Default::default()

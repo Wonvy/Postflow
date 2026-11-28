@@ -2,7 +2,7 @@
 //!
 //! 文件放在本机目录的 `episodes/` 下，文件名是条目 ID 加扩展名，不参与同步（每台设备自己下）。
 //! 下载在后台进行，界面轮询 `episodes.list` 看进度。下完以后只保留最近下载的几期（数量由界面给），
-//! 早下的先删。网页端从 `/api/episodes/<ID>` 取文件（见 postflow-web），桌面应用直接读这个目录。
+//! 早下的先删。网页端从 `/api/episodes/<ID>` 取文件（见 shibapost-web），桌面应用直接读这个目录。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -1,6 +1,6 @@
 //! 订阅统计：更新频率、内容完整度、阅读记录按源和按天汇总。
 
-use postflow_store::{Article, NewFeed, Store, ids};
+use shibapost_store::{Article, NewFeed, Store, ids};
 use tempfile::TempDir;
 
 const DAY: i64 = 86_400_000;

@@ -141,7 +141,7 @@ impl Translator {
         let root = root.into();
         std::fs::create_dir_all(&root)?;
         let http = reqwest::Client::builder()
-            .user_agent(concat!("Postflow/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("ShibaPost/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(15))
             .read_timeout(Duration::from_secs(60))
             .build()

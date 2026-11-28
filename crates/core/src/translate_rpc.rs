@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use postflow_translate::{Mark, Segment};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_translate::{Mark, Segment};
 
 use crate::rpc::{RpcError, parse, reply};
 use crate::{Core, Event, ModelState};
@@ -13,8 +13,8 @@ use crate::{Core, Event, ModelState};
 const MAX_SEGMENTS: usize = 5000;
 const MAX_CHARS: usize = 500_000;
 
-impl From<postflow_translate::Error> for RpcError {
-    fn from(err: postflow_translate::Error) -> Self {
+impl From<shibapost_translate::Error> for RpcError {
+    fn from(err: shibapost_translate::Error) -> Self {
         RpcError::new(err.code(), err.to_string())
     }
 }
@@ -77,7 +77,7 @@ impl Core {
             // 只识别语言，不需要模型。用 AI 翻译时先用它判断原文是不是已经是目标语言
             "translate.detect" => {
                 let p: DetectParams = parse(params)?;
-                reply(json!({ "from": postflow_translate::detect::detect(&p.text) }))
+                reply(json!({ "from": shibapost_translate::detect::detect(&p.text) }))
             }
             "translate.plan" => {
                 let p: PlanParams = parse(params)?;

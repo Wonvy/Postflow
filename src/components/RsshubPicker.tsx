@@ -193,7 +193,7 @@ export function RsshubForm({
   found?: Record<string, string>;
   onBack: () => void;
   onUrl: (url: string | null) => void;
-  /** Postflow 自己就能订阅这个网站时，改用网页地址直接订阅。 */
+  /** ShibaPost 自己就能订阅这个网站时，改用网页地址直接订阅。 */
   onDirect: (pageUrl: string) => void;
 }) {
   const t = useT();

@@ -1,4 +1,4 @@
-// 订阅源刷新失败时给人看的说明。核心记下了错误的种类（Feed.error_code，见 postflow_feed::Error::code）
+// 订阅源刷新失败时给人看的说明。核心记下了错误的种类（Feed.error_code，见 shibapost_feed::Error::code）
 // 和原始的英文信息；以前记下的错误没有种类，从原始信息里认。只有纯函数，方便测试：npm run test:ui
 
 import type { MessageKey } from "./i18n";

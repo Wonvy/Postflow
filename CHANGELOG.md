@@ -1,6 +1,6 @@
 # Changelog
 
-What changed in each Postflow release, newest first. Every version has an English and a Chinese list; the update
+What changed in each ShibaPost release, newest first. Every version has an English and a Chinese list; the update
 window in the app shows the one for your language. Add new entries under **Unreleased**; `npm run release` turns
 that heading into the version number and date.
 
@@ -8,7 +8,11 @@ that heading into the version number and date.
 
 ### English
 
+- Rebranded the project as **ShibaPost** (including app identifiers, URL scheme `shibapost://`, package/crate names, documentation, and repository URLs).
+
 ### 中文
+
+- 项目正式更名为 **ShibaPost**（同步更新应用标识、`shibapost://` 协议、包与 crate 名称、文档及仓库地址）。
 
 ## 0.1.49 — 2026-11-28
 
@@ -104,11 +108,11 @@ that heading into the version number and date.
 
 ### English
 - Paged view: cards now size themselves so each page holds whole rows; the last row is no longer partly hidden behind the bottom of the list. Lists that can't be filled exactly (with date headings, for example) leave the cut-off row for the next page instead of showing half of it, and resizing the window keeps you at the start of a page.
-- Windows: clicking the tray icon after closing the window brings it back more reliably. If the window was destroyed instead of hidden, Postflow stays in the tray and opens a new one; a window that ended up off screen is moved back; it comes to the front; and with hide-at-screen-edge on, it no longer slides away right after you open it from the tray. Quitting removes the tray icon, so no dead icon is left behind. What happens is now written to the log.
+- Windows: clicking the tray icon after closing the window brings it back more reliably. If the window was destroyed instead of hidden, ShibaPost stays in the tray and opens a new one; a window that ended up off screen is moved back; it comes to the front; and with hide-at-screen-edge on, it no longer slides away right after you open it from the tray. Quitting removes the tray icon, so no dead icon is left behind. What happens is now written to the log.
 
 ### 中文
 - 分页视图：卡片的高度跟着页面自动调整，每页正好放下整数行，最后一行不再被列表底边遮住一截。凑不满的（比如有日期分段）放不全的那行留到下一页，不再露出半截；改变窗口大小后也会回到这一页的开头。
-- Windows：关掉窗口后点托盘图标，窗口能更可靠地回来了。窗口被销毁而不是藏起来时，Postflow 留在托盘里、重新打开一个窗口；跑到屏幕外的窗口会挪回来；会放到最前面；开着靠边隐藏时，从托盘打开后不会马上又缩回去。退出时会拿掉托盘图标，不再留下点了没反应的图标。整个过程会写进日志。
+- Windows：关掉窗口后点托盘图标，窗口能更可靠地回来了。窗口被销毁而不是藏起来时，ShibaPost 留在托盘里、重新打开一个窗口；跑到屏幕外的窗口会挪回来；会放到最前面；开着靠边隐藏时，从托盘打开后不会马上又缩回去。退出时会拿掉托盘图标，不再留下点了没反应的图标。整个过程会写进日志。
 
 ## 0.1.40 — 2026-11-20
 
@@ -134,18 +138,18 @@ that heading into the version number and date.
 - A podcast that stops with "This episode can't be played" partway through now picks up again by itself: after a network hiccup it reconnects at the same spot (up to three times), and if a downloaded copy won't play it switches to the online one.
 - Mail changes made while offline (marking read, starring, archiving, moving, deleting a draft) are no longer lost when you quit: they're kept on this device and written to the server once it's reachable again, instead of being undone by the next sync.
 - Fixed a mailbox that stopped receiving mail for good when a large message had an attachment name with a % followed by Chinese characters. Attachment names that declare a charset such as GBK now show correctly.
-- Fixed turning subtitles off (or switching episodes) while an episode was still downloading, which could leave one CPU core busy until Postflow was quit.
+- Fixed turning subtitles off (or switching episodes) while an episode was still downloading, which could leave one CPU core busy until ShibaPost was quit.
 - Windows: online updates work again for installs made with the .msi package (they used to fail with a message saying you had declined the administrator prompt).
-- Using Postflow in a browser: the browser can no longer ask the computer to read or write files in arbitrary places, change the data folder, or install plugins; those stay in the desktop app. Pages on other sites can't embed Postflow in a frame.
-- When more than a thousand messages arrived between two syncs (after Postflow had been closed for a while, or in a busy list folder), some of the older ones in the middle were never downloaded. Postflow now keeps fetching until it has them all, without waiting for the next sync.
+- Using ShibaPost in a browser: the browser can no longer ask the computer to read or write files in arbitrary places, change the data folder, or install plugins; those stay in the desktop app. Pages on other sites can't embed ShibaPost in a frame.
+- When more than a thousand messages arrived between two syncs (after ShibaPost had been closed for a while, or in a busy list folder), some of the older ones in the middle were never downloaded. ShibaPost now keeps fetching until it has them all, without waiting for the next sync.
 - Skipping past a music intro while subtitles were being made could mark the whole episode as done, so no subtitles appeared for the rest of it. Only the part that was actually transcribed is marked now.
-- The desktop app on older macOS (Catalina and Big Sur with Safari 15) opened to a blank window; the interface now runs there. If Safari is older than 15.4, Postflow says so and asks you to update it instead of showing nothing.
+- The desktop app on older macOS (Catalina and Big Sur with Safari 15) opened to a blank window; the interface now runs there. If Safari is older than 15.4, ShibaPost says so and asks you to update it instead of showing nothing.
 - Read aloud: skipping sentences, moving to the next article or stopping no longer leaves the computer busy with sentences you've skipped, so the next one starts sooner (most noticeable with ZipVoice).
 - Read aloud and podcasts no longer play at the same time, and the headphone and keyboard play keys go back to the podcast when you start one, even if reading was paused.
 - "Mark as read when finished" now also works on a phone and with the reader maximized.
 - Clicking Read aloud while the full text is still loading now waits for the full text instead of reading the feed's short summary.
 - Numbers read better: 1,850 is no longer read as a year, negative percentages keep their minus, scores like 21:19 and ratios are read as scores, and phone numbers and dates like 2026-11 aren't read as ranges.
-- A silent recording can no longer be added as a voice sample, and if a local voice can't read several sentences in a row, Postflow switches to the system voice and tells you why instead of pausing on every sentence.
+- A silent recording can no longer be added as a voice sample, and if a local voice can't read several sentences in a row, ShibaPost switches to the system voice and tells you why instead of pausing on every sentence.
 - Previewing a voice or a voice sample stops whatever else is playing, and quick clicks no longer play the wrong recording.
 - A voice or speech model download that resumes from a different mirror starts that file over instead of producing a broken file.
 
@@ -157,10 +161,10 @@ that heading into the version number and date.
 - 播客放到一半提示「这一期放不了」时会自己接上：网络断了一下就从刚才的位置重新连接（最多三次），下载的那份放不了就改放网上的。
 - 断网时对邮件做的改动（标已读、星标、归档、移动、删草稿）关掉应用也不会丢了：先记在这台设备上，连上服务器后接着写回去，不会再被下一次同步改回去。
 - 修复大邮件的附件名里 % 后面跟着中文时，这个邮箱从此再也收不到信的问题。写明了 GBK 等字符集的附件名也能正确显示了。
-- 修复单集还在下载时关掉字幕（或者换一期），可能让一个 CPU 核一直满载、直到退出 Postflow 的问题。
+- 修复单集还在下载时关掉字幕（或者换一期），可能让一个 CPU 核一直满载、直到退出 ShibaPost 的问题。
 - Windows：用 .msi 安装的又能在线更新了（以前会失败，还提示是你拒绝了管理员授权）。
-- 在浏览器里用 Postflow 时，浏览器不能再让电脑在任意位置读写文件、改数据目录或安装插件，这些只能在桌面应用里做；别的网站也不能把 Postflow 嵌进框架里。
-- 两次收信之间来了一千多封（关了 Postflow 一阵子，或者订了很热闹的邮件列表文件夹）时，中间较早的一部分永远收不到。现在会一直接着取，直到取完，不用等下一次收信。
+- 在浏览器里用 ShibaPost 时，浏览器不能再让电脑在任意位置读写文件、改数据目录或安装插件，这些只能在桌面应用里做；别的网站也不能把 ShibaPost 嵌进框架里。
+- 两次收信之间来了一千多封（关了 ShibaPost 一阵子，或者订了很热闹的邮件列表文件夹）时，中间较早的一部分永远收不到。现在会一直接着取，直到取完，不用等下一次收信。
 - 字幕在转写纯音乐的片头时往后拖，整期可能被当成已经转完，之后再也不出字幕。现在只记真正转过的那一段。
 - 较旧的 macOS（Catalina、Big Sur 配 Safari 15）上桌面应用打开是一片空白，现在能正常用了。Safari 低于 15.4 时会提示你更新 Safari，不再什么都不显示。
 - 朗读：跳过几句、换到下一篇或者停下以后，电脑不再接着合成那些已经跳过的句子，下一句更快开始念（用 ZipVoice 时最明显）。
@@ -195,7 +199,7 @@ that heading into the version number and date.
 - The Bilingual style shows a second language for episodes that are already in yours: English under a Chinese show, the interface language under an English one.
 - Subtitles can be adjusted in place: Ctrl-scroll (⌘ on a Mac, or pinch) over them to change the text size, drag their bottom edge in the play bar to change the height, and right-click to show the original, the translation or both, and to pick the language to translate subtitles into.
 - The transcript is laid out in columns: the time, the speaker's mark and the text, with the speaker's name above the first line whenever the speaker changes. Each speaker has their own color; the mark is a square for a voice that sounds male and a circle for one that sounds female (guessed from its pitch, on your device), and a small diamond when it can't tell.
-- Fixed Postflow freezing with "hide at the screen edge" turned on: clicking the tray icon could leave the window impossible to open, and the window stopped sliding away.
+- Fixed ShibaPost freezing with "hide at the screen edge" turned on: clicking the tray icon could leave the window impossible to open, and the window stopped sliding away.
 - On Windows, dragging the window to the top of the screen with "hide at the screen edge" on now docks it there instead of letting Snap maximize it.
 
 ### 中文
@@ -205,13 +209,13 @@ that heading into the version number and date.
 - 「双语」样式下，节目本来就是你的语言也会显示第二种语言：中文节目下面是英文，英文节目下面是界面语言。
 - 字幕可以直接调：鼠标放在上面按住 Ctrl（Mac 上 ⌘，或者双指捏合）滚动调字号，拖播放条里字幕的下沿调高度，右键选只看原文、只看译文还是都看，以及字幕翻译成什么语言。
 - 文字稿分成三列：时间、说话人记号、文字，换人时在第一句上面写上是谁。每个说话人一种颜色；记号的形状分男女：男声是方形，女声是圆形（在本机按音高猜的），听不出来是小菱形。
-- 修复开着「靠边自动隐藏」时 Postflow 会卡住：点托盘图标打不开窗口，窗口也不再靠边缩进去。
+- 修复开着「靠边自动隐藏」时 ShibaPost 会卡住：点托盘图标打不开窗口，窗口也不再靠边缩进去。
 - Windows 上开着「靠边自动隐藏」时，把窗口拖到屏幕顶上会贴在顶边，不再被系统的「贴靠」最大化。
 
 ## 0.1.36 — 2026-11-19
 
 ### English
-- Speech recognition models can be downloaded in mainland China: SenseVoice and Whisper are also fetched from ModelScope. Before downloading, Postflow tries each source briefly and uses the fastest, so a source your network can't reach no longer holds things up.
+- Speech recognition models can be downloaded in mainland China: SenseVoice and Whisper are also fetched from ModelScope. Before downloading, ShibaPost tries each source briefly and uses the fastest, so a source your network can't reach no longer holds things up.
 - Fixed resuming a model download from servers that answer a partial request with status 200, which could leave a broken file.
 - Subtitle styles: eleven ways to show subtitles, each with a live preview in Settings → Subtitles: karaoke (the default: each word lights up as it's spoken), typewriter, bounce, glass, bilingual, emphasis, scroll, particles, speaker labels, waves and minimal. Switch from the small arrow next to the CC button too. Reduce Motion keeps the colors and drops the movement.
 - Subtitles tell speakers apart: each person gets a color, and the transcript names them. For speech recognized on your device, download the small voice model (3D-Speaker CAM++, 27 MB) in Settings → Subtitles; names from a show's own transcript are used as is.
@@ -220,7 +224,7 @@ that heading into the version number and date.
 - Subtitles for episodes in Opus format.
 - Plugins can use the podcast player and its subtitles: `api.player` (state, play, pause, seek, speed) and `api.subtitles` (lines with speakers and translations), with `player` and `subtitle` events. See the plugin guide.
 - Mail with a verification code shows the code at the top of the reader, with a Copy button.
-- AI: models that think before answering are asked not to for short tasks on DeepSeek, Kimi (Moonshot), Qwen, SiliconFlow, Gemini, Ollama and OpenRouter too, not just Zhipu. Postflow remembers which models insist on thinking, so it doesn't have to find out again after a restart.
+- AI: models that think before answering are asked not to for short tasks on DeepSeek, Kimi (Moonshot), Qwen, SiliconFlow, Gemini, Ollama and OpenRouter too, not just Zhipu. ShibaPost remembers which models insist on thinking, so it doesn't have to find out again after a restart.
 - AI errors are explained in plain words; what the AI service said is shown on a separate line when it helps.
 - Zhipu's suggested model is now GLM-4.7. If you use GLM-4.5, which Zhipu is retiring, Settings → AI suggests switching.
 - When a feed fails to refresh, the warning sign in the sidebar now explains why in plain words: for example, that the server sent a "no access" page instead of the feed (as some Xiaoyuzhou podcast feeds do), that the address no longer exists, or that the site can't be reached. The sign stays visible when you point at the row, and clicking it opens the feed's settings.
@@ -248,7 +252,7 @@ that heading into the version number and date.
 - Subtitles for podcasts: turn on the CC button in the player and the text follows the audio, in the player and in the small player under the list. A show's own transcript is used when it has one; otherwise speech is recognized on your computer, starting from where you're listening, and the audio is never uploaded. The transcript is kept on this device and listed under the play bar.
 - Speech recognition models are downloaded on demand in Settings → Subtitles (they aren't part of the installer). You can keep several and switch: SenseVoice for Chinese, Whisper or Parakeet for English and other languages. A model can also be imported from a folder if the download is slow.
 - The macOS app now needs macOS 10.15 or later.
-- Verification code alerts (Settings → General, off by default): when a message carries a verification code, the code pops up in the bottom-right corner with a Copy button, and the system notification shows it while Postflow isn't in front.
+- Verification code alerts (Settings → General, off by default): when a message carries a verification code, the code pops up in the bottom-right corner with a Copy button, and the system notification shows it while ShibaPost isn't in front.
 - With the reader beside the list, press Space on the open item (pointer over the list) to pop the reader up over the list for a closer look; Space or Esc puts it back.
 - Fixed links that did nothing in the desktop app, such as "Release page" in the update window, "Open in browser" and links in articles.
 - The window now opens in the middle of the screen, and is shrunk to fit on small screens.
@@ -269,7 +273,7 @@ that heading into the version number and date.
 ## 0.1.34 — 2026-11-19
 
 ### English
-- Read later has a "Save to Postflow" button for your browser's bookmarks bar (the bookmark button next to Import). In the desktop app it opens a postflow:// link; in the browser version it opens Postflow in a new tab.
+- Read later has a "Save to ShibaPost" button for your browser's bookmarks bar (the bookmark button next to Import). In the desktop app it opens a shibapost:// link; in the browser version it opens ShibaPost in a new tab.
 - Search: `OR` between two words finds either, and `in:inbox`, `in:archive`, `in:sent`, `in:drafts`, `in:junk` or `in:trash` searches just that folder.
 - Waiting for reply: messages sent with "Remind me if no reply" are listed under Mail, and the message shows when you'll be reminded, with a button to cancel.
 - Templates fill in `{name}`, `{first}`, `{me}` and `{date}`.
@@ -280,7 +284,7 @@ that heading into the version number and date.
 - Read aloud marks the sentence it's reading and keeps going when you open another article, with controls under the list.
 
 ### 中文
-- 稍后读多了一个可以拖到浏览器书签栏的「存到 Postflow」按钮（「导入」旁边的书签按钮）。桌面版通过 postflow:// 链接把网页交给 Postflow；网页版在新标签页里打开 Postflow 存下。
+- 稍后读多了一个可以拖到浏览器书签栏的「存到 ShibaPost」按钮（「导入」旁边的书签按钮）。桌面版通过 shibapost:// 链接把网页交给 ShibaPost；网页版在新标签页里打开 ShibaPost 存下。
 - 搜索：两个词之间写 `OR` 表示其中一个就行；`in:inbox`、`in:archive`、`in:sent`、`in:drafts`、`in:junk`、`in:trash` 只在那个文件夹里找。
 - 等回复：设了「没回复就提醒」的已发送邮件列在邮件那边的「等回复」里，打开时显示什么时候提醒，可以取消。
 - 模板里的 `{名字}`、`{名}`、`{我}`、`{日期}`（或英文写法）插入时会自动填好。
@@ -329,9 +333,9 @@ that heading into the version number and date.
 - Folded date headings stay folded after a restart.
 - The shortcuts window shows Space in your language.
 - Add feed shows a small grip in its bottom-right corner, so you can see it resizes.
-- Public Telegram channels can be followed without RSSHub: paste `https://t.me/name`, and Postflow reads the channel's public page.
+- Public Telegram channels can be followed without RSSHub: paste `https://t.me/name`, and ShibaPost reads the channel's public page.
 - Popular sites gains GitLab, Codeberg (and any Forgejo or Gitea), DEV, Lobsters, Lemmy, Discourse, Tumblr, Vimeo, Pinterest, PyPI, Steam, Letterboxd and Telegram. Pasting a PyPI, Steam, Letterboxd, Tumblr, Pinterest or Telegram page finds its feed too.
-- The tray menu shows the unread count and can open Postflow, start a new message, check mail and feeds, open Settings, switch edge hiding and quit.
+- The tray menu shows the unread count and can open ShibaPost, start a new message, check mail and feeds, open Settings, switch edge hiding and quit.
 - Hide at the screen edge (off by default, Settings → General or the tray menu): drag the window to the top, left or right edge and it slides away when the pointer leaves, leaving a thin strip; touch the strip to bring it back.
 
 ### 中文
@@ -341,16 +345,16 @@ that heading into the version number and date.
 - 收起的日期分段重启后还是收起的。
 - 快捷键窗口里的空格键按界面语言显示。
 - 「添加订阅」右下角有一个小的拖动标记，看得出能改大小。
-- Telegram 公开频道不用 RSSHub 也能订阅：贴进 `https://t.me/频道名`，Postflow 读频道的公开网页。
+- Telegram 公开频道不用 RSSHub 也能订阅：贴进 `https://t.me/频道名`，ShibaPost 读频道的公开网页。
 - 常用网站新增 GitLab、Codeberg（以及任何 Forgejo、Gitea）、DEV、Lobsters、Lemmy、Discourse、Tumblr、Vimeo、Pinterest、PyPI、Steam、Letterboxd 和 Telegram。直接粘贴 PyPI、Steam、Letterboxd、Tumblr、Pinterest、Telegram 的页面也能找到订阅源。
-- 托盘菜单里显示未读数，可以打开 Postflow、写邮件、检查新邮件和订阅、打开设置、开关靠边隐藏、退出。
+- 托盘菜单里显示未读数，可以打开 ShibaPost、写邮件、检查新邮件和订阅、打开设置、开关靠边隐藏、退出。
 - 窗口靠边自动隐藏（默认关，在「设置 → 通用」或托盘菜单里打开）：把窗口拖到屏幕的上、左、右边缘，鼠标离开后缩进屏幕外，只露一条细边；鼠标碰到那条边就滑回来。
 
 ## 0.1.31 — 2026-11-18
 
 ### English
-- Clicking the menu-bar or tray icon brings Postflow back after it was minimized; before, the window could come back behind other apps.
-- Only one copy of Postflow runs at a time. Opening it again brings up the window that is already open.
+- Clicking the menu-bar or tray icon brings ShibaPost back after it was minimized; before, the window could come back behind other apps.
+- Only one copy of ShibaPost runs at a time. Opening it again brings up the window that is already open.
 - Translation: the prompt to download an offline model now has Skip. Skipped languages stop asking when the list or an article translates automatically, so a few foreign words don't mean a download. Pressing T still offers it, and Settings → Translation can download it.
 - Date headings in the list (Today, This week…) fold away with a click.
 - The pop-up reader sits on a darker, blurred background and has a close button at the top right.
@@ -359,7 +363,7 @@ that heading into the version number and date.
 
 ### 中文
 - 最小化以后点菜单栏或托盘图标能把窗口拿回来了；以前窗口可能回到别的程序后面。
-- Postflow 只运行一个。再次打开时，把已经开着的窗口拿到最前面。
+- ShibaPost 只运行一个。再次打开时，把已经开着的窗口拿到最前面。
 - 翻译：提示下载离线模型时可以「跳过」。跳过的语言在列表和文章自动翻译时不再提示，不会为了几个外文单词去下载。按 T 翻译时还会问，也可以在「设置 → 翻译」里下载。
 - 列表里的日期分段（今天、本周……）点标题就能收起。
 - 弹出的阅读区后面更暗，还加了模糊，右上角有关闭按钮。
@@ -369,18 +373,18 @@ that heading into the version number and date.
 ## 0.1.30 — 2026-11-18
 
 ### English
-- Discover → Podcasts gains 56 popular Chinese shows, picked from Apple Podcasts' China charts with 声链 (shenglianfm.com) as a guide, and podcasts are now sorted into news, tech, business, education, health, stories, arts, sports, entertainment and society; pick one at the top of the list. Every feed was checked to work in Postflow.
+- Discover → Podcasts gains 56 popular Chinese shows, picked from Apple Podcasts' China charts with 声链 (shenglianfm.com) as a guide, and podcasts are now sorted into news, tech, business, education, health, stories, arts, sports, entertainment and society; pick one at the top of the list. Every feed was checked to work in ShibaPost.
 - A calmer Feeds sidebar: under the Mail/Feeds switch there's one row of icons, the feed types on the left (everything, articles, videos, podcasts, newsletters; hover for the name, a dot means unread) and Today and Starred on the right; the feed list has a Feeds heading you can collapse, and categories sit at the end of the list.
 - Add feed → Podcasts now looks like Discover: Featured and the podcast categories on the left, the shows as a grid or list on the right. Searching lists matching built-in shows first, then more from Apple Podcasts.
 - The sidebar's views no longer have a Views heading: a small arrow centred under them hides or shows them. Right-click a view to show it as a list or as one row of icons (hover for names), separately for Mail and Feeds, and to choose which views appear. In Feeds the type buttons (everything, articles, podcasts…) follow the same choice and collapse with the views. Right-clicking icon buttons that have a tooltip works again.
-- The highlight colour now matches the purple of the Postflow logo, in light and dark themes, and Settings → Appearance can change it: nine presets or any colour you pick, adjusted automatically so text stays readable.
+- The highlight colour now matches the purple of the ShibaPost logo, in light and dark themes, and Settings → Appearance can change it: nine presets or any colour you pick, adjusted automatically so text stays readable.
 
 ### 中文
-- 「发现 → 播客」新增 56 个热门中文播客，参考「声链」（shenglianfm.com）的分类，按 Apple 播客中国区各分类榜单挑选；播客按新闻、科技、商业、教育、健康、故事、艺术、体育、娱乐、社会文化分类，在列表顶上选。每个源都确认过能在 Postflow 里正常订阅。
+- 「发现 → 播客」新增 56 个热门中文播客，参考「声链」（shenglianfm.com）的分类，按 Apple 播客中国区各分类榜单挑选；播客按新闻、科技、商业、教育、健康、故事、艺术、体育、娱乐、社会文化分类，在列表顶上选。每个源都确认过能在 ShibaPost 里正常订阅。
 - 订阅侧栏更整齐：切换条下面只有一行图标，左边是类型（全部、文章、视频、播客、Newsletter，悬停显示名字，有未读时带小点），右边是「今天」「星标」；订阅源列表有可以收起的「订阅源」标题，分类放到列表最后。
 - 「添加订阅 → 播客」和「发现」一样排：左边是推荐和播客分类，右边是节目（图标或列表）。搜索时先列出目录里的，下面接着是苹果播客目录里搜到的。
 - 侧栏的视图不再有「视图」标题，下面正中一个小箭头收起、展开。右键视图可以切换排成一列或一行图标（悬停看名字），邮件和订阅各自设，也可以选显示哪几个。订阅里的类型（全部、文章、播客……）也跟着一起：排成一列时带名字和未读数，收起时一起收起。带提示的图标按钮右键菜单恢复正常。
-- 界面里的高亮色改成和 Postflow Logo 一样的紫色，浅色、深色主题都是；也可以在「设置 → 外观 → 主题色」里换：九种预设，或者自己挑一个颜色，会自动调深浅保证文字看得清。
+- 界面里的高亮色改成和 ShibaPost Logo 一样的紫色，浅色、深色主题都是；也可以在「设置 → 外观 → 主题色」里换：九种预设，或者自己挑一个颜色，会自动调深浅保证文字看得清。
 
 ## 0.1.29 — 2026-11-18
 
@@ -427,7 +431,7 @@ that heading into the version number and date.
 ## 0.1.28 — 2026-11-18
 
 ### English
-- Feeds without an icon now get their website's real icon: after each refresh, Postflow looks up the icon the site declares (a large touch icon when there is one, otherwise a favicon it has checked exists) and uses it from then on. Icons that feeds bring themselves are left alone.
+- Feeds without an icon now get their website's real icon: after each refresh, ShibaPost looks up the icon the site declares (a large touch icon when there is one, otherwise a favicon it has checked exists) and uses it from then on. Icons that feeds bring themselves are left alone.
 - New option in Settings → Appearance → Reader: Pop-up. The window then has two columns, the sidebar and a full-width list; opening an item shows the reader in a large panel on top. J/K move between items, F fills the window, Esc or a click outside closes it. Beside the list stays the default; phones are unchanged.
 
 ### 中文
@@ -487,14 +491,14 @@ that heading into the version number and date.
 ### English
 - Unread counts next to feeds, mailboxes and categories no longer include snoozed items.
 - Snoozed items that come back are pinned to the top of the mailbox, feed, folder or category they belong to, not only the inbox.
-- Phones: add Postflow to the home screen to open it full screen like an app. If a phone opens it without the access key, Postflow asks you to paste the link from the desktop app instead of showing an error. On phones, swipe a row left to archive or right to mark it read or unread.
+- Phones: add ShibaPost to the home screen to open it full screen like an app. If a phone opens it without the access key, ShibaPost asks you to paste the link from the desktop app instead of showing an error. On phones, swipe a row left to archive or right to mark it read or unread.
 - Browser access settings explain what plain HTTP limits on phones (notifications, some copying).
 - The recommended-feeds list now records the exact time it changed, so a second change on the same day still reaches everyone.
 
 ### 中文
 - 侧栏里订阅源、邮箱和分类的未读数不再算上稍后提醒的条目。
 - 到时间回来的稍后提醒，在它所在的邮箱、订阅源、文件夹或分类里也排在最上面，不只是收件箱。
-- 手机：可以「添加到主屏幕」，像应用一样全屏打开。手机上没带访问密钥打开时，Postflow 会请你贴上桌面应用里的链接，而不是报错。手机上把一行往左滑归档，往右滑标为已读或未读。
+- 手机：可以「添加到主屏幕」，像应用一样全屏打开。手机上没带访问密钥打开时，ShibaPost 会请你贴上桌面应用里的链接，而不是报错。手机上把一行往左滑归档，往右滑标为已读或未读。
 - 网页访问的设置里说明了普通 HTTP 在手机上的限制（通知、部分复制功能）。
 - 推荐订阅源列表记下的是精确的修改时间，同一天改第二次也能推送给所有人。
 
@@ -518,21 +522,21 @@ that heading into the version number and date.
 
 ### English
 - Snooze: send mail or articles away until later today, this evening, tomorrow, the weekend, next week or a time you pick. They wait under Snoozed and come back unread at the top of the inbox with a notification. Snoozes sync between devices.
-- Undo send (5 seconds by default, Settings → Appearance) and schedule send (the clock next to Send). Scheduled mail is listed under Scheduled in the Mail sidebar; Postflow sends it when it's running at that time, or as soon as it opens.
+- Undo send (5 seconds by default, Settings → Appearance) and schedule send (the clock next to Send). Scheduled mail is listed under Scheduled in the Mail sidebar; ShibaPost sends it when it's running at that time, or as soon as it opens.
 - Command palette: ⌘K / Ctrl+K (or the button at the bottom of the sidebar) to jump anywhere or run a command.
-- Tray: closing the window keeps Postflow running in the tray (menu bar) with the unread count; quit from the tray menu. Can be turned off.
+- Tray: closing the window keeps ShibaPost running in the tray (menu bar) with the unread count; quit from the tray menu. Can be turned off.
 - Phones: on narrow screens the layout shows one pane at a time, with a sliding sidebar and a back button, so browser access works well on a phone.
-- More Chinese feeds in the catalog for design and life. Postflow is now licensed under GPL-3.0-or-later.
-- Browser access: turn on Settings → Browser access to use Postflow in a browser with the same data. Open it on this computer with one click, or allow access from your network and scan the QR code on your phone. Links carry an access key that the browser then remembers; changing the key signs out every browser. It runs inside the desktop app and stops when you quit.
+- More Chinese feeds in the catalog for design and life. ShibaPost is now licensed under GPL-3.0-or-later.
+- Browser access: turn on Settings → Browser access to use ShibaPost in a browser with the same data. Open it on this computer with one click, or allow access from your network and scan the QR code on your phone. Links carry an access key that the browser then remembers; changing the key signs out every browser. It runs inside the desktop app and stops when you quit.
 
 ### 中文
 - 稍后提醒：邮件或文章可以先拿走，到今晚、明早、周末、下周或者自己挑的时间再回来。等待时在「稍后提醒」里，到时间回到收件箱顶部、标为未读并弹提醒。提醒时间会在设备间同步。
-- 撤销发送（默认 5 秒，设置 → 外观）和定时发送（「发送」旁边的时钟）。等着发的在邮件侧栏的「定时发送」里；到时间时 Postflow 开着就发，关着的话下次打开时补发。
+- 撤销发送（默认 5 秒，设置 → 外观）和定时发送（「发送」旁边的时钟）。等着发的在邮件侧栏的「定时发送」里；到时间时 ShibaPost 开着就发，关着的话下次打开时补发。
 - 命令面板：⌘K / Ctrl+K（或侧栏底部的按钮），前往任意位置或执行命令。
-- 托盘常驻：关闭窗口后 Postflow 留在托盘（菜单栏）里继续收信，显示未读数；从托盘菜单退出。可以关掉。
+- 托盘常驻：关闭窗口后 ShibaPost 留在托盘（菜单栏）里继续收信，显示未读数；从托盘菜单退出。可以关掉。
 - 手机：屏幕窄时一次只显示一栏，侧栏滑出、阅读区有返回按钮，网页访问在手机上也好用。
-- 推荐订阅源补了中文的设计和生活类。Postflow 采用 GPL-3.0-or-later 许可证。
-- 网页访问：在「设置 → 网页访问」里打开后，可以在浏览器里用 Postflow，数据和应用里的一样。这台电脑上一点就能打开；允许局域网访问后，手机扫二维码也能用。链接里带访问密钥，浏览器之后会记住；更换密钥后所有浏览器都要重新打开。它由桌面应用提供，关掉应用就停了。
+- 推荐订阅源补了中文的设计和生活类。ShibaPost 采用 GPL-3.0-or-later 许可证。
+- 网页访问：在「设置 → 网页访问」里打开后，可以在浏览器里用 ShibaPost，数据和应用里的一样。这台电脑上一点就能打开；允许局域网访问后，手机扫二维码也能用。链接里带访问密钥，浏览器之后会记住；更换密钥后所有浏览器都要重新打开。它由桌面应用提供，关掉应用就停了。
 
 ## 0.1.21 — 2026-11-18
 
@@ -596,10 +600,10 @@ that heading into the version number and date.
 - Sidebar: Categories now sit above Mail. Mail and Feeds can be shown as two tabs side by side, one at a time:
   right-click the Mail or Feeds heading and choose Show Mail and Feeds as tabs; right-click the tabs to switch back.
   Section headings are closer together.
-- Plugins: the four example plugins ship with Postflow. The first time Postflow starts on a device (including after
+- Plugins: the four example plugins ship with ShibaPost. The first time ShibaPost starts on a device (including after
   this update), it puts them in the plugins folder, turned off; turn them on in Settings → Plugins. Plugins and
   which ones are on are still per device and don't sync. If you delete an example, Settings → Plugins offers to
-  install it again. The developer guide opens inside Postflow, so it
+  install it again. The developer guide opens inside ShibaPost, so it
   works on networks where GitHub doesn't load.
 - Adding an RSSHub feed: the instance settings box is gone from the form. The instance address now sits in the
   dialog's bottom bar (in the warning colour for the public rsshub.app); click it to change the address or key,
@@ -608,7 +612,7 @@ that heading into the version number and date.
 ### 中文
 - 侧栏：「分类」移到了「邮箱」上面。「邮箱」和「订阅」可以做成左右两个选项卡，一次显示一个：在这两组的标题上点右键，
   选「邮箱和订阅用选项卡切换」；在选项卡上点右键可以改回上下排列。分组之间的间距也缩小了。
-- 插件：四个示例插件随 Postflow 一起打包。每台设备第一次启动 Postflow 时（包括这次更新后）会把它们放进插件目录，
+- 插件：四个示例插件随 ShibaPost 一起打包。每台设备第一次启动 ShibaPost 时（包括这次更新后）会把它们放进插件目录，
   默认不启用，在「设置 → 插件」里打开即可。插件和启用哪些仍然只对这台设备有效，不会同步。删掉的示例可以在
   「设置 → 插件」里重新安装。
   开发文档在应用里直接打开，打不开 GitHub 的网络也能看。
@@ -622,9 +626,9 @@ that heading into the version number and date.
   adding feeds (or importing OPML), the layout and main shortcuts, and where to find rules, translation, AI and
   plugins. Every step can be skipped, and it closes for good once skipped or finished. Open it again from
   Settings → About. People upgrading with mail or feeds already set up don't see it.
-- RSSHub: the guide to running your own instance now opens inside Postflow, so it works on networks where GitHub
+- RSSHub: the guide to running your own instance now opens inside ShibaPost, so it works on networks where GitHub
   doesn't load; commands in it have a copy button. When a route fails with HTTP 503 even though the connection test
-  passes, Postflow now says the route needs setup on the RSSHub server (YouTube routes need YOUTUBE_KEY) and, for
+  passes, ShibaPost now says the route needs setup on the RSSHub server (YouTube routes need YOUTUBE_KEY) and, for
   YouTube, points to Follow directly, which needs no RSSHub.
 - Videos play in the reader: players that feeds embed (Bilibili, as RSSHub's Bilibili feeds do, YouTube, Vimeo,
   Tencent Video, Youku, Xigua, and Spotify, SoundCloud, Apple Music and NetEase Cloud Music for audio) are kept,
@@ -647,7 +651,7 @@ that heading into the version number and date.
 - 新手引导：第一次安装后，一步步带你选语言和主题、添加邮箱、添加订阅（或导入 OPML）、认识界面和常用快捷键，
   并告诉你自动规则、翻译、AI 和插件在哪里。每一步都可以跳过，跳过或看完后不再自动弹出，设置 → 关于里可以再打开。
   已经有邮箱或订阅的老用户升级后不会看到。
-- RSSHub：「怎么部署自己的 RSSHub」改为在 Postflow 里直接打开，打不开 GitHub 的网络也能看，里面的命令可以一键拷贝。
+- RSSHub：「怎么部署自己的 RSSHub」改为在 ShibaPost 里直接打开，打不开 GitHub 的网络也能看，里面的命令可以一键拷贝。
   测试连接通过、但某个路由返回 HTTP 503 时，会说明这个路由要在 RSSHub 服务器上另外配置（YouTube 路由要设置 YOUTUBE_KEY），
   YouTube 还会提示用不需要 RSSHub 的「直接订阅」。
 - 阅读区能直接播放视频：订阅源里嵌的播放器（RSSHub 的 B 站订阅就带着，还有 YouTube、Vimeo、腾讯视频、优酷、西瓜视频，
@@ -666,7 +670,7 @@ that heading into the version number and date.
 
 ### English
 - Sent mail shows up in Sent a few seconds after sending, instead of waiting for the next time new mail arrives.
-  Folders created or renamed on the server while Postflow is running (such as a Sent folder made when the first
+  Folders created or renamed on the server while ShibaPost is running (such as a Sent folder made when the first
   message is sent) are found without restarting. Sent has its own hint when it's empty.
 - Plugins can add their own section above the body in the reader (api.ui.addReaderSection). New example plugin
   textrank-zh: keywords and a three-sentence summary for Chinese articles and mail, computed offline with
@@ -675,11 +679,11 @@ that heading into the version number and date.
 - Automatic AI classification is gone. With some models it could keep sending the same items again every minute when
   the answer couldn't be read, costing money for nothing. New items are filed by your rules (Settings → Rules);
   "Classify now" still asks the AI once when you click it, and logs the shape of an answer it can't read.
-- Mail: when Postflow can't find a mailbox's Sent, Drafts, Spam or Trash folder, verbose logs list the folders the
+- Mail: when ShibaPost can't find a mailbox's Sent, Drafts, Spam or Trash folder, verbose logs list the folders the
   server offers, to help with providers that name them differently.
-- Mail stays connected: Postflow checks in with the server every 2 minutes instead of waiting 5 in silence, so
+- Mail stays connected: ShibaPost checks in with the server every 2 minutes instead of waiting 5 in silence, so
   servers and network gateways that close quiet connections (Sohu after a minute, 163 and 126, QQ and Gmail behind
-  some networks) no longer drop it. If a server still hangs up, Postflow learns how long it allows and checks in
+  some networks) no longer drop it. If a server still hangs up, ShibaPost learns how long it allows and checks in
   sooner. These expected reconnects are no longer logged as warnings or shown as mailbox errors.
 - The sidebar's tabs layout (All / Mail / Feeds tabs, its toggle button, the setting, and keys 1–3) is gone; the
   sidebar always shows every section. To see only mail or only feeds, use the filter at the top of the list.
@@ -689,7 +693,7 @@ that heading into the version number and date.
   screen the system's way (like macOS's green button) leaves the layout as it is.
 
 ### 中文
-- 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。Postflow 运行期间服务器上新建或改名的文件夹
+- 发出的邮件几秒钟后就会出现在「已发送」里，不用再等下一次收到新邮件。ShibaPost 运行期间服务器上新建或改名的文件夹
   （比如第一次发信时才建出来的「已发送」）不用重启也能找到。「已发送」为空时有了自己的提示。
 - 插件可以在阅读区正文上方加自己的一块内容（api.ui.addReaderSection）。新增示例插件 textrank-zh：用 TextRank 离线
   为中文文章和邮件提取关键词和三句摘要（textrank4zh-ts，MIT），阅读区有按钮可以开关。插件开发文档补充了如何把第三方库打包进插件
@@ -697,8 +701,8 @@ that heading into the version number and date.
 - 去掉了 AI 自动分类：有些模型的回答读不出来时，它会每分钟把同一批内容再发一次，白白花钱。新内容改由你的规则分类
   （设置 → 自动规则）；「立即分类」仍然可以点一下让 AI 分一次，读不出回答时日志里会记下回答的样子。
 - 邮件：找不到邮箱的「已发送」「草稿」「垃圾邮件」「已删除」文件夹时，详细日志里会列出服务器提供的文件夹，方便排查叫法不同的邮箱。
-- 邮件连接更稳：Postflow 每 2 分钟跟服务器说一句话，不再安静等 5 分钟，所以会清理安静连接的服务器和网关
-  （搜狐一分钟左右，163、126，以及部分网络下的 QQ、Gmail）不会再把连接断掉。服务器还是会断的话，Postflow 会记住它能等多久，
+- 邮件连接更稳：ShibaPost 每 2 分钟跟服务器说一句话，不再安静等 5 分钟，所以会清理安静连接的服务器和网关
+  （搜狐一分钟左右，163、126，以及部分网络下的 QQ、Gmail）不会再把连接断掉。服务器还是会断的话，ShibaPost 会记住它能等多久，
   以后提前说话。这类正常的重连不再记成警告，也不会让邮箱显示出错。
 - 去掉了侧栏的「选项卡」模式（全部 / 邮件 / 订阅选项卡、切换按钮、设置项和 1–3 快捷键），侧栏总是显示所有分组。
   只想看邮件或只看订阅，用列表顶部的筛选。
@@ -729,10 +733,10 @@ that heading into the version number and date.
 - Two more example plugins: important-senders (stars new mail from senders you mark as important) and
   daily-digest (copies today's unread items, or the open one, as Markdown). The plugin developer guide is now
   also available in Chinese (docs/plugins.zh-CN.md), and Settings → Plugins opens the one for your language.
-- A new look for the Windows installer: brand-purple welcome and finish pages, a header with the Postflow logo,
+- A new look for the Windows installer: brand-purple welcome and finish pages, a header with the ShibaPost logo,
   its own setup icon, and Chinese as well as English (picked from your Windows language).
-- Windows: updating works when Postflow is installed in a folder that needs administrator rights (such as
-  D:\Program Files). Postflow notices, downloads and checks the update, and asks for permission through the
+- Windows: updating works when ShibaPost is installed in a folder that needs administrator rights (such as
+  D:\Program Files). ShibaPost notices, downloads and checks the update, and asks for permission through the
   Windows prompt instead of failing.
 - RSSHub in Add feed: when an RSSHub instance refuses (the public rsshub.app turns feed readers away with
   HTTP 403), the message now says so and what to change, instead of "The server returned an error". YouTube
@@ -760,9 +764,9 @@ that heading into the version number and date.
   响应新邮件，读取和修改条目。开发文档见 docs/plugins.md，完整的例子在 examples/plugins/copy-code。插件要在每台设备上手动启用才会加载。
 - 新增两个插件例子：important-senders（给标记为重要的发件人的新邮件自动加星标）和 daily-digest（把今天的未读条目或打开的条目复制成 Markdown）。
   插件开发文档有了完整的中文版（docs/plugins.zh-CN.md），「设置 → 插件」里的开发文档按钮会按界面语言打开对应的版本。
-- Windows 安装程序换了新样子：品牌紫色的欢迎页和完成页、带 Postflow 图标的页眉、单独的安装程序图标，
+- Windows 安装程序换了新样子：品牌紫色的欢迎页和完成页、带 ShibaPost 图标的页眉、单独的安装程序图标，
   并且有了中文界面（按 Windows 的语言自动选择）。
-- Windows：Postflow 装在需要管理员权限的文件夹（比如 D:\Program Files）时也能在线更新了。Postflow 会发现这种情况，
+- Windows：ShibaPost 装在需要管理员权限的文件夹（比如 D:\Program Files）时也能在线更新了。ShibaPost 会发现这种情况，
   下载并校验更新后，通过系统的授权窗口请求权限，而不是直接安装失败。
 - 添加订阅里的 RSSHub：RSSHub 实例拒绝访问时（公共实例 rsshub.app 会对阅读器返回 HTTP 403），提示会说明原因和该怎么改，
   不再只是「对方服务器返回了错误」。YouTube 的路由会提供「直接订阅」，不经过 RSSHub。RSSHub 的路由和参数说明大多是英文，
@@ -794,7 +798,7 @@ that heading into the version number and date.
 - Settings → Storage shows how much space the data folder and this device use, which feeds and mailboxes take the
   most, and clears local caches: mail older than 30 days (it downloads again when opened), fetched full text and
   sender logos. It can also compact the local index.
-- Language files: export the interface text, translate it, and import it to use Postflow in your own language
+- Language files: export the interface text, translate it, and import it to use ShibaPost in your own language
   (Settings → Appearance). The format is in docs/language-files.md.
 
 ### 中文
@@ -852,7 +856,7 @@ that heading into the version number and date.
 - Drafts save themselves to your mailbox's Drafts folder while you write, so other devices and webmail see them,
   and closing the window keeps the draft. A new Drafts view under your mailboxes opens them to keep writing;
   sending or deleting a draft removes it from the server.
-- Sent: everything you've sent, from Postflow or elsewhere, in a view under your mailboxes. People you write to are
+- Sent: everything you've sent, from ShibaPost or elsewhere, in a view under your mailboxes. People you write to are
   suggested first as recipients.
 - Your own folders: the arrow next to a mailbox lists its other folders, nested; open one to sync and read it.
 
@@ -866,21 +870,21 @@ that heading into the version number and date.
 - 附件：点回形针、把文件拖进写信窗口或者粘贴图片都能添加。转发时会带上原信的附件。
 - 写信时自动存草稿，存进邮箱的「草稿」文件夹，其他设备和网页邮箱里也看得到；关掉窗口草稿还在。
   邮箱列表下面新增「草稿」，打开就能接着写；发出去或者删掉时，服务器上的草稿也一起删掉。
-- 「已发送」：在 Postflow 里或别处发出的信都在这里，在邮箱列表下面。填收件人时，你写过信的人排在前面。
+- 「已发送」：在 ShibaPost 里或别处发出的信都在这里，在邮箱列表下面。填收件人时，你写过信的人排在前面。
 - 自己建的文件夹：点邮箱右边的小箭头，按层级列出它的其他文件夹，打开一个就同步并显示里面的邮件。
 
 ## 0.1.10 — 2026-11-17
 
 ### English
 
-- When a feed moves, change its address in the feed's Edit dialog. Postflow checks the new address first and keeps
+- When a feed moves, change its address in the feed's Edit dialog. ShibaPost checks the new address first and keeps
   the same feed, with its read and starred states and earlier items. The warning sign next to a feed means its last
   refresh failed.
 - The update window shows what's new right inside the app, and checking for updates in Settings opens it straight
   away.
 - Full-text search: the magnifier in the list toolbar, `/` or `⌘F`. It searches titles, senders, authors and the full
   text of articles and mail, Chinese included, in the current list or everywhere, and highlights what it found.
-- New mail notifications while Postflow is in the background, and the number of unread inbox messages on the app
+- New mail notifications while ShibaPost is in the background, and the number of unread inbox messages on the app
   icon. Both can be turned off in Settings → Appearance.
 - Unsubscribe from newsletters right from the message header; lists that support it are unsubscribed in one click.
 - Feeds that move with a permanent redirect switch to their new address by themselves, and a broken feed's Edit
@@ -888,7 +892,7 @@ that heading into the version number and date.
 
 ### 中文
 
-- 订阅源换了地址时，可以在它的「编辑」里改订阅地址。Postflow 先检查新地址能用才换，还是同一个订阅源，
+- 订阅源换了地址时，可以在它的「编辑」里改订阅地址。ShibaPost 先检查新地址能用才换，还是同一个订阅源，
   已读、星标和以前的文章都保留。订阅源旁边的黄色三角表示上次刷新失败。
 - 更新窗口里直接显示更新说明；在设置里点「检查更新」，发现新版本时直接打开这个窗口。
 - 全文搜索：列表工具栏的放大镜、`/` 或 `⌘F`。搜标题、发件人、作者和文章、邮件的正文，中文按词也能搜到；

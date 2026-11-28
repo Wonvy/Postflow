@@ -1,6 +1,6 @@
 //! 搜索播客：用苹果播客目录的公开搜索接口（iTunes Search API，免费、不要密钥），按节目名找到订阅地址。
 //! 只用它来找地址，订阅以后照常直接抓节目自己的 RSS。只给白名单客户端发订阅源的平台（小宇宙）上的节目
-//! 例外：订阅地址换成苹果目录的单集查询（见 postflow-feed 的 apple 模块）。
+//! 例外：订阅地址换成苹果目录的单集查询（见 shibapost-feed 的 apple 模块）。
 
 use serde::{Deserialize, Serialize};
 
@@ -89,8 +89,8 @@ pub(crate) fn parse_results(json: &str) -> Result<Vec<Podcast>, serde_json::Erro
                 .filter(|u| u.starts_with("https://") || u.starts_with("http://"))?;
             // 直接订阅会被拒绝的，改从苹果目录读
             let feed_url = match e.collection_id {
-                Some(id) if postflow_feed::apple::feed_is_blocked(&feed_url) => {
-                    postflow_feed::apple::lookup_url(id)
+                Some(id) if shibapost_feed::apple::feed_is_blocked(&feed_url) => {
+                    shibapost_feed::apple::lookup_url(id)
                 }
                 _ => feed_url,
             };
@@ -134,7 +134,7 @@ impl Core {
             .fetch_text(&search_url(title, "cn"))
             .await
             .ok()?;
-        collection_for(&text, feed_url).map(postflow_feed::apple::lookup_url)
+        collection_for(&text, feed_url).map(shibapost_feed::apple::lookup_url)
     }
 
     pub(crate) async fn search_podcasts(

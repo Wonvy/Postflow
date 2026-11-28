@@ -1,17 +1,17 @@
 //! 命令行里试语音识别，开发时用：
 //!
 //! ```text
-//! cargo run --release -p postflow-speech --example transcribe -- models <目录>
-//! cargo run --release -p postflow-speech --example transcribe -- download <目录> <模型 ID>
-//! cargo run --release -p postflow-speech --example transcribe -- run <目录> <模型 ID> <音频文件> [从第几秒] [到第几秒]
+//! cargo run --release -p shibapost-speech --example transcribe -- models <目录>
+//! cargo run --release -p shibapost-speech --example transcribe -- download <目录> <模型 ID>
+//! cargo run --release -p shibapost-speech --example transcribe -- run <目录> <模型 ID> <音频文件> [从第几秒] [到第几秒]
 //! ```
 //!
-//! `<目录>` 相当于应用的 `本机目录/speech`，比如 `.postflow-dev/local/speech`。
+//! `<目录>` 相当于应用的 `本机目录/speech`，比如 `.shibapost-dev/local/speech`。
 
 use std::path::Path;
 use std::time::Instant;
 
-use postflow_speech::{AudioReader, Speakers, Speech};
+use shibapost_speech::{AudioReader, Speakers, Speech};
 
 fn clock(seconds: f64) -> String {
     let s = seconds.max(0.0);

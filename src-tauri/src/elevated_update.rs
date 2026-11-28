@@ -37,7 +37,7 @@ pub fn install_dir_writable() -> bool {
         else {
             return true;
         };
-        let probe = dir.join(format!(".postflow-write-test-{}", std::process::id()));
+        let probe = dir.join(format!(".shibapost-write-test-{}", std::process::id()));
         match std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -89,7 +89,7 @@ pub async fn install_update_elevated<R: Runtime>(app: AppHandle<R>) -> Result<()
             .download(
                 |chunk, total| {
                     downloaded += chunk as u64;
-                    let _ = app.emit("postflow:update-progress", Progress { downloaded, total });
+                    let _ = app.emit("shibapost:update-progress", Progress { downloaded, total });
                 },
                 || {},
             )
@@ -106,9 +106,9 @@ pub async fn install_update_elevated<R: Runtime>(app: AppHandle<R>) -> Result<()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
         let dir =
-            std::env::temp_dir().join(format!("postflow-update-{}-{nonce:x}", std::process::id()));
+            std::env::temp_dir().join(format!("shibapost-update-{}-{nonce:x}", std::process::id()));
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = dir.join(format!("Postflow_{}_x64-setup.exe", update.version));
+        let path = dir.join(format!("ShibaPost_{}_x64-setup.exe", update.version));
         std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
 
         // Start-Process -Verb RunAs 弹出系统的管理员授权窗口；用户点「否」时它报错，退出码不为 0。

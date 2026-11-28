@@ -1,6 +1,6 @@
 //! 全文搜索：文章和邮件写进索引后，按标题、发件人和正文都能搜到，中文按词也能搜到。
 
-use postflow_store::{
+use shibapost_store::{
     AccountConfig, Article, AttachmentMeta, ItemFilter, MailSync, MailText, NewFeed, NewMail,
     Store, View, ids,
 };

@@ -154,7 +154,7 @@ export function subscribe(handler: (event: CoreEvent) => void): () => void {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     void import("@tauri-apps/api/event").then(({ listen }) =>
-      listen<CoreEvent>("postflow:event", (e) => handler(e.payload)).then((fn) => {
+      listen<CoreEvent>("shibapost:event", (e) => handler(e.payload)).then((fn) => {
         if (cancelled) fn();
         else unlisten = fn;
       }),

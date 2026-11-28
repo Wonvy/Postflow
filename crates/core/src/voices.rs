@@ -17,9 +17,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use postflow_speech::{AudioReader, Speaker, Speakers, Speech, Voice, tts};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_speech::{AudioReader, Speaker, Speakers, Speech, Voice, tts};
 
 use crate::rpc::{RpcError, parse, reply};
 use crate::{Core, Event, ModelState};
@@ -65,7 +65,7 @@ pub(crate) struct Voices {
 }
 
 impl Voices {
-    pub(crate) fn new(root: PathBuf) -> Result<Voices, postflow_speech::Error> {
+    pub(crate) fn new(root: PathBuf) -> Result<Voices, shibapost_speech::Error> {
         Ok(Voices {
             samples_dir: root.join("samples"),
             models: Arc::new(Speech::voices(root)?),
@@ -326,7 +326,7 @@ impl Core {
                 let audio = if spoken.samples.is_empty() {
                     String::new()
                 } else {
-                    postflow_mail::base64(&tts::wav(&spoken.samples, rate))
+                    shibapost_mail::base64(&tts::wav(&spoken.samples, rate))
                 };
                 // speed：实际按什么语速念的，比要的慢时界面放快一些
                 reply(json!({ "audio": audio, "duration": duration, "speed": spoken.speed }))
@@ -334,7 +334,7 @@ impl Core {
             "voices.samples" => reply(json!({ "samples": self.voices.samples() })),
             "voices.samples.add" => {
                 let p: AddSampleParams = parse(params)?;
-                let bytes = postflow_mail::base64_decode(&p.audio)
+                let bytes = shibapost_mail::base64_decode(&p.audio)
                     .ok_or_else(|| RpcError::new("bad_params", "the audio is not Base64"))?;
                 if bytes.len() > SAMPLE_MAX_BYTES {
                     return Err(RpcError::new(
@@ -388,7 +388,7 @@ impl Core {
                     .filter(|p| p.is_file())
                     .ok_or_else(|| RpcError::new("voice_sample_missing", "no such voice sample"))?;
                 let bytes = std::fs::read(path).map_err(|e| RpcError::new("io", e.to_string()))?;
-                reply(json!({ "audio": postflow_mail::base64(&bytes) }))
+                reply(json!({ "audio": shibapost_mail::base64(&bytes) }))
             }
             _ => Err(RpcError::new("unknown_method", method.to_string())),
         }
@@ -403,7 +403,7 @@ impl Core {
         let reader = AudioReader::from_source(Box::new(Cursor::new(bytes)), ext.as_deref())
             .map_err(|_| RpcError::new("voice_sample_unreadable", "cannot read the recording"))?;
         let clip = tts::read_sample(reader).map_err(|e| match e {
-            postflow_speech::Error::Silent => {
+            shibapost_speech::Error::Silent => {
                 RpcError::new("voice_sample_silent", "the recording is silent")
             }
             _ => RpcError::new("voice_sample_unreadable", "cannot read the recording"),
@@ -417,7 +417,7 @@ impl Core {
         }
         std::fs::create_dir_all(&self.voices.samples_dir)
             .map_err(|e| RpcError::new("io", e.to_string()))?;
-        let id = postflow_store::ids::new_device_id();
+        let id = shibapost_store::ids::new_device_id();
         let wav = self
             .voices
             .sample_path(&id, "wav")

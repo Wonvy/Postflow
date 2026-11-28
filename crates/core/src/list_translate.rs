@@ -6,10 +6,10 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use postflow_store::ItemSummary;
-use postflow_translate::{Segment, detect};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_store::ItemSummary;
+use shibapost_translate::{Segment, detect};
 
 use crate::ai_rpc::Use;
 use crate::rpc::{RpcError, parse, reply};
@@ -112,7 +112,7 @@ impl Core {
                 .db(move |s| {
                     s.put_ai_result(
                         &item,
-                        &postflow_store::AiResult {
+                        &shibapost_store::AiResult {
                             task: task.to_string(),
                             lang,
                             provider: String::new(),

@@ -6,13 +6,13 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use postflow_mail::{
+use serde::{Deserialize, Serialize};
+use shibapost_mail::{
     Auth, Connection, FlagChange, FolderInfo, Listing, Security, ServerConfig, SpecialMailbox,
 };
-use postflow_store::{
+use shibapost_store::{
     Account, ItemPatch, MailFolder, MailRef, MailSync, MailSyncStats, NewMail, ids,
 };
-use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
@@ -109,7 +109,7 @@ impl Drop for Worker {
 }
 
 /// 错误码给界面翻译成人话，message 里放服务器的原话，界面会一起显示。
-pub(crate) fn mail_error(err: &postflow_mail::Error) -> RpcError {
+pub(crate) fn mail_error(err: &shibapost_mail::Error) -> RpcError {
     let detail = err.detail();
     RpcError::new(
         err.code(),
@@ -151,8 +151,8 @@ impl Keepalive {
     }
 }
 
-fn is_connection_error(err: &postflow_mail::Error) -> bool {
-    use postflow_mail::Error as E;
+fn is_connection_error(err: &shibapost_mail::Error) -> bool {
+    use shibapost_mail::Error as E;
     matches!(err, E::Io(_) | E::Timeout | E::Connect(_) | E::Tls(_))
 }
 
@@ -202,7 +202,7 @@ pub(crate) fn smtp_config(account: &Account) -> Result<ServerConfig, RpcError> {
             security: parse_security(account.smtp_security.as_deref().unwrap_or("tls"))?,
             username: account.username.clone(),
         },
-        _ => postflow_mail::smtp_for(&account.email, &imap),
+        _ => shibapost_mail::smtp_for(&account.email, &imap),
     };
     // iCloud 收信用 @ 前面的名字，发信要完整的地址
     if cfg.host.eq_ignore_ascii_case("smtp.mail.me.com") && !cfg.username.contains('@') {
@@ -266,7 +266,7 @@ const NOTIFY_MAX_AGE_MS: i64 = 2 * 24 * 60 * 60 * 1000;
 
 impl Core {
     /// 告诉界面来了新邮件。补收的旧邮件不算，太多时只列最新的几封。
-    fn announce_new_mail(&self, account_id: &str, fresh: Vec<postflow_store::FreshMail>) {
+    fn announce_new_mail(&self, account_id: &str, fresh: Vec<shibapost_store::FreshMail>) {
         let since = crate::refresh::now() - NOTIFY_MAX_AGE_MS;
         let mut mails: Vec<_> = fresh.into_iter().filter(|m| m.date >= since).collect();
         if mails.is_empty() {
@@ -313,7 +313,7 @@ impl Core {
         let fixed = session
             .db(|s| {
                 s.repair_mail_text(|raw| {
-                    let summary = postflow_mail::summarize(raw);
+                    let summary = shibapost_mail::summarize(raw);
                     (summary.subject, summary.snippet, summary.from.name)
                 })
             })
@@ -560,13 +560,14 @@ async fn run(
                 .await;
                 fail_fetches(&mut pending, &err);
                 // 令牌被拒（刚好过期、被吊销）：丢掉缓存的，下次重新换
-                if matches!(auth, Auth::OAuth2(_)) && matches!(err, postflow_mail::Error::Auth(_)) {
+                if matches!(auth, Auth::OAuth2(_)) && matches!(err, shibapost_mail::Error::Auth(_))
+                {
                     core.drop_access_token(&account_id);
                 }
                 if err.needs_user() {
                     // 服务器拒绝登录：可能是密码错了，也可能只是暂时的（登录太频繁、系统忙）。
                     // 用户点刷新就再试；不点也过一阵自己再试一次
-                    let retry = matches!(err, postflow_mail::Error::Auth(_)).then_some(AUTH_RETRY);
+                    let retry = matches!(err, shibapost_mail::Error::Auth(_)).then_some(AUTH_RETRY);
                     if park(&mut rx, &mut pending, err.code(), retry).await {
                         continue;
                     }
@@ -741,7 +742,7 @@ async fn finish_write(session: &Arc<Session>, seq: i64) {
     }
 }
 
-fn fail_fetches(pending: &mut Vec<Command>, err: &postflow_mail::Error) {
+fn fail_fetches(pending: &mut Vec<Command>, err: &shibapost_mail::Error) {
     let mut keep = Vec::new();
     for cmd in pending.drain(..) {
         match cmd {
@@ -776,7 +777,7 @@ async fn serve(
     synced_before: bool,
     keepalive: &mut Keepalive,
     last_write: &mut i64,
-) -> Result<(), postflow_mail::Error> {
+) -> Result<(), shibapost_mail::Error> {
     // 刚连上的第一次同步也在界面上显示，让用户知道在收信
     let mut announce = true;
     // 刚添加的邮箱第一次同步会收进一大批旧邮件，那些不算「新邮件」
@@ -944,7 +945,7 @@ async fn serve(
                     })
                     .await?;
                 conn = next;
-                new_data = matches!(outcome, postflow_mail::IdleOutcome::NewData);
+                new_data = matches!(outcome, shibapost_mail::IdleOutcome::NewData);
             } else {
                 tokio::select! {
                     cmd = rx.recv() => match cmd {
@@ -981,7 +982,7 @@ async fn sync_all_folders(
     session: &Arc<Session>,
     account_id: &str,
     watched: &[String],
-) -> Result<MailSyncStats, postflow_mail::Error> {
+) -> Result<MailSyncStats, shibapost_mail::Error> {
     let mut stats = sync_folder(conn, session, account_id, MailFolder::Inbox, INBOX).await?;
     // 每次都重新看一下有哪些文件夹，连接期间新建、改名的（比如发信时才建的「已发送」）也能找到
     conn.forget_mailboxes();
@@ -1039,7 +1040,7 @@ async fn sync_folder(
     account_id: &str,
     folder: MailFolder,
     mailbox: &str,
-) -> Result<MailSyncStats, postflow_mail::Error> {
+) -> Result<MailSyncStats, shibapost_mail::Error> {
     let started_at = crate::refresh::now();
     let info = conn.select(mailbox).await?;
     let id = account_id.to_string();
@@ -1081,7 +1082,7 @@ async fn sync_folder(
         }
     };
 
-    let known_by_uid: HashMap<u32, &postflow_store::KnownMail> =
+    let known_by_uid: HashMap<u32, &shibapost_store::KnownMail> =
         known.iter().map(|k| (k.uid, k)).collect();
     let listed: HashSet<u32> = listing.iter().map(|l| l.uid).collect();
 
@@ -1133,7 +1134,7 @@ async fn sync_folder(
             Ok(stats)
         })
         .await
-        .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
+        .map_err(|e| shibapost_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
     if let Some(floor) = left {
         tracing::info!(account = %account_id, mailbox, floor, "mail: more new mail than one sync takes; continuing");
         stats.more = true;
@@ -1150,9 +1151,9 @@ struct Place<'a> {
 }
 
 /// 只取了信头的大邮件，从邮件结构里认出来的附件：记下来，附件总览里先列出名字。
-type Parts = Vec<(String, Vec<postflow_store::AttachmentMeta>)>;
+type Parts = Vec<(String, Vec<shibapost_store::AttachmentMeta>)>;
 
-fn save_parts(s: &postflow_store::Store, parts: &Parts) -> postflow_store::Result<()> {
+fn save_parts(s: &shibapost_store::Store, parts: &Parts) -> shibapost_store::Result<()> {
     for (id, list) in parts {
         s.set_structure_attachments(id, list)?;
     }
@@ -1164,9 +1165,9 @@ async fn fetch_mails(
     conn: &mut Connection,
     place: &Place<'_>,
     listing: &[&Listing],
-    known: &[postflow_store::KnownMail],
+    known: &[shibapost_store::KnownMail],
     now: i64,
-) -> Result<(Vec<NewMail>, Parts), postflow_mail::Error> {
+) -> Result<(Vec<NewMail>, Parts), shibapost_mail::Error> {
     let mut parts: Parts = Vec::new();
     // 同一个 Message-ID 在收件箱里出现两次时，给后来的那封换个 ID，免得互相覆盖
     let mut taken: HashMap<String, u32> = known.iter().map(|k| (k.id.clone(), k.uid)).collect();
@@ -1176,7 +1177,7 @@ async fn fetch_mails(
     for (group, header_only) in [(small, false), (large, true)] {
         for chunk in group.chunks(FETCH_BATCH) {
             let uids: Vec<u32> = chunk.iter().map(|l| l.uid).collect();
-            let mut structure: HashMap<u32, Vec<postflow_mail::AttachmentInfo>> = HashMap::new();
+            let mut structure: HashMap<u32, Vec<shibapost_mail::AttachmentInfo>> = HashMap::new();
             let fetched: HashMap<u32, Vec<u8>> = if header_only {
                 match conn.fetch_headers(&uids).await {
                     Ok(list) => list
@@ -1215,7 +1216,7 @@ async fn fetch_mails(
                         mail.id.clone(),
                         found
                             .into_iter()
-                            .map(|a| postflow_store::AttachmentMeta {
+                            .map(|a| shibapost_store::AttachmentMeta {
                                 index: a.index,
                                 name: a.name,
                                 mime: a.mime,
@@ -1248,7 +1249,7 @@ async fn load_older(
     session: &Arc<Session>,
     account_id: &str,
     from: OlderFrom,
-) -> Result<(usize, bool), postflow_mail::Error> {
+) -> Result<(usize, bool), shibapost_mail::Error> {
     let (folder, mailbox) = match from {
         OlderFrom::Inbox => (MailFolder::Inbox, INBOX.to_string()),
         OlderFrom::Folder(name) => (MailFolder::Other, name),
@@ -1301,7 +1302,7 @@ async fn load_older(
             save_parts(s, &parts)
         })
         .await
-        .map_err(|e| postflow_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
+        .map_err(|e| shibapost_mail::Error::Io(format!("could not save mail: {}", e.message)))?;
     conn.select(INBOX).await?;
     Ok((added, more))
 }
@@ -1318,7 +1319,7 @@ fn new_mail(
     now: i64,
     taken: &mut HashMap<String, u32>,
 ) -> NewMail {
-    let summary = postflow_mail::summarize(raw);
+    let summary = shibapost_mail::summarize(raw);
     let key = summary
         .message_id
         .clone()
@@ -1393,7 +1394,7 @@ async fn resolve(
     conn: &mut Connection,
     mailbox: &str,
     refs: &[&MailRef],
-) -> Result<Vec<(String, u32)>, postflow_mail::Error> {
+) -> Result<Vec<(String, u32)>, shibapost_mail::Error> {
     conn.select(mailbox).await?;
     let mut out = Vec::new();
     for r in refs {
@@ -1414,7 +1415,7 @@ async fn apply(
     session: &Arc<Session>,
     refs: &[MailRef],
     patch: &ItemPatch,
-) -> Result<(), postflow_mail::Error> {
+) -> Result<(), shibapost_mail::Error> {
     let mut by_mailbox: BTreeMap<&str, Vec<&MailRef>> = BTreeMap::new();
     for r in refs {
         by_mailbox.entry(r.mailbox.as_str()).or_default().push(r);
@@ -1457,7 +1458,7 @@ async fn move_mail(
     conn: &mut Connection,
     refs: &[MailRef],
     target: &str,
-) -> Result<(), postflow_mail::Error> {
+) -> Result<(), shibapost_mail::Error> {
     let mut by_mailbox: BTreeMap<&str, Vec<&MailRef>> = BTreeMap::new();
     for r in refs.iter().filter(|r| r.mailbox != target) {
         by_mailbox.entry(r.mailbox.as_str()).or_default().push(r);
@@ -1476,7 +1477,7 @@ async fn save_draft(
     conn: &mut Connection,
     raw: &[u8],
     replace: Option<&str>,
-) -> Result<(), postflow_mail::Error> {
+) -> Result<(), shibapost_mail::Error> {
     let mailbox = conn.drafts_mailbox().await?;
     conn.append_draft(&mailbox, raw).await?;
     if let Some(old) = replace {
@@ -1486,7 +1487,10 @@ async fn save_draft(
     Ok(())
 }
 
-async fn delete_draft(conn: &mut Connection, message_id: &str) -> Result<(), postflow_mail::Error> {
+async fn delete_draft(
+    conn: &mut Connection,
+    message_id: &str,
+) -> Result<(), shibapost_mail::Error> {
     if let Some(mailbox) = conn.special_mailbox(SpecialMailbox::Drafts).await? {
         conn.delete_by_message_id(&mailbox, message_id).await?;
     }
@@ -1498,7 +1502,7 @@ async fn fetch_body(
     conn: &mut Connection,
     session: &Arc<Session>,
     r: &MailRef,
-) -> Result<Vec<u8>, postflow_mail::Error> {
+) -> Result<Vec<u8>, shibapost_mail::Error> {
     let found = resolve(conn, &r.mailbox, &[r]).await?;
     let raw = match found.first() {
         Some((_, uid)) => conn
@@ -1511,7 +1515,7 @@ async fn fetch_body(
     };
     conn.select(INBOX).await?;
     let raw = raw.ok_or_else(|| {
-        postflow_mail::Error::Server("the message is no longer on the server".into())
+        shibapost_mail::Error::Server("the message is no longer on the server".into())
     })?;
     let (id, copy) = (r.id.clone(), raw.clone());
     let _ = session.db(move |s| s.set_mail_body(&id, &copy)).await;
@@ -1558,7 +1562,7 @@ mod tests {
         ServerConfig {
             host: "imap.mail.me.com".into(),
             port: 993,
-            security: postflow_mail::Security::Tls,
+            security: shibapost_mail::Security::Tls,
             username: username.into(),
         }
     }

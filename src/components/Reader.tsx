@@ -839,7 +839,7 @@ function ArticleView({
           {t("reader.loadingFullText")}
         </p>
       )}
-      {/* 内容在核心里已经净化过，见 postflow-feed 的 sanitize_html */}
+      {/* 内容在核心里已经净化过，见 shibapost-feed 的 sanitize_html */}
       <div
         ref={(el) => {
           body.current = el;
@@ -1002,7 +1002,7 @@ function MailView({
           onBody={(body, el) => setFrameBody(body && el ? { body, el } : null)}
         />
       ) : (
-        // 纯文本邮件在核心里已转义成安全的 HTML，见 postflow-mail 的 text_to_html
+        // 纯文本邮件在核心里已转义成安全的 HTML，见 shibapost-mail 的 text_to_html
         <div
           ref={setTextBody}
           className="article"
@@ -1085,7 +1085,7 @@ function FollowUpBanner({ item }: { item: ItemDetail }) {
 }
 
 /**
- * 邮件列表的退订：能一键退订的由 Postflow 替用户发退订请求；否则打开退订网页，或者写一封退订邮件。
+ * 邮件列表的退订：能一键退订的由 ShibaPost 替用户发退订请求；否则打开退订网页，或者写一封退订邮件。
  * 都先确认一下。
  */
 function Unsubscribe({
@@ -1471,7 +1471,7 @@ function MaximizeButton() {
   const t = useT();
   const maximized = useUi((s) => s.readerMaximized);
   const setMaximized = useUi((s) => s.setReaderMaximized);
-  // Postflow 自己开的全屏里阅读区一直是最大化的，这个按钮没用
+  // ShibaPost 自己开的全屏里阅读区一直是最大化的，这个按钮没用
   const ownFullscreen = useFullscreen((s) => s.on && s.ours);
   // 手机上阅读区本来就占满屏幕，最大化没有意义，也给其他按钮腾地方
   const mobile = useIsMobile();

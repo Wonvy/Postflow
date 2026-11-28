@@ -1,20 +1,20 @@
 [package]
-name = "postflow-desktop"
-description = "Postflow 桌面与移动端外壳"
+name = "shibapost-desktop"
+description = "ShibaPost 桌面与移动端外壳"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [lib]
-name = "postflow_desktop_lib"
+name = "shibapost_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-postflow-core = { workspace = true }
+shibapost-core = { workspace = true }
 # unstable：阅读区的原网页模式要在主窗口里再放一个网页视图（Window::add_child）
 tauri = { version = "2", features = ["unstable", "tray-icon", "protocol-asset"] }
 tauri-plugin-dialog = "2"
@@ -29,10 +29,10 @@ tokio = { version = "1.54.1", features = ["sync", "net"] }
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2.14"
 tauri-plugin-process = "2.4"
-# 只运行一个实例，再次打开时把已有的窗口拿出来；带上 deep-link，postflow:// 链接交给已经开着的那个
+# 只运行一个实例，再次打开时把已有的窗口拿出来；带上 deep-link，shibapost:// 链接交给已经开着的那个
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
-# postflow://save?url=… ：浏览器里的书签按钮把网页交给 Postflow 存进稍后读（见 deep_link.rs）
+# shibapost://save?url=… ：浏览器里的书签按钮把网页交给 ShibaPost 存进稍后读（见 deep_link.rs）
 tauri-plugin-deep-link = "2"
 # 在浏览器中使用：桌面应用自己提供网页版（见 web_access.rs）
-postflow-web = { workspace = true }
+shibapost-web = { workspace = true }
 local-ip-address = "0.6.13"

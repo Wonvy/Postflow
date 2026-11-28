@@ -453,7 +453,7 @@ function NativeFrame({
     let off: (() => void) | undefined;
     let cancelled = false;
     void import("@tauri-apps/api/event").then(({ listen }) =>
-      listen<{ url: string; loading: boolean }>("postflow:web", (e) => {
+      listen<{ url: string; loading: boolean }>("shibapost:web", (e) => {
         // 收起时换上的空白页不算
         if (e.payload.url !== "about:blank") onLoadingRef.current(e.payload.loading, e.payload.url);
       }).then((fn) => {

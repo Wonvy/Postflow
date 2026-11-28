@@ -7,11 +7,11 @@ import { exportFile, importFile, LangFileError, packCodeOf, placeholders } from 
 const reference = {
   "nav.inbox": "Inbox",
   "group.count": "{n} messages",
-  "update.available": "Postflow {version} is available",
+  "update.available": "ShibaPost {version} is available",
 };
 
 const file = (messages: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
-  JSON.stringify({ postflow_language: 1, code: "ja", name: "日本語", base: "en", messages, ...extra });
+  JSON.stringify({ shibapost_language: 1, code: "ja", name: "日本語", base: "en", messages, ...extra });
 
 test("an exported file imports back unchanged", () => {
   const text = exportFile({ code: "ja", name: "日本語", base: "en" }, { "nav.inbox": "受信トレイ" }, "0.1.12");
@@ -29,7 +29,7 @@ test("unknown keys are skipped and listed", () => {
 
 test("a translation that loses or invents a placeholder is dropped", () => {
   const report = importFile(
-    file({ "group.count": "メッセージ", "update.available": "Postflow {version} が公開されました", "nav.inbox": "{x}" }),
+    file({ "group.count": "メッセージ", "update.available": "ShibaPost {version} が公開されました", "nav.inbox": "{x}" }),
     reference,
   );
   assert.deepEqual(report.badPlaceholders.sort(), ["group.count", "nav.inbox"]);
@@ -47,7 +47,7 @@ test("broken files explain why", () => {
   };
   assert.equal(reason("{not json"), "json");
   assert.equal(reason("[]"), "format");
-  assert.equal(reason(file({ "nav.inbox": "x" }, { postflow_language: 99 })), "version");
+  assert.equal(reason(file({ "nav.inbox": "x" }, { shibapost_language: 99 })), "version");
   assert.equal(reason(file({ "nav.inbox": "x" }, { code: "日本" })), "code");
   assert.equal(reason(file({ "nav.inbox": "x" }, { code: "EN" })), "builtin");
   assert.equal(reason(file({ "nav.inbox": "x" }, { name: " " })), "name");

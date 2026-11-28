@@ -1,22 +1,22 @@
 //! 用 OAuth 登录的邮箱：Outlook.com、Hotmail、Microsoft 365，以及 Gmail 和 Google Workspace。
 //!
-//! 登录在系统浏览器里完成（流程见 `postflow_mail::oauth`）。换来的刷新令牌和密码一样只存在
+//! 登录在系统浏览器里完成（流程见 `shibapost_mail::oauth`）。换来的刷新令牌和密码一样只存在
 //! 这台设备的钥匙串里，单独一条，名字是「账户 ID#oauth」；访问令牌只放在内存里，快过期时用
 //! 刷新令牌换新的。账户本身会同步到其他设备，但不记登录方式：界面按服务商判断，
 //! Outlook 和 Microsoft 365 一律走 OAuth，别的设备上同样要登录一次。
 //!
-//! 登录要用一个在微软或 Google 注册的应用。Postflow 不自带，由用户自己注册后填进设置
+//! 登录要用一个在微软或 Google 注册的应用。ShibaPost 不自带，由用户自己注册后填进设置
 //! （`mail.microsoft_client_id`；Google 还要 `mail.google_client_secret`，会同步到其他设备）；
-//! 开发时也可以用环境变量 `POSTFLOW_MICROSOFT_CLIENT_ID`、`POSTFLOW_GOOGLE_CLIENT_ID`、`POSTFLOW_GOOGLE_CLIENT_SECRET`。
+//! 开发时也可以用环境变量 `SHIBAPOST_MICROSOFT_CLIENT_ID`、`SHIBAPOST_GOOGLE_CLIENT_ID`、`SHIBAPOST_GOOGLE_CLIENT_SECRET`。
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use postflow_mail::Auth;
-use postflow_mail::oauth::{self, OAuthError, Pkce, Provider, Redirect, Tokens};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_mail::Auth;
+use shibapost_mail::oauth::{self, OAuthError, Pkce, Provider, Redirect, Tokens};
 
 use crate::rpc::{parse, reply};
 use crate::{Core, RpcError, Session};
@@ -45,11 +45,11 @@ fn env(name: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-/// 登录服务的地址。测试和演示时用 `POSTFLOW_MICROSOFT_AUTHORITY`、`POSTFLOW_GOOGLE_AUTHORITY`
+/// 登录服务的地址。测试和演示时用 `SHIBAPOST_MICROSOFT_AUTHORITY`、`SHIBAPOST_GOOGLE_AUTHORITY`
 /// 换成本机的模拟服务。
 fn provider(name: &str) -> Provider {
     match name {
-        "google" => match env("POSTFLOW_GOOGLE_AUTHORITY") {
+        "google" => match env("SHIBAPOST_GOOGLE_AUTHORITY") {
             Some(base) => {
                 let base = base.trim_end_matches('/');
                 Provider::google(
@@ -60,7 +60,7 @@ fn provider(name: &str) -> Provider {
             None => Provider::google(oauth::GOOGLE_AUTHORIZE_URL, oauth::GOOGLE_TOKEN_URL),
         },
         _ => Provider::microsoft(
-            env("POSTFLOW_MICROSOFT_AUTHORITY")
+            env("SHIBAPOST_MICROSOFT_AUTHORITY")
                 .as_deref()
                 .unwrap_or(oauth::MICROSOFT_AUTHORITY),
         ),
@@ -162,16 +162,16 @@ impl Core {
         match name {
             "google" => Some(OAuthClient {
                 provider: "google".into(),
-                client_id: env("POSTFLOW_GOOGLE_CLIENT_ID")
+                client_id: env("SHIBAPOST_GOOGLE_CLIENT_ID")
                     .or_else(|| setting(GOOGLE_ID_SETTING))?,
                 client_secret: Some(
-                    env("POSTFLOW_GOOGLE_CLIENT_SECRET")
+                    env("SHIBAPOST_GOOGLE_CLIENT_SECRET")
                         .or_else(|| setting(GOOGLE_SECRET_SETTING))?,
                 ),
             }),
             _ => Some(OAuthClient {
                 provider: "microsoft".into(),
-                client_id: env("POSTFLOW_MICROSOFT_CLIENT_ID")
+                client_id: env("SHIBAPOST_MICROSOFT_CLIENT_ID")
                     .or_else(|| setting(CLIENT_ID_SETTING))?,
                 client_secret: None,
             }),

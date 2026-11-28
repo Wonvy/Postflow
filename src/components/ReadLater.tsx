@@ -2,7 +2,7 @@
 // - 列表顶上的输入框：贴网址回车存下；旁边「导入」读 Pocket、Instapaper 的导出文件或浏览器书签。
 // - 在别处（不在输入框里）粘贴一个网址，直接存进稍后读。
 // - 文章、邮件里右键链接 →「存到稍后读」（见 Reader.tsx）。
-// - 浏览器里点「存到 Postflow」书签按钮：桌面应用收到 postflow://save?url=…（见 src-tauri/src/deep_link.rs），
+// - 浏览器里点「存到 ShibaPost」书签按钮：桌面应用收到 shibapost://save?url=…（见 src-tauri/src/deep_link.rs），
 //   网页版打开 /?save=… 。
 // 存的时候核心把网页的标题、封面和正文一起抓下来存好，见 crates/core/src/later.rs。
 
@@ -70,17 +70,17 @@ export function usePasteToSave() {
   }, []);
 }
 
-/** 桌面应用的书签按钮：把当前网页交给 Postflow。 */
+/** 桌面应用的书签按钮：把当前网页交给 ShibaPost。 */
 export const DESKTOP_BOOKMARKLET =
-  "javascript:location.href='postflow://save?url='+encodeURIComponent(location.href)";
+  "javascript:location.href='shibapost://save?url='+encodeURIComponent(location.href)";
 
-/** 网页版的书签按钮：在新标签页里打开 Postflow，带着要存的地址。 */
+/** 网页版的书签按钮：在新标签页里打开 ShibaPost，带着要存的地址。 */
 export function webBookmarklet(origin: string): string {
   return `javascript:window.open('${origin}/?save='+encodeURIComponent(location.href),'_blank')`;
 }
 
 /**
- * 从外面来的「存到 Postflow」：桌面应用收 postflow:// 链接转来的事件（应用被链接拉起来时，先取走
+ * 从外面来的「存到 ShibaPost」：桌面应用收 shibapost:// 链接转来的事件（应用被链接拉起来时，先取走
  * 早到的那几个）；网页版看地址栏里的 ?save=，存完把它从地址里去掉。
  */
 export function useExternalSaves() {
@@ -103,7 +103,7 @@ export function useExternalSaves() {
     let alive = true;
     void (async () => {
       const [{ listen }, { invoke }] = await Promise.all([import("@tauri-apps/api/event"), import("@tauri-apps/api/core")]);
-      const off = await listen<string>("postflow://save-later", ({ payload }) => {
+      const off = await listen<string>("shibapost://save-later", ({ payload }) => {
         // 事件到了就不用再等「取走」：清掉那份，免得存两次
         void invoke<string[]>("pending_saves").catch(() => []);
         const target = singleUrl(payload);
@@ -127,7 +127,7 @@ export function useExternalSaves() {
   }, []);
 }
 
-/** 拖到浏览器书签栏的「存到 Postflow」按钮，和复制它的代码。 */
+/** 拖到浏览器书签栏的「存到 ShibaPost」按钮，和复制它的代码。 */
 function BookmarkletPanel() {
   const t = useT();
   const code = isTauri ? DESKTOP_BOOKMARKLET : webBookmarklet(window.location.origin);

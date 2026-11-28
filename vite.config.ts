@@ -2,8 +2,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// 在普通浏览器里开发时，界面通过这个地址访问 postflow-web（npm run server）
-const API = process.env.POSTFLOW_API ?? "http://127.0.0.1:4319";
+// 在普通浏览器里开发时，界面通过这个地址访问 shibapost-web（npm run server）
+const API = process.env.SHIBAPOST_API ?? "http://127.0.0.1:4319";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

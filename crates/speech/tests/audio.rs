@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use postflow_speech::AudioReader;
-use postflow_speech::audio::SAMPLE_RATE;
+use shibapost_speech::AudioReader;
+use shibapost_speech::audio::SAMPLE_RATE;
 
 /// 读完整个文件，返回所有样本。
 fn read_all(reader: &mut AudioReader) -> Vec<f32> {

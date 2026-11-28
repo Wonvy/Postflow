@@ -6,9 +6,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use postflow_mail::Attachment;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_mail::Attachment;
 
 use super::{Letter, recipients};
 use crate::refresh::now;

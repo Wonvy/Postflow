@@ -197,7 +197,7 @@ fn build_with(out: &Outgoing, now: i64, draft: bool) -> Result<Built> {
         .subject(one_line(&out.subject))
         .date(now)
         .message_id(message_id.clone())
-        .header("User-Agent", Raw::new("Postflow"));
+        .header("User-Agent", Raw::new("ShibaPost"));
     if let Some(ics) = out.calendar.as_deref() {
         use mail_builder::headers::content_type::ContentType;
         use mail_builder::mime::MimePart;

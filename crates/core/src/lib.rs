@@ -1,4 +1,4 @@
-//! Postflow 的核心：把存储、抓取和调度组装起来，对外只暴露一个 `rpc` 入口和一个事件流。
+//! ShibaPost 的核心：把存储、抓取和调度组装起来，对外只暴露一个 `rpc` 入口和一个事件流。
 //!
 //! 桌面外壳通过进程内调用使用它，网页访问通过 HTTP 使用它，两边走的是同一套方法。
 
@@ -33,11 +33,11 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use postflow_feed::Client;
-use postflow_speech::Speech;
-use postflow_store::{Store, ids};
-use postflow_translate::Translator;
 use serde::{Deserialize, Serialize};
+use shibapost_feed::Client;
+use shibapost_speech::Speech;
+use shibapost_store::{Store, ids};
+use shibapost_translate::Translator;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
@@ -56,11 +56,11 @@ pub enum Error {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("{0}")]
-    Feed(#[from] postflow_feed::Error),
+    Feed(#[from] shibapost_feed::Error),
     #[error("{0}")]
-    Translate(#[from] postflow_translate::Error),
+    Translate(#[from] shibapost_translate::Error),
     #[error("{0}")]
-    Speech(#[from] postflow_speech::Error),
+    Speech(#[from] shibapost_speech::Error),
 }
 
 /// 推给界面的事件。
@@ -79,7 +79,7 @@ pub enum Event {
     /// 收件箱里来了新邮件。界面据此弹系统通知；只列最新的几封，`total` 是总数。
     NewMail {
         account_id: String,
-        mails: Vec<postflow_store::FreshMail>,
+        mails: Vec<shibapost_store::FreshMail>,
         total: usize,
         /// 全部新邮件（不止列出的那几封）的发件人地址，小写，从新到旧。界面「只通知重要联系人」时
         /// 按它数有几封是重要联系人的。
@@ -126,19 +126,19 @@ pub enum Event {
         id: String,
         state: subtitles::SubtitleState,
         /// 新出来的句子。`from`、`to` 给了的话，落在这段时间里的旧句子由它们替换。
-        cues: Vec<postflow_speech::Cue>,
+        cues: Vec<shibapost_speech::Cue>,
         #[serde(skip_serializing_if = "Option::is_none")]
         from: Option<f64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         to: Option<f64>,
         /// 已经转过的时间段。
-        covered: postflow_speech::Covered,
+        covered: shibapost_speech::Covered,
         duration: Option<f64>,
         complete: bool,
         /// 用哪个模型转的（模型加载好以前是空的）。
         model: String,
         /// 每个说话人（按编号）猜出来的男声女声，猜不出是 null。
-        voices: Vec<Option<postflow_speech::Gender>>,
+        voices: Vec<Option<shibapost_speech::Gender>>,
         /// 等这一期下载到本机时的进度。
         received: u64,
         total: Option<u64>,
@@ -236,7 +236,7 @@ impl Session {
     /// 在阻塞线程池里跑一次数据库操作，不卡住异步运行时。
     pub async fn db<T, F>(&self, f: F) -> Result<T, RpcError>
     where
-        F: FnOnce(&Store) -> postflow_store::Result<T> + Send + 'static,
+        F: FnOnce(&Store) -> shibapost_store::Result<T> + Send + 'static,
         T: Send + 'static,
     {
         let store = self.store.clone();
@@ -269,14 +269,14 @@ impl Session {
 }
 
 /// 邮件原文里给全文搜索用的文字。
-pub(crate) fn mail_search_text(raw: &[u8]) -> postflow_store::MailText {
-    let (body, recipients, files) = postflow_mail::search_text(raw);
-    postflow_store::MailText {
+pub(crate) fn mail_search_text(raw: &[u8]) -> shibapost_store::MailText {
+    let (body, recipients, files) = shibapost_mail::search_text(raw);
+    shibapost_store::MailText {
         body,
         recipients,
         attachments: files
             .into_iter()
-            .map(|a| postflow_store::AttachmentMeta {
+            .map(|a| shibapost_store::AttachmentMeta {
                 index: a.index,
                 name: a.name,
                 mime: a.mime,

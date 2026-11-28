@@ -1,20 +1,20 @@
-# Postflow
+# ShibaPost
 
 **English** | [简体中文](README.zh-CN.md)
 
 An open-source, cross-platform client for your email and RSS feeds, each in its own space in one app.
 
-- **Local first.** Postflow talks to your mail servers and feeds directly from your device. No server, no account.
+- **Local first.** ShibaPost talks to your mail servers and feeds directly from your device. No server, no account.
 - **Sync on your terms.** Your data is a folder of append-only logs. Keep it in sync between devices with Syncthing, iCloud Drive, Dropbox or any file-sync tool.
 - **Keyboard first.** A calm three-pane layout where every frequent action has a single key.
 
 <p align="center">
-  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg"><img alt="Download for macOS" src="https://img.shields.io/badge/Download-macOS-7533e8?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows-7533e8?style=for-the-badge&logo=windows&logoColor=white"></a>
-  <a href="https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage"><img alt="Download for Linux" src="https://img.shields.io/badge/Download-Linux-7533e8?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-macOS.dmg"><img alt="Download for macOS" src="https://img.shields.io/badge/Download-macOS-7533e8?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Windows-setup.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows-7533e8?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.AppImage"><img alt="Download for Linux" src="https://img.shields.io/badge/Download-Linux-7533e8?style=for-the-badge&logo=linux&logoColor=white"></a>
   <br>
-  <a href="https://github.com/Wonvy/Postflow/releases/latest"><img alt="Latest version" src="https://img.shields.io/github/v/release/Wonvy/Postflow?label=latest&color=7533e8"></a>
-  <a href="https://github.com/Wonvy/Postflow/releases">All versions and release notes</a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases/latest"><img alt="Latest version" src="https://img.shields.io/github/v/release/Wonvy/ShibaPost?label=latest&color=7533e8"></a>
+  <a href="https://github.com/Wonvy/ShibaPost/releases">All versions and release notes</a>
 </p>
 
 ![Mail inbox grouped by sender, with the Mail and Feeds switch at the top of the sidebar](docs/screenshots/en/inbox.png)
@@ -33,15 +33,15 @@ An open-source, cross-platform client for your email and RSS feeds, each in its 
 ## Download
 
 Click your system to download the latest version. Installers for every version are on the
-[Releases](https://github.com/Wonvy/Postflow/releases) page (on GitHub it's also the **Releases** box on the right of the repository page).
+[Releases](https://github.com/Wonvy/ShibaPost/releases) page (on GitHub it's also the **Releases** box on the right of the repository page).
 
 | System | Download |
 |---|---|
-| macOS (one app for Apple silicon and Intel) | [Postflow-macOS.dmg](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-macOS.dmg) |
-| Windows 10 / 11 | [Postflow-Windows-setup.exe](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows-setup.exe) (recommended) or [.msi](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Windows.msi) |
-| Linux (x86-64) | [.AppImage](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.AppImage), [.deb](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.deb) (Debian, Ubuntu) or [.rpm](https://github.com/Wonvy/Postflow/releases/latest/download/Postflow-Linux.rpm) (Fedora, openSUSE) |
+| macOS (one app for Apple silicon and Intel) | [ShibaPost-macOS.dmg](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-macOS.dmg) |
+| Windows 10 / 11 | [ShibaPost-Windows-setup.exe](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Windows-setup.exe) (recommended) or [.msi](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Windows.msi) |
+| Linux (x86-64) | [.AppImage](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.AppImage), [.deb](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.deb) (Debian, Ubuntu) or [.rpm](https://github.com/Wonvy/ShibaPost/releases/latest/download/ShibaPost-Linux.rpm) (Fedora, openSUSE) |
 
-Postflow updates itself: when a new version is out, it offers to install it.
+ShibaPost updates itself: when a new version is out, it offers to install it.
 
 The installers are not yet signed by Apple or Microsoft. On macOS, the first time you open the app go to
 **System Settings → Privacy & Security** and click **Open Anyway**. On Windows, when SmartScreen appears,
@@ -55,12 +55,12 @@ click **More info → Run anyway**.
   NetEase, Fastmail, and more), then enter your address and password; the server settings are filled in for you.
 - Business addresses on your own domain are detected from their mail records: Google Workspace, Microsoft 365,
   Tencent Exmail, Alibaba Mail, NetEase Enterprise, Feishu and others.
-- New mail arrives instantly on servers that support IMAP IDLE. Postflow also checks every five minutes and when you
+- New mail arrives instantly on servers that support IMAP IDLE. ShibaPost also checks every five minutes and when you
   switch back to the app, so servers that never announce new mail are covered too.
 - HTML mail is sanitized and shown in a sandbox with scripts removed. Remote images, often used to track when you
   open a message, stay blocked until you allow them for one message or for a sender.
 - Read, starred and archived states are written back to the server, so your phone and webmail stay in step.
-- New mail shows a system notification while Postflow is in the background, and the Dock or taskbar icon shows how
+- New mail shows a system notification while ShibaPost is in the background, and the Dock or taskbar icon shows how
   many inbox messages are unread (the tab title does in a browser). Both can be turned off in Settings → General.
 - Newsletters and mailing lists get an Unsubscribe link in the message header. Lists that support one-click
   unsubscribe are unsubscribed right away; otherwise their unsubscribe page or an unsubscribe email opens.
@@ -79,9 +79,9 @@ click **More info → Run anyway**.
 - Sent shows what you've sent from every mailbox, including mail sent from your phone or webmail, and the people
   you write to come first when you fill in recipients.
 - Your own folders: click the arrow next to a mailbox (or choose "Show folders" in its menu) to list its other
-  folders, nested as on the server. A folder syncs once you open it and keeps up while Postflow runs. Gmail
+  folders, nested as on the server. A folder syncs once you open it and keeps up while ShibaPost runs. Gmail
   labels show up as folders too.
-- Postflow fetches the most recent mail of each folder first. At the end of a mailbox or folder list, "Load older
+- ShibaPost fetches the most recent mail of each folder first. At the end of a mailbox or folder list, "Load older
   mail from the server" fetches the next 100.
 - Move mail into a folder with "Move to folder" in its right-click menu, or drag it onto the folder in the
   sidebar.
@@ -105,10 +105,10 @@ click **More info → Run anyway**.
   one downloads the message first).
 - Verification code alerts (Settings → General, off by default): when a new message carries a verification code,
   the code pops up in the bottom-right corner with a Copy button, and the system notification shows it while
-  Postflow is in the background.
+  ShibaPost is in the background.
 - Notifications for important senders only (Settings → General): mark people as important from their card, and only
   their mail notifies you. The list syncs to your other devices.
-- Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so Postflow
+- Outlook.com, Hotmail and Microsoft 365 sign in with your Microsoft account (OAuth 2.0) in your browser, so ShibaPost
   never sees the password. The sign-in stays in this device's keychain and renews itself. See
   [Outlook.com and Microsoft 365](#outlookcom-and-microsoft-365). Gmail can sign in with your Google account the
   same way, or with an app password; see [Gmail with a Google account](#gmail-with-a-google-account).
@@ -121,16 +121,16 @@ click **More info → Run anyway**.
   one file, [`public/catalog/catalog.json`](public/catalog/catalog.json), with the icons inside; the app checks GitHub
   for a newer version at most once a day (Settings → Feeds can turn that off). See
   [`scripts/catalog.mjs`](scripts/catalog.mjs) to check the feeds or add icons.
-- Paste a website or feed address and Postflow finds the feed. RSS, Atom and JSON Feed are supported. A preview
+- Paste a website or feed address and ShibaPost finds the feed. RSS, Atom and JSON Feed are supported. A preview
   appears as soon as you paste: the site's icon, name and description, how often it posts, and its latest items, so
   you can see what you're subscribing to. Sites that offer several feeds let you pick one.
 - YouTube channels and playlists: paste an address like `https://www.youtube.com/@name` to subscribe to the channel's
   new videos, with the channel's avatar as the feed icon.
-- Public Telegram channels: paste `https://t.me/name`. Channels have no feed, so Postflow reads the channel's public
+- Public Telegram channels: paste `https://t.me/name`. Channels have no feed, so ShibaPost reads the channel's public
   page (the latest messages, with pictures and link previews). Private channels and groups can't be followed.
 - Popular sites under Add feed → Address: pick YouTube, GitHub, GitLab, Codeberg, Reddit, Bluesky, Mastodon, Lemmy,
   Telegram, Medium, Substack, DEV, Tumblr, Stack Overflow, Hacker News, Lobsters, V2EX, Discourse forums, arXiv, PyPI,
-  Steam, Vimeo, Pinterest or Letterboxd, type a name, and Postflow builds the feed address, no RSSHub needed. Pasting
+  Steam, Vimeo, Pinterest or Letterboxd, type a name, and ShibaPost builds the feed address, no RSSHub needed. Pasting
   a profile, project or store page of these sites works too.
 - Podcasts: search for a show by name under Add feed → Podcasts (results from Apple's public podcast directory; you
   subscribe to the show's own RSS feed). Episodes play in the reader and keep playing in a small player under the
@@ -162,7 +162,7 @@ click **More info → Run anyway**.
   mailbox, feed or folder for its menu.
 - A warning sign next to a feed means its last refresh failed; hover over it for the reason. Feeds that move with a
   permanent redirect are updated to their new address automatically. When a feed has moved without one, its Edit
-  dialog can look for the feed on the site again, or take a new address: Postflow checks it first and keeps the same
+  dialog can look for the feed on the site again, or take a new address: ShibaPost checks it first and keeps the same
   feed, with its read and starred states and earlier items.
 - Load the full article from the original page for feeds that only publish a summary. The full-text button in the
   reader is a switch: while it is on, every article you open loads in full. WeChat articles and pages that describe
@@ -174,7 +174,7 @@ click **More info → Run anyway**.
   original changes or disappears, and it syncs to your other devices. Saved pages stay out of All articles; archive one
   when you're done. "Import" brings in a Pocket or Instapaper export (CSV or HTML) or browser bookmarks; archived
   items stay archived, and their text is fetched when you open them. The bookmark button next to Import gives you a
-  "Save to Postflow" button to drag to your browser's bookmarks bar.
+  "Save to ShibaPost" button to drag to your browser's bookmarks bar.
 - Highlights and notes: select text in an article or message and click Highlight or Note. Highlights show in the text and are
   listed under the article, where you can write notes, delete them, or copy them as Markdown. "Export all highlights
   and notes" in the command palette copies everything as Markdown, grouped by article. They sync to your other
@@ -195,7 +195,7 @@ click **More info → Run anyway**.
 - Web page view (the globe button in the reader, or `W`): a switch that shows each item's original web page right in
   the reader instead of the parsed content. A device picker above the page previews it as Desktop, iPad, iPhone or
   Android, with that device's screen size and, in the desktop app, its user agent; rotate for landscape. The desktop app
-  shows the page in a separate web view, so sites that refuse to be embedded still work. In a browser, Postflow checks
+  shows the page in a separate web view, so sites that refuse to be embedded still work. In a browser, ShibaPost checks
   first and, when a site doesn't allow embedding, says so and offers to open it in your browser. Mail without a web
   link keeps its normal view.
 
@@ -244,8 +244,8 @@ click **More info → Run anyway**.
 - The sidebar's category, account and feed sections fold away.
 - Dark and light themes, compact and comfortable list density, English and Chinese.
 - Use it in a browser too: turn on Settings → Browser access in the desktop app, and the app serves the same
-  interface and data on a port of your choice. See [Using Postflow in a browser](#using-postflow-in-a-browser).
-- Updates itself: when a new version is out, Postflow offers to download it, install it and restart. Update
+  interface and data on a port of your choice. See [Using ShibaPost in a browser](#using-shibapost-in-a-browser).
+- Updates itself: when a new version is out, ShibaPost offers to download it, install it and restart. Update
   packages are signed, and the app refuses any package whose signature doesn't match. On Linux, `.deb` and `.rpm`
   installs ask for your administrator password to install the update.
 
@@ -256,20 +256,20 @@ click **More info → Run anyway**.
   unread, pinned to the top of the inbox, with a notification. Snoozes sync to your other devices, for mail too.
 - Undo send: after you press Send there are a few seconds to take it back (Settings → General; 5 seconds by
   default, or off).
-- Schedule send (the clock next to Send): pick a time and Postflow sends it then. Scheduled mail waits under
-  Scheduled in the Mail sidebar, where you can send it now or cancel it back into a draft. Postflow needs to be
+- Schedule send (the clock next to Send): pick a time and ShibaPost sends it then. Scheduled mail waits under
+  Scheduled in the Mail sidebar, where you can send it now or cancel it back into a draft. ShibaPost needs to be
   running to send; if it's closed at that time, it sends when you open it next.
 - Command palette (`⌘K` / `Ctrl+K`, or the button at the bottom of the sidebar): jump to any view, mailbox, feed,
   folder, category or settings page, or act on the open item.
 - Keeps running in the tray (menu bar) when you close the window, still checking mail, with the unread count on the
-  icon. Turn it off in Settings → General. The tray menu shows the unread count and can open Postflow, start a new
+  icon. Turn it off in Settings → General. The tray menu shows the unread count and can open ShibaPost, start a new
   message, check mail and feeds, open Settings, or quit.
 - Hide at the screen edge (off by default; Settings → General, or the tray menu): drag the window to the top, left or
   right edge of the screen and it slides away when the pointer leaves, leaving a thin strip. Touch the strip to bring
   it back. On Windows, dragging to the top edge docks the window there instead of letting Snap maximize it.
-- Works on phones: on a narrow screen Postflow shows one pane at a time, with the sidebar sliding in from the left
+- Works on phones: on a narrow screen ShibaPost shows one pane at a time, with the sidebar sliding in from the left
   and a back button in the reader. Swipe a row left to archive or right to mark it read or unread. Open it on your
-  phone through [browser access](#using-postflow-in-a-browser) and add it to the home screen to use it like an app.
+  phone through [browser access](#using-shibapost-in-a-browser) and add it to the home screen to use it like an app.
 
 **AI (optional, bring your own key)**
 
@@ -323,13 +323,13 @@ click **More info → Run anyway**.
 
 ## Outlook.com and Microsoft 365
 
-Microsoft no longer lets mail apps sign in to Outlook.com, Hotmail or Microsoft 365 with a password. Postflow signs in
+Microsoft no longer lets mail apps sign in to Outlook.com, Hotmail or Microsoft 365 with a password. ShibaPost signs in
 the way Microsoft asks desktop apps to: it opens Microsoft's sign-in page in your browser, Microsoft sends the browser
-back to a temporary address on your own computer (`http://localhost:<port>`), and Postflow exchanges that for tokens
+back to a temporary address on your own computer (`http://localhost:<port>`), and ShibaPost exchanges that for tokens
 (OAuth 2.0 authorization code with PKCE). The refresh token is kept in the system keychain like a password, never in
 the data folder, so each device signs in on its own. No server of ours is involved.
 
-This needs an application ID registered with Microsoft. Postflow doesn't come with one: you register your own, so
+This needs an application ID registered with Microsoft. ShibaPost doesn't come with one: you register your own, so
 the sign-in goes through your app and nobody else's. It's free and takes a few minutes:
 
 1. Sign in to the [Microsoft Entra admin center](https://entra.microsoft.com) (or the Azure portal) and open
@@ -341,17 +341,17 @@ the sign-in goes through your app and nobody else's. It's free and takes a few m
 5. Optional, but work accounts often need it: under **API permissions**, add the delegated permissions
    `IMAP.AccessAsUser.All`, `SMTP.Send` and `offline_access`.
 
-Then add an Outlook or Microsoft 365 account in Postflow, paste the ID when it asks, and click **Sign in with
+Then add an Outlook or Microsoft 365 account in ShibaPost, paste the ID when it asks, and click **Sign in with
 Microsoft**. The ID is saved in your settings and syncs to your other devices; **Change application ID** under the
 sign-in button replaces it (mailboxes already signed in keep working). Developers can also set the
-`POSTFLOW_MICROSOFT_CLIENT_ID` environment variable. Work and school mailboxes need IMAP turned on, and your admin may
+`SHIBAPOST_MICROSOFT_CLIENT_ID` environment variable. Work and school mailboxes need IMAP turned on, and your admin may
 have to approve the app. To send mail, Microsoft 365 also needs SMTP sending (authenticated SMTP) allowed for the
-mailbox. Mailboxes signed in before Postflow could send keep receiving mail; sign in again from the mailbox's
+mailbox. Mailboxes signed in before ShibaPost could send keep receiving mail; sign in again from the mailbox's
 settings to allow sending.
 
 ## Gmail with a Google account
 
-Gmail and Google Workspace work with an app password, which is the quickest way. Postflow can also sign in with your
+Gmail and Google Workspace work with an app password, which is the quickest way. ShibaPost can also sign in with your
 Google account (OAuth 2.0 with PKCE, in your browser, the same way as for Microsoft). Like Microsoft, Google needs an
 OAuth client that you register yourself, once:
 
@@ -360,19 +360,19 @@ OAuth client that you register yourself, once:
    user.
 2. Under **Credentials**, create an **OAuth client ID** of type **Desktop app**, and copy its client ID and client
    secret. Google needs the secret even for desktop apps; it isn't really secret there.
-3. In Postflow, add a Gmail account, choose **Google account**, paste the ID and secret, and click **Sign in with
+3. In ShibaPost, add a Gmail account, choose **Google account**, paste the ID and secret, and click **Sign in with
    Google**. They are saved in your settings and sync to your other devices.
 
 While the consent screen is in **Testing**, Google ends sign-ins after seven days; publish it (**In production**) to
 keep them. Google then warns that the app isn't verified, because it asks for full mail access; for an app only you
-use, continue past the warning under **Advanced**. Developers can set `POSTFLOW_GOOGLE_CLIENT_ID` and
-`POSTFLOW_GOOGLE_CLIENT_SECRET` instead.
+use, continue past the warning under **Advanced**. Developers can set `SHIBAPOST_GOOGLE_CLIENT_ID` and
+`SHIBAPOST_GOOGLE_CLIENT_SECRET` instead.
 
-## Using Postflow in a browser
+## Using ShibaPost in a browser
 
-The desktop app can serve Postflow to a browser, on this computer or on your phone:
+The desktop app can serve ShibaPost to a browser, on this computer or on your phone:
 
-1. Open **Settings → Browser access** and turn on **Use Postflow in a browser**.
+1. Open **Settings → Browser access** and turn on **Use ShibaPost in a browser**.
 2. Click the open button next to the link. The browser shows the same mailboxes and feeds as the app.
 3. For a phone or another computer on the same network, turn on **Allow access from your network** and scan the
    QR code (or send yourself the link).
@@ -431,8 +431,8 @@ Run the desktop app:
 npm run app
 ```
 
-This development build is called Postflow Dev and keeps its own settings and index, so it runs next to an installed
-Postflow without touching it. Point it at a separate data folder when it asks, unless you mean to test syncing with
+This development build is called ShibaPost Dev and keeps its own settings and index, so it runs next to an installed
+ShibaPost without touching it. Point it at a separate data folder when it asks, unless you mean to test syncing with
 your real data.
 
 Work on the interface in a normal browser (two terminals):
@@ -445,7 +445,7 @@ npm run server
 npm run dev
 ```
 
-Then open <http://localhost:1420>. In this mode the data lives in `.postflow-dev/` inside the repository, away from
+Then open <http://localhost:1420>. In this mode the data lives in `.shibapost-dev/` inside the repository, away from
 your real data.
 
 ### Demo data
@@ -465,8 +465,8 @@ To keep the demo password out of your keychain, use `npm run server:demo` instea
 passwords in memory only.
 
 The demo also has a mailbox that, like Outlook.com, only accepts OAuth sign-in, with a fake Microsoft sign-in page.
-Start the app or server with `POSTFLOW_MICROSOFT_AUTHORITY=http://127.0.0.1:1145/common` and
-`POSTFLOW_MICROSOFT_CLIENT_ID=demo`, add an **Outlook** account `outlook-demo@example.com`, set the server to
+Start the app or server with `SHIBAPOST_MICROSOFT_AUTHORITY=http://127.0.0.1:1145/common` and
+`SHIBAPOST_MICROSOFT_CLIENT_ID=demo`, add an **Outlook** account `outlook-demo@example.com`, set the server to
 `127.0.0.1`, port `1147`, encryption **None**, then click **Sign in with Microsoft** and **Allow**.
 
 ### Tests and checks
@@ -510,11 +510,11 @@ git push --follow-tags
 
 The first command sets version 0.2.0 in `package.json`, `Cargo.toml` and both lock files, commits, and tags
 `v0.2.0`. Pushing the tag starts GitHub Actions, which builds the installers on macOS, Windows and Linux and
-publishes the release once all three succeed. Each installer also gets a copy without the version in its name (`Postflow-macOS.dmg` and so
+publishes the release once all three succeed. Each installer also gets a copy without the version in its name (`ShibaPost-macOS.dmg` and so
 on), which the download links at the top of this README point to. A version with a hyphen, such as `0.2.0-beta.1`, is published as a
 pre-release.
 
-Every release also contains signed update packages and a `latest.json`, which installed copies of Postflow check
+Every release also contains signed update packages and a `latest.json`, which installed copies of ShibaPost check
 to update themselves. Signing needs the private key in the repository secret `TAURI_SIGNING_PRIVATE_KEY`
 (Settings → Secrets and variables → Actions); the matching public key is in `src-tauri/tauri.conf.json`. Keep a
 backup of the private key: without it, installed copies can't verify future updates.
@@ -556,4 +556,4 @@ Icons are from [Lucide](https://lucide.dev) (ISC). The font is [Inter](https://r
 Translation uses the [Firefox Translations](https://github.com/mozilla/translations) models (MPL-2.0), run by
 [fxtranslate](https://crates.io/crates/fxtranslate) (MPL-2.0). Models are downloaded on demand and are not bundled.
 
-Postflow is free software under the [GNU General Public License v3.0 or later](LICENSE): you can use, study, share and change it, and anything you distribute that builds on it must be released under the same license.
+ShibaPost is free software under the [GNU General Public License v3.0 or later](LICENSE): you can use, study, share and change it, and anything you distribute that builds on it must be released under the same license.

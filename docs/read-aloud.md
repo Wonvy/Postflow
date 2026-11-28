@@ -2,7 +2,7 @@
 
 [中文](read-aloud.zh-CN.md)
 
-Click **Read aloud** next to the date under an article's title. Postflow reads what the reader is showing (the full
+Click **Read aloud** next to the date under an article's title. ShibaPost reads what the reader is showing (the full
 text when that's open, the translation when that's on), marks the sentence it's on, and keeps going when you open
 another article, with small controls under the list. Pause, skip sentences and change the speed from the bar that
 replaces the button. When it finishes it moves on to the next article in the list; see
@@ -10,7 +10,7 @@ replaces the button. When it finishes it moves on to the next article in the lis
 
 ## Listening to the news
 
-Click the **headphones** above the list (Listen to this list) and Postflow reads one article after another, starting
+Click the **headphones** above the list (Listen to this list) and ShibaPost reads one article after another, starting
 from the article that's open, or the first one. **Read aloud** under a title does the same from that article. Each
 article starts with its source and headline. If the reader is showing the article that just finished, it opens the
 next one so you can follow along; otherwise reading continues in the background, with controls under the list.
@@ -30,9 +30,9 @@ while a local voice is reading.
 ### AI summaries and cost
 
 The AI summary is the same one the AI panel shows, saved on this device, so an article that already has one costs
-nothing. Postflow only asks AI to write one for the article being read and the next one (prepared in advance so there
+nothing. ShibaPost only asks AI to write one for the article being read and the next one (prepared in advance so there
 is no wait between articles), never for the whole list. The options menu shows how many summaries AI wrote during the
-current session. If AI isn't available (no service set up, out of credit, no network), Postflow says why once and reads the
+current session. If AI isn't available (no service set up, out of credit, no network), ShibaPost says why once and reads the
 feed's summaries for the rest of the session instead of retrying. Mail is only sent to a cloud AI service if you
 allowed that in Settings → AI; otherwise that message's own summary is read.
 
@@ -77,7 +77,7 @@ you add under **Voice samples**, copying its timbre and tone, which makes it sou
 
 1. Download ZipVoice in Settings → Read aloud.
 2. Click **Add a recording…** and choose an audio file (MP3, M4A, WAV, Ogg, FLAC…). Use 3–10 seconds of one person
-   speaking clearly, with no music or background noise. Postflow keeps the first 12 seconds and trims silence at the
+   speaking clearly, with no music or background noise. ShibaPost keeps the first 12 seconds and trims silence at the
    ends.
 3. Check the text under the recording: it must match what is said, word for word. If a speech recognition model is
    installed (Settings → Subtitles), it's filled in for you; otherwise type it.
@@ -87,9 +87,9 @@ you add under **Voice samples**, copying its timbre and tone, which makes it sou
 Only use your own voice, or a recording the speaker agreed to. Recordings stay on this computer and aren't synced.
 
 ZipVoice is slower than Kokoro (about 1.5× real time on an Apple M4, against 4× for Kokoro), so on older computers it
-may not keep up and there will be pauses between sentences. Its dictionary has no English words, so Postflow also
+may not keep up and there will be pauses between sentences. Its dictionary has no English words, so ShibaPost also
 downloads Kokoro's English dictionary and converts it to standard IPA the first time ZipVoice loads. In this version of
-sherpa-onnx ZipVoice ignores the Chinese number rules, so Postflow writes numbers in Chinese sentences as characters
+sherpa-onnx ZipVoice ignores the Chinese number rules, so ShibaPost writes numbers in Chinese sentences as characters
 itself. Very short sentences can't be generated fast; those are generated at normal speed and played faster.
 
 ## How it works
@@ -101,13 +101,13 @@ because the model is loaded then. Changing the speed regenerates from the curren
 
 The model needs about 700 MB of memory while it's reading. It's released after ten minutes without use.
 
-When you use Postflow in a browser on another device (Settings → Web access), the computer running Postflow does the
+When you use ShibaPost in a browser on another device (Settings → Web access), the computer running ShibaPost does the
 reading and the browser plays it, so a phone gets the same voice.
 
 ## Before reading
 
 Kokoro reads words from a dictionary and skips words it doesn't know, which in news means most abbreviations and brand
-names. Postflow tidies each sentence first:
+names. ShibaPost tidies each sentence first:
 
 - Links aren't read.
 - Abbreviations are spelled out (`GPU` → G P U), joined-up names are split (`OpenAI` → Open AI, `MacBook` → Mac Book),
@@ -122,10 +122,10 @@ Names it can't piece together (many Chinese names written in pinyin, such as Hua
 ## Trying it from the command line
 
 ```sh
-cargo run --release -p postflow-speech --example speak -- models .postflow-dev/local/voices
-cargo run --release -p postflow-speech --example speak -- download .postflow-dev/local/voices kokoro-v1.1-zh
-cargo run --release -p postflow-speech --example speak -- prepare .postflow-dev/local/voices kokoro-v1.1-zh "OpenAI 发布了 GPT-5"
-cargo run --release -p postflow-speech --example speak -- say .postflow-dev/local/voices kokoro-v1.1-zh zf_094 "你好" out.wav
+cargo run --release -p shibapost-speech --example speak -- models .shibapost-dev/local/voices
+cargo run --release -p shibapost-speech --example speak -- download .shibapost-dev/local/voices kokoro-v1.1-zh
+cargo run --release -p shibapost-speech --example speak -- prepare .shibapost-dev/local/voices kokoro-v1.1-zh "OpenAI 发布了 GPT-5"
+cargo run --release -p shibapost-speech --example speak -- say .shibapost-dev/local/voices kokoro-v1.1-zh zf_094 "你好" out.wav
 ```
 
 `prepare` prints the sentence as it will be read, which helps when a word comes out wrong.

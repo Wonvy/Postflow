@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use postflow_store::{
+use shibapost_store::{
     AccountConfig, AccountPatch, Article, ItemFilter, ItemKind, ItemPatch, MailFolder, MailSync,
     NewFeed, NewMail, Store, View, ids,
 };
@@ -367,7 +367,7 @@ fn sync_adds_updates_and_removes_mail() {
     let stats = store.apply_mail_sync(&acc, second).unwrap();
     assert_eq!(
         stats,
-        postflow_store::MailSyncStats {
+        shibapost_store::MailSyncStats {
             added: 0,
             updated: 1,
             removed: 1,

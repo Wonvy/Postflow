@@ -1,5 +1,5 @@
-//! `postflow://` 链接：浏览器里的「存到 Postflow」书签按钮打开 `postflow://save?url=<网页地址>`，
-//! 系统把它交给 Postflow（已经开着的话由单实例插件转给开着的那个），这里把地址交给界面存进稍后读。
+//! `shibapost://` 链接：浏览器里的「存到 ShibaPost」书签按钮打开 `shibapost://save?url=<网页地址>`，
+//! 系统把它交给 ShibaPost（已经开着的话由单实例插件转给开着的那个），这里把地址交给界面存进稍后读。
 //!
 //! 应用还没启动、被链接拉起来时，界面还没准备好收事件，所以地址先记着，界面起来后用
 //! `pending_saves` 取走。
@@ -10,14 +10,14 @@ use tauri::{AppHandle, Emitter, Manager, Url};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 /// 发给界面的事件，内容是要存的网页地址。
-const SAVE_EVENT: &str = "postflow://save-later";
+const SAVE_EVENT: &str = "shibapost://save-later";
 
 #[derive(Default)]
 pub struct PendingSaves(Mutex<Vec<String>>);
 
-/// `postflow://save?url=…` 里要存的地址。只收 http 和 https。
+/// `shibapost://save?url=…` 里要存的地址。只收 http 和 https。
 fn save_target(url: &Url) -> Option<String> {
-    if url.scheme() != "postflow" || url.host_str() != Some("save") {
+    if url.scheme() != "shibapost" || url.host_str() != Some("save") {
         return None;
     }
     let target = url.query_pairs().find(|(k, _)| k == "url")?.1.into_owned();
@@ -26,7 +26,7 @@ fn save_target(url: &Url) -> Option<String> {
 
 fn handle(app: &AppHandle, url: &Url) {
     let Some(target) = save_target(url) else {
-        tracing::info!("ignoring an unknown postflow:// link");
+        tracing::info!("ignoring an unknown shibapost:// link");
         return;
     };
     crate::tray::show_main(app);
@@ -40,12 +40,12 @@ fn handle(app: &AppHandle, url: &Url) {
     let _ = app.emit(SAVE_EVENT, target);
 }
 
-/// 注册 `postflow://`，开始接收链接。启动时就带着的链接也处理。
+/// 注册 `shibapost://`，开始接收链接。启动时就带着的链接也处理。
 pub fn setup(app: &AppHandle) {
     // Windows 和 Linux 的安装包会登记链接；直接运行（开发、便携）时这里再登记一次
     #[cfg(any(windows, target_os = "linux"))]
     if let Err(err) = app.deep_link().register_all() {
-        tracing::info!("could not register postflow:// links: {err}");
+        tracing::info!("could not register shibapost:// links: {err}");
     }
     let handle_app = app.clone();
     app.deep_link().on_open_url(move |event| {
@@ -75,17 +75,17 @@ mod tests {
         let url = |s: &str| Url::parse(s).unwrap();
         assert_eq!(
             save_target(&url(
-                "postflow://save?url=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1"
+                "shibapost://save?url=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1"
             ))
             .as_deref(),
             Some("https://example.com/a?b=1")
         );
         assert_eq!(
-            save_target(&url("postflow://save?url=javascript%3Aalert(1)")),
+            save_target(&url("shibapost://save?url=javascript%3Aalert(1)")),
             None
         );
         assert_eq!(
-            save_target(&url("postflow://open?url=https%3A%2F%2Fexample.com")),
+            save_target(&url("shibapost://open?url=https%3A%2F%2Fexample.com")),
             None
         );
         assert_eq!(

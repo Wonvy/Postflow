@@ -1,7 +1,7 @@
 [package]
 publish = false
 description = "只供测试使用的假服务器"
-name = "postflow-testkit"
+name = "shibapost-testkit"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

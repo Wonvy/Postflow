@@ -139,7 +139,7 @@ export const useSubtitles = create<SubtitleStore>()(
       downloads: {},
     }),
     {
-      name: "postflow.subtitles",
+      name: "shibapost.subtitles",
       partialize: (s) => ({
         on: s.on,
         translate: s.translate,

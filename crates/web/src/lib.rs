@@ -25,9 +25,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures::{Stream, StreamExt};
-use postflow_core::{Core, Event, Scope};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use shibapost_core::{Core, Event, Scope};
 use tokio::sync::watch;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -77,7 +77,7 @@ pub struct Access {
 }
 
 /// 浏览器记住访问密钥用的 Cookie。
-const KEY_COOKIE: &str = "postflow_key";
+const KEY_COOKIE: &str = "shibapost_key";
 
 #[derive(Clone)]
 struct ApiState {
@@ -302,7 +302,7 @@ async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> R
     }
     (
         StatusCode::UNAUTHORIZED,
-        Json(json!({ "error": { "code": "unauthorized", "message": "open Postflow with the link from the desktop app" } })),
+        Json(json!({ "error": { "code": "unauthorized", "message": "open ShibaPost with the link from the desktop app" } })),
     )
         .into_response()
 }
@@ -310,8 +310,8 @@ async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> R
 /// 网页应用清单：手机「添加到主屏幕」后像应用一样全屏打开。
 fn manifest(start_url: &str) -> Response {
     let body = json!({
-        "name": "Postflow",
-        "short_name": "Postflow",
+        "name": "ShibaPost",
+        "short_name": "ShibaPost",
         "start_url": start_url,
         "scope": "/",
         "display": "standalone",
@@ -399,7 +399,7 @@ mod tests {
 
     async fn app(access: Access) -> (tempfile::TempDir, Router) {
         let dir = tempfile::tempdir().unwrap();
-        let secrets = Arc::new(postflow_core::MemorySecrets::default());
+        let secrets = Arc::new(shibapost_core::MemorySecrets::default());
         let core = Core::open_with_secrets(dir.path(), secrets).await.unwrap();
         let ui = Ui::Assets(Arc::new(|path: &str| {
             Some(UiFile {
@@ -630,7 +630,7 @@ mod tests {
     #[tokio::test]
     async fn paths_without_a_file_get_the_index_page() {
         let dir = tempfile::tempdir().unwrap();
-        let secrets = Arc::new(postflow_core::MemorySecrets::default());
+        let secrets = Arc::new(shibapost_core::MemorySecrets::default());
         let core = Core::open_with_secrets(dir.path(), secrets).await.unwrap();
         // 像开发时的 Tauri 一样：只认得具体的文件名，不会自己回到首页
         let ui = Ui::Assets(Arc::new(|path: &str| {
@@ -677,7 +677,7 @@ mod tests {
         let mut headers = axum::http::HeaderMap::new();
         headers.insert(
             header::COOKIE,
-            HeaderValue::from_static("a=1; postflow_key=xyz"),
+            HeaderValue::from_static("a=1; shibapost_key=xyz"),
         );
         assert_eq!(cookie_value(&headers, KEY_COOKIE), Some("xyz"));
     }

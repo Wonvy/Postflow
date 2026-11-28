@@ -45,7 +45,7 @@ export function notification(
   return { title, body: lines.join("\n") };
 }
 
-async function show(title: string, body: string, onClick: () => void, tag = "postflow-new-mail") {
+async function show(title: string, body: string, onClick: () => void, tag = "shibapost-new-mail") {
   if (isTauri) {
     const n = await import("@tauri-apps/plugin-notification");
     let granted = await n.isPermissionGranted();
@@ -100,7 +100,7 @@ export function notifyNewMail(event: NewMailEvent, nav: Nav | undefined, setting
             state.setScope({ kind: "account", accountId: mail.accountId });
             state.open(mail.id);
           },
-          "postflow-code",
+          "shibapost-code",
         ).catch(() => {});
       }
       event = { ...event, ...rest };
@@ -133,7 +133,7 @@ export function useUnreadBadge(unreadMail: number | undefined) {
         // Windows 不支持角标数字，安静地算了
         .catch(() => {});
     } else {
-      document.title = count > 0 ? `(${count}) Postflow` : "Postflow";
+      document.title = count > 0 ? `(${count}) ShibaPost` : "ShibaPost";
     }
   }, [enabled, unreadMail]);
 }
@@ -173,7 +173,7 @@ export function useTray(unreadMail: number | undefined) {
         invoke("tray_update", {
           update: {
             unread,
-            tooltip: unread > 0 ? `Postflow · ${t("tray.unread", { n: unread })}` : "Postflow",
+            tooltip: unread > 0 ? `ShibaPost · ${t("tray.unread", { n: unread })}` : "ShibaPost",
             unread_label: unread > 0 ? t("tray.unread", { n: unread }) : null,
             show_label: t("tray.open"),
             compose_label: t("tray.compose"),

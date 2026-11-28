@@ -16,8 +16,8 @@ import { GuideModal } from "./GuideModal";
 import { Button, Spinner, Switch } from "./ui";
 
 const DOCS_URL = {
-  en: "https://github.com/Wonvy/Postflow/blob/main/docs/plugins.md",
-  zh: "https://github.com/Wonvy/Postflow/blob/main/docs/plugins.zh-CN.md",
+  en: "https://github.com/Wonvy/ShibaPost/blob/main/docs/plugins.md",
+  zh: "https://github.com/Wonvy/ShibaPost/blob/main/docs/plugins.zh-CN.md",
 } as const;
 
 export function PluginsSettings({ open }: { open: boolean }) {

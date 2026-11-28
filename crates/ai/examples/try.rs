@@ -1,16 +1,16 @@
 //! 对着一个真实的 AI 服务把几种请求走一遍，开发时排查某个服务或模型的问题用：
 //!
 //! ```text
-//! POSTFLOW_AI_URL=https://open.bigmodel.cn/api/paas/v4 POSTFLOW_AI_MODEL=glm-4.5 \
-//! POSTFLOW_AI_KEY=… cargo run -p postflow-ai --example try
+//! SHIBAPOST_AI_URL=https://open.bigmodel.cn/api/paas/v4 SHIBAPOST_AI_MODEL=glm-4.5 \
+//! SHIBAPOST_AI_KEY=… cargo run -p shibapost-ai --example try
 //! ```
 //!
-//! `POSTFLOW_AI_PRESET` 是预设的 ID（比如 `zhipu`），不给就是 `custom`。密钥只从环境变量读，不会打印。
+//! `SHIBAPOST_AI_PRESET` 是预设的 ID（比如 `zhipu`），不给就是 `custom`。密钥只从环境变量读，不会打印。
 //! 发出去的是下面这段公开的文字，不会碰你的邮件和订阅。
 
 use std::time::Instant;
 
-use postflow_ai::{Client, Message, Provider, Request, prompts};
+use shibapost_ai::{Client, Message, Provider, Request, prompts};
 
 const DOC: prompts::Doc<'static> = prompts::Doc {
     title: "Enabling the parallel frontend on nightly",
@@ -35,14 +35,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let env = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
     let provider = Provider {
         id: "try".into(),
-        preset: env("POSTFLOW_AI_PRESET").unwrap_or_else(|| "custom".into()),
+        preset: env("SHIBAPOST_AI_PRESET").unwrap_or_else(|| "custom".into()),
         name: "try".into(),
-        base_url: env("POSTFLOW_AI_URL").ok_or("set POSTFLOW_AI_URL")?,
-        model: env("POSTFLOW_AI_MODEL").ok_or("set POSTFLOW_AI_MODEL")?,
-        proxy: env("POSTFLOW_AI_PROXY"),
+        base_url: env("SHIBAPOST_AI_URL").ok_or("set SHIBAPOST_AI_URL")?,
+        model: env("SHIBAPOST_AI_MODEL").ok_or("set SHIBAPOST_AI_MODEL")?,
+        proxy: env("SHIBAPOST_AI_PROXY"),
     };
-    let key = env("POSTFLOW_AI_KEY");
-    let lang = env("POSTFLOW_AI_LANG").unwrap_or_else(|| "zh".into());
+    let key = env("SHIBAPOST_AI_KEY");
+    let lang = env("SHIBAPOST_AI_LANG").unwrap_or_else(|| "zh".into());
     let client = Client::new();
     println!("{} · {}", provider.base_url, provider.model);
 

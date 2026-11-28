@@ -13,10 +13,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use postflow_mail::{Attachment, Auth, Connection, Mailbox, Outgoing, ServerConfig};
-use postflow_store::ids;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_mail::{Attachment, Auth, Connection, Mailbox, Outgoing, ServerConfig};
+use shibapost_store::ids;
 use tokio::sync::oneshot;
 
 use crate::mail::{Command, Write, security_str, server_config, smtp_config};
@@ -166,8 +166,8 @@ struct AttachedFile {
 }
 
 /// 发信出错时给界面的错误码。和收信的分开，界面才能说清楚是发信那边出的问题。
-pub(crate) fn send_error(err: &postflow_mail::Error, oauth: bool) -> RpcError {
-    use postflow_mail::Error as E;
+pub(crate) fn send_error(err: &shibapost_mail::Error, oauth: bool) -> RpcError {
+    use shibapost_mail::Error as E;
     let code = match err {
         // 微软账户：多半是登录时还没有发信权限，或者管理员关了 SMTP 发信
         E::Auth(_) if oauth => "send_sign_in",
@@ -183,8 +183,8 @@ pub(crate) fn send_error(err: &postflow_mail::Error, oauth: bool) -> RpcError {
 }
 
 /// 错误码加上给人看的原因。信太大时 message 是上限的 MB 数，界面拿来说「最多 N MB」。
-fn with_detail(err: &postflow_mail::Error, code: &str) -> RpcError {
-    if let postflow_mail::Error::TooLarge(limit) = err {
+fn with_detail(err: &shibapost_mail::Error, code: &str) -> RpcError {
+    if let shibapost_mail::Error::TooLarge(limit) = err {
         return RpcError::new(code, format!("{}", limit.div_ceil(1024 * 1024)));
     }
     let detail = err.detail();
@@ -203,7 +203,7 @@ fn recipients(field: &[String]) -> Result<Vec<Mailbox>, RpcError> {
         .iter()
         .filter(|s| !s.trim().is_empty())
         .map(|s| {
-            postflow_mail::parse_address(s)
+            shibapost_mail::parse_address(s)
                 .ok_or_else(|| RpcError::new("send_bad_address", s.trim().to_string()))
         })
         .collect()
@@ -213,7 +213,7 @@ fn recipients(field: &[String]) -> Result<Vec<Mailbox>, RpcError> {
 fn loose_recipients(field: &[String]) -> Vec<Mailbox> {
     field
         .iter()
-        .filter_map(|s| postflow_mail::parse_address(s))
+        .filter_map(|s| shibapost_mail::parse_address(s))
         .collect()
 }
 
@@ -297,11 +297,11 @@ impl Core {
     /// 写信窗口加了一个文件。
     fn attach(&self, params: Value) -> Result<Value, RpcError> {
         let p: Upload = parse(params)?;
-        let data = postflow_mail::base64_decode(&p.data)
+        let data = shibapost_mail::base64_decode(&p.data)
             .ok_or_else(|| RpcError::new("bad_params", "the file could not be read"))?;
-        if data.len() > postflow_mail::MAX_ATTACHMENTS {
+        if data.len() > shibapost_mail::MAX_ATTACHMENTS {
             return Err(with_detail(
-                &postflow_mail::Error::TooLarge(postflow_mail::MAX_ATTACHMENTS),
+                &shibapost_mail::Error::TooLarge(shibapost_mail::MAX_ATTACHMENTS),
                 "send_too_large",
             ));
         }
@@ -320,7 +320,7 @@ impl Core {
     }
 
     fn extract_attachment(&self, raw: &[u8], index: u32) -> Result<AttachedFile, RpcError> {
-        let (name, mime, data) = postflow_mail::attachment(raw, index)
+        let (name, mime, data) = shibapost_mail::attachment(raw, index)
             .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
         Ok(self.store_upload(Attachment { name, mime, data }))
     }
@@ -356,10 +356,10 @@ impl Core {
             .await?
             .ok_or_else(|| RpcError::new("not_found", "no such message"))?;
         let raw = self.raw_mail(session, &p.id).await?;
-        let ctx = postflow_mail::reply_context(&raw)
+        let ctx = shibapost_mail::reply_context(&raw)
             .ok_or_else(|| RpcError::new("mail_parse", "this message could not be read"))?;
         let (in_reply_to, references) =
-            postflow_mail::thread_headers(ctx.message_id.as_deref(), &ctx.references);
+            shibapost_mail::thread_headers(ctx.message_id.as_deref(), &ctx.references);
         let attachments: Vec<AttachedFile> = if p.forward {
             ctx.attachments
                 .iter()
@@ -384,7 +384,7 @@ impl Core {
             .await?
             .ok_or_else(|| RpcError::new("not_found", "no such draft"))?;
         let raw = self.raw_mail(session, &p.id).await?;
-        let draft = postflow_mail::draft_contents(&raw)
+        let draft = shibapost_mail::draft_contents(&raw)
             .ok_or_else(|| RpcError::new("mail_parse", "this draft could not be read"))?;
         let attachments: Vec<AttachedFile> = draft
             .attachments
@@ -427,7 +427,7 @@ impl Core {
         &self,
         session: &Arc<Session>,
         id: &str,
-    ) -> Result<postflow_store::Account, RpcError> {
+    ) -> Result<shibapost_store::Account, RpcError> {
         let id = id.to_string();
         session
             .db(move |s| s.account(&id))
@@ -449,9 +449,9 @@ impl Core {
         }
         let p: Rsvp = parse(params)?;
         let status = match p.status.to_ascii_uppercase().as_str() {
-            "ACCEPTED" => postflow_mail::calendar::Partstat::Accepted,
-            "TENTATIVE" => postflow_mail::calendar::Partstat::Tentative,
-            "DECLINED" => postflow_mail::calendar::Partstat::Declined,
+            "ACCEPTED" => shibapost_mail::calendar::Partstat::Accepted,
+            "TENTATIVE" => shibapost_mail::calendar::Partstat::Tentative,
+            "DECLINED" => shibapost_mail::calendar::Partstat::Declined,
             _ => {
                 return Err(RpcError::new(
                     "bad_params",
@@ -460,7 +460,7 @@ impl Core {
             }
         };
         let raw = self.raw_mail(session, &p.id).await?;
-        let invite = postflow_mail::calendar::invite(&raw)
+        let invite = shibapost_mail::calendar::invite(&raw)
             .filter(|i| i.method == "REQUEST")
             .ok_or_else(|| {
                 RpcError::new("not_found", "this message has no invitation to answer")
@@ -496,9 +496,9 @@ impl Core {
         };
         let who = me.name.clone().unwrap_or_else(|| account.email.clone());
         let (prefix, verb) = match status {
-            postflow_mail::calendar::Partstat::Accepted => ("Accepted", "accepted"),
-            postflow_mail::calendar::Partstat::Tentative => ("Tentative", "tentatively accepted"),
-            postflow_mail::calendar::Partstat::Declined => ("Declined", "declined"),
+            shibapost_mail::calendar::Partstat::Accepted => ("Accepted", "accepted"),
+            shibapost_mail::calendar::Partstat::Tentative => ("Tentative", "tentatively accepted"),
+            shibapost_mail::calendar::Partstat::Declined => ("Declined", "declined"),
         };
         let letter = Letter {
             account_id: account.id.clone(),
@@ -513,7 +513,7 @@ impl Core {
             attachments: vec![],
             draft: None,
             follow_up: None,
-            calendar: Some(postflow_mail::calendar::reply_ics(
+            calendar: Some(shibapost_mail::calendar::reply_ics(
                 &invite,
                 &me,
                 status,
@@ -536,7 +536,7 @@ impl Core {
         }
         let p: File = parse(params)?;
         let raw = self.raw_mail(session, &p.id).await?;
-        let invite = postflow_mail::calendar::invite(&raw)
+        let invite = shibapost_mail::calendar::invite(&raw)
             .ok_or_else(|| RpcError::new("not_found", "this message has no invitation"))?;
         if !p.save {
             return reply(json!({ "ics": invite.ics }));
@@ -561,14 +561,14 @@ impl Core {
             self.take_attachments(&p.attachments)?,
         );
         let built =
-            postflow_mail::build(&outgoing, now_secs()).map_err(|e| send_error(&e, false))?;
+            shibapost_mail::build(&outgoing, now_secs()).map_err(|e| send_error(&e, false))?;
 
         let smtp = smtp_config(&account)?;
         let auth = self.mail_auth(&account.id).await?.ok_or_else(|| {
             RpcError::new("mail_no_password", "enter the password for this account")
         })?;
         let oauth = matches!(auth, Auth::OAuth2(_));
-        postflow_mail::smtp::send(&smtp, &auth, &built.sender, &built.recipients, &built.raw)
+        shibapost_mail::smtp::send(&smtp, &auth, &built.sender, &built.recipients, &built.raw)
             .await
             .map_err(|e| {
                 tracing::warn!(account = %account.id, host = %smtp.host, code = e.code(), "sending mail failed: {e}");
@@ -579,10 +579,10 @@ impl Core {
             let to: Vec<String> = [&p.to, &p.cc]
                 .into_iter()
                 .flat_map(|list| list.iter())
-                .filter_map(|s| postflow_mail::parse_address(s))
+                .filter_map(|s| shibapost_mail::parse_address(s))
                 .filter_map(|m| m.address.map(|a| a.to_lowercase()))
                 .collect();
-            let follow = postflow_store::FollowUp {
+            let follow = shibapost_store::FollowUp {
                 message_id: built.message_id.clone(),
                 account_id: account.id.clone(),
                 subject: p.subject.clone(),
@@ -653,7 +653,7 @@ impl Core {
             ],
             self.take_attachments(&p.attachments)?,
         );
-        let built = postflow_mail::build_draft(&outgoing, now_secs())
+        let built = shibapost_mail::build_draft(&outgoing, now_secs())
             .map_err(|e| with_detail(&e, "draft_failed"))?;
         let (tx, rx) = oneshot::channel();
         let command = Command::SaveDraft {
@@ -711,7 +711,7 @@ fn ids_ok(id: &str) -> bool {
 
 /// 把写信窗口里的一封信变成要生成的邮件。`lists` 是收件人、抄送、密送。
 fn letter(
-    account: &postflow_store::Account,
+    account: &shibapost_store::Account,
     p: &Letter,
     lists: [Vec<Mailbox>; 3],
     attachments: Vec<Attachment>,
@@ -742,7 +742,7 @@ async fn save_sent_copy(
     auth: &Auth,
     message_id: &str,
     raw: &[u8],
-) -> Result<(), postflow_mail::Error> {
+) -> Result<(), shibapost_mail::Error> {
     let mut conn = Connection::connect(imap, auth).await?;
     let result = async {
         let sent = conn.sent_mailbox().await?;

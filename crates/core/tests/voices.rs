@@ -1,10 +1,10 @@
 //! 朗读的本机声音。模型有几百兆，自动测试里只测没装模型时的表现；
-//! 设了 `POSTFLOW_VOICE_SMOKE=<放 Kokoro v1.1-zh 文件的文件夹>` 时，再从那里导入、真的念一句。
+//! 设了 `SHIBAPOST_VOICE_SMOKE=<放 Kokoro v1.1-zh 文件的文件夹>` 时，再从那里导入、真的念一句。
 
 use std::sync::Arc;
 
-use postflow_core::Core;
 use serde_json::{Value, json};
+use shibapost_core::Core;
 
 async fn call(core: &Arc<Core>, method: &str, params: Value) -> Value {
     core.rpc(method, params, None)
@@ -74,8 +74,8 @@ async fn voices_without_a_model() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn speak_with_a_real_model() {
-    let Ok(folder) = std::env::var("POSTFLOW_VOICE_SMOKE") else {
-        eprintln!("POSTFLOW_VOICE_SMOKE is not set; skipping");
+    let Ok(folder) = std::env::var("SHIBAPOST_VOICE_SMOKE") else {
+        eprintln!("SHIBAPOST_VOICE_SMOKE is not set; skipping");
         return;
     };
     let tmp = tempfile::tempdir().unwrap();
@@ -131,7 +131,7 @@ fn tone(seconds: f64, rate: u32) -> String {
     let samples: Vec<f32> = (0..n)
         .map(|i| (i as f32 * 440.0 * std::f32::consts::TAU / rate as f32).sin() * 0.3)
         .collect();
-    postflow_mail::base64(&postflow_speech::tts::wav(&samples, rate))
+    shibapost_mail::base64(&shibapost_speech::tts::wav(&samples, rate))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -157,7 +157,7 @@ async fn voice_samples() {
         error(
             &core,
             "voices.samples.add",
-            json!({ "name": "junk", "audio": postflow_mail::base64(b"not audio at all"), "ext": "mp3" })
+            json!({ "name": "junk", "audio": shibapost_mail::base64(b"not audio at all"), "ext": "mp3" })
         )
         .await,
         "voice_sample_unreadable"
@@ -212,9 +212,9 @@ async fn voice_samples() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn speak_with_a_voice_sample() {
-    // POSTFLOW_ZIPVOICE_SMOKE=<放 ZipVoice 文件的文件夹>|<一段录音>|<录音里说的话>
-    let Ok(spec) = std::env::var("POSTFLOW_ZIPVOICE_SMOKE") else {
-        eprintln!("POSTFLOW_ZIPVOICE_SMOKE is not set; skipping");
+    // SHIBAPOST_ZIPVOICE_SMOKE=<放 ZipVoice 文件的文件夹>|<一段录音>|<录音里说的话>
+    let Ok(spec) = std::env::var("SHIBAPOST_ZIPVOICE_SMOKE") else {
+        eprintln!("SHIBAPOST_ZIPVOICE_SMOKE is not set; skipping");
         return;
     };
     let mut parts = spec.splitn(3, '|');
@@ -235,7 +235,7 @@ async fn speak_with_a_voice_sample() {
     let sample = call(
         &core,
         "voices.samples.add",
-        json!({ "name": "Anchor", "audio": postflow_mail::base64(&bytes), "ext": "wav", "text": text }),
+        json!({ "name": "Anchor", "audio": shibapost_mail::base64(&bytes), "ext": "wav", "text": text }),
     )
     .await;
     let said = call(

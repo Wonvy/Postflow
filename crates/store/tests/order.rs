@@ -1,6 +1,6 @@
 //! 侧栏里订阅源和邮箱的顺序、文件夹，以及卡片视图的封面图。
 
-use postflow_store::{AccountConfig, Article, ItemFilter, MailSync, NewFeed, NewMail, Store, ids};
+use shibapost_store::{AccountConfig, Article, ItemFilter, MailSync, NewFeed, NewMail, Store, ids};
 use tempfile::TempDir;
 
 fn open(tmp: &TempDir, device: &str) -> Store {

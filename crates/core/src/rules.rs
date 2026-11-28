@@ -10,9 +10,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use postflow_store::{ItemPatch, RuleItem};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_store::{ItemPatch, RuleItem};
 
 use crate::refresh::now;
 use crate::rpc::{RpcError, parse, reply};
@@ -161,7 +161,7 @@ impl<'a> Texts<'a> {
         let i = self.item;
         let body = || {
             self.body
-                .get_or_init(|| postflow_feed::html_to_text(&i.body))
+                .get_or_init(|| shibapost_feed::html_to_text(&i.body))
                 .clone()
         };
         match field {

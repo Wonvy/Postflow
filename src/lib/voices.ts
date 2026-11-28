@@ -75,7 +75,7 @@ export const useVoices = create<VoicePrefs>()(
       setCaptions: (captions) => set({ captions }),
     }),
     {
-      name: "postflow.voices",
+      name: "shibapost.voices",
       partialize: (s) => ({
         engine: s.engine,
         chosen: s.chosen,

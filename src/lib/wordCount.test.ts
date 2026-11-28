@@ -7,7 +7,7 @@ import { readingMinutes, totalWords, wordCount } from "./wordCount.ts";
 test("Chinese counts characters, other languages count words", () => {
   assert.deepEqual(wordCount("今天天气很好"), { cjk: 6, words: 0 });
   assert.deepEqual(wordCount("Hello, world! It's 2026."), { cjk: 0, words: 4 });
-  assert.deepEqual(wordCount("用 Rust 写的 Postflow 很快"), { cjk: 5, words: 2 });
+  assert.deepEqual(wordCount("用 Rust 写的 ShibaPost 很快"), { cjk: 5, words: 2 });
   assert.equal(totalWords(wordCount("  ")), 0);
 });
 

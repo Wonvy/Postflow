@@ -62,7 +62,7 @@ test("markdown in descriptions becomes plain text", () => {
   assert.equal(plainDescription("See [the docs](https://x.y) and `code`\n\n\n::: tip\n**bold**"), "See the docs and code\n\n\nbold".replace("\n\n\n", "\n\n"));
 });
 
-test("YouTube routes point at the channel page Postflow can follow by itself", () => {
+test("YouTube routes point at the channel page ShibaPost can follow by itself", () => {
   assert.equal(directUrl({ namespace: "youtube", path: "/c/:username/:embed?" }, { username: "@buckppt" }), "https://www.youtube.com/@buckppt");
   assert.equal(directUrl({ namespace: "youtube", path: "/user/:username/:embed?" }, { username: "LinusTech" }), "https://www.youtube.com/@LinusTech");
   assert.equal(directUrl({ namespace: "youtube", path: "/channel/:id/:embed?" }, { id: "UC123" }), "https://www.youtube.com/channel/UC123");

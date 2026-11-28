@@ -70,7 +70,7 @@ run("cargo", ["update", "--workspace", "--offline"], { stdio: ["ignore", "ignore
 
 run("git", ["add", "package.json", "package-lock.json", "Cargo.toml", "Cargo.lock", "CHANGELOG.md"]);
 run("git", ["commit", "-m", `发布 ${tag}`]);
-run("git", ["tag", "-a", tag, "-m", `Postflow ${tag}`]);
+run("git", ["tag", "-a", tag, "-m", `ShibaPost ${tag}`]);
 
 console.log(`版本 ${previous} → ${version}，已提交并打上标签 ${tag}。`);
 console.log("推送后 GitHub 会自动打包三个平台的安装包并发布 Release：");

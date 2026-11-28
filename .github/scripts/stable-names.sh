@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 给 Release 里的每个安装包加一份不带版本号的副本，比如 Postflow-macOS.dmg。
-# README 里的下载链接写成 releases/latest/download/Postflow-macOS.dmg，就一直指向最新版的安装包。
+# 给 Release 里的每个安装包加一份不带版本号的副本，比如 ShibaPost-macOS.dmg。
+# README 里的下载链接写成 releases/latest/download/ShibaPost-macOS.dmg，就一直指向最新版的安装包。
 #
 #   bash .github/scripts/stable-names.sh <release id>
 #
@@ -37,9 +37,9 @@ copy() {
   echo "$2 <- $source"
 }
 
-copy '_universal\.dmg$' Postflow-macOS.dmg
-copy '_x64-setup\.exe$' Postflow-Windows-setup.exe
-copy '_x64_en-US\.msi$' Postflow-Windows.msi
-copy '_amd64\.AppImage$' Postflow-Linux.AppImage
-copy '_amd64\.deb$' Postflow-Linux.deb
-copy '\.x86_64\.rpm$' Postflow-Linux.rpm
+copy '_universal\.dmg$' ShibaPost-macOS.dmg
+copy '_x64-setup\.exe$' ShibaPost-Windows-setup.exe
+copy '_x64_en-US\.msi$' ShibaPost-Windows.msi
+copy '_amd64\.AppImage$' ShibaPost-Linux.AppImage
+copy '_amd64\.deb$' ShibaPost-Linux.deb
+copy '\.x86_64\.rpm$' ShibaPost-Linux.rpm

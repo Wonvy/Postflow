@@ -7,7 +7,7 @@ import { api } from "./api";
 import { useUi } from "./store";
 import { isTauri } from "./transport";
 
-const ACTION_EVENT = "postflow://tray-action";
+const ACTION_EVENT = "shibapost://tray-action";
 
 export function useTrayActions() {
   const actions = useActions();

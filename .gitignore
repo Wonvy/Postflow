@@ -7,4 +7,4 @@ src-tauri/gen/schemas/
 .env
 .env.*
 .claude/
-.postflow-dev/
+.shibapost-dev/

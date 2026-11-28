@@ -5,9 +5,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::routing::get;
-use postflow_core::{Core, Event, MemorySecrets};
-use postflow_testkit::{FakeAi, FakeImap, mail};
 use serde_json::{Value, json};
+use shibapost_core::{Core, Event, MemorySecrets};
+use shibapost_testkit::{FakeAi, FakeImap, mail};
 use tokio::sync::broadcast::Receiver;
 
 async fn call(core: &Arc<Core>, method: &str, params: Value) -> Value {

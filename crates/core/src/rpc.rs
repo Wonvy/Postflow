@@ -3,11 +3,13 @@
 use std::fmt;
 use std::sync::Arc;
 
-use postflow_feed::{Conditional, FetchResult, Fetched, favicon_url, host_of, normalize_url, opml};
-use postflow_store::{Cursor, Feed, FeedPatch, ItemFilter, ItemPatch, NewFeed};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_feed::{
+    Conditional, FetchResult, Fetched, favicon_url, host_of, normalize_url, opml,
+};
+use shibapost_store::{Cursor, Feed, FeedPatch, ItemFilter, ItemPatch, NewFeed};
 
 use crate::refresh::{ingest, now};
 use crate::{Core, Scope, Session, home_dir};
@@ -37,20 +39,20 @@ impl fmt::Display for RpcError {
 
 impl std::error::Error for RpcError {}
 
-impl From<postflow_store::Error> for RpcError {
-    fn from(err: postflow_store::Error) -> Self {
+impl From<shibapost_store::Error> for RpcError {
+    fn from(err: shibapost_store::Error) -> Self {
         let code = match &err {
-            postflow_store::Error::FormatTooNew { .. } => "format_too_new",
-            postflow_store::Error::Io(_) => "io",
-            postflow_store::Error::Invalid(_) => "bad_params",
+            shibapost_store::Error::FormatTooNew { .. } => "format_too_new",
+            shibapost_store::Error::Io(_) => "io",
+            shibapost_store::Error::Invalid(_) => "bad_params",
             _ => "store",
         };
         RpcError::new(code, err.to_string())
     }
 }
 
-impl From<postflow_feed::Error> for RpcError {
-    fn from(err: postflow_feed::Error) -> Self {
+impl From<shibapost_feed::Error> for RpcError {
+    fn from(err: shibapost_feed::Error) -> Self {
         RpcError::new(err.code(), err.to_string())
     }
 }
@@ -252,8 +254,8 @@ struct Status {
 
 /// 内置订阅源目录的在线版本：先走 jsDelivr（GitHub 的 CDN，国内更容易打开），不行再直接读 GitHub。
 const CATALOG_URLS: &[&str] = &[
-    "https://cdn.jsdelivr.net/gh/Wonvy/Postflow@main/public/catalog/catalog.json",
-    "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/catalog.json",
+    "https://cdn.jsdelivr.net/gh/Wonvy/ShibaPost@main/public/catalog/catalog.json",
+    "https://raw.githubusercontent.com/Wonvy/ShibaPost/main/public/catalog/catalog.json",
 ];
 /// 目录再大也不会超过这么多；超过了多半不是目录。
 /// 章节、文字稿文件的大小上限。
@@ -296,9 +298,9 @@ impl Core {
                 let p: UiLog = parse(params)?;
                 let message: String = p.message.chars().take(4000).collect();
                 match p.level.as_str() {
-                    "error" => tracing::error!(target: "postflow_ui", "{message}"),
-                    "warn" => tracing::warn!(target: "postflow_ui", "{message}"),
-                    _ => tracing::info!(target: "postflow_ui", "{message}"),
+                    "error" => tracing::error!(target: "shibapost_ui", "{message}"),
+                    "warn" => tracing::warn!(target: "shibapost_ui", "{message}"),
+                    _ => tracing::info!(target: "shibapost_ui", "{message}"),
                 }
                 return reply(json!({}));
             }
@@ -420,7 +422,7 @@ impl Core {
                 }
             }
             "highlights.add" => {
-                let mut h: postflow_store::Highlight = parse(params)?;
+                let mut h: shibapost_store::Highlight = parse(params)?;
                 if h.quote.trim().is_empty() || h.item.is_empty() {
                     return Err(RpcError::new("bad_params", "nothing to highlight"));
                 }
@@ -505,7 +507,7 @@ impl Core {
                     "accounts": accounts,
                     "labels": labels,
                     "newsletters": newsletters,
-                    "later_id": postflow_store::later_feed_id(),
+                    "later_id": shibapost_store::later_feed_id(),
                 }))
             }
 
@@ -644,7 +646,7 @@ impl Core {
                         folder: f.folder,
                     })
                     .collect();
-                let content = opml::write("Postflow", &feeds)?;
+                let content = opml::write("ShibaPost", &feeds)?;
                 match p.path {
                     Some(path) => {
                         tokio::fs::write(&path, content)
@@ -703,9 +705,9 @@ impl Core {
                 }
                 let base = detail.item.url.as_deref();
                 // YouTube、B 站的视频页：正文里没有播放器时补上一个
-                let show = |html: &str| match postflow_feed::with_player(html, base) {
-                    Some(with) => postflow_feed::sanitize_html(&with, base),
-                    None => postflow_feed::sanitize_html(html, base),
+                let show = |html: &str| match shibapost_feed::with_player(html, base) {
+                    Some(with) => shibapost_feed::sanitize_html(&with, base),
+                    None => shibapost_feed::sanitize_html(html, base),
                 };
                 let content = show(&detail.content);
                 let full_text = detail.full_text.as_deref().map(show);
@@ -757,13 +759,13 @@ impl Core {
                     .url
                     .ok_or_else(|| RpcError::new("extract_failed", "item has no link"))?;
                 let raw = self.client.full_text(&url).await?;
-                let clean = match postflow_feed::with_player(&raw, Some(&url)) {
-                    Some(with) => postflow_feed::sanitize_html(&with, Some(&url)),
-                    None => postflow_feed::sanitize_html(&raw, Some(&url)),
+                let clean = match shibapost_feed::with_player(&raw, Some(&url)) {
+                    Some(with) => shibapost_feed::sanitize_html(&with, Some(&url)),
+                    None => shibapost_feed::sanitize_html(&raw, Some(&url)),
                 };
                 // 原网页上的正文比源里给的还短：多半只给了没登录的人看开头，不如源里的内容
                 let chars = |html: &str| {
-                    postflow_feed::html_to_text(html)
+                    shibapost_feed::html_to_text(html)
                         .chars()
                         .filter(|c| !c.is_whitespace())
                         .count()
@@ -807,14 +809,14 @@ impl Core {
                     .await?;
                 let feed = feed.ok_or_else(|| RpcError::new("not_found", "the feed is gone"))?;
                 let xml = self.client.fetch_text(&feed.url).await?;
-                let found = postflow_feed::item_xml(
+                let found = shibapost_feed::item_xml(
                     &xml,
                     guid.as_deref().unwrap_or(""),
                     detail.item.url.as_deref(),
                 );
                 // 这一篇已经不在源里了（源只保留最近几篇），给整个源
                 let whole = found.is_none();
-                let source = found.unwrap_or_else(|| postflow_feed::whole_feed(xml));
+                let source = found.unwrap_or_else(|| shibapost_feed::whole_feed(xml));
                 reply(json!({ "kind": "xml", "source": source, "whole": whole, "url": feed.url }))
             }
 
@@ -898,7 +900,7 @@ impl Core {
             None => None,
         };
         let suggested_data_dir = home_dir()
-            .map(|h| h.join("Postflow").to_string_lossy().into_owned())
+            .map(|h| h.join("ShibaPost").to_string_lossy().into_owned())
             .unwrap_or_default();
         Status {
             configured: session.is_some(),
@@ -928,10 +930,10 @@ impl Core {
         match self.fetch_new(&requested).await {
             // 地址已经永久跳到别处的，直接订阅新地址
             Ok(fetched) => Ok((fetched.moved_to.clone().unwrap_or(requested), fetched)),
-            Err(postflow_feed::Error::NotAFeed(_)) => {
+            Err(shibapost_feed::Error::NotAFeed(_)) => {
                 let mut candidates = self.client.discover(&requested).await?;
                 if candidates.len() != 1 {
-                    return Err(postflow_feed::Error::NoFeedFound.into());
+                    return Err(shibapost_feed::Error::NoFeedFound.into());
                 }
                 let url = candidates.remove(0).url;
                 let fetched = self.fetch_new(&url).await?;
@@ -1014,11 +1016,11 @@ impl Core {
             .await
     }
 
-    async fn fetch_new(&self, url: &str) -> Result<Fetched, postflow_feed::Error> {
+    async fn fetch_new(&self, url: &str) -> Result<Fetched, shibapost_feed::Error> {
         match self.client.fetch_feed(url, &Conditional::default()).await? {
             FetchResult::Fetched(fetched) => Ok(fetched),
             // 没带校验值却收到 304，只可能是服务器或中间代理有问题
-            FetchResult::NotModified => Err(postflow_feed::Error::Status(304)),
+            FetchResult::NotModified => Err(shibapost_feed::Error::Status(304)),
         }
     }
 }

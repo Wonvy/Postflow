@@ -17,7 +17,7 @@ test("defaults and legacy preset ids resolve properly", () => {
   assert.equal(accentVars(DEFAULT_ACCENT, "dark").accent, "#5e6ad2");
   assert.equal(accentVars(PAPER_DEFAULT_ACCENT, "paper").accent, "#0284c7");
   // 旧预设 ID 平滑映射
-  assert.equal(accentKind("postflow"), "violet");
+  assert.equal(accentKind("shibapost"), "violet");
   assert.equal(accentKind("graphite"), "slate");
   // 认不出的当作默认
   assert.equal(accentVars("nonsense", "dark").accent, "#5e6ad2");

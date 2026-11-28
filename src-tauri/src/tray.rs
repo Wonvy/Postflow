@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, Window, WindowEvent};
 
 const TRAY_ID: &str = "main";
 /// 托盘菜单里要界面去做的事，发给界面的事件名。
-const ACTION_EVENT: &str = "postflow://tray-action";
+const ACTION_EVENT: &str = "shibapost://tray-action";
 
 pub struct TrayState {
     /// 关窗口时留在后台。界面启动时按设置告诉这里；默认留着。
@@ -150,11 +150,11 @@ fn recreate_main<R: Runtime>(app: &AppHandle<R>) -> Option<Window<R>> {
 
 /// 建托盘图标。菜单文字先用英文，界面加载后换成界面语言。
 pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Open Postflow", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Postflow", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Open ShibaPost", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit ShibaPost", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &PredefinedMenuItem::separator(app)?, &quit])?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .tooltip("Postflow")
+        .tooltip("ShibaPost")
         .menu(&menu)
         // 左键点图标打开窗口，右键出菜单
         .show_menu_on_left_click(false)
@@ -209,7 +209,7 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
 #[derive(Deserialize)]
 pub struct TrayUpdate {
     unread: u32,
-    /// 鼠标悬停的提示，比如「Postflow · 3 封未读邮件」。
+    /// 鼠标悬停的提示，比如「ShibaPost · 3 封未读邮件」。
     tooltip: String,
     /// 菜单最上面一行（不能点）：「3 封未读邮件」。没有未读时不显示。
     #[serde(default)]

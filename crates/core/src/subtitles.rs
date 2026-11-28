@@ -1,6 +1,6 @@
 //! 字幕：给没有文字稿的播客单集在本机转写。
 //!
-//! 识别模型和转写出来的字幕都在本机目录的 `speech/` 下，不参与同步（见 postflow-speech）。
+//! 识别模型和转写出来的字幕都在本机目录的 `speech/` 下，不参与同步（见 shibapost-speech）。
 //!
 //! 边播边出字幕的做法：不去录正在放的声音，而是直接读下载到本机的音频文件，从播放器现在的位置
 //! 往后转。不用等整期下完：下了一点就开始转，读到还没下到的地方就等一等（`GrowingFile`）。识别比播放快得多（几倍到几十倍），所以开了字幕等一小会儿就能跟上，之后一直走在播放前面；
@@ -13,9 +13,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use postflow_speech::{AudioReader, Cue, MediaSource, Transcript, cues};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_speech::{AudioReader, Cue, MediaSource, Transcript, cues};
 
 use crate::rpc::{RpcError, parse, reply};
 use crate::{Core, Event, ModelState, Session};
@@ -170,8 +170,8 @@ impl MediaSource for GrowingFile {
     }
 }
 
-impl From<postflow_speech::Error> for RpcError {
-    fn from(err: postflow_speech::Error) -> Self {
+impl From<shibapost_speech::Error> for RpcError {
+    fn from(err: shibapost_speech::Error) -> Self {
         RpcError::new(err.code(), err.to_string())
     }
 }

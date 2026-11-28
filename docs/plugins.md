@@ -1,9 +1,9 @@
-# Writing Postflow plugins
+# Writing ShibaPost plugins
 
 [中文版](plugins.zh-CN.md)
 
-Plugins add buttons, menu items and behavior to Postflow. A plugin is a folder with a `manifest.json` and a
-JavaScript module. It runs inside Postflow's interface and talks to the app through an `api` object.
+Plugins add buttons, menu items and behavior to ShibaPost. A plugin is a folder with a `manifest.json` and a
+JavaScript module. It runs inside ShibaPost's interface and talks to the app through an `api` object.
 
 - [Quick start](#quick-start)
 - [Examples](#examples)
@@ -18,7 +18,7 @@ JavaScript module. It runs inside Postflow's interface and talks to the app thro
 
 ## Quick start
 
-1. In Postflow, open **Settings → Plugins → Open plugins folder**. (In the web version, the folder is
+1. In ShibaPost, open **Settings → Plugins → Open plugins folder**. (In the web version, the folder is
    `plugins` inside the app's local data folder, shown at the bottom of that page.)
 2. Create a folder named after your plugin's ID, for example `hello`, with two files:
 
@@ -55,8 +55,8 @@ JavaScript module. It runs inside Postflow's interface and talks to the app thro
 
 ## Examples
 
-Four complete plugins live in [`examples/plugins`](../examples/plugins). They also ship with Postflow: the first time
-Postflow starts on a device, it puts them in the plugins folder, turned off. Turn one on in **Settings → Plugins**.
+Four complete plugins live in [`examples/plugins`](../examples/plugins). They also ship with ShibaPost: the first time
+ShibaPost starts on a device, it puts them in the plugins folder, turned off. Turn one on in **Settings → Plugins**.
 If you delete one, reinstall it from **Example plugins** on the same page. You can also copy a
 plugin's folder into your plugins folder, choose **Rescan** and turn it on.
 
@@ -112,7 +112,7 @@ export default function (api) {
 }
 ```
 
-- A plugin is loaded when the user turns it on, and on every start of Postflow while it's on.
+- A plugin is loaded when the user turns it on, and on every start of ShibaPost while it's on.
 - It's unloaded when the user turns it off, reloads it (the ↻ button in Settings), or rescans.
 - Anything registered through `api` (buttons, menu items, styles, event handlers) is removed automatically
   on unload. Clean up anything else (timers, DOM you added yourself) in `onunload`, with
@@ -123,8 +123,8 @@ export default function (api) {
 
 ### `api.apiVersion`, `api.manifest`, `api.lang()`
 
-- `apiVersion`: the plugin API version of this Postflow (currently `1`).
-- `manifest`: your manifest, as read by Postflow.
+- `apiVersion`: the plugin API version of this ShibaPost (currently `1`).
+- `manifest`: your manifest, as read by ShibaPost.
 - `lang()`: `"zh"` or `"en"`, the interface language (an imported language reports its base language).
 
 ### `api.ui`
@@ -133,7 +133,7 @@ export default function (api) {
 | --- | --- |
 | `addToolbarButton({ id, toolbar, label, icon?, onClick })` | Adds a button to the `"list"` or `"reader"` toolbar. It starts at the end of the top toolbar; users can move it to the status bar or hide it in **Customize toolbar**. `icon` is an SVG string drawn with `currentColor` (24×24 viewBox); without it a puzzle piece is shown. `onClick({ item, selection })` gets the open item (or `null`) and the IDs selected in the list. Returns a function that removes the button. |
 | `addItemMenuItem({ id, label, when?, onClick })` | Adds an item to the end of the list's right-click menu. `onClick(items)` gets the items the menu is for (the right-clicked one, or the whole selection). `when(items)` decides whether to show it. Returns a remover. |
-| `addReaderSection({ id, when?, render })` | Adds a block above the body in the reader, for articles and mail. For every opened item, `render(item, el)` gets the full `ItemDetail` and an empty element to fill with plain DOM; it may be async and may return a cleanup function. Postflow calls it again when another item is opened or full-text mode changes, after running the cleanup and discarding the old element, so a slow render that finishes late never shows up on the wrong item. `when(item)` decides whether to show it. Returns a remover; removing and adding the section again is the way to toggle it. Use the theme's CSS variables (`--fg`, `--fg-2`, `--fg-3`, `--line`, `--accent`, `--accent-soft`, `--hover`) so it fits light and dark mode. |
+| `addReaderSection({ id, when?, render })` | Adds a block above the body in the reader, for articles and mail. For every opened item, `render(item, el)` gets the full `ItemDetail` and an empty element to fill with plain DOM; it may be async and may return a cleanup function. ShibaPost calls it again when another item is opened or full-text mode changes, after running the cleanup and discarding the old element, so a slow render that finishes late never shows up on the wrong item. `when(item)` decides whether to show it. Returns a remover; removing and adding the section again is the way to toggle it. Use the theme's CSS variables (`--fg`, `--fg-2`, `--fg-3`, `--line`, `--accent`, `--accent-soft`, `--hover`) so it fits light and dark mode. |
 | `addStyle(css)` | Adds a `<style>` to the page. Returns a remover. |
 | `toast(message)` | Shows a short message at the bottom of the window. |
 
@@ -162,7 +162,7 @@ Errors thrown (or promises rejected) by `onClick` are shown as a toast.
 | `"item-open"` | `{ id }`, the item opened in the reader (`null` when it's closed). |
 | `"player"` | The podcast player changed: another episode, play or pause, a new speed, or a jump. Payload is [`api.player.state()`](#apiplayer) (`null` when the player closed). Not sent for normal progress; read `state().position` when you need it. |
 | `"subtitle"` | The subtitle line on screen changed (or its translation arrived). Payload is [`api.subtitles.cueAt()`](#apisubtitles): the line, or `null` between lines. |
-| `"core"` | Every event from Postflow's core, unfiltered. |
+| `"core"` | Every event from ShibaPost's core, unfiltered. |
 
 ### `api.player`
 
@@ -217,7 +217,7 @@ Per-plugin storage on this device (not synced). Values must be JSON-serializable
 
 ### `api.rpc(method, params)` and `api.onUnload(fn)`
 
-- `rpc` calls a method of Postflow's core directly and returns a promise. See below.
+- `rpc` calls a method of ShibaPost's core directly and returns a promise. See below.
 - `onUnload(fn)` registers extra cleanup to run when the plugin is unloaded.
 
 ## Core methods you can call
@@ -288,7 +288,7 @@ interface ItemFilter {
 
 ## Debugging
 
-- **Desktop app:** run Postflow from source with `npm run app` to get developer tools (right-click with
+- **Desktop app:** run ShibaPost from source with `npm run app` to get developer tools (right-click with
   Shift held, then Inspect). Plugin errors are logged to the console as `[plugin <id>]`.
 - **Web version:** open your browser's developer tools.
 - After editing `main.js`, press ↻ next to the plugin in Settings to reload it. Rescan picks up new folders
@@ -297,18 +297,18 @@ interface ItemFilter {
 
 ## Security and good manners
 
-Plugins run with the same access as Postflow's own interface: they can read every message and article,
+Plugins run with the same access as ShibaPost's own interface: they can read every message and article,
 change them, and make network requests. That's why nothing loads until the user turns it on, per device.
 
 - Don't send mail content anywhere without saying so clearly in your description.
 - Keep work out of the main thread: no long synchronous loops.
-- Don't rely on Postflow's internal CSS class names or DOM structure; they change without notice.
+- Don't rely on ShibaPost's internal CSS class names or DOM structure; they change without notice.
   Use `api.ui` instead, and keep `addStyle` rules narrow.
 - Clean up after yourself (see [Lifecycle](#lifecycle)).
 
 ## Versioning
 
 `api.apiVersion` goes up only when something changes in a way that breaks existing plugins. New methods
-and events can be added within a version. Set `minApiVersion` to the version you need; Postflow refuses to
+and events can be added within a version. Set `minApiVersion` to the version you need; ShibaPost refuses to
 load a plugin that needs a newer API and says so in Settings.
 

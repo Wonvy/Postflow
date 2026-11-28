@@ -1,4 +1,4 @@
-// Example Postflow plugin: important senders. See docs/plugins.md for the full API.
+// Example ShibaPost plugin: important senders. See docs/plugins.md for the full API.
 //
 // - Right-click mail → "Mark sender as important" / "Not important any more".
 // - New unread mail in the inbox from an important sender is starred automatically.

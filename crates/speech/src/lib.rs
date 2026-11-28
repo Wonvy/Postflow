@@ -71,7 +71,7 @@ pub enum Error {
     UnknownModel(String),
     #[error("speech model {0} is not downloaded")]
     NotInstalled(String),
-    #[error("this version of Postflow cannot load {0} models")]
+    #[error("this version of ShibaPost cannot load {0} models")]
     Unsupported(String),
     #[error("download failed: {0}")]
     Download(String),
@@ -209,7 +209,7 @@ impl Speech {
         // 模型目录先建好：设置里的「打开模型文件夹」在下载第一个模型之前也能用
         std::fs::create_dir_all(root.join("models"))?;
         let http = reqwest::Client::builder()
-            .user_agent(concat!("Postflow/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("ShibaPost/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(15))
             .build()
             .map_err(|e| Error::Download(e.to_string()))?;

@@ -3,8 +3,8 @@
   "name": "Daily digest",
   "version": "1.0.0",
   "description": "Copies today's unread items, or the open one, as Markdown.",
-  "author": "Postflow",
-  "url": "https://github.com/Wonvy/Postflow/tree/main/examples/plugins/daily-digest",
+  "author": "ShibaPost",
+  "url": "https://github.com/Wonvy/ShibaPost/tree/main/examples/plugins/daily-digest",
   "main": "main.js",
   "minApiVersion": 1
 }

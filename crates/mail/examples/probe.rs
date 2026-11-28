@@ -1,10 +1,10 @@
 //! 诊断用：对一个 IMAP 服务器走一遍连接和登录，打印每一步的结果。
 //!
-//!     cargo run -p postflow-mail --example probe -- imap.qq.com 993 tls 用户名 密码
+//!     cargo run -p shibapost-mail --example probe -- imap.qq.com 993 tls 用户名 密码
 
 use std::time::Instant;
 
-use postflow_mail::{Auth, Connection, Security, ServerConfig};
+use shibapost_mail::{Auth, Connection, Security, ServerConfig};
 
 #[tokio::main]
 async fn main() {

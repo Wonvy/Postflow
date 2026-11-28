@@ -1,4 +1,4 @@
-// Example Postflow plugin: daily digest. See docs/plugins.md for the full API.
+// Example ShibaPost plugin: daily digest. See docs/plugins.md for the full API.
 //
 // - List toolbar button "Copy today's digest": today's unread items, grouped by
 //   feed or mailbox, copied as Markdown (handy for notes apps or a team chat).

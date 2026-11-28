@@ -469,7 +469,7 @@ export function AddFeedDialog() {
               }}
               onUrl={onRsshubUrl}
               onDirect={(pageUrl) => {
-                // 换到「网址」，用 Postflow 自己的方式订阅（YouTube 频道）
+                // 换到「网址」，用 ShibaPost 自己的方式订阅（YouTube 频道）
                 switchMode("url");
                 setUrl(pageUrl);
                 void load(pageUrl);
@@ -519,7 +519,7 @@ export function AddFeedDialog() {
           </div>
         </Field>
         )}
-        {/* Postflow 自己能订阅的（YouTube 频道）就不再提 RSSHub */}
+        {/* ShibaPost 自己能订阅的（YouTube 频道）就不再提 RSSHub */}
         {mode === "url" && !quick && !url.trim() && <QuickGrid onPick={(id) => setQuick(id)} />}
         {mode === "url" && !quick && looksLikeUrl(url) && preview?.feed.kind !== "youtube" && (
           <RadarSuggestions url={url.trim()} onPick={pickRoute} />

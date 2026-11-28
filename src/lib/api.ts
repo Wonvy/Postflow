@@ -87,7 +87,7 @@ export interface SpeechModel {
   /** 要下载多少字节。 */
   size: number;
   installed: boolean;
-  /** 这个版本的 Postflow 能不能加载它。 */
+  /** 这个版本的 ShibaPost 能不能加载它。 */
   supported: boolean;
   /** 目录里已经撤掉了（本机还装着）。 */
   retired: boolean;

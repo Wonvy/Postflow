@@ -636,7 +636,7 @@ export const useUi = create<UiState>()(
         })),
       setTheme: (theme) =>
         set((s) =>
-          theme === "paper" && s.theme !== "paper" && (s.accentColor === DEFAULT_ACCENT || s.accentColor === "postflow")
+          theme === "paper" && s.theme !== "paper" && (s.accentColor === DEFAULT_ACCENT || s.accentColor === "shibapost")
             ? { theme, accentColor: PAPER_DEFAULT_ACCENT }
             : { theme },
         ),
@@ -717,7 +717,7 @@ export const useUi = create<UiState>()(
       setSearchAll: (searchAll) => set({ searchAll, selection: [] }),
     }),
     {
-      name: "postflow.ui",
+      name: "shibapost.ui",
       // 旧版本的「只看邮件 / 只看订阅」筛选和「邮箱 / 订阅」选项卡换成了空间：选项卡停在订阅的，升级后停在订阅空间
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<UiState> & {

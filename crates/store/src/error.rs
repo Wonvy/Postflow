@@ -7,7 +7,7 @@ pub enum Error {
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
     #[error(
-        "data directory was written by a newer Postflow (format {found}, this version supports up to {supported})"
+        "data directory was written by a newer ShibaPost (format {found}, this version supports up to {supported})"
     )]
     FormatTooNew { found: u32, supported: u32 },
     #[error("{0}")]

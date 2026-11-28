@@ -1,20 +1,20 @@
 //! 真的跑一次语音识别：下载目录里的模型、解码一段 Opus 录音、识别、分说话人，看认出来的字对不对。
 //!
-//! 要联网下载约 190 MB 的模型，所以默认跳过：设置了环境变量 `POSTFLOW_SPEECH_SMOKE`（模型放在哪个目录）
+//! 要联网下载约 190 MB 的模型，所以默认跳过：设置了环境变量 `SHIBAPOST_SPEECH_SMOKE`（模型放在哪个目录）
 //! 才跑。CI 在 Linux 和 Windows 上跑它，模型目录缓存起来，模型目录（public/catalog/speech.json）变了才重新下载。
 //!
 //! 它能发现只有真跑才知道的问题：预编译的 sherpa-onnx 库在这个系统上加载不了、Opus 解码不对、
 //! 下载或校验出错、声纹模型加载不了。
 //!
 //! ```text
-//! POSTFLOW_SPEECH_SMOKE=/tmp/speech-smoke cargo test -p postflow-speech --test recognize -- --nocapture
+//! SHIBAPOST_SPEECH_SMOKE=/tmp/speech-smoke cargo test -p shibapost-speech --test recognize -- --nocapture
 //! ```
 //!
 //! CI 里它跟着整个 `cargo test --workspace` 一起跑（.github/workflows/ci.yml 里写了为什么不单独编译）。
 
 use std::path::Path;
 
-use postflow_speech::{AudioReader, Cue, Speakers, Speech};
+use shibapost_speech::{AudioReader, Cue, Speakers, Speech};
 
 const MODEL: &str = "whisper-base";
 /// 录音里说的话（LibriSpeech 的标注）。
@@ -24,8 +24,10 @@ const SPEAKER_MODEL: &str = "speaker-campplus";
 #[tokio::test(flavor = "multi_thread")]
 async fn recognizes_real_speech() {
     // CI 在 macOS 上把它设成空的
-    let Some(root) = std::env::var_os("POSTFLOW_SPEECH_SMOKE").filter(|v| !v.is_empty()) else {
-        eprintln!("skipped: set POSTFLOW_SPEECH_SMOKE to a folder for the models to run this test");
+    let Some(root) = std::env::var_os("SHIBAPOST_SPEECH_SMOKE").filter(|v| !v.is_empty()) else {
+        eprintln!(
+            "skipped: set SHIBAPOST_SPEECH_SMOKE to a folder for the models to run this test"
+        );
         return;
     };
     let speech = Speech::new(root).expect("open the models folder");

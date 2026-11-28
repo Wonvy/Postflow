@@ -1,13 +1,13 @@
 //! 用真正的模型翻译。要从 Mozilla 下载约 100 MB，默认不跑：
 //!
-//!     POSTFLOW_TRANSLATE_DIR=/tmp/postflow-models cargo test -p postflow-translate --release -- --ignored --nocapture
+//!     SHIBAPOST_TRANSLATE_DIR=/tmp/shibapost-models cargo test -p shibapost-translate --release -- --ignored --nocapture
 //!
 //! 模型下载过一次就留在那个目录里。
 
-use postflow_translate::{Mark, Segment, Translator};
+use shibapost_translate::{Mark, Segment, Translator};
 
 async fn translator() -> Translator {
-    let dir = std::env::var("POSTFLOW_TRANSLATE_DIR").expect("set POSTFLOW_TRANSLATE_DIR");
+    let dir = std::env::var("SHIBAPOST_TRANSLATE_DIR").expect("set SHIBAPOST_TRANSLATE_DIR");
     let t = Translator::new(dir).unwrap();
     for pair in ["en-zh", "zh-en"] {
         if !t.installed().iter().any(|i| i.pair == pair) {

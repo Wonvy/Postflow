@@ -1,16 +1,16 @@
 //! 在浏览器中使用：桌面应用在本机端口上提供同一套界面，用的就是这个窗口里的核心和数据。
 //!
 //! 设置只存在这台设备上（本机目录的 web-access.json），不同步：端口、是否允许局域网访问、访问密钥。
-//! 一定要访问密钥：链接和二维码里带一次，浏览器之后用 Cookie 记住（见 postflow-web）。
+//! 一定要访问密钥：链接和二维码里带一次，浏览器之后用 Cookie 记住（见 shibapost-web）。
 //! 换密钥后旧链接和已经打开的页面都失效。关掉应用，网页版也就停了。
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use postflow_core::Core;
-use postflow_web::{Access, Ui, UiFile};
 use serde::{Deserialize, Serialize};
+use shibapost_core::Core;
+use shibapost_web::{Access, Ui, UiFile};
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::watch;
 
@@ -35,7 +35,7 @@ impl Default for Config {
             enabled: false,
             port: DEFAULT_PORT,
             lan: false,
-            key: postflow_web::new_key(),
+            key: shibapost_web::new_key(),
             lan_interface: None,
         }
     }
@@ -84,7 +84,7 @@ fn load<R: Runtime>(app: &AppHandle<R>) -> Config {
         Some(c) if c.key.len() >= 16 => c,
         // 第一次用，或者文件坏了：新的密钥
         Some(c) => Config {
-            key: postflow_web::new_key(),
+            key: shibapost_web::new_key(),
             ..c
         },
         None => Config::default(),
@@ -306,7 +306,7 @@ impl WebAccess {
         };
         let ui = ui(app);
         tauri::async_runtime::spawn(async move {
-            if let Err(err) = postflow_web::serve(core, listener, ui, access, stopped).await {
+            if let Err(err) = shibapost_web::serve(core, listener, ui, access, stopped).await {
                 tracing::warn!("web access stopped: {err}");
             }
         });
@@ -375,7 +375,7 @@ pub async fn web_access_update<R: Runtime>(
             config.lan = v;
         }
         if update.new_key {
-            config.key = postflow_web::new_key();
+            config.key = shibapost_web::new_key();
         }
         if let Some(name) = update.lan_interface.clone() {
             config.lan_interface = Some(name);

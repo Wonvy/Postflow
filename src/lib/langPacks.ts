@@ -19,7 +19,7 @@ export const useLangPacks = create<LangPacksState>()(
       add: (pack) => set((s) => ({ packs: [...s.packs.filter((p) => p.code !== pack.code), pack] })),
       remove: (code) => set((s) => ({ packs: s.packs.filter((p) => p.code !== code) })),
     }),
-    { name: "postflow.languages", storage: createJSONStorage(() => localStorage) },
+    { name: "shibapost.languages", storage: createJSONStorage(() => localStorage) },
   ),
 );
 

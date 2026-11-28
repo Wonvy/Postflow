@@ -4278,195 +4278,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "postflow-ai"
-version = "0.1.49"
-dependencies = [
- "postflow-testkit",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "postflow-core"
-version = "0.1.49"
-dependencies = [
- "axum",
- "futures",
- "gethostname",
- "keyring",
- "notify",
- "postflow-ai",
- "postflow-feed",
- "postflow-mail",
- "postflow-speech",
- "postflow-store",
- "postflow-testkit",
- "postflow-translate",
- "regex",
- "serde",
- "serde_json",
- "static_vcruntime",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "postflow-desktop"
-version = "0.1.49"
-dependencies = [
- "local-ip-address",
- "postflow-core",
- "postflow-web",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-deep-link",
- "tauri-plugin-dialog",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "postflow-feed"
-version = "0.1.49"
-dependencies = [
- "ammonia",
- "bytes",
- "dom_smoothie",
- "encoding_rs",
- "feed-rs",
- "futures",
- "opml",
- "reqwest",
- "scraper",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "postflow-mail"
-version = "0.1.49"
-dependencies = [
- "ammonia",
- "async-imap",
- "encoding_rs",
- "futures",
- "hickory-resolver",
- "mail-builder",
- "mail-parser",
- "native-tls",
- "postflow-testkit",
- "rand",
- "reqwest",
- "rustls-platform-verifier",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "thiserror 2.0.21",
- "tokio",
- "tokio-native-tls",
- "tokio-rustls",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "postflow-speech"
-version = "0.1.49"
-dependencies = [
- "axum",
- "opus-decoder",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "sherpa-onnx",
- "static_vcruntime",
- "symphonia",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "postflow-store"
-version = "0.1.49"
-dependencies = [
- "rand",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "postflow-testkit"
-version = "0.1.49"
-dependencies = [
- "serde_json",
- "sha2 0.11.1",
- "tokio",
-]
-
-[[package]]
-name = "postflow-translate"
-version = "0.1.49"
-dependencies = [
- "axum",
- "flate2",
- "fxtranslate",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "whatlang",
-]
-
-[[package]]
-name = "postflow-web"
-version = "0.1.49"
-dependencies = [
- "axum",
- "futures",
- "postflow-core",
- "rand",
- "serde",
- "serde_json",
- "static_vcruntime",
- "tempfile",
- "tokio",
- "tokio-stream",
- "tower",
- "tower-http 0.7.1",
- "tracing",
-]
-
-[[package]]
 name = "potential_utf"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5440,6 +5251,195 @@ dependencies = [
  "tar",
  "ureq",
  "zip",
+]
+
+[[package]]
+name = "shibapost-ai"
+version = "0.1.49"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "shibapost-testkit",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "shibapost-core"
+version = "0.1.49"
+dependencies = [
+ "axum",
+ "futures",
+ "gethostname",
+ "keyring",
+ "notify",
+ "regex",
+ "serde",
+ "serde_json",
+ "shibapost-ai",
+ "shibapost-feed",
+ "shibapost-mail",
+ "shibapost-speech",
+ "shibapost-store",
+ "shibapost-testkit",
+ "shibapost-translate",
+ "static_vcruntime",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "shibapost-desktop"
+version = "0.1.49"
+dependencies = [
+ "local-ip-address",
+ "serde",
+ "serde_json",
+ "shibapost-core",
+ "shibapost-web",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "shibapost-feed"
+version = "0.1.49"
+dependencies = [
+ "ammonia",
+ "bytes",
+ "dom_smoothie",
+ "encoding_rs",
+ "feed-rs",
+ "futures",
+ "opml",
+ "reqwest",
+ "scraper",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "shibapost-mail"
+version = "0.1.49"
+dependencies = [
+ "ammonia",
+ "async-imap",
+ "encoding_rs",
+ "futures",
+ "hickory-resolver",
+ "mail-builder",
+ "mail-parser",
+ "native-tls",
+ "rand",
+ "reqwest",
+ "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "shibapost-testkit",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-rustls",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "shibapost-speech"
+version = "0.1.49"
+dependencies = [
+ "axum",
+ "opus-decoder",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sherpa-onnx",
+ "static_vcruntime",
+ "symphonia",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "shibapost-store"
+version = "0.1.49"
+dependencies = [
+ "rand",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "shibapost-testkit"
+version = "0.1.49"
+dependencies = [
+ "serde_json",
+ "sha2 0.11.1",
+ "tokio",
+]
+
+[[package]]
+name = "shibapost-translate"
+version = "0.1.49"
+dependencies = [
+ "axum",
+ "flate2",
+ "fxtranslate",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "whatlang",
+]
+
+[[package]]
+name = "shibapost-web"
+version = "0.1.49"
+dependencies = [
+ "axum",
+ "futures",
+ "rand",
+ "serde",
+ "serde_json",
+ "shibapost-core",
+ "static_vcruntime",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tower",
+ "tower-http 0.7.1",
+ "tracing",
 ]
 
 [[package]]

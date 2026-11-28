@@ -630,7 +630,7 @@ pub fn reply_ics(invite: &Invite, me: &Mailbox, status: Partstat, now: i64) -> S
         .unwrap_or_default();
     let mut out = String::new();
     out.push_str(
-        "BEGIN:VCALENDAR\r\nPRODID:-//Postflow//Postflow//EN\r\nVERSION:2.0\r\nMETHOD:REPLY\r\n",
+        "BEGIN:VCALENDAR\r\nPRODID:-//ShibaPost//ShibaPost//EN\r\nVERSION:2.0\r\nMETHOD:REPLY\r\n",
     );
     out.push_str("BEGIN:VEVENT\r\n");
     out.push_str(&fold(&format!("UID:{}", invite.uid)));

@@ -4,9 +4,9 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use futures::StreamExt;
-use postflow_feed::{Conditional, FetchResult, ParsedEntry, ParsedFeed, favicon_url};
-use postflow_store::{Article, FeedPatch, FetchTarget, Media, Store, Transcript, hlc, ids};
 use serde_json::{Map, Value, json};
+use shibapost_feed::{Conditional, FetchResult, ParsedEntry, ParsedFeed, favicon_url};
+use shibapost_store::{Article, FeedPatch, FetchTarget, Media, Store, Transcript, hlc, ids};
 
 use crate::{Core, DEFAULT_INTERVAL_MIN, Event, Scope, Session};
 
@@ -87,8 +87,8 @@ impl Core {
         let mut result = self.client.fetch_feed(&target.url, &cond).await;
         // 小宇宙这类只给白名单客户端发订阅源的平台：在苹果播客目录里找到这个节目，改从那里读，
         // 以后也直接用那个地址（和源永久搬家一样处理）
-        if matches!(result, Err(postflow_feed::Error::Refused(_)))
-            && postflow_feed::apple::feed_is_blocked(&target.url)
+        if matches!(result, Err(shibapost_feed::Error::Refused(_)))
+            && shibapost_feed::apple::feed_is_blocked(&target.url)
             && let Some(lookup) = self.apple_lookup(session, target).await
         {
             tracing::info!(feed = %target.feed_id, to = %lookup, "feed refused; reading it from Apple Podcasts");
@@ -189,7 +189,7 @@ pub(crate) fn ingest(
     feed_url: &str,
     feed: ParsedFeed,
     now: i64,
-) -> postflow_store::Result<usize> {
+) -> shibapost_store::Result<usize> {
     if let Some(current) = store.feed(feed_id)? {
         let mut set = Map::new();
         if current.title.is_empty() && !feed.title.is_empty() {

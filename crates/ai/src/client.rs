@@ -508,7 +508,7 @@ impl Client {
             return Ok(client.clone());
         }
         let mut builder = reqwest::Client::builder()
-            .user_agent(concat!("Postflow/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("ShibaPost/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(15))
             // 流式输出时两段之间可能隔得比较久，长思考的模型尤其如此
             .read_timeout(Duration::from_secs(180));

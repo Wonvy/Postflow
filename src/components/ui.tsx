@@ -318,7 +318,7 @@ interface ModalSize {
   height: number;
 }
 
-const MODAL_SIZE_PREFIX = "postflow.dialogSize.";
+const MODAL_SIZE_PREFIX = "shibapost.dialogSize.";
 /** 对话框顶边离窗口顶部 14vh，底下留 16px。 */
 const modalMaxHeight = () => window.innerHeight * 0.86 - 16;
 const modalMaxWidth = () => window.innerWidth - 32;
@@ -745,12 +745,12 @@ export function Logo({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
       <defs>
-        <linearGradient id="postflow-logo" x1="0.15" y1="0" x2="0.85" y2="1">
+        <linearGradient id="shibapost-logo" x1="0.15" y1="0" x2="0.85" y2="1">
           <stop offset="0" stopColor="#A25BFF" />
           <stop offset="1" stopColor="#6A1FE0" />
         </linearGradient>
       </defs>
-      <rect width="64" height="64" rx="15" fill="url(#postflow-logo)" />
+      <rect width="64" height="64" rx="15" fill="url(#shibapost-logo)" />
       <g fill="none" stroke="#fff" strokeWidth="5.5" strokeLinecap="round">
         <path d="M17 22h30" />
         <path d="M17 32h22" opacity=".8" />

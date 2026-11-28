@@ -322,7 +322,7 @@ pub(crate) const ALIVE: &str = "COALESCE(f.deleted, a.deleted, 1) = 0";
 /// 「稍后读」：用户自己存下来的网页。它是一个地址固定的内置订阅源，存下的网页是它的文章，
 /// 所以阅读、翻译、星标、搜索、同步都和别的文章一样。它不刷新、不出现在订阅源列表和 OPML 里，
 /// 文章也不混进「全部文章」「今天」「未读」，只在侧栏的「稍后读」里看。
-pub const LATER_URL: &str = "postflow:later";
+pub const LATER_URL: &str = "shibapost:later";
 
 /// 「稍后读」订阅源的 ID。地址固定，所以每台设备算出来都一样。
 pub fn later_feed_id() -> &'static str {
@@ -339,7 +339,7 @@ fn waiting_sql() -> String {
 }
 
 /// 条目 `i`（连着订阅源 `f`）不是「稍后读」里的。
-const NOT_LATER: &str = "COALESCE(f.url, '') <> 'postflow:later'";
+const NOT_LATER: &str = "COALESCE(f.url, '') <> 'shibapost:later'";
 
 /// 一条操作里最多带多少个 ID，超过就拆成多行，避免出现特别长的行。
 const MAX_IDS_PER_OP: usize = 500;
@@ -732,7 +732,7 @@ impl Store {
         let guard = self.lock();
         let mut stmt = guard
             .conn
-            .prepare(&feed_sql("f.deleted = 0 AND f.url <> 'postflow:later'"))?;
+            .prepare(&feed_sql("f.deleted = 0 AND f.url <> 'shibapost:later'"))?;
         let rows = stmt.query_map([], feed_from_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
@@ -845,7 +845,7 @@ impl Store {
         let later = guard.conn.query_row(
             &format!(
                 "SELECT COUNT(*) FROM {ITEM_FROM} WHERE i.read = 0 AND i.archived = 0 AND {ALIVE} \
-                 AND f.url = 'postflow:later' AND NOT {}",
+                 AND f.url = 'shibapost:later' AND NOT {}",
                 snoozed_now()
             ),
             [],
@@ -1002,7 +1002,7 @@ impl Store {
             "SELECT f.id, f.url, f.interval_min, ff.etag, ff.last_modified, \
                     COALESCE(ff.error_count, 0) \
              FROM feeds f LEFT JOIN feed_fetch ff ON ff.feed_id = f.id \
-             WHERE f.deleted = 0 AND f.url NOT LIKE 'postflow:%' AND {cond}"
+             WHERE f.deleted = 0 AND f.url NOT LIKE 'shibapost:%' AND {cond}"
         );
         let mut stmt = guard.conn.prepare(&sql)?;
         let rows = stmt.query_map(params_from_iter(args), |r| {
@@ -1128,7 +1128,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     add_column(conn, "items", "media_kind", "TEXT")?;
     add_column(conn, "feeds", "kind", "TEXT")?;
     add_column(conn, "feeds", "full_text", "INTEGER NOT NULL DEFAULT 0")?;
-    // 上次抓取出错的种类（postflow_feed::Error::code），界面按它给出说明；以前的错误没有，下次抓取时补上
+    // 上次抓取出错的种类（shibapost_feed::Error::code），界面按它给出说明；以前的错误没有，下次抓取时补上
     add_column(conn, "feed_fetch", "error_code", "TEXT")?;
     Ok(())
 }
@@ -1429,7 +1429,7 @@ fn filter_sql(filter: &ItemFilter, args: &mut Vec<SqlValue>) -> String {
             View::Snoozed => format!("i.archived < 2 AND {ALIVE} AND {}", snoozed_now()),
             View::Waiting => format!("i.archived = 5 AND {ALIVE} AND {}", waiting_sql()),
             View::Later => format!(
-                "i.archived = 0 AND {ALIVE} AND f.url = 'postflow:later' AND NOT {}",
+                "i.archived = 0 AND {ALIVE} AND f.url = 'shibapost:later' AND NOT {}",
                 snoozed_now()
             ),
             // 稍后提醒刚到时间的；以及发出去的信「没回复就提醒」到了时间、还没回复的（提醒时标成了未读）

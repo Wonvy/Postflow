@@ -3,7 +3,7 @@
 //
 //   npm run screenshots
 //
-// Starts the demo data server and a headless Postflow core with a throwaway data folder,
+// Starts the demo data server and a headless ShibaPost core with a throwaway data folder,
 // then drives the web UI in a locally installed Chrome or Edge. Nothing touches your own data.
 
 import { execFileSync, spawn } from "node:child_process";
@@ -151,7 +151,7 @@ async function shot(browser, lang, name, prefs, act) {
     focusPane: false,
   };
   await context.addInitScript((s) => {
-    localStorage.setItem("postflow.ui", JSON.stringify({ state: s, version: 0 }));
+    localStorage.setItem("shibapost.ui", JSON.stringify({ state: s, version: 0 }));
   }, state);
   const page = await context.newPage();
   await resetState();
@@ -172,22 +172,22 @@ const open = (page, title) => page.getByRole("option").filter({ hasText: title }
 async function main() {
   console.log("Building the web UI and the demo binaries…");
   execFileSync("npm", ["run", "build"], { cwd: ROOT, stdio: ["ignore", "ignore", "inherit"] });
-  execFileSync("cargo", ["build", "-q", "-p", "postflow-web", "-p", "postflow-testkit", "--bins"], {
+  execFileSync("cargo", ["build", "-q", "-p", "shibapost-web", "-p", "shibapost-testkit", "--bins"], {
     cwd: ROOT,
     stdio: "inherit",
   });
 
-  const tmp = mkdtempSync(join(tmpdir(), "postflow-shots-"));
+  const tmp = mkdtempSync(join(tmpdir(), "shibapost-shots-"));
   try {
     start(join(ROOT, "target/debug/demo-server"), []);
     await waitFor("demo server", async () => (await fetch(`${FEEDS}/cn/atom.xml`)).ok);
-    start(join(ROOT, "target/debug/postflow-web"), [
+    start(join(ROOT, "target/debug/shibapost-web"), [
       "--local-dir", join(tmp, "local"),
       "--port", String(PORT),
       "--static", join(ROOT, "dist"),
       "--memory-secrets",
     ]);
-    await waitFor("postflow core", async () => (await fetch(BASE)).ok);
+    await waitFor("shibapost core", async () => (await fetch(BASE)).ok);
 
     console.log("Loading demo data…");
     await rpc("app.setup", { data_dir: join(tmp, "data"), device_name: "MacBook Pro" });

@@ -7,8 +7,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use postflow_store::ItemPatch;
 use serde::{Deserialize, Serialize};
+use shibapost_store::ItemPatch;
 
 use crate::refresh::now;
 use crate::{Core, Event, Scope, Session};
@@ -78,7 +78,7 @@ impl Core {
         session: &Arc<Session>,
         after: i64,
         now: i64,
-    ) -> Vec<postflow_store::ItemSummary> {
+    ) -> Vec<shibapost_store::ItemSummary> {
         let due = match session.db(move |s| s.due_follow_ups(after, now)).await {
             Ok(due) => due,
             Err(e) => {
@@ -98,7 +98,8 @@ impl Core {
                 tracing::info!("follow-up: already answered");
                 continue;
             }
-            let id = postflow_store::ids::mail_id(&f.account_id, &format!("sent:{}", f.message_id));
+            let id =
+                shibapost_store::ids::mail_id(&f.account_id, &format!("sent:{}", f.message_id));
             let lookup = id.clone();
             let Ok(Some(detail)) = session.db(move |s| s.item(&lookup)).await else {
                 continue;

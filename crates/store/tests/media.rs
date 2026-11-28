@@ -1,6 +1,6 @@
 //! 播客和视频：附件存进索引、按内容判断订阅源的类型、用户改类型、按类型筛选，以及给早先入库的单集补附件。
 
-use postflow_store::{Article, FeedPatch, ItemFilter, Media, NewFeed, Store, View, ids};
+use shibapost_store::{Article, FeedPatch, ItemFilter, Media, NewFeed, Store, View, ids};
 use tempfile::TempDir;
 
 fn open(tmp: &TempDir) -> Store {

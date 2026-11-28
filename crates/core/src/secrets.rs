@@ -12,7 +12,7 @@ pub trait Secrets: Send + Sync {
 /// 系统钥匙串：macOS 的钥匙串、Windows 凭据管理器、Linux 的 Secret Service。
 pub struct Keychain;
 
-const SERVICE: &str = "app.postflow.mail";
+const SERVICE: &str = "app.shibapost.mail";
 
 impl Secrets for Keychain {
     fn get(&self, account_id: &str) -> Option<String> {

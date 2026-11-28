@@ -15,15 +15,15 @@ pub const BUILTIN: &str = include_str!("../../../public/catalog/speech.json");
 
 /// 目录的在线版本：先走 jsDelivr（国内更容易打开），不行再直接读 GitHub。
 pub const CATALOG_URLS: &[&str] = &[
-    "https://cdn.jsdelivr.net/gh/Wonvy/Postflow@main/public/catalog/speech.json",
-    "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/speech.json",
+    "https://cdn.jsdelivr.net/gh/Wonvy/ShibaPost@main/public/catalog/speech.json",
+    "https://raw.githubusercontent.com/Wonvy/ShibaPost/main/public/catalog/speech.json",
 ];
 
 /// 朗读模型的目录，随程序带的一份和在线版本。
 pub const VOICES_BUILTIN: &str = include_str!("../../../public/catalog/voices.json");
 pub const VOICE_CATALOG_URLS: &[&str] = &[
-    "https://cdn.jsdelivr.net/gh/Wonvy/Postflow@main/public/catalog/voices.json",
-    "https://raw.githubusercontent.com/Wonvy/Postflow/main/public/catalog/voices.json",
+    "https://cdn.jsdelivr.net/gh/Wonvy/ShibaPost@main/public/catalog/voices.json",
+    "https://raw.githubusercontent.com/Wonvy/ShibaPost/main/public/catalog/voices.json",
 ];
 
 /// 这个版本的程序读得懂的目录格式。

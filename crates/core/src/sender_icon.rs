@@ -90,7 +90,7 @@ impl Core {
     /// 发件人所在网站的图标地址，没有返回 `None`。
     pub(crate) async fn sender_icon(&self, domain: &str) -> Option<String> {
         let domain = domain.trim().to_ascii_lowercase();
-        if !postflow_feed::valid_domain(&domain) {
+        if !shibapost_feed::valid_domain(&domain) {
             return None;
         }
         if let Some(entry) = self.sender_icons.cached(&domain) {

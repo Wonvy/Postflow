@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn roundtrip() {
         let feeds = parse(SAMPLE).unwrap();
-        let xml = write("Postflow", &feeds).unwrap();
+        let xml = write("ShibaPost", &feeds).unwrap();
         assert!(xml.starts_with("<?xml"));
         let mut again = parse(&xml).unwrap();
         let mut expected = feeds.clone();

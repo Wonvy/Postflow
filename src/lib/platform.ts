@@ -48,7 +48,7 @@ export async function pickDirectory(defaultPath?: string): Promise<string | null
 
 /** 导出订阅列表，返回导出的订阅数；用户取消时返回 null。 */
 export async function exportOpml(): Promise<number | null> {
-  const filename = "postflow-subscriptions.opml";
+  const filename = "shibapost-subscriptions.opml";
   if (isTauri) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({

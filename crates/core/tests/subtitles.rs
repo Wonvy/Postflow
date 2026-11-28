@@ -1,10 +1,10 @@
 //! 字幕的方法在没装识别模型时的表现。真的转写要几百兆的模型，不放进自动测试
-//! （用 `cargo run -p postflow-speech --example transcribe` 手动试）。
+//! （用 `cargo run -p shibapost-speech --example transcribe` 手动试）。
 
 use std::sync::Arc;
 
-use postflow_core::Core;
 use serde_json::{Value, json};
+use shibapost_core::Core;
 
 async fn call(core: &Arc<Core>, method: &str, params: Value) -> Value {
     core.rpc(method, params, None)

@@ -204,7 +204,7 @@ pub struct Feed {
     pub last_fetch_at: Option<i64>,
     /// 上次抓取的错误信息（原文，英文）。
     pub error: Option<String>,
-    /// 上次抓取出错的种类（`postflow_feed::Error::code`），界面按它给出说明。以前记下的错误没有。
+    /// 上次抓取出错的种类（`shibapost_feed::Error::code`），界面按它给出说明。以前记下的错误没有。
     pub error_code: Option<String>,
 }
 

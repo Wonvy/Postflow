@@ -11,7 +11,7 @@ export type DragPayload =
   | { kind: "folder"; name: string }
   | { kind: "account"; id: string };
 
-const MIME = "application/x-postflow";
+const MIME = "application/x-shibapost";
 
 export const useDrag = create<{ payload: DragPayload | null }>()(() => ({ payload: null }));
 

@@ -31,9 +31,9 @@ function save() {
   writeFileSync(FILE, `${JSON.stringify(catalog, null, 2)}\n`);
   console.log(`Saved ${FILE} (updated ${catalog.updated}).`);
 }
-// Same as the app (crates/feed/src/client.rs sends "Postflow/<version>"), so sites that treat readers differently
-// answer the way they will in Postflow
-const FEED_UA = `Postflow/${JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version}`;
+// Same as the app (crates/feed/src/client.rs sends "ShibaPost/<version>"), so sites that treat readers differently
+// answer the way they will in ShibaPost
+const FEED_UA = `ShibaPost/${JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version}`;
 const PAGE_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 const STALE_DAYS = 180;
@@ -170,7 +170,7 @@ async function icons(args) {
   const todo = CATALOG.filter((f) => (only.length === 0 || only.includes(f.id)) && (force || only.length > 0 || !f.icon));
   const missing = [];
   await pool(todo, 6, async (feed) => {
-    const tmp = mkdtempSync(join(tmpdir(), "postflow-icon-"));
+    const tmp = mkdtempSync(join(tmpdir(), "shibapost-icon-"));
     try {
       const from = await iconFor(feed, tmp);
       console.log(`${from ? "ok" : "!!"} ${feed.id.padEnd(22)} ${from ?? "no icon found"}`);

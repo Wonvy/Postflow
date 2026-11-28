@@ -1,5 +1,5 @@
 {
-  "name": "postflow",
+  "name": "shibapost",
   "private": true,
   "version": "0.1.49",
   "license": "GPL-3.0-or-later",
@@ -11,10 +11,10 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "app": "tauri dev --config src-tauri/tauri.dev.conf.json",
-    "server": "cargo run -p postflow-web -- --local-dir .postflow-dev/local",
-    "server:demo": "cargo run -p postflow-web -- --local-dir .postflow-dev/local --memory-secrets",
+    "server": "cargo run -p shibapost-web -- --local-dir .shibapost-dev/local",
+    "server:demo": "cargo run -p shibapost-web -- --local-dir .shibapost-dev/local --memory-secrets",
     "release": "node scripts/release.mjs",
-    "demo": "cargo run -q -p postflow-testkit --bin demo-server",
+    "demo": "cargo run -q -p shibapost-testkit --bin demo-server",
     "screenshots": "node scripts/screenshots.mjs",
     "test:ui": "node --test src/lib/*.test.ts",
     "build:plugins": "rolldown examples/plugins/textrank-zh/src/main.js --format esm --file examples/plugins/textrank-zh/main.js --banner \"// Built from src/main.js by npm run build:plugins. Includes textrank4zh-ts 0.4.0 (MIT, Copyright (c) ChasLui); see vendor/README.md.\""

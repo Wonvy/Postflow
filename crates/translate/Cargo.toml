@@ -1,5 +1,5 @@
 [package]
-name = "postflow-translate"
+name = "shibapost-translate"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

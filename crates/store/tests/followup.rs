@@ -1,7 +1,7 @@
 //! 没回复就提醒：记在同步日志里，到时间的能找出来；对方的回信能查到；
 //! 到时间、标成未读的「已发送」邮件出现在「提醒」里。
 
-use postflow_store::{
+use shibapost_store::{
     AccountConfig, FollowUp, ItemFilter, ItemKind, ItemPatch, MailFolder, MailSync, NewMail, Store,
     View, ids,
 };
@@ -81,7 +81,7 @@ fn follow_ups_come_due_and_show_in_reminders() {
             },
         )
         .unwrap();
-    let now = postflow_store::hlc::now_ms() as i64;
+    let now = shibapost_store::hlc::now_ms() as i64;
     let follow = FollowUp {
         message_id: "abc@example.com".into(),
         account_id: account.id.clone(),
@@ -189,7 +189,7 @@ fn follow_ups_come_due_and_show_in_reminders() {
     store
         .set_structure_attachments(
             &sent_id,
-            &[postflow_store::AttachmentMeta {
+            &[shibapost_store::AttachmentMeta {
                 index: 0,
                 name: "contract.pdf".into(),
                 mime: "application/pdf".into(),
@@ -200,10 +200,10 @@ fn follow_ups_come_due_and_show_in_reminders() {
     let overview = store.attachments(None, 10).unwrap();
     assert_eq!(overview.files.len(), 1);
     assert!(!overview.files[0].downloaded);
-    assert_eq!(overview.files[0].index, postflow_store::STRUCTURE_INDEX);
+    assert_eq!(overview.files[0].index, shibapost_store::STRUCTURE_INDEX);
     assert_eq!(
         store
-            .structure_attachment_name(&sent_id, postflow_store::STRUCTURE_INDEX)
+            .structure_attachment_name(&sent_id, shibapost_store::STRUCTURE_INDEX)
             .unwrap()
             .as_deref(),
         Some("contract.pdf")

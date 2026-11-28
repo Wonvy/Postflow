@@ -2,15 +2,15 @@
 
 [中文](subtitles.zh-CN.md)
 
-Postflow can show what is being said while a podcast plays. Turn on the **CC** button in the player (in the reader, or
+ShibaPost can show what is being said while a podcast plays. Turn on the **CC** button in the player (in the reader, or
 in the small player under the list); a line of text follows the audio.
 
-- If the show publishes a transcript with timestamps (Podcasting 2.0), Postflow uses it.
-- Otherwise Postflow transcribes the episode **on your own computer**. The audio is not uploaded anywhere.
+- If the show publishes a transcript with timestamps (Podcasting 2.0), ShibaPost uses it.
+- Otherwise ShibaPost transcribes the episode **on your own computer**. The audio is not uploaded anywhere.
 
 ## How it works
 
-Postflow doesn't listen to the sound coming out of your speakers. It downloads the episode to this device (the same
+ShibaPost doesn't listen to the sound coming out of your speakers. It downloads the episode to this device (the same
 download as "Download for offline listening") and reads the file from where you're listening onward, starting as soon
 as the first part has arrived rather than waiting for the whole download. Recognition is several times to tens of
 times faster than playback, so the first line appears a few seconds after you press play and the transcription then
@@ -67,7 +67,7 @@ one that sounds female, and a small **diamond** when it can't tell. The guess co
 person's voice, measured on your device during recognition: most men talk at around 85–150 Hz and most women at
 around 180–260 Hz. Voices in between get the diamond.
 
-For speech recognized on your device, Postflow needs a second, small model that recognizes voices: **3D-Speaker
+For speech recognized on your device, ShibaPost needs a second, small model that recognizes voices: **3D-Speaker
 CAM++** (27 MB, in Settings → Subtitles under Voice model). With it installed, every few seconds of speech are
 compared with the voices heard so far in that episode. It works alongside whichever recognition model you use and
 runs only on your device. Episodes transcribed before you installed it don't have speakers; choose **Transcribe
@@ -77,13 +77,13 @@ again** in their transcript.
 
 Turn on **Translate subtitles** (in Settings → Subtitles or the menu next to the CC button). When an episode isn't
 in your language, a translation appears under each line. It uses what you chose in **Settings → Translation**: the
-target language, and either the free offline models (Postflow asks before downloading one) or your AI service.
+target language, and either the free offline models (ShibaPost asks before downloading one) or your AI service.
 
 With the **Bilingual** style, an episode that's already in your language still gets a second line: a Chinese show
 shown to a Chinese reader is translated into English, and an English show into the interface language.
 
 Only the lines around where you're listening are translated, a minute or so ahead. Translations are kept on this
-device with the subtitles, so listening again, or reopening Postflow, doesn't translate (or, with an AI service,
+device with the subtitles, so listening again, or reopening ShibaPost, doesn't translate (or, with an AI service,
 pay for) anything twice.
 
 ## Speech recognition models
@@ -98,10 +98,10 @@ time.
 | Whisper Base | about a hundred languages | 153 MB | Smaller and faster than Small, less accurate |
 | Parakeet TDT 0.6B v3 | English and 24 other European languages | 640 MB | High accuracy with punctuation and capitalization; no Chinese |
 
-The list comes from [`public/catalog/speech.json`](../public/catalog/speech.json) in this repository. Postflow checks
+The list comes from [`public/catalog/speech.json`](../public/catalog/speech.json) in this repository. ShibaPost checks
 it online once a day, so new models can be added without a new release, as long as the bundled speech runtime
 ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)) already supports that kind of model. Models that need a newer
-runtime are listed as "Needs a newer Postflow".
+runtime are listed as "Needs a newer ShibaPost".
 
 Each model is published by its own authors under its own license, shown next to it in Settings.
 
@@ -109,12 +109,12 @@ Each model is published by its own authors under its own license, shown next to 
 
 Every file has more than one address: Hugging Face, its mirror hf-mirror.com, and for SenseVoice and Whisper also
 [ModelScope](https://modelscope.cn) (魔搭), which is reachable in mainland China. Before downloading a model,
-Postflow fetches the first megabyte from each of them and downloads from the fastest; sources that can't be reached
+ShibaPost fetches the first megabyte from each of them and downloads from the fastest; sources that can't be reached
 are only tried last. So you don't need to choose anything, whether or not Hugging Face works from your network.
 Parakeet is only on Hugging Face so far.
 
-The copies on ModelScope were uploaded by members of the community, not by Postflow. They are only listed when every
-file is byte-for-byte the same as the original (same size and SHA-256), and Postflow checks the SHA-256 again after
+The copies on ModelScope were uploaded by members of the community, not by ShibaPost. They are only listed when every
+file is byte-for-byte the same as the original (same size and SHA-256), and ShibaPost checks the SHA-256 again after
 downloading.
 
 ### If the download is slow or fails
@@ -127,7 +127,7 @@ still doesn't work, download the files yourself and choose **Import from folder*
 2. Download those files into one folder, keeping the file names.
 3. In Settings → Subtitles, choose Import from folder next to that model and pick the folder.
 
-Postflow checks each file's SHA-256 before installing it, wherever it came from.
+ShibaPost checks each file's SHA-256 before installing it, wherever it came from.
 
 ### Voice model
 
@@ -142,14 +142,14 @@ to redo one, open the transcript under the play bar and choose **Transcribe agai
 
 ## Where things are kept
 
-Everything is in the `speech` folder of Postflow's local data directory (Settings → Subtitles shows the path): the
+Everything is in the `speech` folder of ShibaPost's local data directory (Settings → Subtitles shows the path): the
 models, one small JSON file per transcribed episode, and one per episode and language for translations. Settings → Storage shows how much space they use, and
 Settings → Subtitles can clear all saved subtitles.
 
-## When Postflow is used from a browser
+## When ShibaPost is used from a browser
 
 With web access turned on, the phone or browser shows the same subtitles. The models live on, and the work is done by,
-the computer running Postflow.
+the computer running ShibaPost.
 
 ## For plugin authors
 

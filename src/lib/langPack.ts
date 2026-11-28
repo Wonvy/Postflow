@@ -19,7 +19,7 @@ export interface LangPack {
 }
 
 export interface LangFile {
-  postflow_language: number;
+  shibapost_language: number;
   code: string;
   name: string;
   base: BaseLang;
@@ -71,7 +71,7 @@ export function exportFile(
   appVersion: string | undefined,
 ): string {
   const file: LangFile = {
-    postflow_language: FORMAT_VERSION,
+    shibapost_language: FORMAT_VERSION,
     code: pack.code,
     name: pack.name,
     base: pack.base,
@@ -98,8 +98,8 @@ export function importFile(
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new LangFileError("format");
   const f = raw as Partial<Record<keyof LangFile, unknown>>;
-  if (typeof f.postflow_language !== "number") throw new LangFileError("format");
-  if (f.postflow_language > FORMAT_VERSION) throw new LangFileError("version");
+  if (typeof f.shibapost_language !== "number") throw new LangFileError("format");
+  if (f.shibapost_language > FORMAT_VERSION) throw new LangFileError("version");
   if (!f.messages || typeof f.messages !== "object" || Array.isArray(f.messages)) throw new LangFileError("format");
 
   const code = typeof f.code === "string" ? f.code.trim() : "";

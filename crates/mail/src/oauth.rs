@@ -202,7 +202,7 @@ pub(crate) fn http() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
-            .user_agent(concat!("Postflow/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("ShibaPost/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(10))
             .build()
             .unwrap_or_default()
@@ -370,17 +370,17 @@ async fn accept(v4: &TcpListener, v6: Option<&TcpListener>) -> std::io::Result<T
 fn page(ok: bool) -> String {
     let (zh, en) = if ok {
         (
-            "登录完成，可以关掉这个页面回到 Postflow 了。",
-            "Signed in. You can close this tab and go back to Postflow.",
+            "登录完成，可以关掉这个页面回到 ShibaPost 了。",
+            "Signed in. You can close this tab and go back to ShibaPost.",
         )
     } else {
         (
-            "没有登录成功，回到 Postflow 再试一次。",
-            "Sign-in didn't complete. Go back to Postflow and try again.",
+            "没有登录成功，回到 ShibaPost 再试一次。",
+            "Sign-in didn't complete. Go back to ShibaPost and try again.",
         )
     };
     format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Postflow</title>\
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>ShibaPost</title>\
          <meta name=\"viewport\" content=\"width=device-width\">\
          <style>body{{font:15px -apple-system,system-ui,sans-serif;display:grid;place-items:center;\
          height:90vh;margin:0;color:#333;background:#f6f6f8}}p{{margin:.4em 0}}</style></head>\
@@ -589,7 +589,7 @@ mod tests {
                 .unwrap();
             let mut out = String::new();
             s.read_to_string(&mut out).await.unwrap();
-            assert!(out.contains("Postflow"));
+            assert!(out.contains("ShibaPost"));
         });
         let code = redirect.code(Duration::from_secs(5)).await.unwrap();
         assert_eq!(code, "the-code");

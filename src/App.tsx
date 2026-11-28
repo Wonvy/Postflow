@@ -202,7 +202,7 @@ function Shell() {
   useTrayActions();
   // 在输入框外面粘贴一个网址：存进稍后读
   usePasteToSave();
-  // 浏览器里的「存到 Postflow」书签按钮
+  // 浏览器里的「存到 ShibaPost」书签按钮
   useExternalSaves();
   useEffect(() => startUpdateChecks(), []);
   useEffect(() => watchFullscreen(), []);
@@ -412,7 +412,7 @@ function Body() {
       <div data-tauri-drag-region className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
         <Unplug size={28} strokeWidth={1.25} className="text-fg-4" />
         <div>
-          <p className="font-medium text-fg-2">Cannot reach the Postflow core</p>
+          <p className="font-medium text-fg-2">Cannot reach the ShibaPost core</p>
           {!isTauri && (
             <p className="mt-1 max-w-[360px] text-[12px] leading-relaxed text-fg-3">
               Start it with <code className="select-text font-mono text-fg-2">npm run server</code> and try again.

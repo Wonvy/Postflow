@@ -6,9 +6,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use postflow_feed::rsshub::Catalog;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use shibapost_feed::rsshub::Catalog;
 use tokio::sync::Mutex;
 
 use crate::Core;

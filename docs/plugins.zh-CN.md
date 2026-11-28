@@ -1,9 +1,9 @@
-# 开发 Postflow 插件
+# 开发 ShibaPost 插件
 
 [English](plugins.md)
 
-插件可以给 Postflow 加按钮、菜单项和功能。一个插件就是一个文件夹，里面有一个 `manifest.json` 和一个
-JavaScript 模块。插件在 Postflow 的界面里运行，通过 `api` 对象和应用打交道。
+插件可以给 ShibaPost 加按钮、菜单项和功能。一个插件就是一个文件夹，里面有一个 `manifest.json` 和一个
+JavaScript 模块。插件在 ShibaPost 的界面里运行，通过 `api` 对象和应用打交道。
 
 - [快速上手](#快速上手)
 - [例子](#例子)
@@ -18,7 +18,7 @@ JavaScript 模块。插件在 Postflow 的界面里运行，通过 `api` 对象�
 
 ## 快速上手
 
-1. 在 Postflow 里打开「设置 → 插件 → 打开插件目录」。（网页版里，插件目录是应用本机数据目录下的 `plugins`，
+1. 在 ShibaPost 里打开「设置 → 插件 → 打开插件目录」。（网页版里，插件目录是应用本机数据目录下的 `plugins`，
    路径显示在那一页的最下面。）
 2. 新建一个以插件 ID 命名的文件夹，比如 `hello`，放进两个文件：
 
@@ -54,7 +54,7 @@ JavaScript 模块。插件在 Postflow 的界面里运行，通过 `api` 对象�
 
 ## 例子
 
-[`examples/plugins`](../examples/plugins) 里有四个完整的插件。它们也随 Postflow 一起打包：每台设备第一次启动 Postflow 时
+[`examples/plugins`](../examples/plugins) 里有四个完整的插件。它们也随 ShibaPost 一起打包：每台设备第一次启动 ShibaPost 时
 会把它们放进插件目录，默认不启用，在「设置 → 插件」里打开开关就能用。删掉的可以在同一页的「示例插件」里重新安装。也可以把插件文件夹复制到你的插件目录，点「重新扫描」，再启用它。
 
 | 插件 | 做什么 | 演示了哪些接口 |
@@ -108,7 +108,7 @@ export default function (api) {
 }
 ```
 
-- 用户启用插件时加载；插件开着的时候，每次启动 Postflow 都会加载。
+- 用户启用插件时加载；插件开着的时候，每次启动 ShibaPost 都会加载。
 - 用户停用插件、重新加载它（设置里的 ↻ 按钮）或者重新扫描时卸载。
 - 通过 `api` 登记的东西（按钮、菜单项、样式、事件监听）卸载时自动撤掉。别的东西（定时器、自己加的 DOM）
   要自己清理：写在 `onunload` 里、用 `api.onUnload(fn)` 登记，或者放在返回的清理函数里。
@@ -118,8 +118,8 @@ export default function (api) {
 
 ### `api.apiVersion`、`api.manifest`、`api.lang()`
 
-- `apiVersion`：这个 Postflow 的插件接口版本（现在是 `1`）。
-- `manifest`：Postflow 读到的你的 manifest。
+- `apiVersion`：这个 ShibaPost 的插件接口版本（现在是 `1`）。
+- `manifest`：ShibaPost 读到的你的 manifest。
 - `lang()`：界面语言，`"zh"` 或 `"en"`（导入的语言返回它的基础语言）。
 
 ### `api.ui`
@@ -128,7 +128,7 @@ export default function (api) {
 | --- | --- |
 | `addToolbarButton({ id, toolbar, label, icon?, onClick })` | 在 `"list"`（列表）或 `"reader"`（阅读区）工具栏加一个按钮。默认放在顶部工具栏的最后，用户可以在「自定义工具栏」里把它挪到状态栏或隐藏。`icon` 是用 `currentColor` 画的 SVG 字符串（viewBox 24×24），不给就显示拼图图标。`onClick({ item, selection })` 收到阅读区打开的条目（没有就是 `null`）和列表里选中的条目 ID。返回一个移除这个按钮的函数。 |
 | `addItemMenuItem({ id, label, when?, onClick })` | 在列表右键菜单的最后加一项。`onClick(items)` 收到这个菜单针对的条目（右键点的那一条，或者整个选中的范围）。`when(items)` 决定显不显示。返回一个移除函数。 |
-| `addReaderSection({ id, when?, render })` | 在阅读区正文上方加一块内容，文章和邮件都有。每打开一个条目，`render(item, el)` 会收到完整的 `ItemDetail` 和一个空元素，用普通 DOM 往里画；可以是 async，也可以返回一个清理函数。打开别的条目、切换全文模式时，Postflow 先调清理函数、丢掉旧的元素，再重新调用，所以算得慢、晚到的结果不会出现在别的条目上。`when(item)` 决定显不显示。返回一个移除函数；要开关这块内容，就移除后再重新添加。样式请用主题的 CSS 变量（`--fg`、`--fg-2`、`--fg-3`、`--line`、`--accent`、`--accent-soft`、`--hover`），浅色和深色模式下都合适。 |
+| `addReaderSection({ id, when?, render })` | 在阅读区正文上方加一块内容，文章和邮件都有。每打开一个条目，`render(item, el)` 会收到完整的 `ItemDetail` 和一个空元素，用普通 DOM 往里画；可以是 async，也可以返回一个清理函数。打开别的条目、切换全文模式时，ShibaPost 先调清理函数、丢掉旧的元素，再重新调用，所以算得慢、晚到的结果不会出现在别的条目上。`when(item)` 决定显不显示。返回一个移除函数；要开关这块内容，就移除后再重新添加。样式请用主题的 CSS 变量（`--fg`、`--fg-2`、`--fg-3`、`--line`、`--accent`、`--accent-soft`、`--hover`），浅色和深色模式下都合适。 |
 | `addStyle(css)` | 往页面里加一段 `<style>`。返回一个移除函数。 |
 | `toast(message)` | 在窗口底部显示一句很快消失的提示。 |
 
@@ -157,7 +157,7 @@ export default function (api) {
 | `"item-open"` | `{ id }`，阅读区打开的条目（关掉时是 `null`）。 |
 | `"player"` | 播客播放器变了：换了一期、开始或暂停、改了速度、跳了一下。内容是 [`api.player.state()`](#apiplayer)（播放器关了是 `null`）。正常往前放不发；要进度时读 `state().position`。 |
 | `"subtitle"` | 屏幕上显示的那一句字幕换了（或者它的译文到了）。内容是 [`api.subtitles.cueAt()`](#apisubtitles)：那一句，两句之间是 `null`。 |
-| `"core"` | Postflow 核心发出的所有事件，不做筛选。 |
+| `"core"` | ShibaPost 核心发出的所有事件，不做筛选。 |
 
 ### `api.player`
 
@@ -211,7 +211,7 @@ export default function (api) {
 
 ### `api.rpc(method, params)` 和 `api.onUnload(fn)`
 
-- `rpc` 直接调用 Postflow 核心的方法，返回一个 Promise。见下一节。
+- `rpc` 直接调用 ShibaPost 核心的方法，返回一个 Promise。见下一节。
 - `onUnload(fn)` 登记一个插件卸载时要做的额外清理。
 
 ## 可以调用的核心方法
@@ -281,7 +281,7 @@ interface ItemFilter {
 
 ## 调试
 
-- **桌面应用：** 用 `npm run app` 从源码运行 Postflow，就有开发者工具（按住 Shift 点右键，再选「检查」）。
+- **桌面应用：** 用 `npm run app` 从源码运行 ShibaPost，就有开发者工具（按住 Shift 点右键，再选「检查」）。
   插件的错误会以 `[plugin <id>]` 开头打印在控制台里。
 - **网页版：** 打开浏览器的开发者工具。
 - 改完 `main.js` 后，点设置里插件旁边的 ↻ 重新加载。新加的插件文件夹和改过的 manifest 要点「重新扫描」。
@@ -289,15 +289,15 @@ interface ItemFilter {
 
 ## 安全和规矩
 
-插件和 Postflow 自己的界面有同样的权限：能读每一封邮件和每一篇文章、能修改它们，也能发网络请求。
+插件和 ShibaPost 自己的界面有同样的权限：能读每一封邮件和每一篇文章、能修改它们，也能发网络请求。
 所以插件在每台设备上都要用户手动启用才会加载。
 
 - 不要把邮件内容发到任何地方，除非在介绍里写清楚。
 - 别占着主线程：不要写长时间的同步循环。
-- 不要依赖 Postflow 内部的 CSS 类名和 DOM 结构，它们会随时改变。请用 `api.ui`，`addStyle` 的规则写得越窄越好。
+- 不要依赖 ShibaPost 内部的 CSS 类名和 DOM 结构，它们会随时改变。请用 `api.ui`，`addStyle` 的规则写得越窄越好。
 - 自己的东西自己清理（见[生命周期](#生命周期)）。
 
 ## 版本
 
 只有在改动会让现有插件出问题时，`api.apiVersion` 才会加一。同一个版本里可以增加新的方法和事件。
-把 `minApiVersion` 设成你需要的版本；插件需要的接口版本比当前 Postflow 新时，Postflow 不会加载它，并在设置里说明原因。
+把 `minApiVersion` 设成你需要的版本；插件需要的接口版本比当前 ShibaPost 新时，ShibaPost 不会加载它，并在设置里说明原因。

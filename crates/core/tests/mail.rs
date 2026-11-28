@@ -4,9 +4,9 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use postflow_core::{Core, Event, MemorySecrets};
-use postflow_testkit::{FakeImap, FakeSmtp, mail};
 use serde_json::{Value, json};
+use shibapost_core::{Core, Event, MemorySecrets};
+use shibapost_testkit::{FakeImap, FakeSmtp, mail};
 
 const USER: &str = "me@example.com";
 const PASS: &str = "app-password";

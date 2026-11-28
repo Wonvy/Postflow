@@ -3,10 +3,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use postflow_mail::{Auth, RenderOptions, ServerConfig};
-use postflow_store::{AccountConfig, AccountPatch, ItemSummary};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use shibapost_mail::{Auth, RenderOptions, ServerConfig};
+use shibapost_store::{AccountConfig, AccountPatch, ItemSummary};
 use tokio::sync::oneshot;
 
 use crate::mail::{Command, Write, mail_error, parse_security, security_str, verify, verify_login};
@@ -142,7 +142,7 @@ impl Core {
         session: &Arc<Session>,
     ) -> Option<Result<Value, RpcError>> {
         let result = match method {
-            "mail.presets" => reply(json!({ "presets": postflow_mail::presets() })),
+            "mail.presets" => reply(json!({ "presets": shibapost_mail::presets() })),
             "accounts.guess" => self.guess(params).await,
             "accounts.add" => self.add_account(params, session).await,
             "accounts.update" => self.update_account(params, session).await,
@@ -203,7 +203,7 @@ impl Core {
     async fn guess(&self, params: Value) -> Result<Value, RpcError> {
         let p: Email = parse(params)?;
         // 企业邮箱和自定义域名要查 MX 记录才认得出来
-        let (cfg, preset) = postflow_mail::detect(&p.email)
+        let (cfg, preset) = shibapost_mail::detect(&p.email)
             .await
             .ok_or_else(|| RpcError::new("invalid_email", "email address is invalid"))?;
         reply(json!({
@@ -225,7 +225,7 @@ impl Core {
         if let Some(flow) = p.oauth.clone() {
             return self.add_oauth_account(p, &email, &flow, session).await;
         }
-        let (guess, _) = postflow_mail::detect(&email)
+        let (guess, _) = shibapost_mail::detect(&email)
             .await
             .ok_or_else(|| RpcError::new("invalid_email", "email address is invalid"))?;
         if p.password.is_empty() {
@@ -359,7 +359,7 @@ impl Core {
             .ok_or_else(|| {
                 RpcError::new("mail_no_password", "enter the password for this account")
             })?;
-            postflow_mail::smtp::check(&cfg, &auth)
+            shibapost_mail::smtp::check(&cfg, &auth)
                 .await
                 .map_err(|e| crate::compose::send_error(&e, matches!(auth, Auth::OAuth2(_))))?;
         }
@@ -425,7 +425,7 @@ impl Core {
             port: p.imap_port.unwrap_or(default_port),
             security: match p.imap_security {
                 Some(s) => parse_security(&s)?,
-                None => postflow_mail::Security::Tls,
+                None => shibapost_mail::Security::Tls,
             },
             username: non_empty(p.username).unwrap_or_else(|| email.to_string()),
         };
@@ -461,7 +461,7 @@ impl Core {
     /// 从服务器取更早的邮件。每个邮箱交给自己的后台任务，等它们都取完。
     async fn load_older(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
         use crate::mail::OlderFrom;
-        use postflow_mail::SpecialMailbox;
+        use shibapost_mail::SpecialMailbox;
         let p: LoadOlder = parse(params)?;
         let from = match p.folder.as_str() {
             "inbox" => OlderFrom::Inbox,
@@ -643,7 +643,7 @@ impl Core {
                 .is_some_and(|list| list.iter().any(|v| v.as_str() == Some(addr.as_str())))
         });
         let remote = allow_remote || trusted;
-        let rendered = postflow_mail::render(
+        let rendered = shibapost_mail::render(
             &raw,
             RenderOptions {
                 allow_remote: remote,
@@ -667,7 +667,7 @@ impl Core {
         } else {
             None
         };
-        let invite = postflow_mail::calendar::invite(&raw);
+        let invite = shibapost_mail::calendar::invite(&raw);
         let rsvp = if invite.is_some() {
             let id = item.id.clone();
             session.db(move |s| s.rsvp(&id)).await?
@@ -689,9 +689,9 @@ impl Core {
             "cc": rendered.cc,
             "reply_to": rendered.reply_to,
             "attachments": rendered.attachments,
-            "unsubscribe": postflow_mail::unsubscribe(&raw),
+            "unsubscribe": shibapost_mail::unsubscribe(&raw),
             // 信里的验证码：阅读区顶上显示，一点就复制
-            "code": postflow_mail::summarize(&raw).code,
+            "code": shibapost_mail::summarize(&raw).code,
         });
         Ok(value)
     }
@@ -716,13 +716,13 @@ impl Core {
     async fn unsubscribe(&self, params: Value, session: &Arc<Session>) -> Result<Value, RpcError> {
         let p: Id = parse(params)?;
         let raw = self.raw_mail(session, &p.id).await?;
-        let info = postflow_mail::unsubscribe(&raw).ok_or_else(|| {
+        let info = shibapost_mail::unsubscribe(&raw).ok_or_else(|| {
             RpcError::new("unsubscribe_none", "this message has no unsubscribe link")
         })?;
         let url = info.url.filter(|_| info.one_click).ok_or_else(|| {
             RpcError::new("unsubscribe_manual", "this list needs its page or an email")
         })?;
-        postflow_mail::unsubscribe_one_click(&url)
+        shibapost_mail::unsubscribe_one_click(&url)
             .await
             .map_err(|e| {
                 tracing::warn!(item = %p.id, "one-click unsubscribe failed: {e}");
@@ -736,20 +736,20 @@ impl Core {
         let mut p: Attachment = parse(params)?;
         let raw = self.raw_mail(session, &p.id).await?;
         // 附件总览里大邮件的附件是从邮件结构认出来的：正文下载下来以后按名字找到真正的那一个
-        if p.index >= postflow_store::STRUCTURE_INDEX {
+        if p.index >= shibapost_store::STRUCTURE_INDEX {
             let (id, index) = (p.id.clone(), p.index);
             let name = session
                 .db(move |s| s.structure_attachment_name(&id, index))
                 .await?
                 .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
-            p.index = postflow_mail::search_text(&raw)
+            p.index = shibapost_mail::search_text(&raw)
                 .2
                 .into_iter()
                 .find(|a| a.name == name)
                 .map(|a| a.index)
                 .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
         }
-        let (name, mime, bytes) = postflow_mail::attachment(&raw, p.index)
+        let (name, mime, bytes) = shibapost_mail::attachment(&raw, p.index)
             .ok_or_else(|| RpcError::new("not_found", "no such attachment"))?;
         match p.path {
             Some(path) => {
@@ -761,7 +761,7 @@ impl Core {
             None => reply(json!({
                 "name": name,
                 "mime": mime,
-                "data": postflow_mail::base64(&bytes),
+                "data": shibapost_mail::base64(&bytes),
             })),
         }
     }

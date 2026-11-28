@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use postflow_core::{Core, Event, RpcError, Scope};
 use serde_json::Value;
+use shibapost_core::{Core, Event, RpcError, Scope};
 use tauri::utils::config::BundleType;
 use tauri::{Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
@@ -43,7 +43,7 @@ mod web_access;
 mod web_page;
 
 /// 核心事件在界面一侧的事件名。
-const EVENT_NAME: &str = "postflow:event";
+const EVENT_NAME: &str = "shibapost:event";
 
 struct AppState {
     core: Arc<Core>,
@@ -137,7 +137,7 @@ fn handlers<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Sen
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
-    // 只运行一个：再次打开 Postflow 时，把已经开着的窗口拿到最前面，新启动的那个直接退出。
+    // 只运行一个：再次打开 ShibaPost 时，把已经开着的窗口拿到最前面，新启动的那个直接退出。
     // 两个进程同时写同一份数据和索引会出问题。这个插件要第一个注册
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -178,7 +178,7 @@ pub fn run() {
             // 索引和本机配置放在系统给应用分配的私有目录里，不参与同步
             let local_dir = app.path().app_local_data_dir()?;
             // 日志写到本机目录的 logs 下，设置里能查看；开发时同时打到终端
-            postflow_core::logging::init(&local_dir, cfg!(debug_assertions));
+            shibapost_core::logging::init(&local_dir, cfg!(debug_assertions));
             let core = tauri::async_runtime::block_on(Core::open(local_dir))?;
             tracing::info!("core ready");
 
@@ -215,7 +215,7 @@ pub fn run() {
             // 靠边自动隐藏：后台看着窗口，设置打开后才动它
             #[cfg(desktop)]
             edge_hide::start(app.handle());
-            // postflow://save?url=… ：浏览器书签按钮存网页
+            // shibapost://save?url=… ：浏览器书签按钮存网页
             #[cfg(desktop)]
             deep_link::setup(app.handle());
 
@@ -224,7 +224,7 @@ pub fn run() {
         })
         .invoke_handler(handlers())
         .build(tauri::generate_context!())
-        .expect("error while building Postflow")
+        .expect("error while building ShibaPost")
         .run(|app, event| match event {
             // 最后一个窗口没了（不是从托盘菜单退出）：设置了留在后台就不退出，托盘还在，
             // 点托盘图标会重新建窗口（见 tray::show_main）

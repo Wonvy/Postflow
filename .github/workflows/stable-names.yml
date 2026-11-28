@@ -1,6 +1,6 @@
 name: Stable download names
 
-# 给一个已经发布的版本补上不带版本号的安装包（Postflow-macOS.dmg 等），README 的下载链接靠它们。
+# 给一个已经发布的版本补上不带版本号的安装包（ShibaPost-macOS.dmg 等），README 的下载链接靠它们。
 # 新版本在 Release 流程里会自动加上，这里只用来补以前的版本：在 Actions 页面手动运行，填标签。
 on:
   workflow_dispatch:

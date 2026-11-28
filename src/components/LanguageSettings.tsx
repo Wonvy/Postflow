@@ -35,7 +35,7 @@ export function LanguageSettings() {
 
   const save = async (meta: Omit<LangPack, "messages">, messages: Record<string, string>) => {
     try {
-      const saved = await saveTextFile(`postflow-language-${meta.code}.json`, exportFile(meta, messages, version), {
+      const saved = await saveTextFile(`shibapost-language-${meta.code}.json`, exportFile(meta, messages, version), {
         name: "JSON",
         extensions: ["json"],
       });

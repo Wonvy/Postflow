@@ -109,7 +109,7 @@ interface Speech {
 
 function savedRate(): number {
   try {
-    const r = Number(localStorage.getItem("postflow.speechRate"));
+    const r = Number(localStorage.getItem("shibapost.speechRate"));
     return SPEECH_RATES.includes(r as (typeof SPEECH_RATES)[number]) ? r : 1;
   } catch {
     return 1;
@@ -763,7 +763,7 @@ export const useSpeech = create<Speech>()((set, get) => ({
   },
   setRate: (rate) => {
     try {
-      localStorage.setItem("postflow.speechRate", String(rate));
+      localStorage.setItem("shibapost.speechRate", String(rate));
     } catch {
       // 存不了就只管这一次
     }

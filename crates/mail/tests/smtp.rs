@@ -1,7 +1,7 @@
 //! 对着本机的假发信服务器发信，以及把发出的信存进假 IMAP 服务器的「已发送」。
 
-use postflow_mail::{Auth, Connection, Error, Mailbox, Outgoing, Security, ServerConfig, smtp};
-use postflow_testkit::{FakeImap, FakeSmtp};
+use shibapost_mail::{Auth, Connection, Error, Mailbox, Outgoing, Security, ServerConfig, smtp};
+use shibapost_testkit::{FakeImap, FakeSmtp};
 
 fn config(port: u16, user: &str) -> ServerConfig {
     ServerConfig {
@@ -37,7 +37,7 @@ fn letter() -> Outgoing {
 #[tokio::test]
 async fn sends_with_a_password_and_keeps_bcc_off_the_headers() {
     let server = FakeSmtp::start("me@example.com", "secret").await;
-    let built = postflow_mail::build(&letter(), 1_700_000_000).unwrap();
+    let built = shibapost_mail::build(&letter(), 1_700_000_000).unwrap();
     smtp::send(
         &config(server.port, "me@example.com"),
         &Auth::Password("secret".into()),
@@ -66,7 +66,7 @@ async fn sends_with_a_password_and_keeps_bcc_off_the_headers() {
 #[tokio::test]
 async fn oauth_tokens_sign_in_too() {
     let server = FakeSmtp::start("me@example.com", "token-1").await;
-    let built = postflow_mail::build(&letter(), 0).unwrap();
+    let built = shibapost_mail::build(&letter(), 0).unwrap();
     let cfg = config(server.port, "me@example.com");
     smtp::send(
         &cfg,
@@ -101,7 +101,7 @@ async fn wrong_password_and_rejected_recipients_are_reported() {
 
     let mut out = letter();
     out.cc = vec![mb("reject@example.com")];
-    let built = postflow_mail::build(&out, 0).unwrap();
+    let built = shibapost_mail::build(&out, 0).unwrap();
     let err = smtp::send(
         &cfg,
         &Auth::Password("secret".into()),
@@ -136,7 +136,7 @@ async fn sent_copies_go_to_the_marked_mailbox_once() {
     .unwrap();
     conn.select("INBOX").await.unwrap();
 
-    let built = postflow_mail::build(&letter(), 0).unwrap();
+    let built = shibapost_mail::build(&letter(), 0).unwrap();
     let sent = conn.sent_mailbox().await.unwrap();
     assert_eq!(sent, "Sent Items");
     assert!(

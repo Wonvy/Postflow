@@ -8,12 +8,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
-use postflow_ai::{Client, Doc, Message, Provider, Request, markup, prompts, text};
-use postflow_feed::html_to_paragraphs;
-use postflow_mail::RenderOptions;
-use postflow_store::{AiResult, ItemSummary, day_of, ids};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use shibapost_ai::{Client, Doc, Message, Provider, Request, markup, prompts, text};
+use shibapost_feed::html_to_paragraphs;
+use shibapost_mail::RenderOptions;
+use shibapost_store::{AiResult, ItemSummary, day_of, ids};
 
 use crate::rpc::{RpcError, parse, reply};
 use crate::{Core, Event, Scope, Session};
@@ -53,8 +53,8 @@ impl AiRuntime {
     }
 }
 
-impl From<postflow_ai::Error> for RpcError {
-    fn from(err: postflow_ai::Error) -> Self {
+impl From<shibapost_ai::Error> for RpcError {
+    fn from(err: shibapost_ai::Error) -> Self {
         RpcError::new(err.code(), err.to_string())
     }
 }
@@ -71,7 +71,7 @@ pub(crate) struct AiSettings {
     pub default: Option<String>,
     pub fast: Option<String>,
     pub allow_mail: bool,
-    pub categories: Vec<postflow_ai::Category>,
+    pub categories: Vec<shibapost_ai::Category>,
 }
 
 impl AiSettings {
@@ -270,14 +270,14 @@ impl Core {
         client: Option<String>,
     ) -> Result<Value, RpcError> {
         match method {
-            "ai.presets" => reply(json!({ "presets": postflow_ai::PRESETS })),
+            "ai.presets" => reply(json!({ "presets": shibapost_ai::PRESETS })),
             "ai.providers" => {
                 let settings = self.ai_settings(session).await?;
                 let mut providers = Vec::new();
                 for provider in settings.providers {
                     let has_key = self.ai_key(&provider.id).await.is_some();
                     let local = provider.is_local();
-                    let replacement = postflow_ai::replacement(
+                    let replacement = shibapost_ai::replacement(
                         &provider.preset,
                         &provider.base_url,
                         &provider.model,
@@ -318,7 +318,7 @@ impl Core {
                     provider.id = ids::new_device_id();
                 }
                 if provider.name.is_empty() {
-                    provider.name = postflow_ai::preset(&provider.preset)
+                    provider.name = shibapost_ai::preset(&provider.preset)
                         .map_or_else(|| provider.base_url.clone(), |p| p.name.to_string());
                 }
                 if let Some(key) = p
@@ -687,7 +687,7 @@ impl Core {
             categories: settings
                 .get(CATEGORIES)
                 .cloned()
-                .and_then(|v| serde_json::from_value::<Vec<postflow_ai::Category>>(v).ok())
+                .and_then(|v| serde_json::from_value::<Vec<shibapost_ai::Category>>(v).ok())
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|c| !c.name.trim().is_empty())
@@ -729,7 +729,7 @@ impl Core {
             .ok_or_else(|| RpcError::new("not_found", "no such item"))?;
         let text = if detail.item.kind == "mail" {
             let raw = self.raw_mail(session, id).await?;
-            let rendered = postflow_mail::render(
+            let rendered = shibapost_mail::render(
                 &raw,
                 RenderOptions {
                     allow_remote: false,
@@ -847,7 +847,7 @@ impl Core {
         &self,
         session: &Arc<Session>,
         provider: &Provider,
-        usage: postflow_ai::Usage,
+        usage: shibapost_ai::Usage,
     ) {
         let id = provider.id.clone();
         let _ = session

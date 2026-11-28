@@ -1339,7 +1339,7 @@ export function Sidebar({ width }: { width: number }) {
         {!hasInsetTitlebar && (
           <div className="pointer-events-none flex items-center gap-2">
             <Logo />
-            <span className="text-[13px] font-semibold tracking-tight">Postflow</span>
+            <span className="text-[13px] font-semibold tracking-tight">ShibaPost</span>
           </div>
         )}
         <div className="flex-1" data-tauri-drag-region />

@@ -1,8 +1,8 @@
 //! 会「思考」的模型：思考也算在输出上限里，短任务的回答会被截断甚至是空的。
 //! 对着假服务（按模型名模拟几类服务，见 testkit 的 ai.rs）确认总结和关键词照样拿得到完整的回答。
 
-use postflow_ai::{Client, Provider, prompts};
-use postflow_testkit::FakeAi;
+use shibapost_ai::{Client, Provider, prompts};
+use shibapost_testkit::FakeAi;
 
 fn provider(server: &FakeAi, preset: &str, model: &str) -> Provider {
     Provider {
@@ -62,8 +62,8 @@ async fn zhipu_is_asked_not_to_think_for_short_tasks() {
     }
 
     // 对话不带输出上限，让模型自己决定要不要思考
-    let chat = postflow_ai::Request {
-        messages: vec![postflow_ai::Message::user("What changed?")],
+    let chat = shibapost_ai::Request {
+        messages: vec![shibapost_ai::Message::user("What changed?")],
         ..Default::default()
     };
     client.complete(&p, None, &chat).await.unwrap();
@@ -117,8 +117,10 @@ async fn a_thinking_model_gets_no_output_limit() {
     );
 
     // 「测试连接」只给 16 个 token，全被思考用掉了，也要能拿到回答
-    let ping = postflow_ai::Request {
-        messages: vec![postflow_ai::Message::user("Reply with the single word OK.")],
+    let ping = shibapost_ai::Request {
+        messages: vec![shibapost_ai::Message::user(
+            "Reply with the single word OK.",
+        )],
         max_tokens: Some(16),
         ..Default::default()
     };

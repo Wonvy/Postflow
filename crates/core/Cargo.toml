@@ -1,5 +1,5 @@
 [package]
-name = "postflow-core"
+name = "shibapost-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,12 +10,12 @@ futures = "0.3.34"
 gethostname = "1.1.0"
 keyring = "4.2.0"
 notify = "8"
-postflow-ai = { version = "0.1.0", path = "../ai" }
-postflow-feed = { workspace = true }
-postflow-mail = { version = "0.1.0", path = "../mail" }
-postflow-speech = { version = "0.1.0", path = "../speech" }
-postflow-store = { workspace = true }
-postflow-translate = { version = "0.1.0", path = "../translate" }
+shibapost-ai = { version = "0.1.0", path = "../ai" }
+shibapost-feed = { workspace = true }
+shibapost-mail = { version = "0.1.0", path = "../mail" }
+shibapost-speech = { version = "0.1.0", path = "../speech" }
+shibapost-store = { workspace = true }
+shibapost-translate = { version = "0.1.0", path = "../translate" }
 regex = "1.13.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
@@ -26,7 +26,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [dev-dependencies]
 axum = "0.8.9"
-postflow-testkit = { path = "../testkit" }
+shibapost-testkit = { path = "../testkit" }
 tempfile = "3.27.0"
 
 [build-dependencies]

@@ -1,21 +1,21 @@
 //! 命令行里试朗读，开发时用：
 //!
 //! ```text
-//! cargo run --release -p postflow-speech --example speak -- models <目录>
-//! cargo run --release -p postflow-speech --example speak -- download <目录> <模型 ID>
-//! cargo run --release -p postflow-speech --example speak -- import <目录> <模型 ID> <放模型文件的文件夹>
-//! cargo run --release -p postflow-speech --example speak -- prepare <目录> <模型 ID> <文字>
-//! cargo run --release -p postflow-speech --example speak -- say <目录> <模型 ID> <声音> <文字> [输出.wav]
+//! cargo run --release -p shibapost-speech --example speak -- models <目录>
+//! cargo run --release -p shibapost-speech --example speak -- download <目录> <模型 ID>
+//! cargo run --release -p shibapost-speech --example speak -- import <目录> <模型 ID> <放模型文件的文件夹>
+//! cargo run --release -p shibapost-speech --example speak -- prepare <目录> <模型 ID> <文字>
+//! cargo run --release -p shibapost-speech --example speak -- say <目录> <模型 ID> <声音> <文字> [输出.wav]
 //! ```
 //!
 //! ZipVoice 没有自带的声音：`<声音>` 写一段录音的路径，再用环境变量 `SAMPLE_TEXT` 给出录音里说的话。
 //!
-//! `<目录>` 相当于应用的 `本机目录/voices`，比如 `.postflow-dev/local/voices`。
+//! `<目录>` 相当于应用的 `本机目录/voices`，比如 `.shibapost-dev/local/voices`。
 
 use std::path::Path;
 use std::time::Instant;
 
-use postflow_speech::{AudioReader, Speaker, Speech, tts};
+use shibapost_speech::{AudioReader, Speaker, Speech, tts};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

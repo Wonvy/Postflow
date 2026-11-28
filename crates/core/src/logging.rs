@@ -1,4 +1,4 @@
-//! 日志：写到本机目录下的 `logs/postflow.log`，满 5 MB 换一个新文件，保留最近三个旧文件。
+//! 日志：写到本机目录下的 `logs/shibapost.log`，满 5 MB 换一个新文件，保留最近三个旧文件。
 //!
 //! 只记发生了什么（连接、同步、抓取、出错），不记邮件内容、密码和密钥。写进文件之前，
 //! 邮箱地址只留第一个字和域名，像 API Key 的字符串整个遮掉，用户目录换成 `~`，
@@ -13,22 +13,22 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, fmt, reload};
 
-const FILE: &str = "postflow.log";
+const FILE: &str = "shibapost.log";
 const SETTINGS: &str = "settings.json";
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
-/// 保留几个旧文件：postflow.log.1、.2、.3。
+/// 保留几个旧文件：shibapost.log.1、.2、.3。
 const KEEP: usize = 3;
 /// 自己的代码。平时记 info，打开详细日志时记 debug；其他库只记警告以上。
 const CRATES: &[&str] = &[
-    "postflow_core",
-    "postflow_mail",
-    "postflow_feed",
-    "postflow_store",
-    "postflow_ai",
-    "postflow_translate",
-    "postflow_desktop_lib",
-    "postflow_web",
-    "postflow_ui",
+    "shibapost_core",
+    "shibapost_mail",
+    "shibapost_feed",
+    "shibapost_store",
+    "shibapost_ai",
+    "shibapost_translate",
+    "shibapost_desktop_lib",
+    "shibapost_web",
+    "shibapost_ui",
 ];
 
 fn directives(verbose: bool) -> String {
@@ -78,7 +78,7 @@ pub fn init(local_dir: &Path, stderr: bool) {
         tracing::info!(
             version = env!("CARGO_PKG_VERSION"),
             os = std::env::consts::OS,
-            "Postflow started"
+            "ShibaPost started"
         );
     }
 }
@@ -324,7 +324,7 @@ mod tests {
         };
         assert_eq!(
             names,
-            vec!["postflow.log", "postflow.log.1", "postflow.log.2"]
+            vec!["shibapost.log", "shibapost.log.1", "shibapost.log.2"]
         );
         assert!(fs::metadata(dir.path().join(FILE)).unwrap().len() <= MAX_BYTES);
     }

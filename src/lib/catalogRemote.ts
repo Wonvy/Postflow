@@ -27,7 +27,7 @@ interface RemoteCatalog {
 
 const useRemote = create<RemoteCatalog>()(
   persist((): RemoteCatalog => ({ remote: null, checkedAt: 0, checking: false }), {
-    name: "postflow.catalog",
+    name: "shibapost.catalog",
     // 存不下（隐私模式、空间满了）时只是下次重新下载，不出错
     storage: createJSONStorage(() => ({
       getItem: (k) => {

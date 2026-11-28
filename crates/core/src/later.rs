@@ -1,15 +1,15 @@
 //! 稍后读：把任意网页存下来，和订阅的文章一样读。
 //!
-//! 存下的网页是内置「稍后读」订阅源（见 postflow-store 的 `LATER_URL`）的文章，写进文章日志，
+//! 存下的网页是内置「稍后读」订阅源（见 shibapost-store 的 `LATER_URL`）的文章，写进文章日志，
 //! 所以会同步到别的设备。存的时候就把正文抓下来一起存，原网页以后删了改了也还在。
 //! 从 Pocket、Instapaper 和浏览器书签导入的只存地址和标题，打开时再去抓全文。
 
 use std::sync::Arc;
 
-use postflow_feed::{clean_url, html_to_text};
-use postflow_store::{Article, ItemPatch, hlc, ids};
 use regex::Regex;
 use serde::Serialize;
+use shibapost_feed::{clean_url, html_to_text};
+use shibapost_store::{Article, ItemPatch, hlc, ids};
 
 use crate::rpc::RpcError;
 use crate::{Core, Scope, Session};

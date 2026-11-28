@@ -29,7 +29,7 @@ export const PAPER_DEFAULT_ACCENT = "sky";
 
 /** 兼容旧版本保存的预设 ID，升级后平滑映射到新的 9 色预设。 */
 const LEGACY_PRESETS: Record<string, string> = {
-  postflow: "violet",
+  shibapost: "violet",
   blue: "sky",
   teal: "emerald",
   green: "emerald",

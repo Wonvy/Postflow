@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use postflow_store::{Article, FeedPatch, ItemFilter, ItemPatch, NewFeed, Store, View, ids};
+use shibapost_store::{Article, FeedPatch, ItemFilter, ItemPatch, NewFeed, Store, View, ids};
 use tempfile::TempDir;
 
 struct Device {
@@ -83,7 +83,7 @@ fn subscribe(dev: &Device, url: &str) -> String {
         .id
 }
 
-fn inbox(dev: &Device) -> Vec<postflow_store::ItemSummary> {
+fn inbox(dev: &Device) -> Vec<shibapost_store::ItemSummary> {
     dev.store.items(&ItemFilter::default(), None, 100).unwrap()
 }
 
@@ -448,7 +448,7 @@ fn pagination_walks_every_item_once() {
             break;
         }
         let last = page.last().unwrap();
-        cursor = Some(postflow_store::Cursor {
+        cursor = Some(shibapost_store::Cursor {
             published_at: last.published_at,
             id: last.id.clone(),
         });

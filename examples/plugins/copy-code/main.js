@@ -1,4 +1,4 @@
-// Example Postflow plugin. See docs/plugins.md for the full API.
+// Example ShibaPost plugin. See docs/plugins.md for the full API.
 //
 // - Reader toolbar button "Copy code": finds the verification code in the open
 //   message and copies it.

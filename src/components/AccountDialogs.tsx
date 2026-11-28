@@ -137,12 +137,12 @@ function ErrorLine({ error }: { error: Failure }) {
 /** 注册 Azure 应用的说明，在说明文档里。 */
 const OAUTH_DOCS: Record<OAuthProvider, Record<"zh" | "en", string>> = {
   microsoft: {
-    en: "https://github.com/Wonvy/Postflow#outlookcom-and-microsoft-365",
-    zh: "https://github.com/Wonvy/Postflow/blob/main/README.zh-CN.md#outlookcom-和-microsoft-365",
+    en: "https://github.com/Wonvy/ShibaPost#outlookcom-and-microsoft-365",
+    zh: "https://github.com/Wonvy/ShibaPost/blob/main/README.zh-CN.md#outlookcom-和-microsoft-365",
   },
   google: {
-    en: "https://github.com/Wonvy/Postflow#gmail-with-a-google-account",
-    zh: "https://github.com/Wonvy/Postflow/blob/main/README.zh-CN.md#用-google-账户登录-gmail",
+    en: "https://github.com/Wonvy/ShibaPost#gmail-with-a-google-account",
+    zh: "https://github.com/Wonvy/ShibaPost/blob/main/README.zh-CN.md#用-google-账户登录-gmail",
   },
 };
 
