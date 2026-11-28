@@ -1,7 +1,7 @@
 //! 对着本机的假 AI 服务把 AI 功能走一遍：配置服务、总结、关键词、列表摘要、对话，以及邮件的隐私限制。
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::routing::get;
@@ -20,18 +20,50 @@ async fn error(core: &Arc<Core>, method: &str, params: Value) -> String {
     core.rpc(method, params, None).await.unwrap_err().code
 }
 
-const FEED: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Field Notes</title><id>urn:notes</id><updated>2026-11-16T08:00:00Z</updated>
-<entry><id>urn:notes:1</id><title>Version two</title><updated>2026-11-16T08:00:00Z</updated>
+/// 格式化当前 UTC 时间为 RFC 3339，避免 `ai.classify` 的「最近 7 天」过滤因日期推移而跳过测试文章。
+fn now_rfc3339() -> String {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let days = secs.div_euclid(86_400);
+    let rem = secs.rem_euclid(86_400);
+    let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    // Howard Hinnant civil_from_days
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = mp + if mp < 10 { 3 } else { -9 };
+    let y = y + i64::from(mo <= 2);
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+}
+
+fn feed_xml() -> String {
+    let ts = now_rfc3339();
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Field Notes</title><id>urn:notes</id><updated>{ts}</updated>
+<entry><id>urn:notes:1</id><title>Version two</title><updated>{ts}</updated>
 <content type="html">&lt;p&gt;Version two ships today.&lt;/p&gt;&lt;p&gt;It adds offline translation. Cards show cover images. Sync stays local.&lt;/p&gt;</content></entry>
-</feed>"#;
+</feed>"#
+    )
+}
 
 async fn feed_server() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
+    let body = feed_xml();
     let app = Router::new().route(
         "/feed.xml",
-        get(|| async { ([("content-type", "application/atom+xml")], FEED) }),
+        get(move || {
+            let body = body.clone();
+            async move { ([("content-type", "application/atom+xml")], body) }
+        }),
     );
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{addr}/feed.xml")
