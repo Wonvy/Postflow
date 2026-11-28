@@ -8,6 +8,12 @@ that heading into the version number and date.
 
 ### English
 
+### 中文
+
+## 0.1.46 — 2026-11-28
+
+### English
+
 - "Focus the column under the pointer" (fading the other two columns on hover) is now off by default and can be turned on in Settings → Appearance.
 
 ### 中文
