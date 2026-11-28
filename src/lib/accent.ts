@@ -10,23 +10,37 @@ export interface AccentPreset {
   dark: string;
 }
 
-/** 预设。第一个（Postflow 紫，和 Logo 一样）是默认。 */
+/** 预设（参考 ShibaPlan 9 色板：Linear 靛蓝、深靛青、紫罗兰、晴空蓝、青黛绿、暖金琥珀、赤陶橙、绯红、墨灰）。 */
 export const ACCENT_PRESETS: AccentPreset[] = [
-  { id: "postflow", light: "#7533e8", dark: "#a25bff" },
-  { id: "indigo", light: "#5661c8", dark: "#7b86e2" },
-  { id: "blue", light: "#2563eb", dark: "#60a5fa" },
+  { id: "linear", light: "#5a66d1", dark: "#7580de" },
+  { id: "indigo", light: "#4f46e5", dark: "#756eeb" },
+  { id: "violet", light: "#7c3aed", dark: "#9a66f5" },
   { id: "sky", light: "#0277b3", dark: "#38bdf8" },
-  { id: "teal", light: "#0f766e", dark: "#2dd4bf" },
-  { id: "green", light: "#15803d", dark: "#4ade80" },
-  { id: "orange", light: "#c2410c", dark: "#fb923c" },
-  { id: "pink", light: "#be185d", dark: "#f472b6" },
-  { id: "red", light: "#c62828", dark: "#f87171" },
-  { id: "graphite", light: "#4b5563", dark: "#9ca3af" },
+  { id: "emerald", light: "#04825b", dark: "#10b981" },
+  { id: "amber", light: "#9e6506", dark: "#f59e0b" },
+  { id: "orange", light: "#c3490a", dark: "#f97316" },
+  { id: "rose", light: "#dc1c47", dark: "#f43f5e" },
+  { id: "slate", light: "#52525b", dark: "#9494a0" },
 ];
 
-export const DEFAULT_ACCENT = "postflow";
+export const DEFAULT_ACCENT = "linear";
 /** 纸张质感主题默认使用晴空蓝。 */
 export const PAPER_DEFAULT_ACCENT = "sky";
+
+/** 兼容旧版本保存的预设 ID，升级后平滑映射到新的 9 色预设。 */
+const LEGACY_PRESETS: Record<string, string> = {
+  postflow: "violet",
+  blue: "sky",
+  teal: "emerald",
+  green: "emerald",
+  pink: "rose",
+  red: "rose",
+  graphite: "slate",
+};
+
+function resolvePresetId(choice: string): string {
+  return LEGACY_PRESETS[choice] ?? choice;
+}
 
 /** 浅色、深色、纸张界面的背景（和 styles.css 里的 --bg / --bg-sidebar 一样），用来算对比度。 */
 const LIGHT_BG = "#ffffff";
@@ -126,7 +140,8 @@ export type ResolvedTheme = "light" | "dark" | "paper";
 /** 选的主题色（预设的 ID，或者 #rrggbb）在这个界面主题下的几个颜色。认不出的当作默认。 */
 export function accentVars(choice: string, theme: ResolvedTheme): AccentVars {
   const polarity = theme === "dark" ? "dark" : "light";
-  const preset = ACCENT_PRESETS.find((p) => p.id === choice);
+  const resolvedId = resolvePresetId(choice);
+  const preset = ACCENT_PRESETS.find((p) => p.id === resolvedId);
   const base = preset
     ? preset[polarity]
     : parseHex(choice)
@@ -150,5 +165,6 @@ export function accentVars(choice: string, theme: ResolvedTheme): AccentVars {
 
 /** 选的是哪一个：预设的 ID，或者自己挑的颜色时是 "custom"。 */
 export function accentKind(choice: string): string {
-  return ACCENT_PRESETS.some((p) => p.id === choice) ? choice : parseHex(choice) ? "custom" : DEFAULT_ACCENT;
+  const resolvedId = resolvePresetId(choice);
+  return ACCENT_PRESETS.some((p) => p.id === resolvedId) ? resolvedId : parseHex(choice) ? "custom" : DEFAULT_ACCENT;
 }

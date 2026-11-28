@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACCENT_PRESETS, PAPER_DEFAULT_ACCENT, accentKind, accentVars, contrast, parseHex } from "./accent.ts";
+import { ACCENT_PRESETS, DEFAULT_ACCENT, PAPER_DEFAULT_ACCENT, accentKind, accentVars, contrast, parseHex } from "./accent.ts";
 
 test("every preset reads well on all themes", () => {
   for (const p of ACCENT_PRESETS) {
@@ -16,13 +16,16 @@ test("every preset reads well on all themes", () => {
   }
 });
 
-test("the default matches the logo", () => {
-  assert.equal(accentVars("postflow", "light").accent, "#7533e8");
-  assert.equal(accentVars("postflow", "dark").accent, "#a25bff");
+test("defaults and legacy preset ids resolve properly", () => {
+  assert.equal(accentVars(DEFAULT_ACCENT, "light").accent, "#5a66d1");
+  assert.equal(accentVars(DEFAULT_ACCENT, "dark").accent, "#7580de");
   assert.equal(accentVars(PAPER_DEFAULT_ACCENT, "paper").accent, "#026a9f");
+  // 旧预设 ID 平滑映射
+  assert.equal(accentKind("postflow"), "violet");
+  assert.equal(accentKind("graphite"), "slate");
   // 认不出的当作默认
-  assert.equal(accentVars("nonsense", "dark").accent, "#a25bff");
-  assert.equal(accentKind("nonsense"), "postflow");
+  assert.equal(accentVars("nonsense", "dark").accent, "#7580de");
+  assert.equal(accentKind("nonsense"), DEFAULT_ACCENT);
 });
 
 test("a custom colour is adjusted until text is readable", () => {

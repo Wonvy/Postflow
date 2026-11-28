@@ -21,10 +21,10 @@
   --fg-2: #a3a6ad;
   --fg-3: #6f737b;
   --fg-4: #4a4d54;
-  /* 强调色取自 Logo 的紫色渐变（#A25BFF → #6A1FE0），深色界面用浅的一头 */
-  --accent: #a25bff;
-  --accent-strong: #9447f5;
-  --accent-soft: rgb(162 91 255 / 0.16);
+  /* 默认强调色（Linear 靛蓝），深色界面用更亮的一头 */
+  --accent: #7580de;
+  --accent-strong: #626ed9;
+  --accent-soft: rgb(117 128 222 / 0.16);
   --danger: #e5646a;
   --warning: #d9a03f;
   --overlay: rgb(0 0 0 / 0.55);
@@ -46,10 +46,10 @@
   --fg-2: #5d6068;
   --fg-3: #8b8e96;
   --fg-4: #b9bbc1;
-  /* 浅色界面用渐变中段偏深的紫，白底上的文字和按钮上的白字都够清楚 */
-  --accent: #7533e8;
-  --accent-strong: #6a1fe0;
-  --accent-soft: rgb(117 51 232 / 0.1);
+  /* 浅色界面默认强调色（Linear 靛蓝） */
+  --accent: #5a66d1;
+  --accent-strong: #4351c9;
+  --accent-soft: rgb(90 102 209 / 0.1);
   --danger: #c93f46;
   --warning: #b07a16;
   --overlay: rgb(0 0 0 / 0.3);

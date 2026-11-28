@@ -932,7 +932,7 @@ function AccentPicker() {
         : "dark"
       : theme;
   const kind = accentKind(choice);
-  const custom = kind === "custom" ? choice : "#7533e8";
+  const custom = kind === "custom" ? choice : "#5e6ad2";
   const swatch = (selected: boolean) =>
     cx(
       "relative flex size-6 shrink-0 items-center justify-center rounded-full ring-offset-2 ring-offset-surface transition-shadow touch:size-9",

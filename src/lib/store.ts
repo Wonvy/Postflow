@@ -428,7 +428,7 @@ export const useUi = create<UiState>()(
 
       theme: "system",
       paperGrain: true,
-      accentColor: "postflow",
+      accentColor: DEFAULT_ACCENT,
       density: "compact",
       lang: "system",
       sidebarWidth: 244,
@@ -632,7 +632,7 @@ export const useUi = create<UiState>()(
         })),
       setTheme: (theme) =>
         set((s) =>
-          theme === "paper" && s.theme !== "paper" && s.accentColor === DEFAULT_ACCENT
+          theme === "paper" && s.theme !== "paper" && (s.accentColor === DEFAULT_ACCENT || s.accentColor === "postflow")
             ? { theme, accentColor: PAPER_DEFAULT_ACCENT }
             : { theme },
         ),

@@ -8,7 +8,11 @@ that heading into the version number and date.
 
 ### English
 
+- Updated the accent colour presets to a 9-colour palette (Linear indigo, Deep indigo, Violet, Sky blue, Emerald, Amber, Terracotta, Rose, and Slate) tuned for contrast across Dark, Light, and Paper themes, with automatic migration from previous preset selections.
+
 ### 中文
+
+- 更新全部主题强调色预设为 9 色方案（Linear 靛蓝、深靛青、紫罗兰、晴空蓝、青黛绿、暖金琥珀、赤陶橙、绯红、墨灰），在深色、浅色与纸张主题下均保持清晰对比度，并平滑兼容旧预设选项。
 
 ## 0.1.44 — 2026-11-28
 
